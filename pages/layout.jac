@@ -3,7 +3,10 @@
 import from "@jac/runtime" { Outlet, Link }
 import from endpoints { Member, ListMembers }
 import from ..components.WhoAmIPicker { WhoAmIPicker }
-import from ..components.ui.sonner { Toaster }
+# Note: the wrapper lives in toaster.jac, not sonner.jac — a module named
+# `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
+# producing a self-rendering Toaster and an infinite React mount loop.
+import from ..components.ui.toaster { Toaster }
 import from "react" { useEffect }
 
 def:pub Shell() -> JsxLayout {
@@ -32,7 +35,7 @@ def:pub Shell() -> JsxLayout {
 
     <div className="min-h-screen bg-background text-foreground">
         <header className="border-b">
-            <nav className="mx-auto flex max-w-7xl items-center gap-6 px-6 py-3">
+            <nav className="mx-auto flex max-w-[96rem] items-center gap-6 px-6 py-3">
                 <span className="text-lg font-semibold tracking-tight">standup</span>
                 <Link to="/" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                     Board
@@ -52,7 +55,7 @@ def:pub Shell() -> JsxLayout {
                 </div>
             </nav>
         </header>
-        <main className="mx-auto max-w-7xl px-6 py-6">
+        <main className="mx-auto max-w-[96rem] px-6 py-6">
             <Outlet />
         </main>
         <Toaster />

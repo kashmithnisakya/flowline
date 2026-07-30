@@ -51,13 +51,13 @@ def:pub TaskCard(
             <div className="text-sm font-medium leading-snug">{task.title}</div>
             <div className="flex flex-wrap items-center gap-1">
                 {if task.team {
-                    <Badge variant="secondary">{task.team}</Badge>
+                    <Badge key="team" variant="secondary">{task.team}</Badge>
                 }}
                 {if task.priority {
-                    <Badge variant={priorityVariant}>{task.priority}</Badge>
+                    <Badge key="priority" variant={priorityVariant}>{task.priority}</Badge>
                 }}
                 {if task.category {
-                    <Badge variant="outline">{task.category}</Badge>
+                    <Badge key="category" variant="outline">{task.category}</Badge>
                 }}
             </div>
             {if task.assignee_name or task.due_date {

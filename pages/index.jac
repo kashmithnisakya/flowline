@@ -121,9 +121,9 @@ def:pub BoardPage() -> JsxPage {
 
         {if loading {
             <div className="flex gap-3">
-                <Skeleton className="h-72 w-64" />
-                <Skeleton className="h-72 w-64" />
-                <Skeleton className="h-72 w-64" />
+                <Skeleton key="s1" className="h-72 w-64" />
+                <Skeleton key="s2" className="h-72 w-64" />
+                <Skeleton key="s3" className="h-72 w-64" />
             </div>
         } else {
             <div className="flex items-start gap-3 overflow-x-auto pb-4">
