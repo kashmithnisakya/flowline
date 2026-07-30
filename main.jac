@@ -1,14 +1,21 @@
 """standup - Entry Point.
 
-Combines server-side endpoints with the client-side UI.
+File-based routing: pages/ holds the routes, this module only registers the
+server endpoints (every walker name MUST appear in this import list or its
+endpoint 404s) and renders the routed children.
 """
 
-import from endpoints { Message, PostMessage, ListMessages }
+import ".styles.global.css";
 
-# Client-side UI
+import from endpoints {
+    Member, Repo, Task, LogEntry, TaskView,
+    ListMembers, SaveMember, ArchiveMember,
+    ListRepos, AddRepo, RemoveRepo,
+    ListTasks, CreateTask, UpdateTask, MoveTask, DeleteTask,
+    ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry,
+    ImportCsv
+}
 
-import from .frontend { app as ClientApp }
-
-def:pub app -> JsxElement {
-    <ClientApp/>
+def:pub app(children: any) -> JsxElement {
+    <>{children}</>
 }
