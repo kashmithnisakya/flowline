@@ -1,195 +1,135 @@
-# standup — Kanban Project Tracker, v1 Plan
+# standup — v2 Plan: Auth, Organizations, Projects & People
 
-Replaces `reference/Team_Activity_Tracker_v9.xlsx` (Team Roster / Daily Log / To Do List /
-Dashboard) with a Jac 0.34.6 full-stack web app using **jac-shadcn** UI.
+v1 (shipped) replaced the team spreadsheet with a no-auth kanban app — see
+[docs/PLAN-V1.md](docs/PLAN-V1.md) for that design and its Jac gotchas.
+v2 puts a front door on it: **Project Managers sign up, set up their
+organization, create projects, and manage the people on them.**
 
-## Product shape
+## Product flow
 
-Three pages, file-based routing, no login in v1 (same trust model as the shared
-spreadsheet — identity is a localStorage "who am I" member picker):
+1. **Login / Signup is the first page.** Nothing else is reachable logged out.
+2. Signing up **makes you a PM** — team members do not get accounts in v2
+   (they stay roster records; member logins are v3).
+3. First login lands on a **setup wizard**: name your organization → create
+   your first project → add people (or import the spreadsheet) → board.
+4. Day-to-day: full CRUD on projects and people — create/rename/archive
+   projects, add/remove people from the org, assign/unassign them per project.
 
-| Route | Page | Replaces |
-|---|---|---|
-| `/` | **Board** — 6-column kanban of tasks, drag-and-drop + arrow-button fallback, filters defaulting to the viewer's team | To Do List sheet |
-| `/log` | **Daily Log** — one row per person per weekday, exact sheet columns, form prefilled from WhoAmI, This-Week count strip | Daily Log sheet |
-| `/roster` | **Roster** — members table + GitHub repos list; feeds every dropdown | Team Roster sheet |
+## Design decisions
 
-**One status vocabulary** everywhere (board columns = log dropdown):
-`Backlog, In Progress, Review, Changes Requested, Done, Blocked`
-(union of both sheets' status lists; "Not Started" renamed Backlog). Task Category
-(`Architecture, Reviewing, Coding`), Teams (`Jac Core, Jac Scale, Jac Builder, Jac Mobile, CA`),
-Priority (`High, Medium, Low`), and Jac Scale Sections live in `glob` lists — adding a value
-is a data edit, not a schema migration.
+- **One PM = one private org (v2).** Every authenticated walker in Jac runs on
+  the caller's own isolated graph root, so hanging `Organization` off the PM's
+  root gives complete tenant isolation with **zero permission plumbing** — no
+  shared-root or grant machinery in v2. Multi-PM orgs and member accounts are
+  v3 concerns; nothing in this shape blocks them (an org subtree can later be
+  shared or re-parented by a dedicated migration walker).
+- **Projects replace the hardcoded team strings.** The spreadsheet's "teams"
+  (Jac Core, Jac Scale, …) are long-lived projects in disguise. The `TEAMS`
+  glob dies; `Project` becomes a node with CRUD, and tasks/members link to it
+  by edge, so renaming a project touches one node instead of every task.
+- **Auth = Jac built-ins.** `jacSignup` → check `success` → `jacLogin`
+  (signup does not create a session), JWT in localStorage, `(public)`/`(auth)`
+  route groups for the guard. Every v1 walker flips `:pub` → bare
+  (auth-required); scoping is automatic because the caller's root IS the org.
+- **The WhoAmI picker retires.** The nav shows the logged-in PM (+ logout).
+  Daily-log attribution keeps the member dropdown it already has — the PM
+  logs on behalf of roster members, same as the spreadsheet.
+- **Migration = re-import.** v1's live data sits on the anonymous graph; the
+  authoritative source is still the spreadsheet export. After signup, the PM
+  runs the (now authenticated) import — the wizard offers it as a step. The
+  old anonymous data is deliberately orphaned; no adopt-from-shared-root
+  machinery.
 
-**Deliberate v1 exclusions:** login/accounts, the Dashboard sheet (column count badges +
-This-Week strip cover the most-read numbers), GitHub API integration (issue/PR links stay
-plain URLs), log↔task linking, live sync (refetch on focus + 60s poll instead).
-
-## Scaffold
-
-The current guestbook was `jac create --kind web-app`; the shadcn installer refuses to
-retrofit, so re-scaffold in place:
-
-```bash
-jac create --force --use jac-shadcn          # in standup/ — keeps git repo
-jac install --shadcn badge select dialog table dropdown-menu sonner skeleton \
-    input textarea label separator            # button + card ship with the template
-```
-
-Delete guestbook remnants (`endpoints.jac` Message walkers, `frontend.jac`,
-`frontend.impl.jac`, `components/MessageCard.jac`).
-
-Rules that follow from the template:
-- Primitives live in `components/ui/` — **import only, never edit or re-implement**.
-  Hyphenated registry names install as underscored files: `import from .ui.dropdown_menu { … }`.
-- Import prefix depends on where you are: from `components/X.jac` → `.ui.button`;
-  from `pages/X.jac` → `..components.ui.button`; `cn()` always from `lib/utils`.
-- Tailwind is pre-wired; style with utility classes + `cn()`. No `.style.css` annexes,
-  no `*` CSS reset (breaks Preflight).
-
-## Data model (all in one server module — module path is part of persisted archetype identity; settle layout BEFORE importing real data)
+## Data model changes (all in endpoints.jac — never move node/edge declarations)
 
 ```
-node Member  { name, team, role, email, github_username, section (Jac Scale only), active: bool = True }
-node Repo    { full_name }                          # "jaseci-labs/jaseci" dropdown list
-node Task    { title, category, team, priority, status, due_date (ISO str), notes,
-               created_at, updated_at (ISO str), sort_order: float }
-node LogDay  { date (ISO yyyy-mm-dd) }              # unique day bucket, get-or-create
-node LogEntry{ activity, category, repo, issue_link, pr_link, status, notes,
-               member_name, team, section }          # member fields denormalized at write time
+node Organization { name, created_at }                    # NEW — root ++> Organization, exactly one per PM
+node Project      { name, description = "", active = True } # NEW — org ++> Project; replaces TEAMS strings
+node Member       { name, role, email, github_username, section, active }
+                                                          # MODIFIED — drop `team` str; org ++> Member
+node Task         { ... unchanged fields ... }            # MODIFIED — drop `team` str; org ++> Task
+node LogEntry     { ... , project_name }                  # MODIFIED — denormalized project name replaces `team`
 
-edge AssignedTo: Task --> Member {}                  # typed endpoints → typed traversal
-edge Logged:     LogDay --> LogEntry {}
-edge By:         LogEntry --> Member {}
+edge ForProject: Task --> Project {}                      # NEW — a task belongs to one project
+edge OnProject:  Member --> Project {}                    # NEW — assignment; a member can be on many projects
+# AssignedTo / Logged / By unchanged. Repo + LogDay unchanged (org ++> Repo, org ++> LogDay).
 ```
 
-All dates/timestamps are **ISO strings, never `datetime`** (no client marshalling exists).
-Archiving a member sets `active=False` — never `del` — so history edges survive.
-`LogEntry` denormalization is deliberate: historical rows render exactly like the old sheet
-even after roster edits (document it; it is not a bug).
+View objects: `TaskView` gains `project_id` / `project_name` (same join
+pattern as assignee). `MemberView` (new, if needed) carries the member's
+project names for the roster table.
 
-Report channel: `obj MemberView / TaskView / LogEntryView` — node fields + `id: str = jid(node)`;
-`TaskView` joins assignee over `AssignedTo`. Client holds typed lists and passes `jid`
-strings back into walkers (**never node objects, never Python `id()`**; nodes cannot be
-constructed client-side).
+## API changes
 
-## API — all `walker:pub` (bare walkers require JWT; v1 has no auth)
+| Walker | Change |
+| --- | --- |
+| *all v1 walkers* | `:pub` → bare (JWT required); traversal roots change from `root -->` to `org -->` via a `get_org` helper |
+| `GetMe()` | NEW — reports the org (or nothing → client redirects to /setup) |
+| `CreateOrganization(name)` | NEW — idempotent: refuses a second org on the same root |
+| `ListProjects / SaveProject(project_id="") / ArchiveProject` | NEW — project CRUD; archive keeps history like members |
+| `AssignToProject(member_id, project_id)` / `UnassignFromProject` | NEW — manage `OnProject` edges |
+| `CreateTask / UpdateTask / MoveTask` | `team` param → `project_id`; rewire `ForProject` edge on update |
+| `ListTasks` | joins project via `ForProject`; client filters by project |
+| `SaveMember` | drops `team` param; optional `project_ids` list for initial assignment |
+| `LogActivity` | takes `project_id`, denormalizes `project_name` onto the entry |
+| `ImportCsv` | auth-required; the todo/roster `Team` column get-or-creates Projects and wires edges |
 
-Walkers everywhere for one consistent call style, the proven 0.34.6 precedent
-(`jaseci/jac/examples/day_planner`), and because the lookup-base pattern localizes the v2
-`walker:priv` migration to one place per concern.
+Client note: any 401 hard-reloads the page (runtime behavior); the reload
+lands on an `(auth)` route and bounces to `/login` — acceptable session-expiry
+UX for v2.
 
-| Walker | Notes |
-|---|---|
-| `ListMembers / SaveMember(member_id="") / ArchiveMember` | empty id = create, else `jobj` + `isinstance` guard; one save walker for add+edit |
-| `ListRepos / AddRepo / RemoveRepo` | repo dropdown CRUD |
-| `ListTasks` | all tasks + assignee; client-side filtering is fine at ~100 cards |
-| `find_task(task_id)` | abstract base: `jobj` → `isinstance Task` → `visit [target]` |
-| `CreateTask(…, assignee_id="")` | status=Backlog, `sort_order` = end of column, `+>:AssignedTo:+>` |
-| `UpdateTask(find_task)` | full-field save; rewire assignee by deleting the typed edge (`[edge …]` then `del`) and reconnecting |
-| `MoveTask(find_task)(status, sort_order)` | the drag/arrow endpoint; sets status + fractional sort_order + updated_at |
-| `DeleteTask(find_task)` | delete lives only in the edit dialog |
-| `ListLogEntries(from_date, to_date)` | `[root-->(?:LogDay, date in range)]` → `[->:Logged:->]` |
-| `LogActivity(date, member_id, …)` | get-or-create day bucket via `visit … else { fresh = here ++> LogDay(…); visit fresh; }` |
-| `UpdateLogEntry / DeleteLogEntry` | correcting today's rows |
-| `ImportCsv(sheet, csv_text)` | one-time migration: `roster` / `repos` / `todo`; idempotent (skip existing by name); **test against the real workbook export** |
-
-Walker idioms (authoritative for 0.34.6): accumulate into `has reports: list[XView] = []`
-(the `= []` default is mandatory) and report once from a `Root exit` ability; kwargs only
-at spawn sites; fresh ordering = fractional `sort_order` (midpoint between neighbors),
-with a renormalization walker deferred to v2.
-
-## UI (shadcn primitives + Tailwind)
+## Pages
 
 ```
-main.jac                      # def:pub app(children) rendering {children} — MUST render children or all routes silently drop
-pages/layout.jac              # JsxLayout: top nav (Board/Log/Roster) + WhoAmIPicker + <Outlet/>
-pages/index.jac  + .impl.jac  # BoardPage (JsxPage) — stateful shell: all has-state + handlers
-pages/log.jac    + .impl.jac  # DailyLogPage
-pages/roster.jac + .impl.jac  # RosterPage
-components/WhoAmIPicker.jac   # Select of members, persisted to localStorage; drives team-default filter + log prefill
-components/FilterBar.jac      # Select: team (defaults to viewer's) / assignee / category + hide-Done toggle
-components/KanbanColumn.jac   # column header + Badge count; onDragOver(preventDefault)/onDrop
-components/TaskCard.jac       # Card, draggable; Badges for team/priority/category; red blocked strip; ← → arrow move buttons; click opens dialog
-components/TaskDialog.jac     # Dialog: create/edit form (Input/Textarea/Select/Label), Delete inside
-components/LogEntryForm.jac   # add-activity row, prefilled from WhoAmI
-components/WeekStrip.jac      # This-Week counts by status/category, computed client-side
-components/MemberForm.jac + RepoManager.jac
+pages/layout.jac            # shell: nav + project switcher + PM menu when logged in; bare shell otherwise
+pages/(public)/login.jac    # login/signup card (toggle), jacSignup -> jacLogin -> navigate /
+pages/(auth)/index.jac      # Board (moved) — scoped by the nav's project switcher
+pages/(auth)/log.jac        # Daily Log (moved) — same scoping
+pages/(auth)/roster.jac     # People — org roster + per-member project assignment
+pages/(auth)/projects.jac   # NEW — project CRUD (list, create, rename, archive)
+pages/(auth)/setup.jac      # NEW — onboarding wizard: org -> first project -> people/import
+components/ProjectSwitcher.jac  # NEW — replaces WhoAmIPicker in the nav; persists selection in localStorage
 ```
 
-- Stateful-shell architecture: the page owns every `has` field and async handler
-  (implemented in its `.impl.jac`, where fields are bare — no `self.`); child components
-  are stateless, typed props down, `Callable` callbacks up.
-- Drag-and-drop: native HTML5 (fully typed in the compiler; no DnD lib — none precedented).
-  Copy jacBuilder's FileTree conventions: custom MIME `text/x-standup-task` in
-  `dataTransfer.setData` so foreign drags are ignored; `e.preventDefault()` in dragOver;
-  `handler.call(None, …)` when invoking prop callbacks from lambdas.
-- Moves are **optimistic**: rebind local state, spawn `MoveTask`, roll back + Sonner toast
-  on failure. Arrow-button fallback ships in the same milestone (touch devices).
-- Rendering: `{for (i, t) in enumerate(tasks) { <TaskCard key={jid(t)} …/> }}` — `jid` is
-  the React key; `{if cond { … } else { … }}` slots; `skip;` for empty states.
+(The route-group guard is automatic; keep `layout.jac` at `pages/` root —
+a layout inside `(auth)/` collides with the root layout.)
 
-## Milestones (each independently testable; ~9 working days total)
+## Build order (one PR each; app stays deployable at every step)
 
-1. **M1 — Scaffold + backend spine**: re-scaffold jac-shadcn; delete guestbook; globs;
-   Member/Repo nodes + roster walkers; routing shell with 3 stub pages.
-   *Test:* `jac check` clean; walkers respond via curl; nav renders.
-2. **M2 — Roster page** end-to-end (table + MemberForm + RepoManager).
-   *Test:* add/edit/archive survives `jac start` restart.
-3. **M3 — Tasks + read-only board**: Task node, `find_task` family, board with 6 columns,
-   cards, TaskDialog create/edit, FilterBar with team-default + hide-Done.
-   *Test:* cards land in correct columns; filters work.
-4. **M4 — Board interactions**: MoveTask + fractional ordering; HTML5 drag; optimistic
-   update/rollback; arrow-button fallback.
-   *Test:* drag across all 6 columns; reload preserves order; failed move rolls back.
-5. **M5 — Daily Log**: LogDay/LogEntry walkers; date navigator + week toggle;
-   sheet-identical table; LogEntryForm prefilled from WhoAmI; WeekStrip.
-   *Test:* two members logging the same day → exactly one LogDay; row edit/delete.
-6. **M6 — Migration + ship**: ImportCsv; import the real workbook with the team lead;
-   empty states; focus-refetch + 60s poll; deploy internally; 15-min team walkthrough.
-   *Test:* imported data matches the sheet row-for-row.
+1. **M1 — Auth wall**: login/signup page, route groups, logout, all walkers
+   flip to auth-required, WhoAmI picker removed.
+   *Gate:* logged-out user sees only /login; signup → login → empty app works.
+2. **M2 — Organization + onboarding**: `Organization` node, `GetMe` /
+   `CreateOrganization`, `/setup` wizard step 1, client gate (no org → /setup).
+   *Gate:* fresh account is forced through org creation exactly once.
+3. **M3 — Projects**: `Project` node + CRUD + `ForProject` edges, projects
+   page, project switcher, Board/Log scoped, `TEAMS` glob deleted, task
+   dialog uses live projects.
+   *Gate:* create/rename/archive a project; board filters by it; no `team`
+   string remains in the codebase.
+4. **M4 — People**: roster scoped to org, `OnProject` assignment UI on the
+   roster page, member form updated.
+   *Gate:* add a person, assign to two projects, unassign, archive.
+5. **M5 — Import + wizard finish**: authenticated `ImportCsv` mapping the
+   Team column to Projects, wizard import step, README/screenshots refresh.
+   *Gate:* fresh signup → wizard → import the real workbook → populated,
+   project-scoped board.
 
-## 0.34.6 gotchas (each verified in compiler source — will bite otherwise)
+Estimated effort: ~6–8 working days.
 
-- **State**: `has` = `useState`. In-place mutation (`append`, `[i]=`, `.sort()`) never
-  re-renders — always rebind. After any `await`, `has` reads are stale render-time
-  snapshots — accumulate into locals, assign once. Client `sorted()` needs a named key fn.
-- **Spawns are auto-awaited** (enclosing fn must be async, but never write `await root spawn`);
-  `def:pub` RPC calls must be explicitly awaited. Errors throw — wrap in try/except with
-  loading/error state. A 401 hard-reloads the page (moot until v2 auth).
-- **60s reader cache**: writers invalidate overlapping readers — write-then-refetch is
-  the canonical mutation shape and actually hits the server.
-- **Routing**: a page is a route because it returns `JsxPage` (layouts `JsxLayout`);
-  `main.jac`'s `app(children)` must render `children`. Never mix manual `<Router>` with `pages/`.
-- **`is None` misses `undefined`** — use truthy checks for dict/hook values; `params["id"]`
-  subscript, never `.get()`. Pre-declare vars assigned from `await` (jac2js `let` scoping);
-  same for vars first assigned inside an `if` branch.
-- **New endpoint 404/405s** until its exact name is in the entry module's import list.
-- Dev loop: `jac start --dev main.jac`; server/`glob` changes need a full restart
-  (`pkill -f "jac start"` first — a held port breaks the Vite proxy); schema edits on
-  persisted nodes → stale-anchor 500s → `rm -rf .jac/data/` (dev only).
-- JSX: comments are `{#* … *#}`; no `.map()` (use `for` slots / comprehensions);
-  `cond ? : ` is a parse error (use Python ternary); lambdas for handlers
-  (anonymous `def` is a parse error).
+## Auth gotchas to honor (verified against the runtime)
 
-## v2 backlog (explicitly deferred)
+- `jacSignup` returns a dict and **does not log in** — always
+  `await jacSignup(...)` → check `["success"]` → `await jacLogin(...)`.
+- Pre-declare variables assigned from `await` (jac2js `let` scoping).
+- `jacIsLoggedIn()` checks token *presence*, not validity — treat it as a UI
+  hint; the server and the 401 reload are the truth.
+- Bare walkers run on the caller's own root: **never** assume v1's shared
+  data is visible after the flip — that's the point.
 
-Dashboard page (Sheet 4 aggregates via a server-side walker) · GitHub API integration
-(resolve issue/PR state; PR-merged → auto-Done) · real accounts (`jacLogin` +
-`walker:priv` + `root.shared` grants replacing WhoAmI) · log-from-card quick action +
-`About` edge (the convergence path to a derived daily log) · blocked-as-flag preserving
-column (instead of a Blocked column) · WebSocket live sync · Done-column archive sweep,
-sort renormalization, overdue highlighting, CSV export · per-team routed boards.
+## Deferred to v3
 
-## Risks
-
-- **No auth**: leaked URL = anyone edits as anyone. Internal network only; every mutation
-  goes through the `find_task`/lookup bases so the v2 `walker:priv` migration touches one
-  place per concern.
-- **HTML5 DnD has zero touch support** — the arrow-button fallback is part of M4, not later.
-- **Adoption hinges on ImportCsv** handling the real export's quirks (date formats, blank
-  sections) — test against the actual workbook, import together with the team lead.
-- **Last-write-wins concurrency** (60s poll): two people editing one card can clobber each
-  other silently. Accepted at ~20 users.
-- If the team stops filling the Daily Log because the board feels sufficient, fast-track
-  the v2 log-from-card derivation — watch entry counts in weeks 2–3.
+Multi-PM organizations (shared org subtree / grants), member accounts +
+invitations, per-role permissions (PM vs member views), email verification /
+password reset, org settings page, audit trail, the Dashboard page, GitHub
+API integration.
