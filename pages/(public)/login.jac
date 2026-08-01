@@ -54,7 +54,11 @@ def:pub LoginPage() -> JsxPage {
     tabOn = "bg-card text-foreground shadow-sm";
     tabOff = "text-muted-foreground hover:text-foreground";
 
-    <div className="mx-auto grid min-h-[88svh] max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-[1.05fr_1fr]">
+    # items-start on purpose: signup adds a name/organization row, and
+    # centering would let that extra height push the card upward, so the
+    # tabs and heading jumped every time you switched modes. Anchored at
+    # the top, the form only ever grows downward.
+    <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20">
         <AuthAside />
         <div className="mx-auto w-full max-w-md">
             <div className="flex gap-[2px] rounded-xl bg-foreground/[0.06] p-1">
