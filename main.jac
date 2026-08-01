@@ -21,7 +21,8 @@ import from walkers.tasks {
     ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
 }
 import from walkers.log {
-    ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry
+    ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry,
+    CheckLogEntry
 }
 import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
 

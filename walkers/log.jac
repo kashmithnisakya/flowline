@@ -167,6 +167,15 @@ walker UpdateLogEntry(find_log_entry) {
     }
 }
 
+walker CheckLogEntry(find_log_entry) {
+    """Toggle the reviewed mark on one entry."""
+    can toggle with LogEntry entry {
+        here.checked = not here.checked;
+        report here;
+        disengage;
+    }
+}
+
 walker DeleteLogEntry(find_log_entry) {
     can remove with LogEntry entry {
         gone = jid(here);
