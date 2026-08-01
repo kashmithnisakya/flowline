@@ -5,7 +5,7 @@ Logged in: app nav + org name + logout. Logged out: bare shell (the
 """
 
 import from "@jac/runtime" { Outlet, Link, jacIsLoggedIn, jacLogout }
-import from ..walkers.org { GetMe }
+import from ..lib.session { fetchOrgName }
 import from ..components.ui.button { Button }
 # Note: the wrapper lives in toaster.jac, not sonner.jac — a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,

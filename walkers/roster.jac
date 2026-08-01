@@ -1,7 +1,7 @@
 """Roster walkers: members and GitHub repos."""
 
 import from models {
-    Organization, Project, Member, Repo, Task, MemberView, AssignedTo,
+    Project, Member, Repo, Task, MemberView, AssignedTo,
     member_view, resolve, on_attached, owned
 }
 
@@ -12,10 +12,7 @@ walker ListMembers {
         reports: list[list[MemberView]] = [];
 
     can start with Root entry {
-        orgs = [here-->[?:Organization]];
-        if orgs {
-            visit [orgs[0]-->[?:Member]];
-        }
+        visit [here-->[?:Member]];
     }
 
     can gather with Member entry {
@@ -39,14 +36,12 @@ walker SaveMember {
         reports: list[MemberView] = [];
 
     can save with Root entry {
-        orgs = [here-->[?:Organization]];
-        if not orgs or not self.name.strip() {
+        if not self.name.strip() {
             disengage;
         }
-        org = orgs[0];
         if self.member_id {
             target = resolve(self.member_id);
-            if isinstance(target, Member) and owned(org, target) {
+            if isinstance(target, Member) and owned(here, target) {
                 target.name = self.name.strip();
                 target.role = self.role;
                 target.email = self.email;
@@ -55,11 +50,11 @@ walker SaveMember {
                 report member_view(target);
             }
         } else {
-            fresh = org ++> Member(
+            fresh = here ++> Member(
                 name=self.name.strip(), role=self.role, email=self.email,
                 github_username=self.github_username, section=self.section
             );
-            on_attached(org, fresh);
+            on_attached(here, fresh);
             report member_view(fresh);
         }
     }
@@ -72,9 +67,8 @@ walker ArchiveMember {
     has member_id: str;
 
     can archive with Root entry {
-        orgs = [here-->[?:Organization]];
         target = resolve(self.member_id);
-        if orgs and isinstance(target, Member) and owned(orgs[0], target) {
+        if isinstance(target, Member) and owned(here, target) {
             target.active = False;
             # Filter to Task explicitly: the reverse read also surfaces the
             # Organization's generic parent edge, which has no `status`.
@@ -95,10 +89,7 @@ walker ListRepos {
         reports: list[list[Repo]] = [];
 
     can start with Root entry {
-        orgs = [here-->[?:Organization]];
-        if orgs {
-            visit [orgs[0]-->[?:Repo]];
-        }
+        visit [here-->[?:Repo]];
     }
 
     can gather with Repo entry {
@@ -116,18 +107,16 @@ walker AddRepo {
         reports: list[Repo] = [];
 
     can add with Root entry {
-        orgs = [here-->[?:Organization]];
-        if not orgs or not self.full_name.strip() {
+        if not self.full_name.strip() {
             disengage;
         }
-        org = orgs[0];
         fn = self.full_name.strip();
-        existing = [org-->[?:Repo, full_name == fn]];
+        existing = [here-->[?:Repo, full_name == fn]];
         if existing {
             report existing[0];
         } else {
-            fresh = org ++> Repo(full_name=fn);
-            on_attached(org, fresh);
+            fresh = here ++> Repo(full_name=fn);
+            on_attached(here, fresh);
             report fresh;
         }
     }
@@ -137,9 +126,8 @@ walker RemoveRepo {
     has repo_id: str;
 
     can remove with Root entry {
-        orgs = [here-->[?:Organization]];
         target = resolve(self.repo_id);
-        if orgs and isinstance(target, Repo) and owned(orgs[0], target) {
+        if isinstance(target, Repo) and owned(here, target) {
             gone = jid(target);
             del target;
             report {"deleted": gone};

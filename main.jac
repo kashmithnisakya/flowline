@@ -8,9 +8,8 @@ the routed children.
 import ".styles.global.css";
 
 import from models {
-    Organization, Project, Member, Repo, Task, LogEntry, TaskView, MemberView
+    Project, Member, Repo, Task, LogEntry, TaskView, MemberView
 }
-import from walkers.org { GetMe, CreateOrganization }
 import from walkers.projects {
     ListProjects, SaveProject, ArchiveProject,
     AssignToProject, UnassignFromProject

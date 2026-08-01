@@ -1,15 +1,17 @@
 """Implementations for the Board page."""
 
 impl BoardPage.boot -> None {
-    # Onboarding gate: no org yet -> the setup wizard owns the session.
+    # Onboarding gate: a workspace with no projects yet goes to the wizard.
+    # (The organization itself is created at signup.)
     try {
-        me = root spawn GetMe();
-        if not me.reports {
+        projResult = root spawn ListProjects();
+        existing = projResult.reports[0] if projResult.reports else [];
+        if len(existing) == 0 {
             window.location.href = "/setup";
             return;
         }
     } except Exception as e {
-        toast("Failed to load your organization");
+        toast("Failed to load your workspace");
     }
     await loadAll();
 }

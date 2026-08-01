@@ -1,7 +1,7 @@
 """Daily-log walkers: day buckets and their entries."""
 
 import from models {
-    Organization, Project, Member, LogDay, LogEntry,
+    Project, Member, LogDay, LogEntry,
     Logged, By, resolve, on_attached, owned
 }
 
@@ -15,10 +15,7 @@ walker ListLogEntries {
         reports: list[list[LogEntry]] = [];
 
     can start with Root entry {
-        orgs = [here-->[?:Organization]];
-        if orgs {
-            visit [orgs[0]-->[?:LogDay, date >= self.from_date, date <= self.to_date]];
-        }
+        visit [here-->[?:LogDay, date >= self.from_date, date <= self.to_date]];
     }
 
     can descend with LogDay entry {
@@ -36,7 +33,7 @@ walker ListLogEntries {
 }
 
 walker LogActivity {
-    """Get-or-create the day bucket under the org, then append one
+    """Get-or-create the day bucket under the caller's root, then append one
     denormalized row. Refuses writes no view could fetch (empty date) or
     that would produce a blank authorless row (bad member jid)."""
     has date: str,
@@ -52,25 +49,24 @@ walker LogActivity {
         reports: list[LogEntry] = [];
 
     can start with Root entry {
-        orgs = [here-->[?:Organization]];
-        if not orgs or not self.date {
+        if not self.date {
             disengage;
         }
-        org = orgs[0];
         probe = resolve(self.member_id);
-        if not isinstance(probe, Member) or not owned(org, probe) {
+        if not isinstance(probe, Member) or not owned(here, probe) {
             disengage;
         }
-        visit [org-->[?:LogDay, date == self.date]] else {
-            fresh = org ++> LogDay(date=self.date);
-            on_attached(org, fresh);
+        visit [here-->[?:LogDay, date == self.date]] else {
+            fresh = here ++> LogDay(date=self.date);
+            on_attached(here, fresh);
             visit fresh;
         }
     }
 
     can add with LogDay entry {
-        owners = [here<--[?:Organization]];
-        org = owners[0];
+        # `here` is the LogDay; its container is the caller's root.
+        owners = [here<--];
+        holder = owners[0];
         member_name = "";
         section = "";
         m = resolve(self.member_id);
@@ -80,7 +76,7 @@ walker LogActivity {
         }
         project_name = "";
         p = resolve(self.project_id);
-        if isinstance(p, Project) and owned(org, p) {
+        if isinstance(p, Project) and owned(holder, p) {
             project_name = p.name;
         }
         row = here +>:Logged():+> LogEntry(
@@ -98,17 +94,16 @@ walker LogActivity {
 
 walker find_log_entry {
     """Lookup base for log-entry mutations: two-hop parentage check
-    (LogEntry <- LogDay <- Organization) before visiting."""
+    (LogEntry <- LogDay <- root) before visiting."""
     has entry_id: str = "";
 
     can locate with Root entry {
-        orgs = [here-->[?:Organization]];
         target = resolve(self.entry_id);
-        if not orgs or not isinstance(target, LogEntry) {
+        if not isinstance(target, LogEntry) {
             disengage;
         }
         days = [target<-:Logged:<-];
-        if days and owned(orgs[0], days[0]) {
+        if days and owned(here, days[0]) {
             visit [target];
         }
     }

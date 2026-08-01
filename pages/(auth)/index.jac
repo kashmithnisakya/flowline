@@ -6,7 +6,6 @@ the columns, cards, filters, and dialog are presentational components.
 
 import from ...constants { STATUSES }
 import from ...models { Project, MemberView, TaskView }
-import from ...walkers.org { GetMe }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListMembers }
 import from ...walkers.tasks {

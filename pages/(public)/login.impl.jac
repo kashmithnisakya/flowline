@@ -5,19 +5,25 @@ impl LoginPage.submit(e: FormEvent) -> None {
     if busy or not email.strip() or not password {
         return;
     }
+    signingUp = mode == "signup";
+    if signingUp and not orgName.strip() {
+        return;
+    }
     error = "";
-    if mode == "signup" and password != confirm {
+    if signingUp and password != confirm {
         error = "Passwords do not match.";
         return;
     }
     busy = True;
     addr = email.strip();
     pw = password;
+    org = orgName.strip();
     try {
-        if mode == "signup" {
-            # jacSignup returns a dict and does NOT log in.
+        if signingUp {
+            # The org name rides along as the account profile — jacSignup
+            # takes it directly, so there is no separate org-creation step.
             res: dict = {};
-            res = await jacSignup(addr, pw);
+            res = await jacSignup(addr, pw, {"org_name": org});
             if not res["success"] {
                 error = "Signup failed — is that email already registered?";
                 busy = False;
