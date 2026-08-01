@@ -5,13 +5,14 @@ form takes the organization name and hands it to jacSignup as the account
 profile. jacSignup does NOT create a session — always signup, check success,
 then login.
 
-Layout follows the design: a brand panel beside a tabbed auth card. No
-social buttons and no "Forgot?" link — neither SSO nor password reset is
-wired yet, and a dead control is worse than an absent one.
+Layout follows the design: a brand panel beside a tabbed auth card, with
+Google/GitHub sign-in wired to jac-scale's /sso endpoints. There is still no
+"Forgot?" link because password reset has no flow behind it yet.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
 import from ...components.auth.AuthAside { AuthAside }
+import from ...components.auth.SsoButtons { SsoButtons }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }
@@ -90,7 +91,19 @@ def:pub LoginPage() -> JsxPage {
                 </p>
             }}
 
-            <form onSubmit={submit} className="mt-6 flex flex-col gap-[13px]">
+            <div className="mt-6">
+                <SsoButtons
+                    operation={"register" if signup else "login"}
+                    onFailure={lambda (msg: str) { error = msg; }}
+                />
+            </div>
+            <div className="my-5 flex items-center gap-3">
+                <span className="h-px flex-1 bg-border"></span>
+                <span className="text-[11.5px] text-muted-foreground">or with email</span>
+                <span className="h-px flex-1 bg-border"></span>
+            </div>
+
+            <form onSubmit={submit} className="flex flex-col gap-[13px]">
                 {if signup {
                     <div key="who" className="grid grid-cols-2 gap-[9px]">
                         <div className="grid gap-1.5">
