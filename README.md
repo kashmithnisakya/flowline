@@ -70,9 +70,9 @@ curl -X POST http://localhost:8000/walker/ImportCsv \
   categories, priorities as `glob` lists shared by client dropdowns and server
   validation. Adding a value is a data edit, not a schema migration.
 
-See [PLAN.md](PLAN.md) for the full v1 design, the 0.34.6 gotchas baked into
-the implementation, and the v2 roadmap (dashboard aggregates, GitHub API
-integration, real accounts, log-from-card).
+See [PLAN.md](PLAN.md) for the v2 plan (PM auth, organizations, projects &
+people management) and [docs/PLAN-V1.md](docs/PLAN-V1.md) for the original v1
+design and the 0.34.6 gotchas baked into the implementation.
 
 > **Jac tip learned the hard way:** don't name a module after an npm package it
 > imports. `components/ui/sonner.jac` importing `"sonner"` resolved to *itself*,
