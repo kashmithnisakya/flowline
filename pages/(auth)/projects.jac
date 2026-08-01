@@ -32,7 +32,7 @@ def:pub ProjectsPage() -> JsxPage {
     <div className="space-y-8">
         <div className="flex items-center justify-between">
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+                <h1 className="font-display text-2xl font-bold tracking-tight">Projects</h1>
                 <p className="text-sm text-muted-foreground">
                     {len(active)} active — tasks and daily logs are scoped to these.
                 </p>

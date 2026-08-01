@@ -91,7 +91,7 @@ def:pub DailyLogPage() -> JsxPage {
     <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Daily Log</h1>
+                <h1 className="font-display text-2xl font-bold tracking-tight">Daily Log</h1>
                 <p className="text-sm text-muted-foreground">One row per person per weekday.</p>
             </div>
             <div className="flex items-center gap-2">

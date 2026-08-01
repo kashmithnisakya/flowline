@@ -1,81 +1,91 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/space-grotesk";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.58 0.22 27);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.809 0.105 251.813);
-    --chart-2: oklch(0.623 0.214 259.815);
-    --chart-3: oklch(0.546 0.245 262.881);
-    --chart-4: oklch(0.488 0.243 264.376);
-    --chart-5: oklch(0.424 0.199 265.638);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    /* standup brand — ink on warm paper with an ember accent.
+       Generated palette source of truth: PLAN.md / brand/logo.jac */
+    --background: #F6F2EB;          /* paper */
+    --foreground: #14120F;          /* ink */
+    --card: #FFFDFA;                /* surface */
+    --card-foreground: #14120F;
+    --popover: #FFFDFA;
+    --popover-foreground: #14120F;
+    --primary: #E8552F;             /* ember */
+    --primary-foreground: #F6F2EB;
+    --secondary: #EFE9DE;
+    --secondary-foreground: #3C372F;
+    --muted: #EFE9DE;
+    --muted-foreground: #6B6459;
+    --accent: #F1ECE3;
+    --accent-foreground: #14120F;
+    --destructive: #E8552F;
+    --border: #EFE9DE;
+    --input: #E2DACC;
+    --ring: #E8552F;
+    --success: #2C5545;             /* pine */
+    --warning: #E8A22F;             /* amber */
+    --chart-1: #E8552F;
+    --chart-2: #2C5545;
+    --chart-3: #E8A22F;
+    --chart-4: #8A8275;
+    --chart-5: #5E574B;
+    --radius: 0.75rem;              /* 12px — design uses 11-13px controls */
+    --sidebar: #FFFDFA;
+    --sidebar-foreground: #14120F;
+    --sidebar-primary: #E8552F;
+    --sidebar-primary-foreground: #F6F2EB;
+    --sidebar-accent: #F1ECE3;
+    --sidebar-accent-foreground: #14120F;
+    --sidebar-border: #EFE9DE;
+    --sidebar-ring: #E8552F;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.87 0.00 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.371 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.809 0.105 251.813);
-    --chart-2: oklch(0.623 0.214 259.815);
-    --chart-3: oklch(0.546 0.245 262.881);
-    --chart-4: oklch(0.488 0.243 264.376);
-    --chart-5: oklch(0.424 0.199 265.638);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #14120F;
+    --foreground: #F6F2EB;
+    --card: #1D1A16;
+    --card-foreground: #F6F2EB;
+    --popover: #1D1A16;
+    --popover-foreground: #F6F2EB;
+    --primary: #E8552F;
+    --primary-foreground: #F6F2EB;
+    --secondary: #2A2620;
+    --secondary-foreground: #F6F2EB;
+    --muted: #2A2620;
+    --muted-foreground: #8A8275;
+    --accent: #3C372F;
+    --accent-foreground: #F6F2EB;
+    --destructive: #E8552F;
+    --border: rgba(246, 242, 235, .12);
+    --input: rgba(246, 242, 235, .16);
+    --ring: #E8552F;
+    --success: #4E8C74;
+    --warning: #E8A22F;
+    --chart-1: #E8552F;
+    --chart-2: #4E8C74;
+    --chart-3: #E8A22F;
+    --chart-4: #8A8275;
+    --chart-5: #C9C1B4;
+    --sidebar: #1D1A16;
+    --sidebar-foreground: #F6F2EB;
+    --sidebar-primary: #E8552F;
+    --sidebar-primary-foreground: #F6F2EB;
+    --sidebar-accent: #3C372F;
+    --sidebar-accent-foreground: #F6F2EB;
+    --sidebar-border: rgba(246, 242, 235, .12);
+    --sidebar-ring: #E8552F;
 }
 
 @theme inline {
-    --font-sans: 'Figtree Variable', sans-serif;
+    --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
+    --font-display: 'Bricolage Grotesque Variable', 'Space Grotesk Variable', sans-serif;
+    --color-success: var(--success);
+    --color-warning: var(--warning);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

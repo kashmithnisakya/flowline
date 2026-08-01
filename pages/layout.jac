@@ -31,7 +31,12 @@ def:pub Shell() -> JsxLayout {
         {if loggedIn {
             <header key="nav" className="border-b">
                 <nav className="mx-auto flex max-w-[96rem] items-center gap-6 px-6 py-3">
-                    <span className="text-lg font-semibold tracking-tight">standup</span>
+                    <Link to="/" className="flex items-center gap-2">
+                        <img src="/static/brand/logo-mark.svg" alt="" width={28} height={28} />
+                        <span className="font-display text-lg font-bold tracking-tight">
+                            standup
+                        </span>
+                    </Link>
                     <Link to="/" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                         Board
                     </Link>
