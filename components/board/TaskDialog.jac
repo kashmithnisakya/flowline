@@ -20,6 +20,10 @@ import from ..ui.textarea { Textarea }
 import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
+import from ..ui.dropdown_menu {
+    DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+    DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem
+}
 
 def:pub TaskDialog(
     open: bool,
@@ -123,35 +127,56 @@ def:pub TaskDialog(
                 </div>
                 <div className="grid gap-2">
                     <Label>Assignees</Label>
-                    {if len(members) > 0 {
-                        <div key="chips" className="flex flex-wrap gap-1.5">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild={False}>
+                            <span className="flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border bg-card px-3 text-sm hover:bg-accent">
+                                <span className={"truncate" + ("" if len(assignees) > 0 else " text-muted-foreground")}>
+                                    {
+                                        ", ".join([m.name for m in members if m.id in assignees])
+                                        if len(assignees) > 0
+                                        else "Pick assignees"
+                                    }
+                                </span>
+                                <span className="ml-2 shrink-0 text-muted-foreground">⌄</span>
+                            </span>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-64">
+                            {if len(inProject) > 0 {
+                                <DropdownMenuLabel key="inl">On this project</DropdownMenuLabel>
+                            }}
                             {for m in inProject {
-                                <Badge
+                                <DropdownMenuCheckboxItem
                                     key={m.id}
-                                    variant={"default" if m.id in assignees else "outline"}
-                                    className="cursor-pointer"
-                                    onClick={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                    checked={m.id in assignees}
+                                    onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                    onSelect={lambda (e: any) { e.preventDefault(); }}
                                 >
                                     {m.name}
-                                </Badge>
+                                </DropdownMenuCheckboxItem>
+                            }}
+                            {if len(inProject) > 0 and len(outsiders) > 0 {
+                                <DropdownMenuSeparator key="sep" />
+                            }}
+                            {if len(outsiders) > 0 {
+                                <DropdownMenuLabel key="ol">
+                                    {"Other people" if selectedProject != "none" else "People"}
+                                </DropdownMenuLabel>
                             }}
                             {for m in outsiders {
-                                <Badge
+                                <DropdownMenuCheckboxItem
                                     key={m.id}
-                                    variant={"default" if m.id in assignees else "outline"}
-                                    className={"cursor-pointer" + ("" if selectedProject == "none" else " opacity-70")}
-                                    onClick={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                    checked={m.id in assignees}
+                                    onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                    onSelect={lambda (e: any) { e.preventDefault(); }}
                                 >
                                     {m.name}
-                                </Badge>
+                                </DropdownMenuCheckboxItem>
                             }}
-                        </div>
-                    } else {
-                        <p key="none" className="text-xs text-muted-foreground">No members yet.</p>
-                    }}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     {if outsideSelected {
                         <p key="hint" className="text-xs text-muted-foreground">
-                            Dimmed people are not on this project yet. Saving adds them to it.
+                            Some picks are not on this project yet. Saving adds them to it.
                         </p>
                     }}
                 </div>

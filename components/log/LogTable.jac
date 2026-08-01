@@ -26,27 +26,36 @@ def:pub LogTable(
                 <TableHeader>
                     <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Member</TableHead>
+                        <TableHead>Task</TableHead>
                         <TableHead>Project</TableHead>
-                        <TableHead>Tags</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Links</TableHead>
+                        <TableHead>Member</TableHead>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>PR</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Notes</TableHead>
+                        <TableHead>Note</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {for en in entries {
                         <TableRow key={jid(en)}>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">{en.date}</TableCell>
-                            <TableCell className="font-medium">{en.member_name}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                                <div className="text-sm">{en.date}</div>
+                                {if len(en.at) >= 16 {
+                                    <div className="text-xs text-muted-foreground">{en.at[11:16]}</div>
+                                }}
+                            </TableCell>
+                            <TableCell>
+                                <div className="font-medium">
+                                    {en.task_title if en.task_title else en.activity}
+                                </div>
+                                {if en.task_title {
+                                    <div className="text-xs text-muted-foreground">{en.activity}</div>
+                                }}
+                            </TableCell>
                             <TableCell className="text-muted-foreground">{en.project_name}</TableCell>
-                            <TableCell className="text-muted-foreground">{en.tags}</TableCell>
-                            <TableCell>{en.activity}</TableCell>
-                            <TableCell className="text-muted-foreground">{en.category}</TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
+                            <TableCell>{en.member_name}</TableCell>
+                            <TableCell className="text-xs">
                                 {if en.issue_link {
                                     <a
                                         href={en.issue_link}
@@ -55,10 +64,11 @@ def:pub LogTable(
                                     >
                                         Issue
                                     </a>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
-                                {if en.issue_link and en.pr_link {
-                                    <span className="text-muted-foreground"> · </span>
-                                }}
+                            </TableCell>
+                            <TableCell className="text-xs">
                                 {if en.pr_link {
                                     <a
                                         href={en.pr_link}
@@ -67,15 +77,17 @@ def:pub LogTable(
                                     >
                                         PR
                                     </a>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
                             </TableCell>
-                            <TableCell>{en.status}</TableCell>
-                            <TableCell className="max-w-48 truncate text-muted-foreground">{en.notes}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
+                            <TableCell className="whitespace-nowrap">{en.status}</TableCell>
+                            <TableCell className="max-w-56 truncate text-muted-foreground">{en.notes}</TableCell>
+                            <TableCell className="text-right">
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-destructive"
+                                    className="text-muted-foreground hover:text-destructive"
                                     onClick={lambda { onDelete(jid(en)); }}
                                 >
                                     ✕

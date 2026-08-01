@@ -70,7 +70,7 @@ walker CreateTask {
         if isinstance(p, Project) and owned(here, p) {
             fresh +>:ForProject():+> p;
         }
-        record_task_event(here, fresh, "Added '" + fresh.title + "' to " + col, stamp[:10]);
+        record_task_event(here, fresh, "Added to " + col, stamp);
         report fresh.to_view();
     }
 }
@@ -145,9 +145,7 @@ walker UpdateTask(find_task) {
         }
         if moved {
             record_task_event(
-                holder, here,
-                "Moved '" + here.title + "' to " + here.status,
-                here.updated_at[:10]
+                holder, here, "Moved to " + here.status, here.updated_at
             );
         }
         report here.to_view();
@@ -210,9 +208,7 @@ walker MoveTask(find_task) {
         here.updated_at = now_iso();
         if self.status != was {
             record_task_event(
-                holder, here,
-                "Moved '" + here.title + "' to " + here.status,
-                here.updated_at[:10]
+                holder, here, "Moved to " + here.status, here.updated_at
             );
         }
         report here.to_view();

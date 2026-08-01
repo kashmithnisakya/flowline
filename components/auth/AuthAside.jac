@@ -25,11 +25,11 @@ def:pub AuthAside() -> JsxElement {
                     A kanban board per project, so status is a glance instead of a meeting.
                 </li>
                 <li className="flex gap-3">
-                    <span aria-hidden="true" className="text-primary">—</span>
+                    <span aria-hidden="true" className="text-primary">•</span>
                     A written daily log that becomes the archive nobody has to remember.
                 </li>
                 <li className="flex gap-3">
-                    <span aria-hidden="true" className="text-primary">—</span>
+                    <span aria-hidden="true" className="text-primary">•</span>
                     Your own private workspace: one account, one organization.
                 </li>
             </ul>

@@ -73,7 +73,13 @@ impl BoardPage.setField(key: str, value: str) -> None {
 
 impl BoardPage.openCreate -> None {
     editingId = "";
-    form = {**BLANK_TASK, "project": fProject if fProject != "all" else "none"};
+    d = new(Date);
+    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    form = {
+        **BLANK_TASK,
+        "project": fProject if fProject != "all" else "none",
+        "due_date": shifted.toISOString()[:10]
+    };
     fAssignees = [];
     dialogOpen = True;
 }

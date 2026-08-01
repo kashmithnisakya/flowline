@@ -110,6 +110,8 @@ node LogDay {
 node LogEntry {
     has date: str,
         activity: str,
+        at: str = "",
+        task_title: str = "",
         category: str = "",
         repo: str = "",
         issue_link: str = "",

@@ -94,7 +94,8 @@ walker LogActivity {
 
 # Board moves write the log now: append one denormalized row describing a
 # task event to today's bucket. Called from the task walkers.
-def record_task_event(holder: Root, task: Task, activity: str, today: str) -> None {
+def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> None {
+    today = stamp[:10];
     if not today {
         return;
     }
@@ -117,7 +118,8 @@ def record_task_event(holder: Root, task: Task, activity: str, today: str) -> No
     }
     projects = [task ->:ForProject:->];
     day +>:Logged():+> LogEntry(
-        date=today, activity=activity, category=task.category,
+        date=today, at=stamp, task_title=task.title,
+        activity=activity, category=task.category,
         repo="", issue_link=task.issue_link, pr_link=task.pr_link,
         status=task.status, notes="",
         member_name=", ".join(names), tags=", ".join(tag_pool),
