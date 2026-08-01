@@ -79,12 +79,6 @@ def:pub BoardPage() -> JsxPage {
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
     allCategories = [t.value for t in vocab if t.kind == "category"];
-    weekAgoDate = new(Date);
-    weekAgoDate.setDate(weekAgoDate.getDate() - 7);
-    weekAgo = weekAgoDate.toISOString()[:10];
-    doneVisible = [t for t in visible if t.status == "Done"];
-    recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
-    olderDoneCount = len(doneVisible) - len(recentDone);
     visible = [
         t for t in tasks
         if (fProject == "all" or t.project_id == fProject)
@@ -92,6 +86,12 @@ def:pub BoardPage() -> JsxPage {
         and (fCategory == "All" or t.category == fCategory)
         and (not hideDone or t.status != "Done")
     ];
+    weekAgoDate = new(Date);
+    weekAgoDate.setDate(weekAgoDate.getDate() - 7);
+    weekAgo = weekAgoDate.toISOString()[:10];
+    doneVisible = [t for t in visible if t.status == "Done"];
+    recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
+    olderDoneCount = len(doneVisible) - len(recentDone);
 
     <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
