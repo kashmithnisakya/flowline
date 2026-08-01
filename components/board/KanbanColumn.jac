@@ -1,8 +1,8 @@
 """One status column: header with live count badge, drop target, card list."""
 
-import from endpoints { TaskView }
+import from ...models { TaskView }
 import from .TaskCard { TaskCard }
-import from .ui.badge { Badge }
+import from ..ui.badge { Badge }
 
 def:pub KanbanColumn(
     status: str,
@@ -54,7 +54,7 @@ def:pub KanbanColumn(
             <TaskCard key={t.id} task={t} onOpen={onOpen} onArrowMove={onArrowMove} />
         }}
         {if len(tasks) == 0 {
-            <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+            <div key="empty" className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
                 Empty
             </div>
         }}

@@ -1,9 +1,9 @@
 """This-week counts by status and category — the dashboard-lite that lets
 v1 defer the full Dashboard sheet."""
 
-import from endpoints { LogEntry }
-import from ..constants { STATUSES, CATEGORIES }
-import from .ui.badge { Badge }
+import from ...models { LogEntry }
+import from ...constants { STATUSES, CATEGORIES }
+import from ..ui.badge { Badge }
 
 def:pub WeekStrip(entries: list[LogEntry]) -> JsxElement {
     <div className="flex flex-wrap items-center gap-2 text-xs">

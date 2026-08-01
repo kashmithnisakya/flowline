@@ -1,30 +1,31 @@
-"""Board filters: team (defaults to the viewer's), assignee, category, hide-Done."""
+"""Board filters: project (persisted), assignee, category, hide-Done."""
 
-import from endpoints { Member }
-import from ..constants { TEAMS, CATEGORIES }
-import from .ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
-import from .ui.button { Button }
+import from ...models { Project, MemberView }
+import from ...constants { CATEGORIES }
+import from ..ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+import from ..ui.button { Button }
 
 def:pub FilterBar(
-    members: list[Member],
-    team: str,
+    projects: list[Project],
+    members: list[MemberView],
+    project: str,
     assignee: str,
     category: str,
     hideDone: bool,
-    onTeam: Callable[[str], None],
+    onProject: Callable[[str], None],
     onAssignee: Callable[[str], None],
     onCategory: Callable[[str], None],
     onHideDone: Callable[[], None]
 ) -> JsxElement {
     <div className="flex flex-wrap items-center gap-2">
-        <Select value={team} onValueChange={onTeam}>
-            <SelectTrigger className="h-8 w-40" size="sm">
-                <SelectValue placeholder="Team" />
+        <Select value={project} onValueChange={onProject}>
+            <SelectTrigger className="h-8 w-44" size="sm">
+                <SelectValue placeholder="Project" />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="All">All teams</SelectItem>
-                {for t in TEAMS {
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                <SelectItem value="all">All projects</SelectItem>
+                {for p in projects {
+                    <SelectItem key={jid(p)} value={jid(p)}>{p.name}</SelectItem>
                 }}
             </SelectContent>
         </Select>
@@ -35,7 +36,7 @@ def:pub FilterBar(
             <SelectContent>
                 <SelectItem value="All">Everyone</SelectItem>
                 {for m in members {
-                    <SelectItem key={jid(m)} value={jid(m)}>{m.name}</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 }}
             </SelectContent>
         </Select>

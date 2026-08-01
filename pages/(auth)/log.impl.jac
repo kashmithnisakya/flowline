@@ -3,25 +3,24 @@
 impl DailyLogPage.loadLists -> None {
     try {
         mResult = root spawn ListMembers();
+        pResult = root spawn ListProjects();
         rResult = root spawn ListRepos();
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         members = fetchedMembers;
+        projects = pResult.reports[0] if pResult.reports else [];
         repos = rResult.reports[0] if rResult.reports else [];
-        # Resolve WhoAmI against the freshly fetched roster: a stale jid
-        # (e.g. after a data re-import) must not prefill the form, or every
-        # submit would be rejected server-side with no visible reason.
-        who = localStorage.getItem("standup_who") or "";
+        # Restore the last-used member if it still resolves.
+        who = localStorage.getItem("standup_log_member") or "";
         found = False;
         for m in fetchedMembers {
-            if jid(m) == who {
+            if m.id == who and m.active {
                 found = True;
             }
         }
         if who and found {
-            lMember = who;
+            form = {**form, "member": who};
         } elif who {
-            localStorage.removeItem("standup_who");
-            lMember = "";
+            localStorage.removeItem("standup_log_member");
         }
     } except Exception as e {
         toast("Failed to load roster lists");
@@ -30,8 +29,8 @@ impl DailyLogPage.loadLists -> None {
 
 impl DailyLogPage.loadWeek -> None {
     # Sequence fence: responses can resolve out of order (the 60s reader
-    # cache makes the previous week near-instant while a new week is a
-    # slow round-trip), so only the newest request may assign state.
+    # cache makes the previous week near-instant while a new week is a slow
+    # round-trip), so only the newest request may assign state.
     seq = (weekReqRef.current or 0) + 1;
     weekReqRef.current = seq;
     monday = mondayOf(selectedDate);
@@ -49,41 +48,51 @@ impl DailyLogPage.loadWeek -> None {
     }
 }
 
+impl DailyLogPage.setField(key: str, value: str) -> None {
+    form = {**form, key: value};
+    if key == "member" and value {
+        localStorage.setItem("standup_log_member", value);
+    }
+}
+
 impl DailyLogPage.submitLog -> None {
-    if not lActivity.strip() or not selectedDate {
+    activity = form["activity"].strip();
+    if not activity or not selectedDate {
         return;
     }
-    if not editingEntryId and not lMember {
+    if not editingEntryId and not form["member"] {
         return;
     }
     saving = True;
     wasEditing = bool(editingEntryId);
-    repo = lRepo if lRepo != "none" else "";
+    keepMember = form["member"];
+    repo = form["repo"] if form["repo"] != "none" else "";
+    project = form["project"] if form["project"] != "none" else "";
     try {
         if editingEntryId {
             root spawn UpdateLogEntry(
-                entry_id=editingEntryId, activity=lActivity.strip(),
-                category=lCategory, repo=repo, issue_link=lIssue.strip(),
-                pr_link=lPr.strip(), status=lStatus, notes=lNotes
+                entry_id=editingEntryId, activity=activity,
+                category=form["category"], repo=repo,
+                issue_link=form["issue"].strip(), pr_link=form["pr"].strip(),
+                status=form["status"], notes=form["notes"]
             );
         } else {
             root spawn LogActivity(
-                date=selectedDate, member_id=lMember, activity=lActivity.strip(),
-                category=lCategory, repo=repo, issue_link=lIssue.strip(),
-                pr_link=lPr.strip(), status=lStatus, notes=lNotes
+                date=selectedDate, member_id=form["member"], activity=activity,
+                project_id=project, category=form["category"], repo=repo,
+                issue_link=form["issue"].strip(), pr_link=form["pr"].strip(),
+                status=form["status"], notes=form["notes"]
             );
         }
         editingEntryId = "";
         editingMemberName = "";
-        lActivity = "";
-        lIssue = "";
-        lPr = "";
-        lNotes = "";
         if wasEditing {
-            # Do not leak the edited row's dropdowns into the next fresh entry.
-            lCategory = "Coding";
-            lRepo = "none";
-            lStatus = "In Progress";
+            # Do not leak the edited row's dropdowns into the next entry.
+            form = {**BLANK_LOG, "member": keepMember};
+        } else {
+            form = {
+                **form, "activity": "", "issue": "", "pr": "", "notes": ""
+            };
         }
         await loadWeek();
     } except Exception as e {
@@ -95,25 +104,23 @@ impl DailyLogPage.submitLog -> None {
 impl DailyLogPage.startEdit(en: LogEntry) -> None {
     editingEntryId = jid(en);
     editingMemberName = en.member_name;
-    lActivity = en.activity;
-    lCategory = en.category if en.category else "Coding";
-    lRepo = en.repo if en.repo else "none";
-    lIssue = en.issue_link;
-    lPr = en.pr_link;
-    lStatus = en.status if en.status else "In Progress";
-    lNotes = en.notes;
+    form = {
+        **form,
+        "activity": en.activity,
+        "category": en.category if en.category else "Coding",
+        "repo": en.repo if en.repo else "none",
+        "issue": en.issue_link,
+        "pr": en.pr_link,
+        "status": en.status if en.status else "In Progress",
+        "notes": en.notes
+    };
 }
 
 impl DailyLogPage.cancelEdit -> None {
+    keepMember = form["member"];
     editingEntryId = "";
     editingMemberName = "";
-    lActivity = "";
-    lIssue = "";
-    lPr = "";
-    lNotes = "";
-    lCategory = "Coding";
-    lRepo = "none";
-    lStatus = "In Progress";
+    form = {**BLANK_LOG, "member": keepMember};
 }
 
 impl DailyLogPage.deleteEntry(entryId: str) -> None {

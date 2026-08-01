@@ -4,11 +4,11 @@ Draggable via native HTML5 DnD (custom MIME type so foreign drags are
 ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 """
 
-import from endpoints { TaskView }
-import from ..constants { STATUSES }
-import from .ui.card { Card, CardContent }
-import from .ui.badge { Badge }
-import from .ui.button { Button }
+import from ...models { TaskView }
+import from ...constants { STATUSES }
+import from ..ui.card { Card, CardContent }
+import from ..ui.badge { Badge }
+import from ..ui.button { Button }
 
 def:pub TaskCard(
     task: TaskView,
@@ -50,8 +50,8 @@ def:pub TaskCard(
         <CardContent className="space-y-2 p-3">
             <div className="text-sm font-medium leading-snug">{task.title}</div>
             <div className="flex flex-wrap items-center gap-1">
-                {if task.team {
-                    <Badge key="team" variant="secondary">{task.team}</Badge>
+                {if task.project_name {
+                    <Badge key="project" variant="secondary">{task.project_name}</Badge>
                 }}
                 {if task.priority {
                     <Badge key="priority" variant={priorityVariant}>{task.priority}</Badge>
@@ -61,13 +61,13 @@ def:pub TaskCard(
                 }}
             </div>
             {if task.assignee_name or task.due_date {
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div key="meta" className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{task.assignee_name}</span>
                     <span>{task.due_date}</span>
                 </div>
             }}
             {if task.status == "Blocked" and task.notes {
-                <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                <div key="blocked" className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
                     {task.notes}
                 </div>
             }}

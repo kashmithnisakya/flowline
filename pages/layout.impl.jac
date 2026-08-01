@@ -1,31 +1,18 @@
 """Implementations for the root layout."""
 
-impl Shell.loadMembers -> None {
+impl Shell.loadOrg -> None {
     try {
-        result = root spawn ListMembers();
-        fetched = result.reports[0] if result.reports else [];
-        members = fetched;
-        # Drop a WhoAmI that no longer resolves (roster re-import mints new
-        # jids) — a stale one would silently blank every log-form prefill.
-        who = localStorage.getItem("standup_who") or "";
-        if who and fetched {
-            found = False;
-            for m in fetched {
-                if jid(m) == who {
-                    found = True;
-                }
-            }
-            if not found {
-                localStorage.removeItem("standup_who");
-                whoAmI = "";
-            }
+        result = root spawn GetMe();
+        fetched = result.reports[0] if result.reports else None;
+        if fetched {
+            orgName = fetched.name;
         }
     } except Exception as e {
-        members = [];
+        orgName = "";
     }
 }
 
-impl Shell.setWho(memberId: str) -> None {
-    whoAmI = memberId;
-    localStorage.setItem("standup_who", memberId);
+impl Shell.logout -> None {
+    jacLogout();
+    window.location.href = "/login";
 }
