@@ -45,7 +45,7 @@ def:pub TaskCard(
                 onOpen(task);
             }
         }}
-        className="cursor-grab gap-0 py-0 transition-shadow hover:shadow-md active:cursor-grabbing"
+        className="group cursor-grab gap-0 border-border/70 py-0 transition-shadow hover:shadow-md active:cursor-grabbing"
     >
         <CardContent className="space-y-2 p-3">
             <div className="text-sm font-medium leading-snug">{task.title}</div>
@@ -71,11 +71,11 @@ def:pub TaskCard(
                     {task.notes}
                 </div>
             }}
-            <div className="flex justify-between pt-1">
+            <div className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100">
                 <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
                     disabled={not prevStatus}
                     title={"Move to " + prevStatus if prevStatus else ""}
                     onClick={lambda (e: MouseEvent) {
@@ -87,8 +87,8 @@ def:pub TaskCard(
                 </Button>
                 <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
                     disabled={not nextStatus}
                     title={"Move to " + nextStatus if nextStatus else ""}
                     onClick={lambda (e: MouseEvent) {

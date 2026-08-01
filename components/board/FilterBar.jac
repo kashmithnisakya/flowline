@@ -15,8 +15,10 @@ def:pub FilterBar(
     onProject: Callable[[str], None],
     onAssignee: Callable[[str], None],
     onCategory: Callable[[str], None],
-    onHideDone: Callable[[], None]
+    onHideDone: Callable[[], None],
+    categories: list[str] = []
 ) -> JsxElement {
+    categoryOptions = categories if categories else CATEGORIES;
     <div className="flex flex-wrap items-center gap-2">
         <Select value={project} onValueChange={onProject}>
             <SelectTrigger className="h-8 w-44" size="sm">
@@ -46,7 +48,7 @@ def:pub FilterBar(
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="All">All categories</SelectItem>
-                {for c in CATEGORIES {
+                {for c in categoryOptions {
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                 }}
             </SelectContent>

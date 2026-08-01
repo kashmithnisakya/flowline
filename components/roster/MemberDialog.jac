@@ -18,8 +18,12 @@ def:pub MemberDialog(
     saving: bool,
     onField: Callable[[str, str], None],
     onOpenChange: Callable[[bool], None],
-    onSave: Callable[[], None]
+    onSave: Callable[[], None],
+    sections: list[str] = []
 ) -> JsxElement {
+    # Custom sections ride in via the prop; built-ins are the fallback so
+    # previews and older call sites keep rendering.
+    sectionOptions = sections if sections else SECTIONS;
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
             <DialogHeader>
@@ -50,7 +54,7 @@ def:pub MemberDialog(
                             <SelectValue placeholder="Pick a section (optional)" />
                         </SelectTrigger>
                         <SelectContent>
-                            {for s in SECTIONS {
+                            {for s in sectionOptions {
                                 <SelectItem key={s} value={s}>{s}</SelectItem>
                             }}
                         </SelectContent>

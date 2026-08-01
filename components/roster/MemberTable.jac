@@ -11,6 +11,14 @@ import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
 
+# "Ishara Perera" -> "IP" for the avatar circle.
+def initialsOf(name: str) -> str {
+    parts = [w for w in name.split() if w];
+    first = parts[0][:1] if len(parts) > 0 else "?";
+    second = parts[1][:1] if len(parts) > 1 else "";
+    return (first + second).upper();
+}
+
 def:pub MemberTable(
     members: list[MemberView],
     projects: list[Project],
@@ -32,19 +40,29 @@ def:pub MemberTable(
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Name</TableHead>
+                        <TableHead>Member</TableHead>
                         <TableHead>Projects</TableHead>
-                        <TableHead>Role</TableHead>
                         <TableHead>Section</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>GitHub</TableHead>
+                        <TableHead>Contact</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {for m in members {
                         <TableRow key={m.id}>
-                            <TableCell className="font-medium">{m.name}</TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                        {initialsOf(m.name)}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <div className="truncate font-medium">{m.name}</div>
+                                        {if m.role {
+                                            <div className="truncate text-xs text-muted-foreground">{m.role}</div>
+                                        }}
+                                    </div>
+                                </div>
+                            </TableCell>
                             <TableCell>
                                 <div className="flex flex-wrap items-center gap-1">
                                     {for pname in m.project_names {
@@ -78,10 +96,26 @@ def:pub MemberTable(
                                     }}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{m.role}</TableCell>
-                            <TableCell className="text-muted-foreground">{m.section}</TableCell>
-                            <TableCell className="text-muted-foreground">{m.email}</TableCell>
-                            <TableCell className="text-muted-foreground">{m.github_username}</TableCell>
+                            <TableCell>
+                                {if m.section {
+                                    <Badge variant="outline">{m.section}</Badge>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">—</span>
+                                }}
+                            </TableCell>
+                            <TableCell>
+                                <div className="grid gap-0.5 text-xs text-muted-foreground">
+                                    {if m.email {
+                                        <span key="mail" className="truncate">{m.email}</span>
+                                    }}
+                                    {if m.github_username {
+                                        <span key="gh" className="truncate font-mono">@{m.github_username}</span>
+                                    }}
+                                    {if not m.email and not m.github_username {
+                                        <span key="dash">—</span>
+                                    }}
+                                </div>
+                            </TableCell>
                             <TableCell className="text-right">
                                 <Button variant="ghost" size="sm" onClick={lambda { onEdit(m); }}>
                                     Edit

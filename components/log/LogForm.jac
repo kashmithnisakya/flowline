@@ -11,6 +11,12 @@ import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
 
+# "jaseci-labs/standup" -> "standup" for the repo dropdown.
+def repoShortName(full_name: str) -> str {
+    parts = full_name.split("/");
+    return parts[-1] if parts else full_name;
+}
+
 def:pub LogForm(
     form: dict[str, str],
     members: list[MemberView],
@@ -21,22 +27,23 @@ def:pub LogForm(
     canSubmit: bool,
     onField: Callable[[str, str], None],
     onSubmit: Callable[[], None],
-    onCancel: Callable[[], None]
+    onCancel: Callable[[], None],
+    categories: list[str] = []
 ) -> JsxElement {
-    <Card>
-        <CardHeader>
+    # Custom categories ride in via the prop; built-ins are the fallback.
+    categoryOptions = categories if categories else CATEGORIES;
+    <Card className="gap-0 py-4">
+        <CardHeader className="pb-3">
             <CardTitle className="text-base">
-                {"Update entry" if editing else "Log activity"}
+                {("Update entry for " + editingMemberName) if editing else "Log activity"}
             </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                <div className="grid gap-2">
-                    <Label>Member</Label>
-                    {if editing {
-                        <Input key="ro" value={editingMemberName} disabled={True} />
-                    } else {
-                        <Select key="sel"
+        <CardContent className="grid gap-3">
+            <div className="flex flex-wrap items-end gap-2">
+                {if not editing {
+                    <div key="who" className="grid w-44 gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Member</Label>
+                        <Select
                             value={form["member"]}
                             onValueChange={lambda (v: str) { onField("member", v); }}
                         >
@@ -47,10 +54,29 @@ def:pub LogForm(
                                 }}
                             </SelectContent>
                         </Select>
-                    }}
+                    </div>
+                }}
+                <div className="grid min-w-56 flex-1 gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Activity / task</Label>
+                    <Input
+                        placeholder="What did they work on?"
+                        value={form["activity"]}
+                        onChange={lambda (e: ChangeEvent) { onField("activity", e.target.value); }}
+                        onKeyDown={lambda (e: KeyboardEvent) {
+                            if e.key == "Enter" { onSubmit(); }
+                        }}
+                    />
                 </div>
-                <div className="grid gap-2">
-                    <Label>Project</Label>
+                {if editing {
+                    <Button key="cancel" variant="outline" onClick={onCancel}>Cancel</Button>
+                }}
+                <Button onClick={onSubmit} disabled={not canSubmit}>
+                    {"Update" if editing else "Log it"}
+                </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Project</Label>
                     <Select
                         value={form["project"]}
                         onValueChange={lambda (v: str) { onField("project", v); }}
@@ -65,22 +91,22 @@ def:pub LogForm(
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Category</Label>
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Category</Label>
                     <Select
                         value={form["category"]}
                         onValueChange={lambda (v: str) { onField("category", v); }}
                     >
                         <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
                         <SelectContent>
-                            {for c in CATEGORIES {
+                            {for c in categoryOptions {
                                 <SelectItem key={c} value={c}>{c}</SelectItem>
                             }}
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Status</Label>
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Status</Label>
                     <Select
                         value={form["status"]}
                         onValueChange={lambda (v: str) { onField("status", v); }}
@@ -93,8 +119,8 @@ def:pub LogForm(
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid gap-2">
-                    <Label>GitHub repo</Label>
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">GitHub repo</Label>
                     <Select
                         value={form["repo"]}
                         onValueChange={lambda (v: str) { onField("repo", v); }}
@@ -103,52 +129,38 @@ def:pub LogForm(
                         <SelectContent>
                             <SelectItem value="none">No repo</SelectItem>
                             {for r in repos {
-                                <SelectItem key={jid(r)} value={r.full_name}>{r.full_name}</SelectItem>
+                                <SelectItem key={jid(r)} value={r.full_name}>{repoShortName(r.full_name)}</SelectItem>
                             }}
                         </SelectContent>
                     </Select>
                 </div>
             </div>
-            <div className="grid gap-2">
-                <Label>Activity / task</Label>
-                <Input
-                    placeholder="What did they work on?"
-                    value={form["activity"]}
-                    onChange={lambda (e: ChangeEvent) { onField("activity", e.target.value); }}
-                />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                    <Label>GitHub issue link</Label>
+            <div className="grid gap-2 lg:grid-cols-[1fr_1fr_2fr]">
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">GitHub issue link</Label>
                     <Input
                         placeholder="https://github.com/..."
                         value={form["issue"]}
                         onChange={lambda (e: ChangeEvent) { onField("issue", e.target.value); }}
                     />
                 </div>
-                <div className="grid gap-2">
-                    <Label>PR link</Label>
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">PR link</Label>
                     <Input
                         placeholder="https://github.com/..."
                         value={form["pr"]}
                         onChange={lambda (e: ChangeEvent) { onField("pr", e.target.value); }}
                     />
                 </div>
-            </div>
-            <div className="grid gap-2">
-                <Label>Notes / blockers</Label>
-                <Textarea
-                    value={form["notes"]}
-                    onChange={lambda (e: ChangeEvent) { onField("notes", e.target.value); }}
-                />
-            </div>
-            <div className="flex justify-end gap-2">
-                {if editing {
-                    <Button key="cancel" variant="outline" onClick={onCancel}>Cancel</Button>
-                }}
-                <Button onClick={onSubmit} disabled={not canSubmit}>
-                    {"Update" if editing else "Log it"}
-                </Button>
+                <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Notes / blockers</Label>
+                    <Textarea
+                        className="min-h-9"
+                        rows={1}
+                        value={form["notes"]}
+                        onChange={lambda (e: ChangeEvent) { onField("notes", e.target.value); }}
+                    />
+                </div>
             </div>
         </CardContent>
     </Card>

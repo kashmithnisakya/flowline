@@ -28,7 +28,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             res: dict = {};
             res = await jacSignup(addr, pw, {"org_name": org, "full_name": who});
             if not res["success"] {
-                error = "Signup failed — is that email already registered?";
+                error = "Signup failed. Is that email already registered?";
                 busy = False;
                 return;
             }
@@ -44,7 +44,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             error = "Invalid email or password.";
         }
     } except Exception as ex {
-        error = "Something went wrong — try again.";
+        error = "Something went wrong. Try again.";
     }
     busy = False;
 }

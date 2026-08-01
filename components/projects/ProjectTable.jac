@@ -1,10 +1,9 @@
-"""Project list with edit/archive actions."""
+"""Project grid: one card per project with edit/archive actions."""
 
 import from ...models { Project }
 import from ..ui.button { Button }
-import from ..ui.card { Card, CardContent }
-import from ..ui.table {
-    Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+import from ..ui.card {
+    Card, CardHeader, CardTitle, CardDescription, CardContent
 }
 
 def:pub ProjectTable(
@@ -20,38 +19,32 @@ def:pub ProjectTable(
         </Card>;
     }
 
-    <Card>
-        <CardContent className="pt-4">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {for p in projects {
-                        <TableRow key={jid(p)}>
-                            <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell className="text-muted-foreground">{p.description}</TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" onClick={lambda { onEdit(p); }}>
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive"
-                                    onClick={lambda { onArchive(jid(p)); }}
-                                >
-                                    Archive
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    }}
-                </TableBody>
-            </Table>
-        </CardContent>
-    </Card>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {for p in projects {
+            <Card key={jid(p)} className="gap-3 py-5 transition-shadow hover:shadow-md">
+                <CardHeader className="gap-1">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                        <span className="truncate">{p.name}</span>
+                    </CardTitle>
+                    <CardDescription className="min-h-10 text-sm">
+                        {p.description if p.description else "No description yet."}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-end gap-1 pt-0">
+                    <Button variant="ghost" size="sm" onClick={lambda { onEdit(p); }}>
+                        Edit
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={lambda { onArchive(jid(p)); }}
+                    >
+                        Archive
+                    </Button>
+                </CardContent>
+            </Card>
+        }}
+    </div>
 }

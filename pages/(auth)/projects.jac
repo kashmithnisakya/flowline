@@ -34,7 +34,7 @@ def:pub ProjectsPage() -> JsxPage {
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Projects</h1>
                 <p className="text-sm text-muted-foreground">
-                    {len(active)} active — tasks and daily logs are scoped to these.
+                    {len(active)} active. Tasks and daily logs are scoped to these.
                 </p>
             </div>
             <Button onClick={openCreate}>New project</Button>

@@ -21,7 +21,7 @@ def:pub AuthAside() -> JsxElement {
             </p>
             <ul className="space-y-3 text-sm text-background/70">
                 <li className="flex gap-3">
-                    <span aria-hidden="true" className="text-primary">—</span>
+                    <span aria-hidden="true" className="text-primary">•</span>
                     A kanban board per project, so status is a glance instead of a meeting.
                 </li>
                 <li className="flex gap-3">
@@ -30,7 +30,7 @@ def:pub AuthAside() -> JsxElement {
                 </li>
                 <li className="flex gap-3">
                     <span aria-hidden="true" className="text-primary">—</span>
-                    Your own private workspace — one account, one organization.
+                    Your own private workspace: one account, one organization.
                 </li>
             </ul>
         </div>

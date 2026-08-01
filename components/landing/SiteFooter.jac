@@ -33,7 +33,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
         <div className="mt-10 flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
                 <img src="/static/brand/logo-mark.svg" alt="" width={20} height={20} />
-                <span>standup — built with Jac</span>
+                <span>standup<span className="text-primary ml-0.5">.</span> · built with Jac</span>
             </div>
             <div className="flex gap-5">
                 <a href="#product" className="transition-colors hover:text-foreground">Product</a>

@@ -44,7 +44,7 @@ def:pub SetupPage() -> JsxPage {
                         {"Welcome to " + orgName if orgName else "Create your first project"}
                     </CardTitle>
                     <CardDescription>
-                        Step 1 of 2 — tasks and daily logs are scoped to projects.
+                        Step 1 of 2: tasks and daily logs are scoped to projects.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -68,7 +68,7 @@ def:pub SetupPage() -> JsxPage {
                 <CardHeader>
                     <CardTitle>Add your people</CardTitle>
                     <CardDescription>
-                        Step 2 of 2 — team members are roster records (no accounts).
+                        Step 2 of 2: team members are roster records (no accounts).
                         You can add more any time on the People page.
                     </CardDescription>
                 </CardHeader>

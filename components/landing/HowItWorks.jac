@@ -11,7 +11,7 @@ glob STEPS: list[Step] = [
         n="1",
         title="Create your workspace",
         body="Sign up with your work email and name your organization. The account "
-            + "you create is the organization — there is nothing else to set up."
+            + "you create is the organization. There is nothing else to set up."
     ),
     Step(
         n="2",

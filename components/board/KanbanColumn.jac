@@ -4,6 +4,16 @@ import from ...models { TaskView }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
 
+# Status accent colors from the brand palette (see styles/global.css).
+glob STATUS_DOT: dict[str, str] = {
+    "Backlog": "var(--chart-4)",
+    "In Progress": "var(--primary)",
+    "Review": "var(--warning)",
+    "Changes Requested": "var(--warning)",
+    "Done": "var(--success)",
+    "Blocked": "var(--destructive)"
+};
+
 def:pub KanbanColumn(
     status: str,
     tasks: list[TaskView],
@@ -15,7 +25,7 @@ def:pub KanbanColumn(
 
     <div
         className={
-            "flex w-64 shrink-0 flex-col gap-2 rounded-lg border bg-muted/30 p-2 "
+            "flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-muted/30 p-2 "
             + ("ring-2 ring-ring" if dragOver else "")
         }
         onDragOver={lambda (e: DragEvent) {
@@ -47,15 +57,21 @@ def:pub KanbanColumn(
         }}
     >
         <div className="flex items-center justify-between px-1 py-1">
-            <span className="text-sm font-medium">{status}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+                <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{"background": STATUS_DOT.get(status, "var(--chart-4)")}}
+                />
+                <span className="truncate">{status}</span>
+            </span>
             <Badge variant="secondary">{len(tasks)}</Badge>
         </div>
         {for t in tasks {
             <TaskCard key={t.id} task={t} onOpen={onOpen} onArrowMove={onArrowMove} />
         }}
         {if len(tasks) == 0 {
-            <div key="empty" className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-                Empty
+            <div key="empty" className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                Drop a task here
             </div>
         }}
     </div>
