@@ -41,6 +41,7 @@ def:pub MemberTable(
                 <TableHeader>
                     <TableRow>
                         <TableHead>Member</TableHead>
+                        <TableHead>Roles</TableHead>
                         <TableHead>Projects</TableHead>
                         <TableHead>Tags</TableHead>
                         <TableHead>Contact</TableHead>
@@ -57,11 +58,19 @@ def:pub MemberTable(
                                     </span>
                                     <div className="min-w-0">
                                         <div className="truncate font-medium">{m.name}</div>
-                                        {if len(m.roles) > 0 {
-                                            <div className="truncate text-xs text-muted-foreground">{", ".join(m.roles)}</div>
-                                        }}
                                     </div>
                                 </div>
+                            </TableCell>
+                            <TableCell>
+                                {if len(m.roles) > 0 {
+                                    <div className="flex flex-wrap gap-1">
+                                        {for r in m.roles {
+                                            <Badge key={r} variant="secondary" className="font-normal">{r}</Badge>
+                                        }}
+                                    </div>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">—</span>
+                                }}
                             </TableCell>
                             <TableCell>
                                 <div className="flex flex-wrap items-center gap-1">
