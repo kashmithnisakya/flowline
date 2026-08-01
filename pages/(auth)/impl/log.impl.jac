@@ -49,7 +49,12 @@ impl DailyLogPage.loadWeek -> None {
 }
 
 impl DailyLogPage.setField(key: str, value: str) -> None {
-    form = {**form, key: value};
+    # NOTE: `{**form, key: value}` compiles to a JS object literal with a
+    # LITERAL "key" property — the variable is ignored and the real field
+    # never updates (inputs appear frozen). Build a copy and subscript it.
+    updated = {**form};
+    updated[key] = value;
+    form = updated;
     if key == "member" and value {
         localStorage.setItem("standup_log_member", value);
     }
