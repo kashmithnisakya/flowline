@@ -14,7 +14,7 @@ Requested · Done · Blocked`), no login — identity is a "Who are you?" picker
 the same trust model as the spreadsheet it replaces.
 
 | Page | Replaces | Highlights |
-|---|---|---|
+| --- | --- | --- |
 | **Board** (`/`) | To Do List sheet | 6 status columns, native drag-and-drop **plus** ←/→ click-to-move on every card, optimistic moves with server-authoritative ordering, filters that default to *your* team, live column counts, 60s poll + refetch-on-focus |
 | **Daily Log** (`/log`) | Daily Log sheet | One row per person per weekday with the exact sheet columns, form prefilled from the WhoAmI picker, day/week views, This-Week count strip |
 | **Roster** (`/roster`) | Team Roster sheet | Members + GitHub repos CRUD; feeds every dropdown; archiving un-assigns open tasks but keeps history |
@@ -23,9 +23,11 @@ the same trust model as the spreadsheet it replaces.
 <summary><b>More screenshots</b></summary>
 
 ### Daily Log
+
 ![Daily Log](docs/daily-log.png)
 
 ### Roster
+
 ![Roster](docs/roster.png)
 
 </details>
@@ -81,3 +83,7 @@ integration, real accounts, log-from-card).
 
 v1 — no auth (run it on the internal network), last-write-wins concurrency,
 dashboard deferred. The spreadsheet's job, done by an app.
+
+## License
+
+[MIT](LICENSE)
