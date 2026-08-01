@@ -36,7 +36,7 @@ def:pub SsoCallbackPage() -> JsxPage {
             # Same marker a password login sets, so a later 401 can tell
             # this apart from a cold arrival at /login.
             localStorage.setItem("standup_session", "1");
-            window.location.href = "/";
+            window.location.href = "/board";
         } else {
             failure = problem if problem else "Sign-in was cancelled or failed.";
         }

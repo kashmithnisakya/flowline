@@ -1,16 +1,19 @@
 """standup - root layout.
 
-Logged in: app nav + org name + logout. Logged out: bare shell (the
-(public)/login page centers itself; (auth)/ pages are guarded anyway).
+App pages get the nav, org name and logout. Public pages (the landing page
+and the auth screens) render bare — the landing brings its own header, and
+a logged-in visitor browsing / should not see two navs stacked.
 """
 
-import from "@jac/runtime" { Outlet, Link, jacIsLoggedIn, jacLogout }
+import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from ..lib.session { fetchOrgName }
 import from ..components.ui.button { Button }
 # Note: the wrapper lives in toaster.jac, not sonner.jac — a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
 # producing a self-rendering Toaster and an infinite React mount loop.
 import from ..components.ui.toaster { Toaster }
+
+glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"];
 
 def:pub Shell() -> JsxLayout {
     has loggedIn: bool = False,
@@ -27,17 +30,20 @@ def:pub Shell() -> JsxLayout {
     async def loadOrg -> None;
     def logout -> None;
 
+    location = useLocation();
+    chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
+
     <div className="min-h-screen bg-background text-foreground">
-        {if loggedIn {
+        {if chrome {
             <header key="nav" className="border-b">
                 <nav className="mx-auto flex max-w-[96rem] items-center gap-6 px-6 py-3">
-                    <Link to="/" className="flex items-center gap-2">
+                    <Link to="/board" className="flex items-center gap-2">
                         <img src="/static/brand/logo-mark.svg" alt="" width={28} height={28} />
                         <span className="font-display text-lg font-bold tracking-tight">
                             standup
                         </span>
                     </Link>
-                    <Link to="/" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link to="/board" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                         Board
                     </Link>
                     <Link to="/log" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
@@ -62,9 +68,13 @@ def:pub Shell() -> JsxLayout {
                 </nav>
             </header>
         }}
-        <main className="mx-auto max-w-[96rem] px-6 py-6">
-            <Outlet />
-        </main>
+        {if chrome {
+            <main key="app" className="mx-auto max-w-[96rem] px-6 py-6">
+                <Outlet />
+            </main>
+        } else {
+            <Outlet key="bare" />
+        }}
         <Toaster />
     </div>
 }
