@@ -8,9 +8,7 @@ def:pub ProjectTable(
     projects: list[Project],
     repos: list[RepoView],
     onEdit: Callable[[Project], None],
-    onArchive: Callable[[str], None],
-    onAddRepo: Callable[[str, str], None],
-    onRemoveRepo: Callable[[str], None]
+    onArchive: Callable[[str], None]
 ) -> JsxElement {
     if len(projects) == 0 {
         return <Card>
@@ -28,8 +26,6 @@ def:pub ProjectTable(
                 repos={[r for r in repos if r.project_id == jid(p)]}
                 onEdit={onEdit}
                 onArchive={onArchive}
-                onAddRepo={onAddRepo}
-                onRemoveRepo={onRemoveRepo}
             />
         }}
     </div>

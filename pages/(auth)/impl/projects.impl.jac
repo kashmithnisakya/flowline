@@ -16,6 +16,7 @@ impl ProjectsPage.openCreate -> None {
     editingId = "";
     fName = "";
     fDescription = "";
+    fRepoDraft = "";
     dialogOpen = True;
 }
 
@@ -23,6 +24,7 @@ impl ProjectsPage.openEdit(p: Project) -> None {
     editingId = jid(p);
     fName = p.name;
     fDescription = p.description;
+    fRepoDraft = "";
     dialogOpen = True;
 }
 
@@ -32,9 +34,19 @@ impl ProjectsPage.saveProject -> None {
     }
     saving = True;
     try {
-        root spawn SaveProject(
+        result = root spawn SaveProject(
             project_id=editingId, name=fName.strip(), description=fDescription
         );
+        saved = result.reports[0] if result.reports else None;
+        draft = normalizeRepoInput(fRepoDraft);
+        if saved and fRepoDraft.strip() {
+            if draft {
+                root spawn AddRepo(full_name=draft, project_id=jid(saved));
+            } else {
+                toast("Saved, but the repo link did not look like a GitHub repo.");
+            }
+        }
+        fRepoDraft = "";
         dialogOpen = False;
         await loadProjects();
     } except Exception as e {
@@ -52,19 +64,6 @@ impl ProjectsPage.archiveProject(projectId: str) -> None {
     }
 }
 
-impl ProjectsPage.addRepo(projectId: str, raw: str) -> None {
-    cleaned = normalizeRepoInput(raw);
-    if not cleaned {
-        toast("That does not look like a GitHub repo link.");
-        return;
-    }
-    try {
-        root spawn AddRepo(full_name=cleaned, project_id=projectId);
-        await loadProjects();
-    } except Exception as e {
-        toast("Failed to add repo");
-    }
-}
 
 impl ProjectsPage.removeRepo(repoId: str) -> None {
     try {
