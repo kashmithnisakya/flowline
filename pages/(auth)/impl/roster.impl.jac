@@ -4,11 +4,9 @@ impl RosterPage.loadAll -> None {
     try {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        rResult = root spawn ListRepos();
         vResult = root spawn ListVocab();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
-        repos = rResult.reports[0] if rResult.reports else [];
         vocab = vResult.reports[0] if vResult.reports else [];
     } except Exception as e {
         toast("Failed to load the workspace");
@@ -18,25 +16,59 @@ impl RosterPage.loadAll -> None {
 
 impl RosterPage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
-    # LITERAL "key" property — the variable is ignored and the real field
-    # never updates (inputs appear frozen). Build a copy and subscript it.
+    # LITERAL "key" property. Build a copy and subscript it instead.
     updated = {**form};
     updated[key] = value;
     form = updated;
 }
 
+impl RosterPage.addRole -> None {
+    draft = form["roleDraft"].strip();
+    if not draft or draft in mRoles {
+        return;
+    }
+    mRoles = mRoles + [draft];
+    setField("roleDraft", "");
+}
+
+impl RosterPage.removeRole(role: str) -> None {
+    mRoles = [r for r in mRoles if r != role];
+}
+
+impl RosterPage.toggleTag(tag: str) -> None {
+    if tag in mTags {
+        mTags = [t for t in mTags if t != tag];
+    } else {
+        mTags = mTags + [tag];
+    }
+}
+
+impl RosterPage.toggleProject(projectId: str) -> None {
+    if projectId in mProjects {
+        mProjects = [p for p in mProjects if p != projectId];
+    } else {
+        mProjects = mProjects + [projectId];
+    }
+}
+
 impl RosterPage.openCreate -> None {
     editingId = "";
     form = BLANK_MEMBER;
+    mRoles = [];
+    mTags = [];
+    mProjects = [];
     dialogOpen = True;
 }
 
 impl RosterPage.openEdit(m: MemberView) -> None {
     editingId = m.id;
     form = {
-        "name": m.name, "role": m.role, "email": m.email,
-        "github": m.github_username, "section": m.section
+        "name": m.name, "email": m.email,
+        "github": m.github_username, "roleDraft": ""
     };
+    mRoles = m.roles;
+    mTags = m.tags;
+    mProjects = m.project_ids;
     dialogOpen = True;
 }
 
@@ -46,12 +78,33 @@ impl RosterPage.saveMember -> None {
         return;
     }
     saving = True;
+    # A role still sitting in the draft box counts; losing typed input on
+    # save is the setup-wizard bug all over again.
+    roles = mRoles;
+    draft = form["roleDraft"].strip();
+    if draft and draft not in roles {
+        roles = roles + [draft];
+    }
     try {
-        root spawn SaveMember(
-            member_id=editingId, name=name, role=form["role"].strip(),
+        result = root spawn SaveMember(
+            member_id=editingId, name=name, roles=roles,
             email=form["email"].strip(), github_username=form["github"].strip(),
-            section=form["section"]
+            tags=mTags
         );
+        saved = result.reports[0] if result.reports else None;
+        if saved {
+            before = saved.project_ids;
+            for pid in mProjects {
+                if pid not in before {
+                    root spawn AssignToProject(member_id=saved.id, project_id=pid);
+                }
+            }
+            for pid in before {
+                if pid not in mProjects {
+                    root spawn UnassignFromProject(member_id=saved.id, project_id=pid);
+                }
+            }
+        }
         dialogOpen = False;
         await loadAll();
     } except Exception as e {
@@ -101,41 +154,8 @@ impl RosterPage.unassignFrom(memberId: str, projectName: str) -> None {
     }
 }
 
-impl RosterPage.addRepo -> None {
-    # Accept a pasted GitHub URL (https/ssh, with or without .git) or a
-    # bare org/repo, and store the normalized org/repo form.
-    captured = newRepo.strip();
-    if not captured {
-        return;
-    }
-    cleaned = captured;
-    cleaned = cleaned.replace("https://github.com/", "");
-    cleaned = cleaned.replace("http://github.com/", "");
-    cleaned = cleaned.replace("git@github.com:", "");
-    cleaned = cleaned.replace("www.github.com/", "");
-    if cleaned.endswith(".git") {
-        cleaned = cleaned[:-4];
-    }
-    cleaned = cleaned.strip("/");
-    parts = [p for p in cleaned.split("/") if p];
-    if len(parts) >= 2 {
-        cleaned = parts[0] + "/" + parts[1];
-    }
-    if not cleaned {
-        toast("That does not look like a GitHub repo link.");
-        return;
-    }
-    try {
-        root spawn AddRepo(full_name=cleaned);
-        newRepo = "";
-        await loadAll();
-    } except Exception as e {
-        toast("Failed to add repo");
-    }
-}
-
 impl RosterPage.addVocab(kind: str) -> None {
-    value = newCategory.strip() if kind == "category" else newSection.strip();
+    value = newCategory.strip() if kind == "category" else newTag.strip();
     if not value {
         return;
     }
@@ -144,7 +164,7 @@ impl RosterPage.addVocab(kind: str) -> None {
         if kind == "category" {
             newCategory = "";
         } else {
-            newSection = "";
+            newTag = "";
         }
         await loadAll();
     } except Exception as e {
@@ -158,14 +178,5 @@ impl RosterPage.removeVocab(termId: str) -> None {
         await loadAll();
     } except Exception as e {
         toast("Failed to remove the term");
-    }
-}
-
-impl RosterPage.removeRepo(repoId: str) -> None {
-    try {
-        root spawn RemoveRepo(repo_id=repoId);
-        await loadAll();
-    } except Exception as e {
-        toast("Failed to remove repo");
     }
 }

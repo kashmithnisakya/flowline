@@ -1,50 +1,36 @@
-"""Project grid: one card per project with edit/archive actions."""
+"""Project grid: one ProjectCard per active project."""
 
-import from ...models { Project }
-import from ..ui.button { Button }
-import from ..ui.card {
-    Card, CardHeader, CardTitle, CardDescription, CardContent
-}
+import from ...models { Project, RepoView }
+import from ..ui.card { Card, CardContent }
+import from .ProjectCard { ProjectCard }
 
 def:pub ProjectTable(
     projects: list[Project],
+    repos: list[RepoView],
     onEdit: Callable[[Project], None],
-    onArchive: Callable[[str], None]
+    onArchive: Callable[[str], None],
+    onAddRepo: Callable[[str, str], None],
+    onRemoveRepo: Callable[[str], None]
 ) -> JsxElement {
     if len(projects) == 0 {
         return <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                No projects yet — create your first one.
+                No projects yet. Create your first one.
             </CardContent>
         </Card>;
     }
 
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {for p in projects {
-            <Card key={jid(p)} className="gap-3 py-5 transition-shadow hover:shadow-md">
-                <CardHeader className="gap-1">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
-                        <span className="truncate">{p.name}</span>
-                    </CardTitle>
-                    <CardDescription className="min-h-10 text-sm">
-                        {p.description if p.description else "No description yet."}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-end gap-1 pt-0">
-                    <Button variant="ghost" size="sm" onClick={lambda { onEdit(p); }}>
-                        Edit
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={lambda { onArchive(jid(p)); }}
-                    >
-                        Archive
-                    </Button>
-                </CardContent>
-            </Card>
+            <ProjectCard
+                key={jid(p)}
+                project={p}
+                repos={[r for r in repos if r.project_id == jid(p)]}
+                onEdit={onEdit}
+                onArchive={onArchive}
+                onAddRepo={onAddRepo}
+                onRemoveRepo={onRemoveRepo}
+            />
         }}
     </div>
 }

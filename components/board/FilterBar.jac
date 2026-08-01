@@ -1,7 +1,6 @@
 """Board filters: project (persisted), assignee, category, hide-Done."""
 
 import from ...models { Project, MemberView }
-import from ...constants { CATEGORIES }
 import from ..ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
 import from ..ui.button { Button }
 
@@ -18,7 +17,10 @@ def:pub FilterBar(
     onHideDone: Callable[[], None],
     categories: list[str] = []
 ) -> JsxElement {
-    categoryOptions = categories if categories else CATEGORIES;
+    shownMembers = [
+        m for m in members
+        if project == "all" or project in m.project_ids
+    ];
     <div className="flex flex-wrap items-center gap-2">
         <Select value={project} onValueChange={onProject}>
             <SelectTrigger className="h-8 w-44" size="sm">
@@ -37,7 +39,7 @@ def:pub FilterBar(
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="All">Everyone</SelectItem>
-                {for m in members {
+                {for m in shownMembers {
                     <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 }}
             </SelectContent>
@@ -48,7 +50,7 @@ def:pub FilterBar(
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="All">All categories</SelectItem>
-                {for c in categoryOptions {
+                {for c in categories {
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                 }}
             </SelectContent>

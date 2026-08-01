@@ -5,8 +5,7 @@ of roster members (members have no accounts in v2). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """
 
-import from ...models { Project, MemberView, Repo, LogEntry, VocabTerm }
-import from ...constants { CATEGORIES }
+import from ...models { Project, MemberView, RepoView, LogEntry, VocabTerm }
 import from ...walkers.roster { ListMembers, ListRepos }
 import from ...walkers.vocab { ListVocab }
 import from ...walkers.projects { ListProjects }
@@ -22,7 +21,7 @@ import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 
 glob BLANK_LOG: dict[str, str] = {
-    "member": "", "project": "none", "category": "Coding",
+    "member": "", "project": "none", "category": "",
     "status": "In Progress", "repo": "none", "activity": "",
     "issue": "", "pr": "", "notes": ""
 };
@@ -54,7 +53,7 @@ def:pub DailyLogPage() -> JsxPage {
         entries: list[LogEntry] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
-        repos: list[Repo] = [],
+        repos: list[RepoView] = [],
         selectedDate: str = "",
         viewMode: str = "day",
         loading: bool = True,
@@ -85,7 +84,11 @@ def:pub DailyLogPage() -> JsxPage {
 
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
-    allCategories = CATEGORIES + [t.value for t in vocab if t.kind == "category"];
+    allCategories = [t.value for t in vocab if t.kind == "category"];
+    shownRepos = [
+        r for r in repos
+        if form["project"] == "none" or not r.project_id or r.project_id == form["project"]
+    ];
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
     # The button stays clickable; submitLog explains what is missing via
     # toasts. A silently-disabled submit reads as "the button is broken".
@@ -135,13 +138,17 @@ def:pub DailyLogPage() -> JsxPage {
             </div>
         </div>
 
-        <WeekStrip entries={entries} categories={allCategories} />
+        <WeekStrip
+            entries={entries}
+            selectedDate={selectedDate}
+            onSelectDate={lambda (d: str) { selectedDate = d; viewMode = "day"; }}
+        />
 
         <LogForm
             form={form}
             members={activeMembers}
             projects={activeProjects}
-            repos={repos}
+            repos={shownRepos}
             editing={bool(editingEntryId)}
             editingMemberName={editingMemberName}
             canSubmit={canSubmit}

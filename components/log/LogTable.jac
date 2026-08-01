@@ -29,7 +29,7 @@ def:pub LogTable(
                         <TableHead>Date</TableHead>
                         <TableHead>Member</TableHead>
                         <TableHead>Project</TableHead>
-                        <TableHead>Section</TableHead>
+                        <TableHead>Tags</TableHead>
                         <TableHead>Activity</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead>Repo</TableHead>
@@ -45,7 +45,7 @@ def:pub LogTable(
                             <TableCell className="whitespace-nowrap text-muted-foreground">{en.date}</TableCell>
                             <TableCell className="font-medium">{en.member_name}</TableCell>
                             <TableCell className="text-muted-foreground">{en.project_name}</TableCell>
-                            <TableCell className="text-muted-foreground">{en.section}</TableCell>
+                            <TableCell className="text-muted-foreground">{en.tags}</TableCell>
                             <TableCell>{en.activity}</TableCell>
                             <TableCell className="text-muted-foreground">{en.category}</TableCell>
                             <TableCell className="font-mono text-xs">{en.repo}</TableCell>

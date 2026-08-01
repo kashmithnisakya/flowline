@@ -3,6 +3,7 @@
 import from models {
     Project, Member, LogDay, LogEntry,
     Logged, By, resolve, on_attached, owned
+
 }
 
 # ---------------------------------------------------------------- daily log
@@ -68,11 +69,11 @@ walker LogActivity {
         owners = [here<--];
         holder = owners[0];
         member_name = "";
-        section = "";
+        tags_snap = "";
         m = resolve(self.member_id);
         if isinstance(m, Member) {
             member_name = m.name;
-            section = m.section;
+            tags_snap = ", ".join(m.tags);
         }
         project_name = "";
         p = resolve(self.project_id);
@@ -83,7 +84,7 @@ walker LogActivity {
             date=here.date, activity=self.activity, category=self.category,
             repo=self.repo, issue_link=self.issue_link, pr_link=self.pr_link,
             status=self.status, notes=self.notes,
-            member_name=member_name, section=section, project_name=project_name
+            member_name=member_name, tags=tags_snap, project_name=project_name
         );
         if isinstance(m, Member) {
             row +>:By():+> m;

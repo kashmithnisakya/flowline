@@ -32,6 +32,48 @@ impl SetupPage.createProject -> None {
     busy = False;
 }
 
+impl SetupPage.toggleCategory(value: str) -> None {
+    if value in pickedCategories {
+        pickedCategories = [c for c in pickedCategories if c != value];
+    } else {
+        pickedCategories = pickedCategories + [value];
+    }
+}
+
+impl SetupPage.addCategory -> None {
+    captured = newCategory.strip();
+    if not captured or captured in pickedCategories {
+        return;
+    }
+    pickedCategories = pickedCategories + [captured];
+    newCategory = "";
+}
+
+impl SetupPage.addTag -> None {
+    captured = newTag.strip();
+    if not captured or captured in pickedTags {
+        return;
+    }
+    pickedTags = pickedTags + [captured];
+    newTag = "";
+}
+
+impl SetupPage.saveVocabulary -> None {
+    busy = True;
+    try {
+        for c in pickedCategories {
+            root spawn AddVocab(kind="category", value=c);
+        }
+        for t in pickedTags {
+            root spawn AddVocab(kind="tag", value=t);
+        }
+        step = 3;
+    } except Exception as e {
+        step = 3;
+    }
+    busy = False;
+}
+
 impl SetupPage.addPerson -> None {
     captured = mName.strip();
     capturedRole = mRole.strip();
@@ -40,7 +82,10 @@ impl SetupPage.addPerson -> None {
     }
     busy = True;
     try {
-        result = root spawn SaveMember(name=captured, role=capturedRole);
+        result = root spawn SaveMember(
+            name=captured,
+            roles=[capturedRole] if capturedRole else []
+        );
         fresh = result.reports[0] if result.reports else None;
         if fresh {
             added = added + [fresh];
@@ -51,4 +96,13 @@ impl SetupPage.addPerson -> None {
         mName = mName;
     }
     busy = False;
+}
+
+impl SetupPage.finish -> None {
+    # A name still sitting in the inputs counts; navigating away must not
+    # silently discard a typed member.
+    if mName.strip() {
+        await addPerson();
+    }
+    window.location.href = "/board";
 }

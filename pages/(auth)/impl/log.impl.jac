@@ -120,7 +120,7 @@ impl DailyLogPage.startEdit(en: LogEntry) -> None {
     form = {
         **form,
         "activity": en.activity,
-        "category": en.category if en.category else "Coding",
+        "category": en.category,
         "repo": en.repo if en.repo else "none",
         "issue": en.issue_link,
         "pr": en.pr_link,

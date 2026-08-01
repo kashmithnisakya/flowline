@@ -98,6 +98,19 @@ impl BoardPage.saveTask -> None {
     assignee = form["assignee"] if form["assignee"] != "none" else "";
     project = form["project"] if form["project"] != "none" else "";
     try {
+        # Assigning someone who is not on the task's project pulls them in.
+        if assignee and project {
+            onProject = False;
+            for m in members {
+                if m.id == assignee and project in m.project_ids {
+                    onProject = True;
+                }
+            }
+            if not onProject {
+                root spawn AssignToProject(member_id=assignee, project_id=project);
+                toast("Added the assignee to the project");
+            }
+        }
         if editingId {
             root spawn UpdateTask(
                 task_id=editingId, title=title, category=form["category"],

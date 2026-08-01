@@ -4,7 +4,7 @@ The form is a plain dict owned by the page; every field change comes back
 through onField(key, value) so this stays a presentational component.
 """
 
-import from ...constants { STATUSES, CATEGORIES, PRIORITIES }
+import from ...constants { STATUSES, PRIORITIES }
 import from ...models { Project, MemberView }
 import from ..ui.button { Button }
 import from ..ui.dialog {
@@ -14,7 +14,8 @@ import from ..ui.input { Input }
 import from ..ui.label { Label }
 import from ..ui.textarea { Textarea }
 import from ..ui.select {
-    Select, SelectTrigger, SelectValue, SelectContent, SelectItem
+    Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+    SelectGroup, SelectLabel
 }
 
 def:pub TaskDialog(
@@ -30,7 +31,20 @@ def:pub TaskDialog(
     onDelete: Callable[[], None],
     categories: list[str] = []
 ) -> JsxElement {
-    categoryOptions = categories if categories else CATEGORIES;
+    # Assignees are grouped by project membership; picking someone outside
+    # the selected project assigns them to it on save (the page handles it).
+    selectedProject = form["project"];
+    inProject = [
+        m for m in members
+        if selectedProject != "none" and selectedProject in m.project_ids
+    ];
+    outsiders = [m for m in members if m not in inProject];
+    assigneeOutside = False;
+    for m in outsiders {
+        if m.id == form["assignee"] and selectedProject != "none" {
+            assigneeOutside = True;
+        }
+    }
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -68,7 +82,7 @@ def:pub TaskDialog(
                         >
                             <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
                             <SelectContent>
-                                {for c in categoryOptions {
+                                {for c in categories {
                                     <SelectItem key={c} value={c}>{c}</SelectItem>
                                 }}
                             </SelectContent>
@@ -111,11 +125,31 @@ def:pub TaskDialog(
                             <SelectTrigger><SelectValue placeholder="Assignee" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">Unassigned</SelectItem>
-                                {for m in members {
-                                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                {if selectedProject != "none" and len(inProject) > 0 {
+                                    <SelectGroup key="in">
+                                        <SelectLabel>On this project</SelectLabel>
+                                        {for m in inProject {
+                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                        }}
+                                    </SelectGroup>
+                                }}
+                                {if len(outsiders) > 0 {
+                                    <SelectGroup key="out">
+                                        {if selectedProject != "none" {
+                                            <SelectLabel key="lbl">Everyone else</SelectLabel>
+                                        }}
+                                        {for m in outsiders {
+                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                        }}
+                                    </SelectGroup>
                                 }}
                             </SelectContent>
                         </Select>
+                        {if assigneeOutside {
+                            <p key="hint" className="text-xs text-muted-foreground">
+                                Not on this project yet. Saving adds them to it.
+                            </p>
+                        }}
                     </div>
                     <div className="grid gap-2">
                         <Label>Due date</Label>

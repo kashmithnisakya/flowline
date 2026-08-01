@@ -47,10 +47,10 @@ node Project {
 
 node Member {
     has name: str,
-        role: str = "",
+        roles: list[str] = [],
         email: str = "",
         github_username: str = "",
-        section: str = "",
+        tags: list[str] = [],
         active: bool = True;
 }
 
@@ -110,18 +110,18 @@ node LogEntry {
         status: str = "",
         notes: str = "",
         member_name: str = "",
-        section: str = "",
+        tags: str = "",
         project_name: str = "";
 }
 
-# A custom vocabulary term added from the Workspace tab. kind is
-# "category" or "section"; built-in terms stay in constants.jac and the
-# client merges the two lists.
+# An org-defined vocabulary term (kind: "category" or "tag"), seeded in
+# the setup wizard and managed on the Workspace tab.
 node VocabTerm {
     has kind: str,
         value: str;
 }
 
+edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
@@ -148,14 +148,35 @@ obj TaskView {
 obj MemberView {
     has id: str,
         name: str,
-        role: str,
+        roles: list[str],
         email: str,
         github_username: str,
-        section: str,
+        tags: list[str],
         active: bool,
         project_ids: list[str],
         project_names: list[str];
 }
+
+obj RepoView {
+    has id: str,
+        full_name: str,
+        project_id: str,
+        project_name: str;
+}
+
+def repo_view(r: Repo) -> RepoView {
+    project_id = "";
+    project_name = "";
+    for p in [r<-:HasRepo:<-] {
+        project_id = jid(p);
+        project_name = p.name;
+    }
+    return RepoView(
+        id=jid(r), full_name=r.full_name,
+        project_id=project_id, project_name=project_name
+    );
+}
+
 
 def member_view(m: Member) -> MemberView {
     ids: list[str] = [];
@@ -165,8 +186,8 @@ def member_view(m: Member) -> MemberView {
         names.append(p.name);
     }
     return MemberView(
-        id=jid(m), name=m.name, role=m.role, email=m.email,
-        github_username=m.github_username, section=m.section,
+        id=jid(m), name=m.name, roles=m.roles, email=m.email,
+        github_username=m.github_username, tags=m.tags,
         active=m.active, project_ids=ids, project_names=names
     );
 }
