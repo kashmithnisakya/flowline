@@ -188,11 +188,24 @@ walker UpdateLogEntry(find_log_entry) {
     }
 }
 
-walker DeleteLogEntry(find_log_entry) {
-    can remove with LogEntry entry {
-        gone = jid(here);
-        del here;
+walker DeleteLogEntries {
+    """Bulk delete: every id is parentage-checked (LogEntry <- LogDay <-
+    root) before removal, same rule as the single-entry lookup base."""
+    has entry_ids: list[str] = [];
+
+    can remove with Root entry {
+        gone: list[str] = [];
+        for eid in self.entry_ids {
+            target = resolve(eid);
+            if not isinstance(target, LogEntry) {
+                continue;
+            }
+            days = [target<-:Logged:<-];
+            if days and owned(here, days[0]) {
+                gone.append(jid(target));
+                del target;
+            }
+        }
         report {"deleted": gone};
-        disengage;
     }
 }

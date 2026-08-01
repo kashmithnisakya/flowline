@@ -21,11 +21,24 @@ impl DailyLogPage.loadWeek -> None {
     }
 }
 
-impl DailyLogPage.deleteEntry(entryId: str) -> None {
+impl DailyLogPage.toggleSelect(entryId: str) -> None {
+    if entryId in selectedIds {
+        selectedIds = [i for i in selectedIds if i != entryId];
+    } else {
+        selectedIds = selectedIds + [entryId];
+    }
+}
+
+impl DailyLogPage.deleteSelected -> None {
+    if len(selectedIds) == 0 {
+        return;
+    }
     try {
-        root spawn DeleteLogEntry(entry_id=entryId);
+        root spawn DeleteLogEntries(entry_ids=selectedIds);
+        selecting = False;
+        selectedIds = [];
         await loadWeek();
     } except Exception as e {
-        toast("Failed to delete entry");
+        toast("Failed to delete the selected entries");
     }
 }

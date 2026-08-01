@@ -1,7 +1,6 @@
 """The activity feed: rows written automatically by board moves."""
 
 import from ...models { LogEntry }
-import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
 import from ..ui.table {
     Table, TableHeader, TableBody, TableRow, TableHead, TableCell
@@ -28,7 +27,9 @@ def linkRef(url: str) -> str {
 def:pub LogTable(
     entries: list[LogEntry],
     emptyLabel: str,
-    onDelete: Callable[[str], None]
+    selecting: bool = False,
+    selected: list[str] = [],
+    onToggleSelect: Callable[[str], None] = None
 ) -> JsxElement {
     if len(entries) == 0 {
         return <Card>
@@ -43,6 +44,9 @@ def:pub LogTable(
             <Table>
                 <TableHeader>
                     <TableRow>
+                        {if selecting {
+                            <TableHead key="sel" className="w-8" />
+                        }}
                         <TableHead>Date</TableHead>
                         <TableHead>Task</TableHead>
                         <TableHead>Action</TableHead>
@@ -52,12 +56,26 @@ def:pub LogTable(
                         <TableHead>PR</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Note</TableHead>
-                        <TableHead className="w-10" />
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {for en in entries {
-                        <TableRow key={jid(en)}>
+                        <TableRow
+                            key={jid(en)}
+                            className={"cursor-pointer" if selecting else ""}
+                            onClick={lambda { if selecting and onToggleSelect { onToggleSelect(jid(en)); } }}
+                        >
+                            {if selecting {
+                                <TableCell key="sel" className="w-8">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 cursor-pointer"
+                                        style={{"accentColor": "var(--primary)"}}
+                                        checked={jid(en) in selected}
+                                        onChange={lambda { if onToggleSelect { onToggleSelect(jid(en)); } }}
+                                    />
+                                </TableCell>
+                            }}
                             <TableCell className="whitespace-nowrap">
                                 <div className="text-sm">{en.date}</div>
                                 {if len(en.at) >= 16 {
@@ -104,17 +122,6 @@ def:pub LogTable(
                             </TableCell>
                             <TableCell className="whitespace-nowrap">{en.status}</TableCell>
                             <TableCell className="max-w-48 truncate text-muted-foreground">{en.notes}</TableCell>
-                            <TableCell className="text-right">
-                                <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    className="text-muted-foreground hover:text-destructive"
-                                    title="Delete this entry"
-                                    onClick={lambda { onDelete(jid(en)); }}
-                                >
-                                    ✕
-                                </Button>
-                            </TableCell>
                         </TableRow>
                     }}
                 </TableBody>

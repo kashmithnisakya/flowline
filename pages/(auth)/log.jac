@@ -6,7 +6,7 @@ fetched once (Mon-Sun) and the day view filters locally.
 """
 
 import from ...models { LogEntry }
-import from ...walkers.log { ListLogEntries, DeleteLogEntry }
+import from ...walkers.log { ListLogEntries, DeleteLogEntries }
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
@@ -38,6 +38,8 @@ def mondayOf(iso: str) -> str {
 
 def:pub DailyLogPage() -> JsxPage {
     has entries: list[LogEntry] = [],
+        selecting: bool = False,
+        selectedIds: list[str] = [],
         selectedDate: str = "",
         viewMode: str = "day",
         loading: bool = True,
@@ -54,7 +56,8 @@ def:pub DailyLogPage() -> JsxPage {
     }
 
     async def loadWeek -> None;
-    async def deleteEntry(entryId: str) -> None;
+    async def deleteSelected -> None;
+    def toggleSelect(entryId: str) -> None;
 
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
 
@@ -106,6 +109,30 @@ def:pub DailyLogPage() -> JsxPage {
             onSelectDate={lambda (d: str) { selectedDate = d; viewMode = "day"; }}
         />
 
+        <div className="flex items-center justify-end gap-2">
+            {if selecting {
+                <Button key="cancel" variant="outline" size="sm"
+                    onClick={lambda { selecting = False; selectedIds = []; }}
+                >
+                    Cancel
+                </Button>
+            }}
+            {if selecting {
+                <Button key="del" variant="destructive" size="sm"
+                    disabled={len(selectedIds) == 0}
+                    onClick={deleteSelected}
+                >
+                    Delete ({len(selectedIds)})
+                </Button>
+            } else {
+                <Button key="sel" variant="outline" size="sm"
+                    onClick={lambda { selecting = True; }}
+                >
+                    Select
+                </Button>
+            }}
+        </div>
+
         {if loading {
             <Skeleton key="sk" className="h-40 w-full" />
         } else {
@@ -115,7 +142,9 @@ def:pub DailyLogPage() -> JsxPage {
                     "Nothing logged this week yet." if viewMode == "week"
                     else "Nothing logged for this day yet."
                 }
-                onDelete={deleteEntry}
+                selecting={selecting}
+                selected={selectedIds}
+                onToggleSelect={toggleSelect}
             />
         }}
     </div>
