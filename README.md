@@ -1,34 +1,44 @@
 # standup
 
-A kanban-style project tracker for the Jaseci Labs teams — replacing the shared
-**Team Activity Tracker** spreadsheet with a real app. Built entirely in
-[Jac](https://www.jaseci.org/) (full-stack: graph-native backend + JSX/React
-client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI primitives.
+A multi-tenant kanban project tracker for Project Managers — sign up, set up
+your organization, create projects, and manage the people on them. Built
+entirely in [Jac](https://www.jaseci.org/) (graph-native backend + JSX/React
+client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-![Board](docs/board.png)
+![Board](assets/board.png)
 
 ## What it does
 
-Three pages, one shared vocabulary (`Backlog · In Progress · Review · Changes
-Requested · Done · Blocked`), no login — identity is a "Who are you?" picker,
-the same trust model as the spreadsheet it replaces.
+Log in, and everything below is scoped to **your organization** — a private
+graph nobody else can read or write.
 
-| Page | Replaces | Highlights |
-| --- | --- | --- |
-| **Board** (`/`) | To Do List sheet | 6 status columns, native drag-and-drop **plus** ←/→ click-to-move on every card, optimistic moves with server-authoritative ordering, filters that default to *your* team, live column counts, 60s poll + refetch-on-focus |
-| **Daily Log** (`/log`) | Daily Log sheet | One row per person per weekday with the exact sheet columns, form prefilled from the WhoAmI picker, day/week views, This-Week count strip |
-| **Roster** (`/roster`) | Team Roster sheet | Members + GitHub repos CRUD; feeds every dropdown; archiving un-assigns open tasks but keeps history |
+| Page | Purpose |
+| --- | --- |
+| **Login / Signup** (`/login`) | The front door. Signing up makes you a Project Manager; nothing else is reachable logged out |
+| **Setup wizard** (`/setup`) | First run only: name your org → create your first project → add people |
+| **Board** (`/`) | 6-column kanban filtered by project, drag-and-drop **plus** ←/→ click-to-move, optimistic moves with server-authoritative ordering, 60s poll + refetch-on-focus |
+| **Daily Log** (`/log`) | One row per person per weekday, day/week views, This-Week count strip |
+| **Projects** (`/projects`) | Create, rename, archive — tasks and logs hang off these |
+| **People** (`/roster`) | Org roster with inline project assignment, plus the GitHub repo list |
 
 <details>
 <summary><b>More screenshots</b></summary>
 
+### Login
+
+![Login](assets/login.png)
+
 ### Daily Log
 
-![Daily Log](docs/daily-log.png)
+![Daily Log](assets/daily-log.png)
 
-### Roster
+### People
 
-![Roster](docs/roster.png)
+![People](assets/people.png)
+
+### Projects
+
+![Projects](assets/projects.png)
 
 </details>
 
@@ -39,50 +49,52 @@ jac install              # deps (Python + npm) from jac.toml
 jac start --dev main.jac # dev server with hot reload → http://localhost:8000
 ```
 
-Production: `jac start main.jac`.
+Production: `jac start main.jac`. Sign up at `/login` to create the first PM.
 
-## Migrating the spreadsheet
+## Security model
 
-Export each sheet as CSV and feed it to the `ImportCsv` walker — it finds the
-header row in a raw Excel export, reads the repos list from the roster sheet's
-column G, dedupes on re-runs, normalizes off-vocabulary values, and backfills
-assignees if you import sheets in the wrong order:
+- **One PM = one private organization.** Every walker requires a JWT and runs
+  on the caller's own graph root, so `[root --> Organization]` structurally
+  cannot reach another tenant — isolation with no permission plumbing.
+- **Resolution is not authorization.** `jobj(id)` resolves *any* node id, so
+  every jid-addressed mutation verifies the node's parentage back to the
+  caller's org (`owned()` / the `find_*` lookup bases) before touching it. A
+  leaked or guessed jid from another org is a no-op, not a breach.
+- Verified by an 18-check suite covering the auth wall, onboarding, CRUD,
+  cross-tenant reads, and foreign-jid update/move/delete/assign attacks.
 
-```bash
-curl -X POST http://localhost:8000/walker/ImportCsv \
-  -H 'Content-Type: application/json' \
-  -d "$(jq -n --rawfile csv roster.csv '{sheet: "roster", csv_text: $csv}')"
-# then the same with sheet: "todo" (and optionally sheet: "repos")
+## Layout
+
+```text
+models.jac              # every node/edge/obj archetype — never move (module path = identity)
+constants.jac           # statuses, categories, priorities, sections
+walkers/                # the API, one module per domain
+  org · projects · roster · tasks · log · util
+pages/                  # file-based routing
+  layout.jac            # nav + org name + logout
+  (public)/login.jac    # unauthenticated route group
+  (auth)/               # auto-guarded: index (board) · log · roster · projects · setup
+components/
+  board/ · log/ · roster/ · projects/   # feature sections (tables, dialogs, forms)
+  ui/                   # jac-shadcn primitives — import only, never edit
 ```
 
-## How it's built
+Pages are thin stateful shells: they own the data and handlers (bodies in
+`.impl.jac` annexes) and compose presentational section components. Form-heavy
+dialogs take a `dict` plus one `onField(key, value)` callback instead of a
+dozen props.
 
-- **Server** ([endpoints.jac](endpoints.jac)) — persisted graph: `Member`,
-  `Repo`, `Task`, `LogDay → LogEntry` nodes with typed edges (`AssignedTo`,
-  `Logged`, `By`). The API is ~16 `walker:pub` endpoints; task mutations go
-  through a `find_task` lookup base so a future `walker:priv` auth migration
-  touches one place.
-- **Client** ([pages/](pages/), [components/](components/)) — file-based
-  routing, stateful-shell pages with handlers in `.impl.jac` annexes,
-  [shadcn primitives](components/ui/) composed with Tailwind. Drag-and-drop is
-  plain HTML5 DnD with a custom MIME type — no extra library.
-- **Vocabulary** ([constants.jac](constants.jac)) — teams, statuses,
-  categories, priorities as `glob` lists shared by client dropdowns and server
-  validation. Adding a value is a data edit, not a schema migration.
+## Roadmap
 
-See [PLAN.md](PLAN.md) for the v2 plan (PM auth, organizations, projects &
-people management) and [docs/PLAN-V1.md](docs/PLAN-V1.md) for the original v1
-design and the 0.34.6 gotchas baked into the implementation.
+**v3**: multi-PM organizations (per-node grant backfill — `pm_root_ids` and the
+`_on_attached` hook are already in place), member accounts and invitations,
+per-role permissions, password reset, dashboard aggregates, GitHub API
+integration.
 
 > **Jac tip learned the hard way:** don't name a module after an npm package it
-> imports. `components/ui/sonner.jac` importing `"sonner"` resolved to *itself*,
-> giving the Toaster an infinite render loop — the wrapper lives in
-> `toaster.jac` instead.
-
-## Status
-
-v1 — no auth (run it on the internal network), last-write-wins concurrency,
-dashboard deferred. The spreadsheet's job, done by an app.
+> imports (`sonner.jac` importing `"sonner"` resolves to *itself* → infinite
+> render loop), and keep Python imports out of any module the client imports
+> types from, or the wasm host gets dragged into the browser bundle.
 
 ## License
 

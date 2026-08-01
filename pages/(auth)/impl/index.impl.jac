@@ -1,19 +1,51 @@
 """Implementations for the Board page."""
 
+impl BoardPage.boot -> None {
+    # Onboarding gate: no org yet -> the setup wizard owns the session.
+    try {
+        me = root spawn GetMe();
+        if not me.reports {
+            window.location.href = "/setup";
+            return;
+        }
+    } except Exception as e {
+        toast("Failed to load your organization");
+    }
+    await loadAll();
+}
+
 impl BoardPage.loadAll -> None {
-    # While a move is in flight, its optimistic state is newer than
-    # anything a concurrent fetch started earlier could return — skip.
+    # While a move is in flight its optimistic state is newer than anything
+    # a concurrent fetch started earlier could return — skip.
     if movesRef.current {
         return;
     }
     try {
         tResult = root spawn ListTasks();
         mResult = root spawn ListMembers();
+        pResult = root spawn ListProjects();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
+        fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
             tasks = fetchedTasks;
             members = fetchedMembers;
+            projects = fetchedProjects;
+        }
+        # A stale persisted filter (archived project) would show an empty
+        # board with no hint — reset it to "all".
+        stored = localStorage.getItem("standup_project") or "";
+        if stored and stored != "all" {
+            found = False;
+            for p in fetchedProjects {
+                if jid(p) == stored and p.active {
+                    found = True;
+                }
+            }
+            if not found {
+                localStorage.setItem("standup_project", "all");
+                fProject = "all";
+            }
         }
     } except Exception as e {
         toast("Failed to load the board");
@@ -21,50 +53,55 @@ impl BoardPage.loadAll -> None {
     loading = False;
 }
 
+impl BoardPage.setProjectFilter(v: str) -> None {
+    fProject = v;
+    localStorage.setItem("standup_project", v);
+}
+
+impl BoardPage.setField(key: str, value: str) -> None {
+    form = {**form, key: value};
+}
+
 impl BoardPage.openCreate -> None {
     editingId = "";
-    tTitle = "";
-    tCategory = "";
-    tTeam = fTeam if fTeam != "All" else "";
-    tPriority = "Medium";
-    tStatus = "Backlog";
-    tDueDate = "";
-    tNotes = "";
-    tAssignee = "none";
+    form = {**BLANK_TASK, "project": fProject if fProject != "all" else "none"};
     dialogOpen = True;
 }
 
 impl BoardPage.openEdit(t: TaskView) -> None {
     editingId = t.id;
-    tTitle = t.title;
-    tCategory = t.category;
-    tTeam = t.team;
-    tPriority = t.priority;
-    tStatus = t.status;
-    tDueDate = t.due_date;
-    tNotes = t.notes;
-    tAssignee = t.assignee_id if t.assignee_id else "none";
+    form = {
+        "title": t.title, "category": t.category,
+        "project": t.project_id if t.project_id else "none",
+        "priority": t.priority, "status": t.status,
+        "due_date": t.due_date, "notes": t.notes,
+        "assignee": t.assignee_id if t.assignee_id else "none"
+    };
     dialogOpen = True;
 }
 
 impl BoardPage.saveTask -> None {
-    if not tTitle.strip() or not tTeam {
+    title = form["title"].strip();
+    if not title {
         return;
     }
     saving = True;
-    assignee = tAssignee if tAssignee != "none" else "";
+    assignee = form["assignee"] if form["assignee"] != "none" else "";
+    project = form["project"] if form["project"] != "none" else "";
     try {
         if editingId {
             root spawn UpdateTask(
-                task_id=editingId, title=tTitle.strip(), category=tCategory,
-                team=tTeam, priority=tPriority, status=tStatus,
-                due_date=tDueDate, notes=tNotes, assignee_id=assignee
+                task_id=editingId, title=title, category=form["category"],
+                priority=form["priority"], status=form["status"],
+                due_date=form["due_date"], notes=form["notes"],
+                assignee_id=assignee, project_id=project
             );
         } else {
             root spawn CreateTask(
-                title=tTitle.strip(), category=tCategory, team=tTeam,
-                priority=tPriority, status=tStatus, due_date=tDueDate,
-                notes=tNotes, assignee_id=assignee
+                title=title, category=form["category"],
+                priority=form["priority"], status=form["status"],
+                due_date=form["due_date"], notes=form["notes"],
+                assignee_id=assignee, project_id=project
             );
         }
         dialogOpen = False;
@@ -93,7 +130,7 @@ impl BoardPage.deleteTask -> None {
 impl BoardPage.moveTo(taskId: str, status: str) -> None {
     # Optimistic: mutate the card in state and rebind; the server computes
     # the authoritative end-of-column order. movesRef fences the poll so a
-    # stale fetch can't snap the card back mid-flight; on failure the board
+    # stale fetch cannot snap the card back mid-flight; on failure the board
     # refetches server truth instead of rebinding a stale local snapshot.
     oldStatus = "";
     peak = 0.0;
