@@ -18,6 +18,7 @@ def:pub ProjectsPage() -> JsxPage {
         editingId: str = "",
         fName: str = "",
         fDescription: str = "",
+        fRepoDraft: str = "",
         saving: bool = False;
 
     async can with entry {
@@ -25,7 +26,6 @@ def:pub ProjectsPage() -> JsxPage {
     }
 
     async def loadProjects -> None;
-    async def addRepo(projectId: str, raw: str) -> None;
     async def removeRepo(repoId: str) -> None;
     async def saveProject -> None;
     async def archiveProject(projectId: str) -> None;
@@ -53,8 +53,6 @@ def:pub ProjectsPage() -> JsxPage {
                 repos={repos}
                 onEdit={openEdit}
                 onArchive={archiveProject}
-                onAddRepo={addRepo}
-                onRemoveRepo={removeRepo}
             />
         }}
 
@@ -68,6 +66,10 @@ def:pub ProjectsPage() -> JsxPage {
             onDescription={lambda (v: str) { fDescription = v; }}
             onOpenChange={lambda (o: bool) { dialogOpen = o; }}
             onSave={saveProject}
+            repos={[r for r in repos if editingId and r.project_id == editingId]}
+            repoDraft={fRepoDraft}
+            onRepoDraft={lambda (v: str) { fRepoDraft = v; }}
+            onRemoveRepo={removeRepo}
         />
     </div>
 }

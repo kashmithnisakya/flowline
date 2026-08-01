@@ -123,6 +123,9 @@ File-based routing with route groups:
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.
+- **`max()`/`min()` over a list compiles to JS `Math.max(array)`, which is
+  `NaN`.** Any guard like `max(xs) > 0` then silently fails. Compute peaks
+  with an explicit loop in client code.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating; a `has` read after `await` is a stale
   render-time snapshot.

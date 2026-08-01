@@ -15,8 +15,8 @@ import from ...walkers.log {
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.LogForm { LogForm }
 import from ...components.log.LogTable { LogTable }
+import from ...components.log.DatePicker { DatePicker }
 import from ...components.ui.button { Button }
-import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 
@@ -97,7 +97,7 @@ def:pub DailyLogPage() -> JsxPage {
     <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight">Daily Log</h1>
+                <h1 className="font-display text-2xl font-bold tracking-tight">Log</h1>
                 <p className="text-sm text-muted-foreground">One row per person per weekday.</p>
             </div>
             <div className="flex items-center gap-2">
@@ -108,11 +108,9 @@ def:pub DailyLogPage() -> JsxPage {
                 >
                     ←
                 </Button>
-                <Input
-                    type="date"
-                    className="w-40"
+                <DatePicker
                     value={selectedDate}
-                    onChange={lambda (e: ChangeEvent) { selectedDate = e.target.value; }}
+                    onChange={lambda (d: str) { selectedDate = d; }}
                 />
                 <Button
                     variant="outline"

@@ -54,8 +54,11 @@ def:pub Shell() -> JsxLayout {
                     <Link to="/board" className={navClass("/board")}>
                         Board
                     </Link>
+                    <Link to="/overview" className={navClass("/overview")}>
+                        Overview
+                    </Link>
                     <Link to="/log" className={navClass("/log")}>
-                        Daily Log
+                        Log
                     </Link>
                     <Link to="/projects" className={navClass("/projects")}>
                         Projects

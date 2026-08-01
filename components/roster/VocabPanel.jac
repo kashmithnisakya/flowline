@@ -21,16 +21,16 @@ def:pub VocabPanel(
     onAdd: Callable[[str], None],
     onRemove: Callable[[str], None]
 ) -> JsxElement {
+    <>
     <Card>
         <CardHeader>
-            <CardTitle>Vocabulary</CardTitle>
+            <CardTitle>Categories</CardTitle>
             <CardDescription>
-                The categories and tags offered across the app. Yours to define.
+                Label the work in board and log dropdowns.
             </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-2">
             <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Categories</Label>
                 <div className="flex flex-wrap items-center gap-1.5">
                     {for t in customCategories {
                         <Badge
@@ -64,8 +64,17 @@ def:pub VocabPanel(
                     </Button>
                 </div>
             </div>
+        </CardContent>
+    </Card>
+    <Card>
+        <CardHeader>
+            <CardTitle>Tags</CardTitle>
+            <CardDescription>
+                Label your people; pick them on each member.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
             <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Tags</Label>
                 <div className="flex flex-wrap items-center gap-1.5">
                     {for t in customTags {
                         <Badge
@@ -101,4 +110,5 @@ def:pub VocabPanel(
             </div>
         </CardContent>
     </Card>
+    </>
 }

@@ -19,7 +19,10 @@ def:pub KanbanColumn(
     tasks: list[TaskView],
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
-    onDropTask: Callable[[str, str], None]
+    onDropTask: Callable[[str, str], None],
+    extraCount: int = 0,
+    showingAll: bool = False,
+    onToggleOlder: Callable[[], None] = None
 ) -> JsxElement {
     has dragOver: bool = False;
 
@@ -73,6 +76,16 @@ def:pub KanbanColumn(
             <div key="empty" className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
                 Drop a task here
             </div>
+        }}
+        {if extraCount > 0 or showingAll {
+            <button
+                key="older"
+                type="button"
+                className="rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={lambda { if onToggleOlder { onToggleOlder(); } }}
+            >
+                {("Show " + str(extraCount) + " completed earlier") if not showingAll else "Show recent only"}
+            </button>
         }}
     </div>
 }
