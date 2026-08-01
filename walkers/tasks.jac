@@ -5,7 +5,7 @@ import from models {
     AssignedTo, ForProject, resolve, on_attached, owned
 }
 import from walkers.util { now_iso }
-import from walkers.log { record_task_event }
+import from walkers.log { record_task_event, sync_task_links }
 import from constants { STATUSES }
 
 # -------------------------------------------------------------------- tasks
@@ -181,6 +181,7 @@ walker SetMoveInfo(find_task) {
             here.notes = self.note.strip();
         }
         here.updated_at = now_iso();
+        sync_task_links(holder, here, self.note.strip());
         report here.to_view();
         disengage;
     }

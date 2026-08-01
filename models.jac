@@ -111,6 +111,7 @@ node LogEntry {
     has date: str,
         activity: str,
         at: str = "",
+        task_id: str = "",
         task_title: str = "",
         category: str = "",
         repo: str = "",

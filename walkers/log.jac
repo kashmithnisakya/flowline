@@ -118,13 +118,34 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     }
     projects = [task ->:ForProject:->];
     day +>:Logged():+> LogEntry(
-        date=today, at=stamp, task_title=task.title,
+        date=today, at=stamp, task_id=jid(task), task_title=task.title,
         activity=activity, category=task.category,
         repo="", issue_link=task.issue_link, pr_link=task.pr_link,
         status=task.status, notes="",
         member_name=", ".join(names), tags=", ".join(tag_pool),
         project_name=projects[0].name if projects else ""
     );
+}
+
+# The move handoff arrives after the move row was written; refresh the
+# latest row for this task today so its links and note show in the feed.
+def sync_task_links(holder: Root, task: Task, note: str) -> None {
+    today = task.updated_at[:10];
+    days = [holder-->[?:LogDay, date == today]];
+    if not days {
+        return;
+    }
+    matches = [r for r in [days[0] ->:Logged:->] if r.task_id == jid(task)];
+    if not matches {
+        return;
+    }
+    matches.sort(key=lambda (r: LogEntry) { r.at; });
+    target = matches[-1];
+    target.issue_link = task.issue_link;
+    target.pr_link = task.pr_link;
+    if note {
+        target.notes = note;
+    }
 }
 
 walker find_log_entry {
