@@ -46,6 +46,14 @@ def pct(part: int, whole: int) -> str {
     return str(part * 100.0 / whole) + "%";
 }
 
+# Like pct but capped: the largest value maps to cap% of the track.
+def scaled(part: int, whole: int, cap: int) -> str {
+    if whole == 0 {
+        return "0%";
+    }
+    return str(part * cap * 1.0 / whole) + "%";
+}
+
 def:pub OverviewPage() -> JsxPage {
     has tasks: list[TaskView] = [],
         members: list[MemberView] = [],
@@ -66,7 +74,20 @@ def:pub OverviewPage() -> JsxPage {
     openTasks = [t for t in tasks if t.status != "Done"];
     doneWeek = [t for t in tasks if t.status == "Done" and t.updated_at[:10] >= monday];
     dayCounts = [len([e for e in entries if e.date == d]) for d in weekDays];
-    maxDay = max(dayCounts) if max(dayCounts) > 0 else 1;
+    # NOTE: max(list) compiles to JS Math.max(array) which is NaN; loop instead.
+    maxDay = 1;
+    for c in dayCounts {
+        if c > maxDay {
+            maxDay = c;
+        }
+    }
+    peakEntries = 1;
+    for mm in activeMembers {
+        cnt = len([e for e in entries if e.member_name == mm.name]);
+        if cnt > peakEntries {
+            peakEntries = cnt;
+        }
+    }
 
     <div className="space-y-8">
         <div>
@@ -104,7 +125,7 @@ def:pub OverviewPage() -> JsxPage {
                                         <div
                                             className="w-full rounded-t-[4px]"
                                             style={{
-                                                "height": pct(dayCounts[i] * 85, maxDay) if dayCounts[i] > 0 else "2px",
+                                                "height": scaled(dayCounts[i], maxDay, 85) if dayCounts[i] > 0 else "2px",
                                                 "background": "var(--primary)" if dayCounts[i] > 0 else "var(--border)"
                                             }}
                                         />
@@ -192,7 +213,7 @@ def:pub OverviewPage() -> JsxPage {
                                     <div
                                         className="h-2.5 rounded-full"
                                         style={{
-                                            "width": pct(len([e for e in entries if e.member_name == m.name]) * 92, max([len([e for e in entries if e.member_name == mm.name]) for mm in activeMembers]) if len(activeMembers) > 0 and max([len([e for e in entries if e.member_name == mm.name]) for mm in activeMembers]) > 0 else 1),
+                                            "width": scaled(len([e for e in entries if e.member_name == m.name]), peakEntries, 92),
                                             "background": "var(--primary)",
                                             "minWidth": "2px"
                                         }}
