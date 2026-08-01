@@ -31,8 +31,12 @@ def:pub LoginPage() -> JsxPage {
 
     can with entry {
         if jacIsLoggedIn() {
-            window.location.href = "/";
+            window.location.href = "/board";
             return;
+        }
+        # The landing page links here as /login?mode=signup.
+        if "mode=signup" in str(window.location.search) {
+            mode = "signup";
         }
         # A 401 wipes the token and hard-reloads; this marker is what tells
         # us the visitor was signed in a moment ago rather than arriving cold.

@@ -97,7 +97,7 @@ def:pub SetupPage() -> JsxPage {
                     }}
                 </CardContent>
                 <CardFooter className="justify-end">
-                    <Button onClick={lambda { window.location.href = "/"; }}>
+                    <Button onClick={lambda { window.location.href = "/board"; }}>
                         Go to the board
                     </Button>
                 </CardFooter>

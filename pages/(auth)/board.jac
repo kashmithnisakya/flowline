@@ -1,4 +1,4 @@
-"""standup - Board page: the 6-column kanban, scoped by project.
+"""standup - Board page (/board): the 6-column kanban, scoped by project.
 
 Stateful shell: owns the data and every handler (bodies in index.impl.jac);
 the columns, cards, filters, and dialog are presentational components.

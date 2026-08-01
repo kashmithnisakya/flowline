@@ -10,7 +10,7 @@ impl SetupPage.boot -> None {
         if len(existing) == 0 {
             step = 1;
         } else {
-            window.location.href = "/";
+            window.location.href = "/board";
         }
     } except Exception as e {
         step = 1;

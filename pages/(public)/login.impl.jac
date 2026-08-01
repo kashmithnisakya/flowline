@@ -39,7 +39,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             # Marker for the session-expired notice: a 401 clears the JWT
             # and reloads, and this is how /login knows it was a timeout.
             localStorage.setItem("standup_session", "1");
-            window.location.href = "/";
+            window.location.href = "/board";
         } else {
             error = "Invalid email or password.";
         }
