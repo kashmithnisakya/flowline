@@ -59,7 +59,12 @@ impl BoardPage.setProjectFilter(v: str) -> None {
 }
 
 impl BoardPage.setField(key: str, value: str) -> None {
-    form = {**form, key: value};
+    # NOTE: `{**form, key: value}` compiles to a JS object literal with a
+    # LITERAL "key" property — the variable is ignored and the real field
+    # never updates (inputs appear frozen). Build a copy and subscript it.
+    updated = {**form};
+    updated[key] = value;
+    form = updated;
 }
 
 impl BoardPage.openCreate -> None {
