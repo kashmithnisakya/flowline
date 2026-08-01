@@ -1,9 +1,8 @@
 """Daily-log walkers: day buckets and their entries."""
 
 import from models {
-    Project, Member, LogDay, LogEntry,
-    Logged, By, resolve, on_attached, owned
-
+    Project, Member, Task, LogDay, LogEntry,
+    Logged, By, AssignedTo, ForProject, resolve, on_attached, owned
 }
 
 # ---------------------------------------------------------------- daily log
@@ -91,6 +90,39 @@ walker LogActivity {
         }
         report row;
     }
+}
+
+# Board moves write the log now: append one denormalized row describing a
+# task event to today's bucket. Called from the task walkers.
+def record_task_event(holder: Root, task: Task, activity: str, today: str) -> None {
+    if not today {
+        return;
+    }
+    days = [holder-->[?:LogDay, date == today]];
+    if not days {
+        fresh = holder ++> LogDay(date=today);
+        on_attached(holder, fresh);
+        days = [holder-->[?:LogDay, date == today]];
+    }
+    day = days[0];
+    names: list[str] = [];
+    tag_pool: list[str] = [];
+    for a in [task ->:AssignedTo:->] {
+        names.append(a.name);
+        for t in a.tags {
+            if t not in tag_pool {
+                tag_pool.append(t);
+            }
+        }
+    }
+    projects = [task ->:ForProject:->];
+    day +>:Logged():+> LogEntry(
+        date=today, activity=activity, category=task.category,
+        repo="", issue_link=task.issue_link, pr_link=task.pr_link,
+        status=task.status, notes="",
+        member_name=", ".join(names), tags=", ".join(tag_pool),
+        project_name=projects[0].name if projects else ""
+    );
 }
 
 walker find_log_entry {

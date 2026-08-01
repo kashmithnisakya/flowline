@@ -18,7 +18,7 @@ import from walkers.roster {
     ListMembers, SaveMember, ArchiveMember, ListRepos, AddRepo, RemoveRepo
 }
 import from walkers.tasks {
-    ListTasks, CreateTask, UpdateTask, MoveTask, DeleteTask
+    ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
 }
 import from walkers.log {
     ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry

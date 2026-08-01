@@ -60,9 +60,9 @@ def:pub TaskCard(
                     <Badge key="category" variant="outline">{task.category}</Badge>
                 }}
             </div>
-            {if task.assignee_name or task.due_date {
+            {if len(task.assignee_names) > 0 or task.due_date {
                 <div key="meta" className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{task.assignee_name}</span>
+                    <span className="truncate">{", ".join(task.assignee_names)}</span>
                     <span>{task.due_date}</span>
                 </div>
             }}

@@ -65,17 +65,21 @@ node Task {
         status: str = "Backlog",
         due_date: str = "",
         notes: str = "",
+        issue_link: str = "",
+        pr_link: str = "",
+        reviewer_id: str = "",
+        reviewer_name: str = "",
+        review_due: str = "",
         created_at: str = "",
         updated_at: str = "",
         sort_order: float = 0.0;
 
     def to_view -> TaskView {
-        assignee_id = "";
-        assignee_name = "";
-        assignees = [self ->:AssignedTo:->];
-        if assignees {
-            assignee_id = jid(assignees[0]);
-            assignee_name = assignees[0].name;
+        assignee_ids: list[str] = [];
+        assignee_names: list[str] = [];
+        for a in [self ->:AssignedTo:->] {
+            assignee_ids.append(jid(a));
+            assignee_names.append(a.name);
         }
         project_id = "";
         project_name = "";
@@ -90,7 +94,10 @@ node Task {
             due_date=self.due_date, notes=self.notes,
             created_at=self.created_at, updated_at=self.updated_at,
             sort_order=self.sort_order,
-            assignee_id=assignee_id, assignee_name=assignee_name,
+            assignee_ids=assignee_ids, assignee_names=assignee_names,
+            issue_link=self.issue_link, pr_link=self.pr_link,
+            reviewer_id=self.reviewer_id, reviewer_name=self.reviewer_name,
+            review_due=self.review_due,
             project_id=project_id, project_name=project_name
         );
     }
@@ -139,8 +146,13 @@ obj TaskView {
         created_at: str,
         updated_at: str,
         sort_order: float,
-        assignee_id: str,
-        assignee_name: str,
+        assignee_ids: list[str],
+        assignee_names: list[str],
+        issue_link: str,
+        pr_link: str,
+        reviewer_id: str,
+        reviewer_name: str,
+        review_due: str,
         project_id: str,
         project_name: str;
 }

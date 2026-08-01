@@ -1,12 +1,16 @@
 """Create/edit dialog for a kanban task.
 
-The form is a plain dict owned by the page; every field change comes back
-through onField(key, value) so this stays a presentational component.
+The form is a plain dict owned by the page; assignees ride separately as
+a list (tasks take several people in v2.5). Assignee chips group by
+project membership, and picking someone outside the selected project
+adds them to it on save. A Review status reveals the handoff fields.
 """
 
 import from ...constants { STATUSES, PRIORITIES }
 import from ...models { Project, MemberView }
+import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
+import from ..ui.badge { Badge }
 import from ..ui.dialog {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 }
@@ -14,8 +18,7 @@ import from ..ui.input { Input }
 import from ..ui.label { Label }
 import from ..ui.textarea { Textarea }
 import from ..ui.select {
-    Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-    SelectGroup, SelectLabel
+    Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
 
 def:pub TaskDialog(
@@ -29,22 +32,23 @@ def:pub TaskDialog(
     onOpenChange: Callable[[bool], None],
     onSave: Callable[[], None],
     onDelete: Callable[[], None],
-    categories: list[str] = []
+    categories: list[str] = [],
+    assignees: list[str] = [],
+    onToggleAssignee: Callable[[str], None] = None
 ) -> JsxElement {
-    # Assignees are grouped by project membership; picking someone outside
-    # the selected project assigns them to it on save (the page handles it).
     selectedProject = form["project"];
     inProject = [
         m for m in members
         if selectedProject != "none" and selectedProject in m.project_ids
     ];
     outsiders = [m for m in members if m not in inProject];
-    assigneeOutside = False;
+    outsideSelected = False;
     for m in outsiders {
-        if m.id == form["assignee"] and selectedProject != "none" {
-            assigneeOutside = True;
+        if m.id in assignees and selectedProject != "none" {
+            outsideSelected = True;
         }
     }
+
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -116,50 +120,101 @@ def:pub TaskDialog(
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2">
-                        <Label>Assignee</Label>
-                        <Select
-                            value={form["assignee"]}
-                            onValueChange={lambda (v: str) { onField("assignee", v); }}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Assignee" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Unassigned</SelectItem>
-                                {if selectedProject != "none" and len(inProject) > 0 {
-                                    <SelectGroup key="in">
-                                        <SelectLabel>On this project</SelectLabel>
-                                        {for m in inProject {
-                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                                        }}
-                                    </SelectGroup>
-                                }}
-                                {if len(outsiders) > 0 {
-                                    <SelectGroup key="out">
-                                        {if selectedProject != "none" {
-                                            <SelectLabel key="lbl">Everyone else</SelectLabel>
-                                        }}
-                                        {for m in outsiders {
-                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                                        }}
-                                    </SelectGroup>
-                                }}
-                            </SelectContent>
-                        </Select>
-                        {if assigneeOutside {
-                            <p key="hint" className="text-xs text-muted-foreground">
-                                Not on this project yet. Saving adds them to it.
-                            </p>
-                        }}
-                    </div>
+                </div>
+                <div className="grid gap-2">
+                    <Label>Assignees</Label>
+                    {if len(members) > 0 {
+                        <div key="chips" className="flex flex-wrap gap-1.5">
+                            {for m in inProject {
+                                <Badge
+                                    key={m.id}
+                                    variant={"default" if m.id in assignees else "outline"}
+                                    className="cursor-pointer"
+                                    onClick={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                >
+                                    {m.name}
+                                </Badge>
+                            }}
+                            {for m in outsiders {
+                                <Badge
+                                    key={m.id}
+                                    variant={"default" if m.id in assignees else "outline"}
+                                    className={"cursor-pointer" + ("" if selectedProject == "none" else " opacity-70")}
+                                    onClick={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                >
+                                    {m.name}
+                                </Badge>
+                            }}
+                        </div>
+                    } else {
+                        <p key="none" className="text-xs text-muted-foreground">No members yet.</p>
+                    }}
+                    {if outsideSelected {
+                        <p key="hint" className="text-xs text-muted-foreground">
+                            Dimmed people are not on this project yet. Saving adds them to it.
+                        </p>
+                    }}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                         <Label>Due date</Label>
+                        <div>
+                            <DatePicker
+                                value={form["due_date"]}
+                                onChange={lambda (d: str) { onField("due_date", d); }}
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>GitHub issue (optional)</Label>
                         <Input
-                            type="date"
-                            value={form["due_date"]}
-                            onChange={lambda (e: ChangeEvent) { onField("due_date", e.target.value); }}
+                            placeholder="https://github.com/..."
+                            value={form["issue"]}
+                            onChange={lambda (e: ChangeEvent) { onField("issue", e.target.value); }}
                         />
                     </div>
                 </div>
+                {if form["status"] == "Review" {
+                    <div key="review" className="grid gap-3 rounded-lg border bg-muted/30 p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Review handoff (optional)
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-2">
+                                <Label>Reviewer</Label>
+                                <Select
+                                    value={form["reviewer"]}
+                                    onValueChange={lambda (v: str) { onField("reviewer", v); }}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Reviewer" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No reviewer</SelectItem>
+                                        {for m in members {
+                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                        }}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Review by</Label>
+                                <div>
+                                    <DatePicker
+                                        value={form["review_due"]}
+                                        onChange={lambda (d: str) { onField("review_due", d); }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>PR link</Label>
+                            <Input
+                                placeholder="https://github.com/..."
+                                value={form["pr"]}
+                                onChange={lambda (e: ChangeEvent) { onField("pr", e.target.value); }}
+                            />
+                        </div>
+                    </div>
+                }}
                 <div className="grid gap-2">
                     <Label>Notes / blockers</Label>
                     <Textarea

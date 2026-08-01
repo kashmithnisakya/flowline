@@ -1,4 +1,4 @@
-"""The daily-log table: one row per person per weekday."""
+"""The activity feed: rows written automatically by board moves."""
 
 import from ...models { LogEntry }
 import from ..ui.button { Button }
@@ -10,7 +10,6 @@ import from ..ui.table {
 def:pub LogTable(
     entries: list[LogEntry],
     emptyLabel: str,
-    onEdit: Callable[[LogEntry], None],
     onDelete: Callable[[str], None]
 ) -> JsxElement {
     if len(entries) == 0 {
@@ -32,7 +31,6 @@ def:pub LogTable(
                         <TableHead>Tags</TableHead>
                         <TableHead>Activity</TableHead>
                         <TableHead>Category</TableHead>
-                        <TableHead>Repo</TableHead>
                         <TableHead>Links</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Notes</TableHead>
@@ -48,7 +46,6 @@ def:pub LogTable(
                             <TableCell className="text-muted-foreground">{en.tags}</TableCell>
                             <TableCell>{en.activity}</TableCell>
                             <TableCell className="text-muted-foreground">{en.category}</TableCell>
-                            <TableCell className="font-mono text-xs">{en.repo}</TableCell>
                             <TableCell className="whitespace-nowrap text-xs">
                                 {if en.issue_link {
                                     <a
@@ -75,16 +72,13 @@ def:pub LogTable(
                             <TableCell>{en.status}</TableCell>
                             <TableCell className="max-w-48 truncate text-muted-foreground">{en.notes}</TableCell>
                             <TableCell className="text-right whitespace-nowrap">
-                                <Button variant="ghost" size="sm" onClick={lambda { onEdit(en); }}>
-                                    Edit
-                                </Button>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     className="text-destructive"
                                     onClick={lambda { onDelete(jid(en)); }}
                                 >
-                                    Delete
+                                    ✕
                                 </Button>
                             </TableCell>
                         </TableRow>

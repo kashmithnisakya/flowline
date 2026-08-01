@@ -37,20 +37,32 @@ def prettyLabel(iso: str) -> str {
     return names[int(d.getDay())] + ", " + MONTHS[int(d.getMonth())][:3] + " " + str(int(d.getDate()));
 }
 
+def todayIso -> str {
+    d = new(Date);
+    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    return shifted.toISOString()[:10];
+}
+
 def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
-    has viewYear: int = 0,
+    has pickerOpen: bool = False,
+        viewYear: int = 0,
         viewMonth: int = -1;
 
-    year = viewYear if viewMonth >= 0 else int(value[:4]);
-    month = viewMonth if viewMonth >= 0 else int(value[5:7]) - 1;
+    # An empty value (nothing picked yet) anchors the grid to today.
+    anchor = value if value else todayIso();
+    year = viewYear if viewMonth >= 0 else int(anchor[:4]);
+    month = viewMonth if viewMonth >= 0 else int(anchor[5:7]) - 1;
     total = daysIn(year, month);
     offset = firstOffset(year, month);
 
     <DropdownMenu
+        open={pickerOpen}
         onOpenChange={lambda (o: bool) {
+            pickerOpen = o;
             if o {
-                viewYear = int(value[:4]);
-                viewMonth = int(value[5:7]) - 1;
+                seed = value if value else todayIso();
+                viewYear = int(seed[:4]);
+                viewMonth = int(seed[5:7]) - 1;
             }
         }}
     >
@@ -114,7 +126,10 @@ def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
                                 else "hover:bg-accent"
                             )
                         }
-                        onClick={lambda { onChange(isoOf(year, month, d)); }}
+                        onClick={lambda {
+                            onChange(isoOf(year, month, d));
+                            pickerOpen = False;
+                        }}
                     >
                         {d}
                     </button>

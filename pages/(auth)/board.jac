@@ -11,11 +11,12 @@ import from ...walkers.roster { ListMembers }
 import from ...walkers.vocab { ListVocab }
 import from ...models { VocabTerm }
 import from ...walkers.tasks {
-    ListTasks, CreateTask, UpdateTask, MoveTask, DeleteTask
+    ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
 }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
+import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
@@ -23,8 +24,16 @@ import from "react" { useEffect }
 
 glob BLANK_TASK: dict[str, str] = {
     "title": "", "category": "", "project": "none", "priority": "Medium",
-    "status": "Backlog", "due_date": "", "notes": "", "assignee": "none"
+    "status": "Backlog", "due_date": "", "notes": "", "issue": "",
+    "pr": "", "reviewer": "none", "review_due": ""
 };
+
+glob BLANK_MOVE: dict[str, str] = {
+    "reviewer": "none", "review_due": "", "pr": "", "note": ""
+};
+
+# Statuses whose moves open the optional handoff dialog.
+glob HANDOFF_STATUSES: list[str] = ["Review", "Blocked", "Changes Requested"];
 
 def:pub BoardPage() -> JsxPage {
     has showAllDone: bool = False,
@@ -41,6 +50,11 @@ def:pub BoardPage() -> JsxPage {
         dialogOpen: bool = False,
         editingId: str = "",
         form: dict[str, str] = BLANK_TASK,
+        fAssignees: list[str] = [],
+        moveTaskId: str = "",
+        moveTaskTitle: str = "",
+        moveStatus: str = "",
+        mForm: dict[str, str] = BLANK_MOVE,
         saving: bool = False;
 
     async can with entry {
@@ -73,6 +87,9 @@ def:pub BoardPage() -> JsxPage {
     def arrowMove(t: TaskView, status: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setField(key: str, value: str) -> None;
+    def setMoveField(key: str, value: str) -> None;
+    def toggleAssignee(memberId: str) -> None;
+    async def saveMoveInfo -> None;
     def openCreate -> None;
     def openEdit(t: TaskView) -> None;
 
@@ -82,7 +99,7 @@ def:pub BoardPage() -> JsxPage {
     visible = [
         t for t in tasks
         if (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or t.assignee_id == fAssignee)
+        and (fAssignee == "All" or fAssignee in t.assignee_ids)
         and (fCategory == "All" or t.category == fCategory)
         and (not hideDone or t.status != "Done")
     ];
@@ -156,6 +173,20 @@ def:pub BoardPage() -> JsxPage {
             onSave={saveTask}
             onDelete={deleteTask}
             categories={allCategories}
+            assignees={fAssignees}
+            onToggleAssignee={toggleAssignee}
+        />
+
+        <MoveDialog
+            open={bool(moveTaskId)}
+            status={moveStatus}
+            taskTitle={moveTaskTitle}
+            members={activeMembers}
+            form={mForm}
+            saving={saving}
+            onField={setMoveField}
+            onOpenChange={lambda (o: bool) { if not o { moveTaskId = ""; } }}
+            onSave={saveMoveInfo}
         />
     </div>
 }
