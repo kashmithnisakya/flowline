@@ -18,27 +18,26 @@ def resolve(anchor_id: str) -> any {
     }
 }
 
-# v3 hook: when multi-PM orgs land, grant `fresh` to every root in
-# org.pm_root_ids here. Deliberately a no-op in v2.
-def on_attached(org: Organization, fresh: any) -> None {
+# v3 hook: when multi-PM orgs land, grant `fresh` to every collaborating
+# root here. Deliberately a no-op while one account == one organization.
+def on_attached(holder: any, fresh: any) -> None {
     return;
 }
 
-# Parentage check: does this node hang directly under the caller's org?
+# Parentage check: does this node hang directly off the caller's root?
 # jobj/jid resolution is NOT authorization — every jid-addressed mutation
-# calls this before touching anything.
-def owned(org: any, target: any) -> bool {
-    owners = [target<--[?:Organization]];
-    return bool(owners) and jid(owners[0]) == jid(org);
+# calls this first, or a guessed/leaked jid from another account would be
+# mutable. The account IS the organization, so "my root" is the tenant line.
+def owned(holder: any, target: any) -> bool {
+    for owner in [target<--] {
+        if jid(owner) == jid(holder) {
+            return True;
+        }
+    }
+    return False;
 }
 
 # ---------------------------------------------------------------- archetypes
-
-node Organization {
-    has name: str,
-        created_at: str = "",
-        pm_root_ids: list[str] = [];
-}
 
 node Project {
     has name: str,

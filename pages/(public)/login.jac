@@ -1,8 +1,9 @@
 """standup - Login / Signup, the first page.
 
-Signing up makes you a Project Manager — team members do not get accounts
-in v2. jacSignup does NOT create a session: always signup -> check success
--> login.
+The account IS the organization: signing up creates the workspace, so the
+form takes the organization name and hands it to jacSignup as the account
+profile. jacSignup does NOT create a session — always signup, check success,
+then login.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
@@ -15,6 +16,7 @@ import from ...components.ui.label { Label }
 
 def:pub LoginPage() -> JsxPage {
     has mode: str = "login",
+        orgName: str = "",
         email: str = "",
         password: str = "",
         confirm: str = "",
@@ -29,24 +31,42 @@ def:pub LoginPage() -> JsxPage {
 
     async def submit(e: FormEvent) -> None;
 
+    signup = mode == "signup";
+    ready = (
+        not busy and bool(email.strip()) and bool(password)
+        and (not signup or bool(orgName.strip()))
+    );
+
     <div className="flex min-h-[80svh] items-center justify-center">
         <Card className="w-full max-w-sm">
             <CardHeader>
-                <CardTitle className="text-xl">standup</CardTitle>
+                <CardTitle className="text-xl">
+                    {"Start your first standup." if signup else "Welcome back."}
+                </CardTitle>
                 <CardDescription>
-                    {"Log in to manage your projects." if mode == "login"
-                        else "Create a Project Manager account."}
+                    {"Create your organization's workspace." if signup
+                        else "Sign in to manage your projects."}
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <form onSubmit={submit} className="grid gap-4">
+                    {if signup {
+                        <div key="org" className="grid gap-2">
+                            <Label>Organization name</Label>
+                            <Input
+                                value={orgName}
+                                onChange={lambda (ev: ChangeEvent) { orgName = ev.target.value; }}
+                                placeholder="Jaseci Labs"
+                            />
+                        </div>
+                    }}
                     <div className="grid gap-2">
-                        <Label>Email</Label>
+                        <Label>Work email</Label>
                         <Input
                             type="email"
                             value={email}
                             onChange={lambda (ev: ChangeEvent) { email = ev.target.value; }}
-                            placeholder="pm@example.com"
+                            placeholder="you@company.com"
                         />
                     </div>
                     <div className="grid gap-2">
@@ -57,7 +77,7 @@ def:pub LoginPage() -> JsxPage {
                             onChange={lambda (ev: ChangeEvent) { password = ev.target.value; }}
                         />
                     </div>
-                    {if mode == "signup" {
+                    {if signup {
                         <div key="confirm" className="grid gap-2">
                             <Label>Confirm password</Label>
                             <Input
@@ -70,11 +90,8 @@ def:pub LoginPage() -> JsxPage {
                     {if error {
                         <p key="err" className="text-sm text-destructive">{error}</p>
                     }}
-                    <Button
-                        type="submit"
-                        disabled={busy or not email.strip() or not password}
-                    >
-                        {"Log in" if mode == "login" else "Sign up"}
+                    <Button type="submit" disabled={not ready}>
+                        {"Create workspace" if signup else "Sign in"}
                     </Button>
                 </form>
             </CardContent>
@@ -83,11 +100,12 @@ def:pub LoginPage() -> JsxPage {
                     variant="link"
                     className="text-sm"
                     onClick={lambda {
-                        mode = "signup" if mode == "login" else "login";
+                        mode = "login" if signup else "signup";
                         error = "";
                     }}
                 >
-                    {"New here? Create a PM account" if mode == "login" else "Already have an account? Log in"}
+                    {"Already have a workspace? Sign in" if signup
+                        else "New to standup? Create your workspace"}
                 </Button>
             </CardFooter>
         </Card>

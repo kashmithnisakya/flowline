@@ -1,7 +1,7 @@
 """Task walkers: the kanban board API."""
 
 import from models {
-    Organization, Project, Member, Task, TaskView,
+    Project, Member, Task, TaskView,
     AssignedTo, ForProject, resolve, on_attached, owned
 }
 import from walkers.util { now_iso }
@@ -14,10 +14,7 @@ walker ListTasks {
         reports: list[list[TaskView]] = [];
 
     can start with Root entry {
-        orgs = [here-->[?:Organization]];
-        if orgs {
-            visit [orgs[0]-->[?:Task]];
-        }
+        visit [here-->[?:Task]];
     }
 
     can gather with Task entry {
@@ -42,32 +39,30 @@ walker CreateTask {
         reports: list[TaskView] = [];
 
     can create with Root entry {
-        orgs = [here-->[?:Organization]];
-        if not orgs or not self.title.strip() {
+        if not self.title.strip() {
             disengage;
         }
-        org = orgs[0];
         col = self.status if self.status in STATUSES else "Backlog";
         peak = 0.0;
-        for t in [org-->[?:Task, status == col]] {
+        for t in [here-->[?:Task, status == col]] {
             if t.sort_order > peak {
                 peak = t.sort_order;
             }
         }
         stamp = now_iso();
-        fresh = org ++> Task(
+        fresh = here ++> Task(
             title=self.title.strip(), category=self.category,
             priority=self.priority, status=col,
             due_date=self.due_date, notes=self.notes,
             created_at=stamp, updated_at=stamp, sort_order=peak + 1024.0
         );
-        on_attached(org, fresh);
+        on_attached(here, fresh);
         m = resolve(self.assignee_id);
-        if isinstance(m, Member) and owned(org, m) {
+        if isinstance(m, Member) and owned(here, m) {
             fresh +>:AssignedTo():+> m;
         }
         p = resolve(self.project_id);
-        if isinstance(p, Project) and owned(org, p) {
+        if isinstance(p, Project) and owned(here, p) {
             fresh +>:ForProject():+> p;
         }
         report fresh.to_view();
@@ -81,9 +76,8 @@ walker find_task {
     has task_id: str = "";
 
     can locate with Root entry {
-        orgs = [here-->[?:Organization]];
         target = resolve(self.task_id);
-        if orgs and isinstance(target, Task) and owned(orgs[0], target) {
+        if isinstance(target, Task) and owned(here, target) {
             visit [target];
         }
     }
@@ -101,8 +95,9 @@ walker UpdateTask(find_task) {
         reports: list[TaskView] = [];
 
     can apply with Task entry {
-        owners = [here<--[?:Organization]];
-        org = owners[0];
+        # The task's container is the caller's root (root ++> Task).
+        owners = [here<--];
+        holder = owners[0];
         here.title = self.title;
         here.category = self.category;
         here.priority = self.priority;
@@ -114,14 +109,14 @@ walker UpdateTask(find_task) {
             del e;
         }
         m = resolve(self.assignee_id);
-        if isinstance(m, Member) and owned(org, m) {
+        if isinstance(m, Member) and owned(holder, m) {
             here +>:AssignedTo():+> m;
         }
         for e in [edge here ->:ForProject:->] {
             del e;
         }
         p = resolve(self.project_id);
-        if isinstance(p, Project) and owned(org, p) {
+        if isinstance(p, Project) and owned(holder, p) {
             here +>:ForProject():+> p;
         }
         report here.to_view();
@@ -136,10 +131,11 @@ walker MoveTask(find_task) {
         reports: list[TaskView] = [];
 
     can move with Task entry {
-        owners = [here<--[?:Organization]];
-        org = owners[0];
+        # The task's container is the caller's root (root ++> Task).
+        owners = [here<--];
+        holder = owners[0];
         peak = 0.0;
-        for t in [org-->[?:Task, status == self.status]] {
+        for t in [holder-->[?:Task, status == self.status]] {
             if t.sort_order > peak {
                 peak = t.sort_order;
             }

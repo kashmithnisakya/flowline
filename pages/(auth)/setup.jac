@@ -1,13 +1,14 @@
-"""standup - Onboarding wizard: organization -> first project -> people.
+"""standup - Onboarding wizard: first project -> people.
 
-The Board redirects here when GetMe reports no org; this page sends the PM
-to the Board once setup is done, so a fresh account passes through once.
+The organization is created at signup (its name lives in the account
+profile), so the wizard starts at the first project. The Board sends a PM
+here while they have no projects yet; finishing lands them on the board.
 """
 
 import from ...models { MemberView }
-import from ...walkers.org { GetMe, CreateOrganization }
 import from ...walkers.projects { ListProjects, SaveProject }
 import from ...walkers.roster { SaveMember }
+import from ...lib.session { fetchOrgName }
 import from ...components.ui.card {
     Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
 }
@@ -30,7 +31,6 @@ def:pub SetupPage() -> JsxPage {
     }
 
     async def boot -> None;
-    async def createOrg -> None;
     async def createProject -> None;
     async def addPerson -> None;
 
@@ -38,32 +38,14 @@ def:pub SetupPage() -> JsxPage {
         {if step == 0 {
             <p key="loading" className="w-full text-center text-sm text-muted-foreground">Loading…</p>
         } elif step == 1 {
-            <Card key="org" className="w-full">
-                <CardHeader>
-                    <CardTitle>Welcome! Name your organization</CardTitle>
-                    <CardDescription>Step 1 of 3 — this is your private workspace.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid gap-2">
-                        <Label>Organization name</Label>
-                        <Input
-                            value={orgName}
-                            onChange={lambda (e: ChangeEvent) { orgName = e.target.value; }}
-                            placeholder="Jaseci Labs"
-                        />
-                    </div>
-                </CardContent>
-                <CardFooter className="justify-end">
-                    <Button onClick={createOrg} disabled={busy or not orgName.strip()}>
-                        Continue
-                    </Button>
-                </CardFooter>
-            </Card>
-        } elif step == 2 {
             <Card key="project" className="w-full">
                 <CardHeader>
-                    <CardTitle>Create your first project</CardTitle>
-                    <CardDescription>Step 2 of 3 — tasks and daily logs are scoped to projects.</CardDescription>
+                    <CardTitle>
+                        {"Welcome to " + orgName if orgName else "Create your first project"}
+                    </CardTitle>
+                    <CardDescription>
+                        Step 1 of 2 — tasks and daily logs are scoped to projects.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="grid gap-2">
@@ -86,7 +68,7 @@ def:pub SetupPage() -> JsxPage {
                 <CardHeader>
                     <CardTitle>Add your people</CardTitle>
                     <CardDescription>
-                        Step 3 of 3 — team members are roster records (no accounts).
+                        Step 2 of 2 — team members are roster records (no accounts).
                         You can add more any time on the People page.
                     </CardDescription>
                 </CardHeader>
