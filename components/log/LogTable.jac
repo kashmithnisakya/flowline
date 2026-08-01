@@ -1,17 +1,35 @@
-"""The daily-log table: one row per person per weekday."""
+"""The activity feed: rows written automatically by board moves."""
 
 import from ...models { LogEntry }
-import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
 import from ..ui.table {
     Table, TableHeader, TableBody, TableRow, TableHead, TableCell
 }
 
+# "https://github.com/org/repo/pull/42" -> "#42" (falls back to "link").
+def linkRef(url: str) -> str {
+    parts = [p for p in url.split("/") if p];
+    if parts {
+        tail = parts[-1];
+        digits = True;
+        for ch in tail {
+            if ch not in "0123456789" {
+                digits = False;
+            }
+        }
+        if digits and tail {
+            return "#" + tail;
+        }
+    }
+    return "link";
+}
+
 def:pub LogTable(
     entries: list[LogEntry],
     emptyLabel: str,
-    onEdit: Callable[[LogEntry], None],
-    onDelete: Callable[[str], None]
+    selecting: bool = False,
+    selected: list[str] = [],
+    onToggleSelect: Callable[[str], None] = None
 ) -> JsxElement {
     if len(entries) == 0 {
         return <Card>
@@ -26,67 +44,84 @@ def:pub LogTable(
             <Table>
                 <TableHeader>
                     <TableRow>
+                        {if selecting {
+                            <TableHead key="sel" className="w-8" />
+                        }}
                         <TableHead>Date</TableHead>
-                        <TableHead>Member</TableHead>
+                        <TableHead>Task</TableHead>
+                        <TableHead>Action</TableHead>
                         <TableHead>Project</TableHead>
-                        <TableHead>Tags</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Repo</TableHead>
-                        <TableHead>Links</TableHead>
+                        <TableHead>Member</TableHead>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>PR</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>Note</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {for en in entries {
-                        <TableRow key={jid(en)}>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">{en.date}</TableCell>
-                            <TableCell className="font-medium">{en.member_name}</TableCell>
+                        <TableRow
+                            key={jid(en)}
+                            className={"cursor-pointer" if selecting else ""}
+                            onClick={lambda { if selecting and onToggleSelect { onToggleSelect(jid(en)); } }}
+                        >
+                            {if selecting {
+                                <TableCell key="sel" className="w-8">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 cursor-pointer"
+                                        style={{"accentColor": "var(--primary)"}}
+                                        checked={jid(en) in selected}
+                                        onChange={lambda { if onToggleSelect { onToggleSelect(jid(en)); } }}
+                                    />
+                                </TableCell>
+                            }}
+                            <TableCell className="whitespace-nowrap">
+                                <div className="text-sm">{en.date}</div>
+                                {if len(en.at) >= 16 {
+                                    <div className="text-xs text-muted-foreground">{en.at[11:16]}</div>
+                                }}
+                            </TableCell>
+                            <TableCell className="max-w-56">
+                                <div className="truncate font-medium">
+                                    {en.task_title if en.task_title else en.activity}
+                                </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                                {en.activity if en.task_title else "·"}
+                            </TableCell>
                             <TableCell className="text-muted-foreground">{en.project_name}</TableCell>
-                            <TableCell className="text-muted-foreground">{en.tags}</TableCell>
-                            <TableCell>{en.activity}</TableCell>
-                            <TableCell className="text-muted-foreground">{en.category}</TableCell>
-                            <TableCell className="font-mono text-xs">{en.repo}</TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
+                            <TableCell>{en.member_name}</TableCell>
+                            <TableCell className="text-xs">
                                 {if en.issue_link {
                                     <a
                                         href={en.issue_link}
                                         target="_blank"
-                                        className="text-primary underline-offset-2 hover:underline"
+                                        rel="noopener"
+                                        className="font-medium text-primary underline-offset-2 hover:underline"
                                     >
-                                        Issue
+                                        {linkRef(en.issue_link)}
                                     </a>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
-                                {if en.issue_link and en.pr_link {
-                                    <span className="text-muted-foreground"> · </span>
-                                }}
+                            </TableCell>
+                            <TableCell className="text-xs">
                                 {if en.pr_link {
                                     <a
                                         href={en.pr_link}
                                         target="_blank"
-                                        className="text-primary underline-offset-2 hover:underline"
+                                        rel="noopener"
+                                        className="font-medium text-primary underline-offset-2 hover:underline"
                                     >
-                                        PR
+                                        {linkRef(en.pr_link)}
                                     </a>
+                                } else {
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
                             </TableCell>
-                            <TableCell>{en.status}</TableCell>
+                            <TableCell className="whitespace-nowrap">{en.status}</TableCell>
                             <TableCell className="max-w-48 truncate text-muted-foreground">{en.notes}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
-                                <Button variant="ghost" size="sm" onClick={lambda { onEdit(en); }}>
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive"
-                                    onClick={lambda { onDelete(jid(en)); }}
-                                >
-                                    Delete
-                                </Button>
-                            </TableCell>
                         </TableRow>
                     }}
                 </TableBody>

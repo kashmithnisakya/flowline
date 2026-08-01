@@ -5,26 +5,14 @@ of roster members (members have no accounts in v2). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """
 
-import from ...models { Project, MemberView, RepoView, LogEntry, VocabTerm }
-import from ...walkers.roster { ListMembers, ListRepos }
-import from ...walkers.vocab { ListVocab }
-import from ...walkers.projects { ListProjects }
-import from ...walkers.log {
-    ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry
-}
+import from ...models { LogEntry }
+import from ...walkers.log { ListLogEntries, DeleteLogEntries }
 import from ...components.log.WeekStrip { WeekStrip }
-import from ...components.log.LogForm { LogForm }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
-
-glob BLANK_LOG: dict[str, str] = {
-    "member": "", "project": "none", "category": "",
-    "status": "In Progress", "repo": "none", "activity": "",
-    "issue": "", "pr": "", "notes": ""
-};
 
 def localIso(d: any) -> str {
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
@@ -49,22 +37,15 @@ def mondayOf(iso: str) -> str {
 }
 
 def:pub DailyLogPage() -> JsxPage {
-    has vocab: list[VocabTerm] = [],
-        entries: list[LogEntry] = [],
-        members: list[MemberView] = [],
-        projects: list[Project] = [],
-        repos: list[RepoView] = [],
+    has entries: list[LogEntry] = [],
+        selecting: bool = False,
+        selectedIds: list[str] = [],
         selectedDate: str = "",
         viewMode: str = "day",
         loading: bool = True,
-        weekReqRef: Ref[any] = Ref(),
-        form: dict[str, str] = BLANK_LOG,
-        editingEntryId: str = "",
-        editingMemberName: str = "",
-        saving: bool = False;
+        weekReqRef: Ref[any] = Ref();
 
     async can with entry {
-        loadLists();
         selectedDate = todayIso();
     }
 
@@ -74,31 +55,17 @@ def:pub DailyLogPage() -> JsxPage {
         }
     }
 
-    async def loadLists -> None;
     async def loadWeek -> None;
-    async def submitLog -> None;
-    async def deleteEntry(entryId: str) -> None;
-    def setField(key: str, value: str) -> None;
-    def startEdit(en: LogEntry) -> None;
-    def cancelEdit -> None;
+    async def deleteSelected -> None;
+    def toggleSelect(entryId: str) -> None;
 
-    activeMembers = [m for m in members if m.active];
-    activeProjects = [p for p in projects if p.active];
-    allCategories = [t.value for t in vocab if t.kind == "category"];
-    shownRepos = [
-        r for r in repos
-        if form["project"] == "none" or not r.project_id or r.project_id == form["project"]
-    ];
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
-    # The button stays clickable; submitLog explains what is missing via
-    # toasts. A silently-disabled submit reads as "the button is broken".
-    canSubmit = not saving;
 
     <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Log</h1>
-                <p className="text-sm text-muted-foreground">One row per person per weekday.</p>
+                <p className="text-sm text-muted-foreground">Written automatically as tasks move on the board.</p>
             </div>
             <div className="flex items-center gap-2">
                 <Button
@@ -142,19 +109,29 @@ def:pub DailyLogPage() -> JsxPage {
             onSelectDate={lambda (d: str) { selectedDate = d; viewMode = "day"; }}
         />
 
-        <LogForm
-            form={form}
-            members={activeMembers}
-            projects={activeProjects}
-            repos={shownRepos}
-            editing={bool(editingEntryId)}
-            editingMemberName={editingMemberName}
-            canSubmit={canSubmit}
-            onField={setField}
-            onSubmit={submitLog}
-            onCancel={cancelEdit}
-            categories={allCategories}
-        />
+        <div className="flex items-center justify-end gap-2">
+            {if selecting {
+                <Button key="cancel" variant="outline" size="sm"
+                    onClick={lambda { selecting = False; selectedIds = []; }}
+                >
+                    Cancel
+                </Button>
+            }}
+            {if selecting {
+                <Button key="del" variant="destructive" size="sm"
+                    disabled={len(selectedIds) == 0}
+                    onClick={deleteSelected}
+                >
+                    Delete ({len(selectedIds)})
+                </Button>
+            } else {
+                <Button key="sel" variant="outline" size="sm"
+                    onClick={lambda { selecting = True; }}
+                >
+                    Select
+                </Button>
+            }}
+        </div>
 
         {if loading {
             <Skeleton key="sk" className="h-40 w-full" />
@@ -165,8 +142,9 @@ def:pub DailyLogPage() -> JsxPage {
                     "Nothing logged this week yet." if viewMode == "week"
                     else "Nothing logged for this day yet."
                 }
-                onEdit={startEdit}
-                onDelete={deleteEntry}
+                selecting={selecting}
+                selected={selectedIds}
+                onToggleSelect={toggleSelect}
             />
         }}
     </div>

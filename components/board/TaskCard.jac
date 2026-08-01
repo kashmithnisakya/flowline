@@ -6,6 +6,19 @@ ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 
 import from ...models { TaskView }
 import from ...constants { STATUSES }
+
+glob MONTH_SHORT: list[str] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+# "2026-08-07" -> "Aug 7"
+def prettyDay(iso: str) -> str {
+    if len(iso) < 10 {
+        return iso;
+    }
+    return MONTH_SHORT[int(iso[5:7]) - 1] + " " + str(int(iso[8:10]));
+}
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
@@ -60,10 +73,10 @@ def:pub TaskCard(
                     <Badge key="category" variant="outline">{task.category}</Badge>
                 }}
             </div>
-            {if task.assignee_name or task.due_date {
+            {if len(task.assignee_names) > 0 or task.due_date {
                 <div key="meta" className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{task.assignee_name}</span>
-                    <span>{task.due_date}</span>
+                    <span className="truncate">{", ".join(task.assignee_names)}</span>
+                    <span className="shrink-0">{prettyDay(task.due_date)}</span>
                 </div>
             }}
             {if task.status == "Blocked" and task.notes {

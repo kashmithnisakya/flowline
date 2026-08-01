@@ -73,7 +73,14 @@ impl BoardPage.setField(key: str, value: str) -> None {
 
 impl BoardPage.openCreate -> None {
     editingId = "";
-    form = {**BLANK_TASK, "project": fProject if fProject != "all" else "none"};
+    d = new(Date);
+    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    form = {
+        **BLANK_TASK,
+        "project": fProject if fProject != "all" else "none",
+        "due_date": shifted.toISOString()[:10]
+    };
+    fAssignees = [];
     dialogOpen = True;
 }
 
@@ -84,8 +91,11 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "project": t.project_id if t.project_id else "none",
         "priority": t.priority, "status": t.status,
         "due_date": t.due_date, "notes": t.notes,
-        "assignee": t.assignee_id if t.assignee_id else "none"
+        "issue": t.issue_link, "pr": t.pr_link,
+        "reviewer": t.reviewer_id if t.reviewer_id else "none",
+        "review_due": t.review_due
     };
+    fAssignees = t.assignee_ids;
     dialogOpen = True;
 }
 
@@ -95,20 +105,26 @@ impl BoardPage.saveTask -> None {
         return;
     }
     saving = True;
-    assignee = form["assignee"] if form["assignee"] != "none" else "";
     project = form["project"] if form["project"] != "none" else "";
+    reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
     try {
-        # Assigning someone who is not on the task's project pulls them in.
-        if assignee and project {
-            onProject = False;
-            for m in members {
-                if m.id == assignee and project in m.project_ids {
-                    onProject = True;
+        # Assigning people who are not on the task's project pulls them in.
+        if project {
+            added = 0;
+            for aid in fAssignees {
+                onProject = False;
+                for m in members {
+                    if m.id == aid and project in m.project_ids {
+                        onProject = True;
+                    }
+                }
+                if not onProject {
+                    root spawn AssignToProject(member_id=aid, project_id=project);
+                    added = added + 1;
                 }
             }
-            if not onProject {
-                root spawn AssignToProject(member_id=assignee, project_id=project);
-                toast("Added the assignee to the project");
+            if added > 0 {
+                toast("Added " + str(added) + " assignee(s) to the project");
             }
         }
         if editingId {
@@ -116,14 +132,17 @@ impl BoardPage.saveTask -> None {
                 task_id=editingId, title=title, category=form["category"],
                 priority=form["priority"], status=form["status"],
                 due_date=form["due_date"], notes=form["notes"],
-                assignee_id=assignee, project_id=project
+                issue_link=form["issue"].strip(), pr_link=form["pr"].strip(),
+                reviewer_id=reviewer, review_due=form["review_due"],
+                assignee_ids=fAssignees, project_id=project
             );
         } else {
             root spawn CreateTask(
                 title=title, category=form["category"],
                 priority=form["priority"], status=form["status"],
                 due_date=form["due_date"], notes=form["notes"],
-                assignee_id=assignee, project_id=project
+                issue_link=form["issue"].strip(),
+                assignee_ids=fAssignees, project_id=project
             );
         }
         dialogOpen = False;
@@ -185,7 +204,51 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
     if failed {
         toast("Move failed. Restoring the board.");
         await loadAll();
+    } elif status in HANDOFF_STATUSES {
+        # Optional handoff details for the landing column.
+        title = "";
+        for t in tasks {
+            if t.id == taskId {
+                title = t.title;
+            }
+        }
+        mForm = BLANK_MOVE;
+        moveStatus = status;
+        moveTaskTitle = title;
+        moveTaskId = taskId;
     }
+}
+
+impl BoardPage.setMoveField(key: str, value: str) -> None {
+    updated = {**mForm};
+    updated[key] = value;
+    mForm = updated;
+}
+
+impl BoardPage.toggleAssignee(memberId: str) -> None {
+    if memberId in fAssignees {
+        fAssignees = [a for a in fAssignees if a != memberId];
+    } else {
+        fAssignees = fAssignees + [memberId];
+    }
+}
+
+impl BoardPage.saveMoveInfo -> None {
+    saving = True;
+    try {
+        root spawn SetMoveInfo(
+            task_id=moveTaskId,
+            reviewer_id=mForm["reviewer"] if mForm["reviewer"] != "none" else "",
+            review_due=mForm["review_due"],
+            pr_link=mForm["pr"].strip(),
+            note=mForm["note"].strip()
+        );
+        moveTaskId = "";
+        await loadAll();
+    } except Exception as e {
+        toast("Failed to save the handoff details");
+    }
+    saving = False;
 }
 
 impl BoardPage.arrowMove(t: TaskView, status: str) -> None {

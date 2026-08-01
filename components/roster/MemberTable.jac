@@ -69,7 +69,7 @@ def:pub MemberTable(
                                         }}
                                     </div>
                                 } else {
-                                    <span key="dash" className="text-muted-foreground">—</span>
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
                             </TableCell>
                             <TableCell>
@@ -113,7 +113,7 @@ def:pub MemberTable(
                                         }}
                                     </div>
                                 } else {
-                                    <span key="dash" className="text-muted-foreground">—</span>
+                                    <span key="dash" className="text-muted-foreground">·</span>
                                 }}
                             </TableCell>
                             <TableCell>
@@ -125,7 +125,7 @@ def:pub MemberTable(
                                         <span key="gh" className="truncate font-mono">@{m.github_username}</span>
                                     }}
                                     {if not m.email and not m.github_username {
-                                        <span key="dash">—</span>
+                                        <span key="dash">·</span>
                                     }}
                                 </div>
                             </TableCell>

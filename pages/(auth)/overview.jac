@@ -205,8 +205,8 @@ def:pub OverviewPage() -> JsxPage {
                                 <div className="w-40 min-w-0">
                                     <div className="truncate text-sm font-medium">{m.name}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        {str(len([t for t in openTasks if t.assignee_id == m.id]))} open ·
-                                        {" " + str(len([t for t in doneWeek if t.assignee_id == m.id]))} done this week
+                                        {str(len([t for t in openTasks if m.id in t.assignee_ids]))} open ·
+                                        {" " + str(len([t for t in doneWeek if m.id in t.assignee_ids]))} done this week
                                     </div>
                                 </div>
                                 <div className="flex-1" title={m.name + ": " + str(len([e for e in entries if e.member_name == m.name])) + " entries this week"}>
