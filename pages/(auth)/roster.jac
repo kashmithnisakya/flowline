@@ -50,7 +50,7 @@ def:pub RosterPage() -> JsxPage {
     <div className="space-y-8">
         <div className="flex items-center justify-between">
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+                <h1 className="font-display text-2xl font-bold tracking-tight">People</h1>
                 <p className="text-sm text-muted-foreground">
                     {len(active)} members — assign them to projects here.
                 </p>

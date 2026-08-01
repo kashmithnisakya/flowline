@@ -40,7 +40,7 @@ def:pub LoginPage() -> JsxPage {
     <div className="flex min-h-[80svh] items-center justify-center">
         <Card className="w-full max-w-sm">
             <CardHeader>
-                <CardTitle className="text-xl">
+                <CardTitle className="font-display text-xl font-bold tracking-tight">
                     {"Start your first standup." if signup else "Welcome back."}
                 </CardTitle>
                 <CardDescription>
