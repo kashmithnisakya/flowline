@@ -1,63 +1,41 @@
 # standup
 
-A multi-tenant kanban project tracker for Organization Owners - sign up, set up
-your organization, create projects, and manage the people on them. Built
-entirely in [Jac](https://www.jaseci.org/) (graph-native backend + JSX/React
-client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
+A kanban board and an automatic daily log for teams that hate status meetings.
+Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
+JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-![Board](assets/board.png)
+[add video here]
 
-<details>
-<summary><b>More screenshots</b></summary>
+## What it does
 
-### Login
+- A six-column board per organization, scoped by project, with drag and drop
+- The board writes the log: task creation and every status move land in the
+  activity feed automatically, with timestamps, issue/PR links and the people involved
+- Review handoffs: moving a task to Review asks (optionally) for a reviewer,
+  a review-by date and the PR link; Blocked asks what is blocking it
+- Multi-assignee tasks, org-defined categories and tags, repos attached to projects
+- An Overview tab with headline numbers, per-project progress and per-person activity
 
-![Login](assets/login.png)
+## Install Jac
 
-### Daily Log
-
-![Daily Log](assets/daily-log.png)
-
-### People
-
-![People](assets/people.png)
-
-### Projects
-
-![Projects](assets/projects.png)
-
-</details>
-
-## Running it
+Jac ships as a single native binary. No Python, pip or Node required up front:
 
 ```bash
-jac install              # deps (Python + npm) from jac.toml
-jac start --dev main.jac # dev server with hot reload → http://localhost:8000
+curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash
 ```
 
-## Jac gotchas learned the hard way
+Run `jac` afterwards to confirm it is on your PATH.
 
-- **A computed key does not survive a dict-literal spread.**
-  `{**form, key: value}` compiles to `{...form, key: value}` — JavaScript sets
-  a *literal* `"key"` property and the variable is ignored, so bound inputs
-  silently freeze. Copy and subscript instead:
-  `updated = {**form}; updated[key] = value; form = updated;`
-- **Never name a module after an npm package it imports.**
-  `components/ui/sonner.jac` importing `"sonner"` resolved to *itself* — a
-  self-rendering Toaster that pinned the main thread in an infinite React
-  mount loop. The wrapper lives in `toaster.jac`.
-- **Keep Python imports out of any module the client imports types from.**
-  A stray `import datetime` in `models.jac` dragged `@jac/wasm_host` into the
-  browser bundle and broke the build; server-only helpers live in
-  `walkers/util.jac`.
-- **Elements inside `{if ...}` slots need explicit `key` props**, or React
-  logs a list-key warning for every conditional branch.
-- **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
-  fix doesn't appear under `/compiled/...`, remove `.jac/cache` and
-  `.jac/client/compiled`, then restart.
-- **Kill stray servers before restarting.** A lingering `_bun/bun` child holds
-  the API port, `jac start` silently drifts to the next port pair, and every
-  walker call from the browser hangs.
+## Run the app
+
+```bash
+jac install          # dependencies (Python + npm) from jac.toml
+jac start main.jac   # serve at http://localhost:8000
+```
+
+Use `jac start --dev main.jac` for hot reload while developing. Google and
+GitHub sign-in are optional: put the client ids and secrets in `.env` (the
+variable names are in `jac.toml` under `[scale.sso]`).
 
 ## License
 
