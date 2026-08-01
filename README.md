@@ -4,7 +4,7 @@ A kanban board and an automatic daily log for teams that hate status meetings.
 Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
 JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-[add video here]
+https://github.com/user-attachments/assets/303eb173-2508-4252-ab51-0f1c7fe1f4b2
 
 ## What it does
 
