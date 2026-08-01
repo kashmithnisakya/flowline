@@ -1,8 +1,4 @@
-"""The activity feed: rows written automatically by board moves.
-
-Each row can be marked reviewed (the check control); delete unlocks only
-after a row is checked, so nothing vanishes unacknowledged.
-"""
+"""The activity feed: rows written automatically by board moves."""
 
 import from ...models { LogEntry }
 import from ..ui.button { Button }
@@ -32,7 +28,6 @@ def linkRef(url: str) -> str {
 def:pub LogTable(
     entries: list[LogEntry],
     emptyLabel: str,
-    onCheck: Callable[[str], None],
     onDelete: Callable[[str], None]
 ) -> JsxElement {
     if len(entries) == 0 {
@@ -57,12 +52,12 @@ def:pub LogTable(
                         <TableHead>PR</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Note</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="w-10" />
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {for en in entries {
-                        <TableRow key={jid(en)} className={"opacity-60" if en.checked else ""}>
+                        <TableRow key={jid(en)}>
                             <TableCell className="whitespace-nowrap">
                                 <div className="text-sm">{en.date}</div>
                                 {if len(en.at) >= 16 {
@@ -109,21 +104,12 @@ def:pub LogTable(
                             </TableCell>
                             <TableCell className="whitespace-nowrap">{en.status}</TableCell>
                             <TableCell className="max-w-48 truncate text-muted-foreground">{en.notes}</TableCell>
-                            <TableCell className="whitespace-nowrap text-right">
-                                <Button
-                                    variant={"default" if en.checked else "ghost"}
-                                    size="icon-xs"
-                                    title={"Reviewed. Click to uncheck" if en.checked else "Mark as reviewed"}
-                                    onClick={lambda { onCheck(jid(en)); }}
-                                >
-                                    ✓
-                                </Button>
+                            <TableCell className="text-right">
                                 <Button
                                     variant="ghost"
                                     size="icon-xs"
                                     className="text-muted-foreground hover:text-destructive"
-                                    disabled={not en.checked}
-                                    title={"Delete" if en.checked else "Check the row first, then delete"}
+                                    title="Delete this entry"
                                     onClick={lambda { onDelete(jid(en)); }}
                                 >
                                     ✕

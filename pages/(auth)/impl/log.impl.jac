@@ -21,15 +21,6 @@ impl DailyLogPage.loadWeek -> None {
     }
 }
 
-impl DailyLogPage.checkEntry(entryId: str) -> None {
-    try {
-        root spawn CheckLogEntry(entry_id=entryId);
-        await loadWeek();
-    } except Exception as e {
-        toast("Failed to update the entry");
-    }
-}
-
 impl DailyLogPage.deleteEntry(entryId: str) -> None {
     try {
         root spawn DeleteLogEntry(entry_id=entryId);

@@ -6,7 +6,7 @@ fetched once (Mon-Sun) and the day view filters locally.
 """
 
 import from ...models { LogEntry }
-import from ...walkers.log { ListLogEntries, DeleteLogEntry, CheckLogEntry }
+import from ...walkers.log { ListLogEntries, DeleteLogEntry }
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
@@ -54,7 +54,6 @@ def:pub DailyLogPage() -> JsxPage {
     }
 
     async def loadWeek -> None;
-    async def checkEntry(entryId: str) -> None;
     async def deleteEntry(entryId: str) -> None;
 
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
@@ -116,7 +115,6 @@ def:pub DailyLogPage() -> JsxPage {
                     "Nothing logged this week yet." if viewMode == "week"
                     else "Nothing logged for this day yet."
                 }
-                onCheck={checkEntry}
                 onDelete={deleteEntry}
             />
         }}

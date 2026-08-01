@@ -121,8 +121,7 @@ node LogEntry {
         notes: str = "",
         member_name: str = "",
         tags: str = "",
-        project_name: str = "",
-        checked: bool = False;
+        project_name: str = "";
 }
 
 # An org-defined vocabulary term (kind: "category" or "tag"), seeded in
