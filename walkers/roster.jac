@@ -1,8 +1,8 @@
 """Roster walkers: members and GitHub repos."""
 
 import from models {
-    Project, Member, Repo, Task, MemberView, AssignedTo,
-    member_view, resolve, on_attached, owned
+    Project, Member, Repo, Task, MemberView, RepoView, AssignedTo, HasRepo,
+    member_view, repo_view, resolve, on_attached, owned
 }
 
 # ------------------------------------------------------------------- roster
@@ -29,10 +29,10 @@ walker SaveMember {
     """Empty member_id creates; otherwise updates the addressed Member."""
     has member_id: str = "",
         name: str = "",
-        role: str = "",
+        roles: list[str] = [],
         email: str = "",
         github_username: str = "",
-        section: str = "",
+        tags: list[str] = [],
         reports: list[MemberView] = [];
 
     can save with Root entry {
@@ -43,16 +43,18 @@ walker SaveMember {
             target = resolve(self.member_id);
             if isinstance(target, Member) and owned(here, target) {
                 target.name = self.name.strip();
-                target.role = self.role;
+                target.roles = [r.strip() for r in self.roles if r.strip()];
                 target.email = self.email;
                 target.github_username = self.github_username;
-                target.section = self.section;
+                target.tags = [t.strip() for t in self.tags if t.strip()];
                 report member_view(target);
             }
         } else {
             fresh = here ++> Member(
-                name=self.name.strip(), role=self.role, email=self.email,
-                github_username=self.github_username, section=self.section
+                name=self.name.strip(),
+                roles=[r.strip() for r in self.roles if r.strip()],
+                email=self.email, github_username=self.github_username,
+                tags=[t.strip() for t in self.tags if t.strip()]
             );
             on_attached(here, fresh);
             report member_view(fresh);
@@ -85,26 +87,29 @@ walker ArchiveMember {
 }
 
 walker ListRepos {
-    has results: list[Repo] = [],
-        reports: list[list[Repo]] = [];
+    has results: list[RepoView] = [],
+        reports: list[list[RepoView]] = [];
 
     can start with Root entry {
         visit [here-->[?:Repo]];
     }
 
     can gather with Repo entry {
-        self.results.append(here);
+        self.results.append(repo_view(here));
     }
 
     can deliver with Root exit {
-        self.results.sort(key=lambda (r: Repo) { r.full_name; });
+        self.results.sort(key=lambda (r: RepoView) { r.full_name; });
         report self.results;
     }
 }
 
 walker AddRepo {
+    """Creates (or reuses) the repo node under root and, when project_id
+    resolves to an owned project, points that project at it."""
     has full_name: str,
-        reports: list[Repo] = [];
+        project_id: str = "",
+        reports: list[RepoView] = [];
 
     can add with Root entry {
         if not self.full_name.strip() {
@@ -112,13 +117,20 @@ walker AddRepo {
         }
         fn = self.full_name.strip();
         existing = [here-->[?:Repo, full_name == fn]];
-        if existing {
-            report existing[0];
-        } else {
-            fresh = here ++> Repo(full_name=fn);
-            on_attached(here, fresh);
-            report fresh;
+        target = existing[0] if existing else None;
+        if not target {
+            target = here ++> Repo(full_name=fn);
+            on_attached(here, target);
         }
+        if self.project_id {
+            proj = resolve(self.project_id);
+            if isinstance(proj, Project) and owned(here, proj) {
+                if not [edge proj ->:HasRepo:-> target] {
+                    proj +>:HasRepo():+> target;
+                }
+            }
+        }
+        report repo_view(target);
     }
 }
 

@@ -1,38 +1,35 @@
-"""standup - Workspace page: roster, project assignment, repos, vocabulary."""
+"""standup - Workspace page: roster, project assignment, vocabulary."""
 
-import from ...models { Project, MemberView, Repo, VocabTerm }
-import from ...walkers.roster {
-    ListMembers, SaveMember, ArchiveMember, ListRepos, AddRepo, RemoveRepo
-}
+import from ...models { Project, MemberView, VocabTerm }
+import from ...walkers.roster { ListMembers, SaveMember, ArchiveMember }
 import from ...walkers.projects {
     ListProjects, AssignToProject, UnassignFromProject
 }
 import from ...walkers.vocab { ListVocab, AddVocab, RemoveVocab }
-import from ...constants { SECTIONS }
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
-import from ...components.roster.RepoManager { RepoManager }
 import from ...components.roster.VocabPanel { VocabPanel }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
-    "name": "", "role": "", "email": "", "github": "", "section": ""
+    "name": "", "email": "", "github": "", "roleDraft": ""
 };
 
 def:pub RosterPage() -> JsxPage {
     has members: list[MemberView] = [],
         projects: list[Project] = [],
-        repos: list[Repo] = [],
         vocab: list[VocabTerm] = [],
         loading: bool = True,
         dialogOpen: bool = False,
         editingId: str = "",
         form: dict[str, str] = BLANK_MEMBER,
-        newRepo: str = "",
+        mRoles: list[str] = [],
+        mTags: list[str] = [],
+        mProjects: list[str] = [],
         newCategory: str = "",
-        newSection: str = "",
+        newTag: str = "",
         saving: bool = False;
 
     async can with entry {
@@ -44,26 +41,28 @@ def:pub RosterPage() -> JsxPage {
     async def archiveMember(memberId: str) -> None;
     async def assignTo(memberId: str, projectId: str) -> None;
     async def unassignFrom(memberId: str, projectName: str) -> None;
-    async def addRepo -> None;
-    async def removeRepo(repoId: str) -> None;
     async def addVocab(kind: str) -> None;
     async def removeVocab(termId: str) -> None;
     def setField(key: str, value: str) -> None;
+    def addRole -> None;
+    def removeRole(role: str) -> None;
+    def toggleTag(tag: str) -> None;
+    def toggleProject(projectId: str) -> None;
     def openCreate -> None;
     def openEdit(m: MemberView) -> None;
 
     active = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
     customCategories = [t for t in vocab if t.kind == "category"];
-    customSections = [t for t in vocab if t.kind == "section"];
-    allSections = SECTIONS + [t.value for t in customSections];
+    customTags = [t for t in vocab if t.kind == "tag"];
+    allTags = [t.value for t in customTags];
 
     <div className="space-y-8">
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Workspace</h1>
                 <p className="text-sm text-muted-foreground">
-                    {len(active)} team members, plus the repos and vocabulary your logs use.
+                    {len(active)} team members, plus the vocabulary your board and logs use.
                 </p>
             </div>
             <Button onClick={openCreate}>Add member</Button>
@@ -84,34 +83,33 @@ def:pub RosterPage() -> JsxPage {
                     />
                 }}
             </div>
-            <div className="space-y-6">
-                <RepoManager
-                    repos={repos}
-                    value={newRepo}
-                    onChange={lambda (v: str) { newRepo = v; }}
-                    onAdd={addRepo}
-                    onRemove={removeRepo}
-                />
-                <VocabPanel
-                    customCategories={customCategories}
-                    customSections={customSections}
-                    newCategory={newCategory}
-                    newSection={newSection}
-                    onNewCategory={lambda (v: str) { newCategory = v; }}
-                    onNewSection={lambda (v: str) { newSection = v; }}
-                    onAdd={addVocab}
-                    onRemove={removeVocab}
-                />
-            </div>
+            <VocabPanel
+                customCategories={customCategories}
+                customTags={customTags}
+                newCategory={newCategory}
+                newTag={newTag}
+                onNewCategory={lambda (v: str) { newCategory = v; }}
+                onNewTag={lambda (v: str) { newTag = v; }}
+                onAdd={addVocab}
+                onRemove={removeVocab}
+            />
         </div>
 
         <MemberDialog
             open={dialogOpen}
             editing={bool(editingId)}
             form={form}
-            sections={allSections}
+            roles={mRoles}
+            memberTags={mTags}
+            allTags={allTags}
+            projects={activeProjects}
+            selectedProjectIds={mProjects}
             saving={saving}
             onField={setField}
+            onAddRole={addRole}
+            onRemoveRole={removeRole}
+            onToggleTag={toggleTag}
+            onToggleProject={toggleProject}
             onOpenChange={lambda (o: bool) { dialogOpen = o; }}
             onSave={saveMember}
         />

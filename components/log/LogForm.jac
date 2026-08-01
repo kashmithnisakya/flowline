@@ -1,7 +1,7 @@
 """The log-activity form: the PM records one member's day."""
 
-import from ...constants { STATUSES, CATEGORIES }
-import from ...models { Project, MemberView, Repo }
+import from ...constants { STATUSES }
+import from ...models { Project, MemberView, RepoView }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardHeader, CardTitle, CardContent }
 import from ..ui.input { Input }
@@ -21,7 +21,7 @@ def:pub LogForm(
     form: dict[str, str],
     members: list[MemberView],
     projects: list[Project],
-    repos: list[Repo],
+    repos: list[RepoView],
     editing: bool,
     editingMemberName: str,
     canSubmit: bool,
@@ -30,8 +30,7 @@ def:pub LogForm(
     onCancel: Callable[[], None],
     categories: list[str] = []
 ) -> JsxElement {
-    # Custom categories ride in via the prop; built-ins are the fallback.
-    categoryOptions = categories if categories else CATEGORIES;
+
     <Card className="gap-0 py-4">
         <CardHeader className="pb-3">
             <CardTitle className="text-base">
@@ -99,7 +98,7 @@ def:pub LogForm(
                     >
                         <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
                         <SelectContent>
-                            {for c in categoryOptions {
+                            {for c in categories {
                                 <SelectItem key={c} value={c}>{c}</SelectItem>
                             }}
                         </SelectContent>
@@ -129,7 +128,7 @@ def:pub LogForm(
                         <SelectContent>
                             <SelectItem value="none">No repo</SelectItem>
                             {for r in repos {
-                                <SelectItem key={jid(r)} value={r.full_name}>{repoShortName(r.full_name)}</SelectItem>
+                                <SelectItem key={r.id} value={r.full_name}>{repoShortName(r.full_name)}</SelectItem>
                             }}
                         </SelectContent>
                     </Select>

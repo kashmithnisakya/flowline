@@ -42,7 +42,7 @@ def:pub MemberTable(
                     <TableRow>
                         <TableHead>Member</TableHead>
                         <TableHead>Projects</TableHead>
-                        <TableHead>Section</TableHead>
+                        <TableHead>Tags</TableHead>
                         <TableHead>Contact</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -57,8 +57,8 @@ def:pub MemberTable(
                                     </span>
                                     <div className="min-w-0">
                                         <div className="truncate font-medium">{m.name}</div>
-                                        {if m.role {
-                                            <div className="truncate text-xs text-muted-foreground">{m.role}</div>
+                                        {if len(m.roles) > 0 {
+                                            <div className="truncate text-xs text-muted-foreground">{", ".join(m.roles)}</div>
                                         }}
                                     </div>
                                 </div>
@@ -97,8 +97,12 @@ def:pub MemberTable(
                                 </div>
                             </TableCell>
                             <TableCell>
-                                {if m.section {
-                                    <Badge variant="outline">{m.section}</Badge>
+                                {if len(m.tags) > 0 {
+                                    <div className="flex flex-wrap gap-1">
+                                        {for t in m.tags {
+                                            <Badge key={t} variant="outline" className="font-normal">{t}</Badge>
+                                        }}
+                                    </div>
                                 } else {
                                     <span key="dash" className="text-muted-foreground">—</span>
                                 }}

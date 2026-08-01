@@ -4,9 +4,9 @@ Stateful shell: owns the data and every handler (bodies in index.impl.jac);
 the columns, cards, filters, and dialog are presentational components.
 """
 
-import from ...constants { STATUSES, CATEGORIES }
+import from ...constants { STATUSES }
 import from ...models { Project, MemberView, TaskView }
-import from ...walkers.projects { ListProjects }
+import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.roster { ListMembers }
 import from ...walkers.vocab { ListVocab }
 import from ...models { VocabTerm }
@@ -77,7 +77,7 @@ def:pub BoardPage() -> JsxPage {
 
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
-    allCategories = CATEGORIES + [t.value for t in vocab if t.kind == "category"];
+    allCategories = [t.value for t in vocab if t.kind == "category"];
     visible = [
         t for t in tasks
         if (fProject == "all" or t.project_id == fProject)

@@ -1,12 +1,10 @@
 """Workspace vocabulary: extend the category and section lists.
 
-Built-in terms (constants.jac) show as locked chips; custom VocabTerm
-nodes get a remove control. Removing a term never rewrites rows that
-already use it, the category/section fields on entries are free text.
+Every term is org-defined (no built-ins). Removing a term never rewrites
+rows that already use it; category/tag values on entries are free text.
 """
 
 import from ...models { VocabTerm }
-import from ...constants { CATEGORIES, SECTIONS }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
@@ -15,11 +13,11 @@ import from ..ui.label { Label }
 
 def:pub VocabPanel(
     customCategories: list[VocabTerm],
-    customSections: list[VocabTerm],
+    customTags: list[VocabTerm],
     newCategory: str,
-    newSection: str,
+    newTag: str,
     onNewCategory: Callable[[str], None],
-    onNewSection: Callable[[str], None],
+    onNewTag: Callable[[str], None],
     onAdd: Callable[[str], None],
     onRemove: Callable[[str], None]
 ) -> JsxElement {
@@ -27,16 +25,13 @@ def:pub VocabPanel(
         <CardHeader>
             <CardTitle>Vocabulary</CardTitle>
             <CardDescription>
-                The categories and sections offered in dropdowns. Add your own next to the built-ins.
+                The categories and tags offered across the app. Yours to define.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
             <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Categories</Label>
                 <div className="flex flex-wrap items-center gap-1.5">
-                    {for c in CATEGORIES {
-                        <Badge key={c} variant="secondary" className="font-normal">{c}</Badge>
-                    }}
                     {for t in customCategories {
                         <Badge
                             key={jid(t)}
@@ -70,12 +65,9 @@ def:pub VocabPanel(
                 </div>
             </div>
             <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Sections</Label>
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Tags</Label>
                 <div className="flex flex-wrap items-center gap-1.5">
-                    {for s in SECTIONS {
-                        <Badge key={s} variant="secondary" className="font-normal">{s}</Badge>
-                    }}
-                    {for t in customSections {
+                    {for t in customTags {
                         <Badge
                             key={jid(t)}
                             variant="outline"
@@ -89,19 +81,19 @@ def:pub VocabPanel(
                 </div>
                 <div className="flex gap-2">
                     <Input
-                        placeholder="New section"
+                        placeholder="New tag"
                         className="h-8"
-                        value={newSection}
-                        onChange={lambda (e: ChangeEvent) { onNewSection(e.target.value); }}
+                        value={newTag}
+                        onChange={lambda (e: ChangeEvent) { onNewTag(e.target.value); }}
                         onKeyDown={lambda (e: KeyboardEvent) {
-                            if e.key == "Enter" { onAdd("section"); }
+                            if e.key == "Enter" { onAdd("tag"); }
                         }}
                     />
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={lambda { onAdd("section"); }}
-                        disabled={not newSection.strip()}
+                        onClick={lambda { onAdd("tag"); }}
+                        disabled={not newTag.strip()}
                     >
                         Add
                     </Button>

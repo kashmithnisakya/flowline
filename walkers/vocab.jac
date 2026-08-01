@@ -8,7 +8,7 @@ category/section fields on tasks and log entries are free text).
 
 import from models { VocabTerm, resolve, on_attached, owned }
 
-glob VOCAB_KINDS: list[str] = ["category", "section"];
+glob VOCAB_KINDS: list[str] = ["category", "tag"];
 
 walker ListVocab {
     has results: list[VocabTerm] = [],

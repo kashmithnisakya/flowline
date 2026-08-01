@@ -3,7 +3,9 @@
 impl ProjectsPage.loadProjects -> None {
     try {
         result = root spawn ListProjects();
+        rResult = root spawn ListRepos();
         projects = result.reports[0] if result.reports else [];
+        repos = rResult.reports[0] if rResult.reports else [];
     } except Exception as e {
         toast("Failed to load projects");
     }
@@ -47,5 +49,28 @@ impl ProjectsPage.archiveProject(projectId: str) -> None {
         await loadProjects();
     } except Exception as e {
         toast("Failed to archive project");
+    }
+}
+
+impl ProjectsPage.addRepo(projectId: str, raw: str) -> None {
+    cleaned = normalizeRepoInput(raw);
+    if not cleaned {
+        toast("That does not look like a GitHub repo link.");
+        return;
+    }
+    try {
+        root spawn AddRepo(full_name=cleaned, project_id=projectId);
+        await loadProjects();
+    } except Exception as e {
+        toast("Failed to add repo");
+    }
+}
+
+impl ProjectsPage.removeRepo(repoId: str) -> None {
+    try {
+        root spawn RemoveRepo(repo_id=repoId);
+        await loadProjects();
+    } except Exception as e {
+        toast("Failed to remove repo");
     }
 }
