@@ -14,7 +14,7 @@ glob FAQS: list[QA] = [
     QA(
         q="Do my teammates need their own accounts?",
         a="No. Only the person managing the projects signs in. Teammates are "
-            + "roster records you create, and you log the day on their behalf — "
+            + "roster records you create, and you log the day on their behalf, "
             + "so nobody else has a password to forget."
     ),
     QA(
@@ -33,8 +33,8 @@ glob FAQS: list[QA] = [
     QA(
         q="Does it connect to GitHub?",
         a="You can attach an issue link and a PR link to any daily-log entry, and "
-            + "keep a list of the repos your team uses. There is no API sync yet — "
-            + "nothing reads or writes GitHub on your behalf."
+            + "keep a list of the repos your team uses. There is no API sync yet. "
+            + "Nothing reads or writes GitHub on your behalf."
     ),
     QA(
         q="Is there a Slack or Teams app?",
@@ -45,7 +45,7 @@ glob FAQS: list[QA] = [
         q="What happened to the spreadsheet we used before?",
         a="This replaced it. The board covers the to-do sheet, the daily log "
             + "covers the activity sheet, and projects replaced the hardcoded team "
-            + "column — but the app does not import the old file, so you start "
+            + "column, but the app does not import the old file, so you start "
             + "clean."
     )
 ];

@@ -114,6 +114,14 @@ node LogEntry {
         project_name: str = "";
 }
 
+# A custom vocabulary term added from the Workspace tab. kind is
+# "category" or "section"; built-in terms stay in constants.jac and the
+# client merges the two lists.
+node VocabTerm {
+    has kind: str,
+        value: str;
+}
+
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}

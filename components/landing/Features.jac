@@ -38,7 +38,7 @@ glob FEATURES: list[Feature] = [
         n="04",
         title="A workspace that is yours",
         body="Your account is your organization. Everything you create lives on "
-            + "your own private graph — another account cannot read or touch it.",
+            + "your own private graph. Another account cannot read or touch it.",
         tag="Private"
     )
 ];
@@ -49,7 +49,7 @@ def:pub Features() -> JsxElement {
             Everything a standup does. None of the 9:45.
         </h2>
         <p className="mt-4 max-w-2xl text-base text-muted-foreground">
-            Four things replace the ritual — and unlike the meeting, the record is
+            Four things replace the ritual, and unlike the meeting, the record is
             still there next month.
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2">

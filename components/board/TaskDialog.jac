@@ -27,8 +27,10 @@ def:pub TaskDialog(
     onField: Callable[[str, str], None],
     onOpenChange: Callable[[bool], None],
     onSave: Callable[[], None],
-    onDelete: Callable[[], None]
+    onDelete: Callable[[], None],
+    categories: list[str] = []
 ) -> JsxElement {
+    categoryOptions = categories if categories else CATEGORIES;
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -66,7 +68,7 @@ def:pub TaskDialog(
                         >
                             <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
                             <SelectContent>
-                                {for c in CATEGORIES {
+                                {for c in categoryOptions {
                                     <SelectItem key={c} value={c}>{c}</SelectItem>
                                 }}
                             </SelectContent>

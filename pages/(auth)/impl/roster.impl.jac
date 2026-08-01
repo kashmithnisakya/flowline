@@ -1,15 +1,17 @@
-"""Implementations for the People page."""
+"""Implementations for the Workspace page."""
 
 impl RosterPage.loadAll -> None {
     try {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
         rResult = root spawn ListRepos();
+        vResult = root spawn ListVocab();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
         repos = rResult.reports[0] if rResult.reports else [];
+        vocab = vResult.reports[0] if vResult.reports else [];
     } except Exception as e {
-        toast("Failed to load people");
+        toast("Failed to load the workspace");
     }
     loading = False;
 }
@@ -100,16 +102,62 @@ impl RosterPage.unassignFrom(memberId: str, projectName: str) -> None {
 }
 
 impl RosterPage.addRepo -> None {
+    # Accept a pasted GitHub URL (https/ssh, with or without .git) or a
+    # bare org/repo, and store the normalized org/repo form.
     captured = newRepo.strip();
     if not captured {
         return;
     }
+    cleaned = captured;
+    cleaned = cleaned.replace("https://github.com/", "");
+    cleaned = cleaned.replace("http://github.com/", "");
+    cleaned = cleaned.replace("git@github.com:", "");
+    cleaned = cleaned.replace("www.github.com/", "");
+    if cleaned.endswith(".git") {
+        cleaned = cleaned[:-4];
+    }
+    cleaned = cleaned.strip("/");
+    parts = [p for p in cleaned.split("/") if p];
+    if len(parts) >= 2 {
+        cleaned = parts[0] + "/" + parts[1];
+    }
+    if not cleaned {
+        toast("That does not look like a GitHub repo link.");
+        return;
+    }
     try {
-        root spawn AddRepo(full_name=captured);
+        root spawn AddRepo(full_name=cleaned);
         newRepo = "";
         await loadAll();
     } except Exception as e {
         toast("Failed to add repo");
+    }
+}
+
+impl RosterPage.addVocab(kind: str) -> None {
+    value = newCategory.strip() if kind == "category" else newSection.strip();
+    if not value {
+        return;
+    }
+    try {
+        root spawn AddVocab(kind=kind, value=value);
+        if kind == "category" {
+            newCategory = "";
+        } else {
+            newSection = "";
+        }
+        await loadAll();
+    } except Exception as e {
+        toast("Failed to add the term");
+    }
+}
+
+impl RosterPage.removeVocab(termId: str) -> None {
+    try {
+        root spawn RemoveVocab(term_id=termId);
+        await loadAll();
+    } except Exception as e {
+        toast("Failed to remove the term");
     }
 }
 

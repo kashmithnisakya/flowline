@@ -5,10 +5,12 @@ impl DailyLogPage.loadLists -> None {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
         rResult = root spawn ListRepos();
+        vResult = root spawn ListVocab();
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         members = fetchedMembers;
         projects = pResult.reports[0] if pResult.reports else [];
         repos = rResult.reports[0] if rResult.reports else [];
+        vocab = vResult.reports[0] if vResult.reports else [];
         # Restore the last-used member if it still resolves.
         who = localStorage.getItem("standup_log_member") or "";
         found = False;
@@ -62,10 +64,16 @@ impl DailyLogPage.setField(key: str, value: str) -> None {
 
 impl DailyLogPage.submitLog -> None {
     activity = form["activity"].strip();
-    if not activity or not selectedDate {
+    if not activity {
+        toast("Describe the work first. The activity field is empty.");
+        return;
+    }
+    if not selectedDate {
+        toast("Pick a date first.");
         return;
     }
     if not editingEntryId and not form["member"] {
+        toast("Pick who did the work. The Member dropdown is empty.");
         return;
     }
     saving = True;

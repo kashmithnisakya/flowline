@@ -5,8 +5,10 @@ of roster members (members have no accounts in v2). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """
 
-import from ...models { Project, MemberView, Repo, LogEntry }
+import from ...models { Project, MemberView, Repo, LogEntry, VocabTerm }
+import from ...constants { CATEGORIES }
 import from ...walkers.roster { ListMembers, ListRepos }
+import from ...walkers.vocab { ListVocab }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.log {
     ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry
@@ -48,7 +50,8 @@ def mondayOf(iso: str) -> str {
 }
 
 def:pub DailyLogPage() -> JsxPage {
-    has entries: list[LogEntry] = [],
+    has vocab: list[VocabTerm] = [],
+        entries: list[LogEntry] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
         repos: list[Repo] = [],
@@ -82,11 +85,11 @@ def:pub DailyLogPage() -> JsxPage {
 
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
+    allCategories = CATEGORIES + [t.value for t in vocab if t.kind == "category"];
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
-    canSubmit = (
-        not saving and bool(form["activity"].strip()) and bool(selectedDate)
-        and (bool(editingEntryId) or bool(form["member"]))
-    );
+    # The button stays clickable; submitLog explains what is missing via
+    # toasts. A silently-disabled submit reads as "the button is broken".
+    canSubmit = not saving;
 
     <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -132,7 +135,7 @@ def:pub DailyLogPage() -> JsxPage {
             </div>
         </div>
 
-        <WeekStrip entries={entries} />
+        <WeekStrip entries={entries} categories={allCategories} />
 
         <LogForm
             form={form}
@@ -145,6 +148,7 @@ def:pub DailyLogPage() -> JsxPage {
             onField={setField}
             onSubmit={submitLog}
             onCancel={cancelEdit}
+            categories={allCategories}
         />
 
         {if loading {

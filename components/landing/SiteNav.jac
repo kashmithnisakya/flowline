@@ -8,7 +8,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
         <nav className="mx-auto flex max-w-[1180px] items-center gap-8 px-7 py-4">
             <Link to="/" className="flex items-center gap-2">
                 <img src="/static/brand/logo-mark.svg" alt="" width={28} height={28} />
-                <span className="font-display text-lg font-bold tracking-tight">standup</span>
+                <span className="font-display text-lg font-bold tracking-tight">standup<span className="text-primary ml-0.5">.</span></span>
             </Link>
             <a href="#product" className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block">
                 Product

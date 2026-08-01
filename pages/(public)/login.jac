@@ -86,7 +86,7 @@ def:pub LoginPage() -> JsxPage {
                 {"Start your first standup." if signup else "Welcome back."}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {"Create your organization's workspace — you'll be its project manager."
+                {"Create your organization's workspace. You'll be its project manager."
                     if signup else "Your team's log is waiting in the archive."}
             </p>
 
@@ -95,7 +95,7 @@ def:pub LoginPage() -> JsxPage {
                     key="expired"
                     className="mt-4 rounded-xl border border-border bg-accent px-3 py-2 text-sm text-muted-foreground"
                 >
-                    Your session expired — please sign in again.
+                    Your session expired. Please sign in again.
                 </p>
             }}
 

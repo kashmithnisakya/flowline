@@ -83,9 +83,13 @@ def wordmark(width: int = 240, dark: bool = False) -> str {
         f'rx="{TILE_R}" fill="{tile_fill}"/>'
         f'{_bars(bars_fill, EMBER)}'
         f'\n    <circle cx="{cx}" cy="12" r="{DOT_R}" fill="{EMBER}"/>'
+        # textLength pins the rendered text width: SVGs loaded via <img>
+        # cannot fetch webfonts, and without it the fallback font's metrics
+        # move the wordmark's end away from the fixed-position trailing dot.
         f'\n    <text x="70" y="38" font-family="\'Bricolage Grotesque\','
         f"'Helvetica Neue',sans-serif\" font-size="
-        f'"30" font-weight="700" letter-spacing="-1.2" fill="{text_fill}">standup</text>'
+        f'"30" font-weight="700" letter-spacing="-1.2" textLength="140" '
+        f'lengthAdjust="spacingAndGlyphs" fill="{text_fill}">standup</text>'
         f'\n    <circle cx="221" cy="34" r="4" fill="{EMBER}"/>'
         f'\n</svg>\n'
     );

@@ -18,7 +18,7 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-muted-foreground">
             standup keeps a kanban board for every project and a written log of who
-            did what each day — so status is something your team reads, not another
+            did what each day, so status is something your team reads, not another
             fifteen minutes on the calendar.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

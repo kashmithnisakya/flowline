@@ -26,6 +26,7 @@ impl BoardPage.loadAll -> None {
         tResult = root spawn ListTasks();
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
+        vResult = root spawn ListVocab();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
@@ -33,6 +34,7 @@ impl BoardPage.loadAll -> None {
             tasks = fetchedTasks;
             members = fetchedMembers;
             projects = fetchedProjects;
+            vocab = vResult.reports[0] if vResult.reports else [];
         }
         # A stale persisted filter (archived project) would show an empty
         # board with no hint — reset it to "all".
@@ -168,7 +170,7 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
     }
     movesRef.current = movesRef.current - 1;
     if failed {
-        toast("Move failed — restoring the board");
+        toast("Move failed. Restoring the board.");
         await loadAll();
     }
 }

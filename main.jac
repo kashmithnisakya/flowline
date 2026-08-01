@@ -23,6 +23,7 @@ import from walkers.tasks {
 import from walkers.log {
     ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntry
 }
+import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
 
 def:pub app(children: any) -> JsxElement {
     <>{children}</>

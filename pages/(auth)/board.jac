@@ -4,10 +4,12 @@ Stateful shell: owns the data and every handler (bodies in index.impl.jac);
 the columns, cards, filters, and dialog are presentational components.
 """
 
-import from ...constants { STATUSES }
+import from ...constants { STATUSES, CATEGORIES }
 import from ...models { Project, MemberView, TaskView }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListMembers }
+import from ...walkers.vocab { ListVocab }
+import from ...models { VocabTerm }
 import from ...walkers.tasks {
     ListTasks, CreateTask, UpdateTask, MoveTask, DeleteTask
 }
@@ -25,7 +27,8 @@ glob BLANK_TASK: dict[str, str] = {
 };
 
 def:pub BoardPage() -> JsxPage {
-    has tasks: list[TaskView] = [],
+    has vocab: list[VocabTerm] = [],
+        tasks: list[TaskView] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
         loading: bool = True,
@@ -74,6 +77,7 @@ def:pub BoardPage() -> JsxPage {
 
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
+    allCategories = CATEGORIES + [t.value for t in vocab if t.kind == "category"];
     visible = [
         t for t in tasks
         if (fProject == "all" or t.project_id == fProject)
@@ -97,19 +101,22 @@ def:pub BoardPage() -> JsxPage {
                     onAssignee={lambda (v: str) { fAssignee = v; }}
                     onCategory={lambda (v: str) { fCategory = v; }}
                     onHideDone={lambda { hideDone = not hideDone; }}
+                    categories={allCategories}
                 />
                 <Button onClick={openCreate}>New task</Button>
             </div>
         </div>
 
         {if loading {
-            <div key="skeletons" className="flex gap-3">
-                <Skeleton key="s1" className="h-72 w-64" />
-                <Skeleton key="s2" className="h-72 w-64" />
-                <Skeleton key="s3" className="h-72 w-64" />
+            <div key="skeletons" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <Skeleton key="s1" className="h-72 w-full" />
+                <Skeleton key="s2" className="h-72 w-full" />
+                <Skeleton key="s3" className="h-72 w-full" />
             </div>
         } else {
-            <div key="columns" className="flex items-start gap-3 overflow-x-auto pb-4">
+            # Fluid grid: all six columns share the viewport width on xl, wrap
+            # into rows below it. No horizontal scrollbar at any width.
+            <div key="columns" className="grid grid-cols-2 items-start gap-3 md:grid-cols-3 xl:grid-cols-6">
                 {for s in STATUSES {
                     <KanbanColumn
                         key={s}
@@ -134,6 +141,7 @@ def:pub BoardPage() -> JsxPage {
             onOpenChange={lambda (o: bool) { dialogOpen = o; }}
             onSave={saveTask}
             onDelete={deleteTask}
+            categories={allCategories}
         />
     </div>
 }

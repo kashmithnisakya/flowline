@@ -33,27 +33,35 @@ def:pub Shell() -> JsxLayout {
     location = useLocation();
     chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
 
+    def navClass(path: str) -> str {
+        base = "rounded-md px-2.5 py-1.5 text-[15px] font-medium transition-colors ";
+        if location.pathname == path {
+            return base + "bg-secondary text-foreground";
+        }
+        return base + "text-muted-foreground hover:bg-accent hover:text-foreground";
+    }
+
     <div className="min-h-screen bg-background text-foreground">
         {if chrome {
             <header key="nav" className="border-b">
-                <nav className="mx-auto flex max-w-[96rem] items-center gap-6 px-6 py-3">
-                    <Link to="/board" className="flex items-center gap-2">
-                        <img src="/static/brand/logo-mark.svg" alt="" width={28} height={28} />
-                        <span className="font-display text-lg font-bold tracking-tight">
-                            standup
+                <nav className="flex items-center gap-4 px-6 py-3 lg:px-10">
+                    <Link to="/board" className="mr-2 flex items-center gap-2">
+                        <img src="/static/brand/logo-mark.svg" alt="" width={30} height={30} />
+                        <span className="font-display text-xl font-bold tracking-tight">
+                            standup<span className="text-primary ml-0.5">.</span>
                         </span>
                     </Link>
-                    <Link to="/board" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link to="/board" className={navClass("/board")}>
                         Board
                     </Link>
-                    <Link to="/log" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link to="/log" className={navClass("/log")}>
                         Daily Log
                     </Link>
-                    <Link to="/projects" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link to="/projects" className={navClass("/projects")}>
                         Projects
                     </Link>
-                    <Link to="/roster" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-                        People
+                    <Link to="/roster" className={navClass("/roster")}>
+                        Workspace
                     </Link>
                     <div className="ml-auto flex items-center gap-3">
                         {if orgName {
@@ -69,7 +77,7 @@ def:pub Shell() -> JsxLayout {
             </header>
         }}
         {if chrome {
-            <main key="app" className="mx-auto max-w-[96rem] px-6 py-6">
+            <main key="app" className="px-6 py-6 lg:px-10">
                 <Outlet />
             </main>
         } else {
