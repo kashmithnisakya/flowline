@@ -5,11 +5,14 @@ status dot over the tallest bar. Run this to regenerate every variant:
 
     jac run brand/logo.jac
 
-It writes SVGs into assets/brand/. Commit the output so the frontend can
-reference plain static paths, and re-run this whenever the palette moves.
+It writes SVGs into assets/brand/, plus PNG/JPG rasters of the mark drawn
+straight from the same geometry with Pillow. Commit the output so the
+frontend can reference plain static paths, and re-run this whenever the
+palette moves.
 """
 
 import os;
+import from PIL { Image, ImageDraw }
 
 
 # --- brand palette (see PLAN.md; mirrors styles/global.css) -----------------
@@ -98,6 +101,51 @@ def _write(name: str, body: str) -> None {
 }
 
 
+# Draw the mark with Pillow from the same geometry the SVGs use,
+# supersampled 4x then downscaled for smooth edges.
+def _draw_mark(size: int) -> Image.Image {
+    ss = 4;
+    s = size * ss / TILE;
+    px = size * ss;
+    img = Image.new("RGBA", (px, px), (0, 0, 0, 0));
+    draw = ImageDraw.Draw(img);
+    draw.rounded_rectangle([0, 0, px, px], radius=TILE_R * s, fill=INK);
+    for (i, bar) in enumerate(BARS) {
+        (x, y, h) = bar;
+        fill = EMBER if i == len(BARS) - 1 else PAPER;
+        draw.rounded_rectangle(
+            [x * s, y * s, (x + BAR_W) * s, (y + h) * s],
+            radius=BAR_R * s,
+            fill=fill,
+        );
+    }
+    (last_x, last_y, last_h) = BARS[-1];
+    cx = (last_x + BAR_W / 2) * s;
+    cy = 12 * s;
+    r = DOT_R * s;
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=EMBER);
+    return img.resize((size, size), Image.Resampling.LANCZOS);
+}
+
+
+def _write_png(name: str, size: int) {
+    path = os.path.join(OUT_DIR, name);
+    _draw_mark(size).save(path);
+    print(f"  wrote {path} ({os.path.getsize(path)} bytes)");
+}
+
+
+# JPEG has no alpha channel, so flatten onto PAPER first.
+def _write_jpg(name: str, size: int) {
+    path = os.path.join(OUT_DIR, name);
+    img = _draw_mark(size);
+    flat = Image.new("RGB", img.size, PAPER);
+    flat.paste(img, (0, 0), img);
+    flat.save(path, quality=90);
+    print(f"  wrote {path} ({os.path.getsize(path)} bytes)");
+}
+
+
 with entry:__main__ {
     os.makedirs(OUT_DIR, exist_ok=True);
     print("standup brand assets ->");
@@ -106,5 +154,7 @@ with entry:__main__ {
     _write("logo-full.svg", wordmark(width=240));
     _write("logo-full-dark.svg", wordmark(width=240, dark=True));
     _write("favicon.svg", mark(size=32));
+    _write_png("logo-mark.png", size=512);
+    _write_jpg("logo-mark.jpg", size=512);
     print("done.");
 }

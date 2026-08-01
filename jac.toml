@@ -35,3 +35,15 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 [serve]
 base_route_app = "app"
+
+[scale.sso]
+host = "http://localhost:8000"
+client_auth_callback_url = "http://localhost:8000/auth/callback"
+
+[scale.sso.google]
+client_id = ""
+client_secret = ""
+
+[scale.sso.github]
+client_id = "${GITHUB_CLIENT_ID}"
+client_secret = "${GITHUB_CLIENT_SECRET}"
