@@ -83,16 +83,18 @@ def:pub RosterPage() -> JsxPage {
                     />
                 }}
             </div>
-            <VocabPanel
-                customCategories={customCategories}
-                customTags={customTags}
-                newCategory={newCategory}
-                newTag={newTag}
-                onNewCategory={lambda (v: str) { newCategory = v; }}
-                onNewTag={lambda (v: str) { newTag = v; }}
-                onAdd={addVocab}
-                onRemove={removeVocab}
-            />
+            <div className="space-y-6">
+                <VocabPanel
+                    customCategories={customCategories}
+                    customTags={customTags}
+                    newCategory={newCategory}
+                    newTag={newTag}
+                    onNewCategory={lambda (v: str) { newCategory = v; }}
+                    onNewTag={lambda (v: str) { newTag = v; }}
+                    onAdd={addVocab}
+                    onRemove={removeVocab}
+                />
+            </div>
         </div>
 
         <MemberDialog

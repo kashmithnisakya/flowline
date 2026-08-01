@@ -27,7 +27,8 @@ glob BLANK_TASK: dict[str, str] = {
 };
 
 def:pub BoardPage() -> JsxPage {
-    has vocab: list[VocabTerm] = [],
+    has showAllDone: bool = False,
+        vocab: list[VocabTerm] = [],
         tasks: list[TaskView] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
@@ -78,6 +79,12 @@ def:pub BoardPage() -> JsxPage {
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
     allCategories = [t.value for t in vocab if t.kind == "category"];
+    weekAgoDate = new(Date);
+    weekAgoDate.setDate(weekAgoDate.getDate() - 7);
+    weekAgo = weekAgoDate.toISOString()[:10];
+    doneVisible = [t for t in visible if t.status == "Done"];
+    recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
+    olderDoneCount = len(doneVisible) - len(recentDone);
     visible = [
         t for t in tasks
         if (fProject == "all" or t.project_id == fProject)
@@ -121,10 +128,17 @@ def:pub BoardPage() -> JsxPage {
                     <KanbanColumn
                         key={s}
                         status={s}
-                        tasks={[t for t in visible if t.status == s]}
+                        tasks={
+                            (doneVisible if showAllDone else recentDone)
+                            if s == "Done"
+                            else [t for t in visible if t.status == s]
+                        }
                         onOpen={openEdit}
                         onArrowMove={arrowMove}
                         onDropTask={moveTo}
+                        extraCount={olderDoneCount if s == "Done" and not showAllDone else 0}
+                        showingAll={showAllDone if s == "Done" else False}
+                        onToggleOlder={lambda { showAllDone = not showAllDone; }}
                     />
                 }}
             </div>
