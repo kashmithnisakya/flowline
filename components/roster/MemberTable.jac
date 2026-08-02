@@ -91,10 +91,11 @@ def:pub MemberTable(
                                             onValueChange={lambda (v: str) { onAssign(m.id, v); }}
                                         >
                                             <SelectTrigger
-                                                className="h-6 w-9 border-dashed px-1 text-xs"
+                                                className="h-6 w-auto border-dashed px-2 text-xs text-muted-foreground"
                                                 size="sm"
+                                                title="Assign to a project"
                                             >
-                                                <SelectValue placeholder="+" />
+                                                <SelectValue placeholder="+ Assign" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {for p in projects {
