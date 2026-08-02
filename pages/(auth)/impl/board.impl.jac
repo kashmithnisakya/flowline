@@ -201,17 +201,32 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
         failed = True;
     }
     movesRef.current = movesRef.current - 1;
+    title = "";
+    for t in tasks {
+        if t.id == taskId {
+            title = t.title;
+        }
+    }
     if failed {
         toast("Move failed. Restoring the board.");
         await loadAll();
-    } elif status in HANDOFF_STATUSES {
-        # Optional handoff details for the landing column.
-        title = "";
-        for t in tasks {
-            if t.id == taskId {
-                title = t.title;
+        return;
+    }
+    # Every successful move confirms itself and offers the undo: a card can
+    # land out of sight (Hide Done, or a column below the fold), and the
+    # handoff dialog is skippable, so it cannot be the only feedback.
+    toast(
+        "Moved to " + status,
+        {
+            "description": title,
+            "action": {
+                "label": "Undo",
+                "onClick": lambda { moveTo(taskId, oldStatus); }
             }
         }
+    );
+    if status in HANDOFF_STATUSES {
+        # Review / Blocked / Changes Requested also ask for optional detail.
         mForm = BLANK_MOVE;
         moveStatus = status;
         moveTaskTitle = title;
