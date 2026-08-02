@@ -72,9 +72,14 @@ def:pub BoardPage() -> JsxPage {
     useEffect(lambda {
         onFocus = lambda { loadAll(); };
         window.addEventListener("focus", onFocus);
+        # The assistant dock lives in the layout, not in this tree, so an
+        # applied proposal announces itself with an event rather than leaving
+        # the new card invisible until the next poll.
+        window.addEventListener("standup:refresh", onFocus);
         timer = window.setInterval(lambda { loadAll(); }, 60000);
         return lambda {
             window.removeEventListener("focus", onFocus);
+            window.removeEventListener("standup:refresh", onFocus);
             window.clearInterval(timer);
         };
     }, []);
