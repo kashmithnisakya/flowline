@@ -24,6 +24,8 @@ import from walkers.log {
     ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntries
 }
 import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
+import from walkers.insights { Digest }
+import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 
 def:pub app(children: any) -> JsxElement {
     <>{children}</>

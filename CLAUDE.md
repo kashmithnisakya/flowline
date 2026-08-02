@@ -126,9 +126,14 @@ File-based routing with route groups:
 - **`max()`/`min()` over a list compiles to JS `Math.max(array)`, which is
   `NaN`.** Any guard like `max(xs) > 0` then silently fails. Compute peaks
   with an explicit loop in client code.
+- **A name first assigned inside an `if` is block-scoped in the compiled JS**
+  and is `ReferenceError` after the branch. Initialise it before the branch.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating; a `has` read after `await` is a stale
-  render-time snapshot.
+  render-time snapshot. That last one bites hardest when a handler appends to
+  a list twice around a walker call: the second `xs = xs + [...]` re-reads the
+  pre-call value and silently drops the first append. Build the new list in a
+  local and assign once.
 
 ## Verification
 

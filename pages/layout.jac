@@ -12,6 +12,7 @@ import from ..components.ui.button { Button }
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
 # producing a self-rendering Toaster and an infinite React mount loop.
 import from ..components.ui.toaster { Toaster }
+import from ..components.assistant.AssistantDock { AssistantDock }
 
 glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"];
 
@@ -85,6 +86,9 @@ def:pub Shell() -> JsxLayout {
             </main>
         } else {
             <Outlet key="bare" />
+        }}
+        {if chrome {
+            <AssistantDock key="assistant" />
         }}
         <Toaster />
     </div>

@@ -39,6 +39,16 @@ description = "A kanban board per project and a written daily log. Everything a 
 theme_color = "#F6F2EB"
 icon = "/static/brand/favicon.svg"
 
+[byllm]
+system_prompt = "You are the assistant inside standup, a kanban and daily-log tool for small teams. Answer ONLY from the workspace snapshot you are given. Never invent tasks, people, projects or dates: if the snapshot does not contain the answer, say so plainly. Team members do not have accounts, so always write about them in the third person. Be terse and concrete."
+
+[byllm.model]
+default_model = "${LLM_MODEL:-gpt-4o-mini}"
+
+[byllm.call_params]
+temperature = 0.2
+max_output_retries = 3
+
 [serve]
 base_route_app = "app"
 

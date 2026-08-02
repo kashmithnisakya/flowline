@@ -15,6 +15,9 @@ https://github.com/user-attachments/assets/303eb173-2508-4252-ab51-0f1c7fe1f4b2
   a review-by date and the PR link; Blocked asks what is blocking it
 - Multi-assignee tasks, org-defined categories and tags, repos attached to projects
 - An Overview tab with headline numbers, per-project progress and per-person activity
+- An assistant that reads the whole workspace and writes the standup note for you,
+  answers questions about your own board, and turns "add a task for Nadia on the
+  docs site" into a suggestion you confirm before anything is written
 
 ## Install Jac
 
@@ -33,9 +36,12 @@ jac install          # dependencies (Python + npm) from jac.toml
 jac start main.jac   # serve at http://localhost:8000
 ```
 
-Use `jac start --dev main.jac` for hot reload while developing. Google and
-GitHub sign-in are optional: put the client ids and secrets in `.env` (the
-variable names are in `jac.toml` under `[scale.sso]`).
+Use `jac start --dev main.jac` for hot reload while developing.
+
+Copy `.env.example` to `.env` and fill in what you need. Everything in it is
+optional: without `OPENAI_API_KEY` the app runs fine and only the assistant is
+unavailable, and leaving a Google or GitHub pair empty simply hides that
+sign-in button.
 
 ## License
 
