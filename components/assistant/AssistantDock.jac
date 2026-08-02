@@ -137,7 +137,7 @@ def:pub AssistantDock -> JsxElement {
             </button>;
     }
 
-    <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl">
+    return <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl">
         <div className="flex items-center gap-2 border-b px-4 py-3">
             <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden="true" className="text-primary">
                 <path fill="currentColor" d={SPARKLE} />
@@ -298,7 +298,7 @@ def:pub AssistantDock -> JsxElement {
                 {"Answers come from your workspace only." if asking else "Suggestions only. Nothing changes until you press Apply."}
             </p>
         </div>
-    </div>
+    </div>;
 }
 
 
@@ -308,7 +308,7 @@ def NoteList(title: str, items: list[str]) -> JsxElement {
     if not items or len(items) == 0 {
         return <span />;
     }
-    <div>
+    return <div>
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {title}
         </div>
@@ -320,7 +320,7 @@ def NoteList(title: str, items: list[str]) -> JsxElement {
                 </li>
             }}
         </ul>
-    </div>
+    </div>;
 }
 
 
@@ -356,7 +356,7 @@ def ProposalCard(
         facts.append({"k": "Due", "v": proposal.due_date});
     }
 
-    <div className="rounded-xl border bg-background p-3.5">
+    return <div className="rounded-xl border bg-background p-3.5">
         <div className="flex items-center gap-2">
             <Badge variant="secondary">{"Move task" if moving else "New task"}</Badge>
             {if proposal.confidence and proposal.confidence != "high" {
@@ -402,5 +402,5 @@ def ProposalCard(
                 </Button>
             </div>
         }}
-    </div>
+    </div>;
 }

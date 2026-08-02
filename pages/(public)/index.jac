@@ -20,7 +20,7 @@ def:pub LandingPage() -> JsxPage {
         loggedIn = jacIsLoggedIn();
     }
 
-    <div className="bg-background">
+    return <div className="bg-background">
         <SiteNav loggedIn={loggedIn} />
         <main>
             <Hero loggedIn={loggedIn} />
@@ -29,5 +29,5 @@ def:pub LandingPage() -> JsxPage {
             <Faq />
             <SiteFooter loggedIn={loggedIn} />
         </main>
-    </div>
+    </div>;
 }

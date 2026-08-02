@@ -6,7 +6,7 @@ what the product actually does instead of inventing social proof.
 """
 
 def:pub AuthAside() -> JsxElement {
-    <div className="hidden min-h-[560px] flex-col justify-between gap-12 rounded-3xl bg-foreground p-10 text-background lg:flex">
+    return <div className="hidden min-h-[560px] flex-col justify-between gap-12 rounded-3xl bg-foreground p-10 text-background lg:flex">
         <img
             src="/static/brand/logo-full-dark.svg"
             alt="standup"
@@ -37,5 +37,5 @@ def:pub AuthAside() -> JsxElement {
         <p className="text-xs text-background/50">
             Built with Jac · your data stays in your workspace
         </p>
-    </div>
+    </div>;
 }

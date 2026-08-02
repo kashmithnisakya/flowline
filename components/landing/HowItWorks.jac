@@ -28,7 +28,7 @@ glob STEPS: list[Step] = [
 ];
 
 def:pub HowItWorks() -> JsxElement {
-    <section id="how" className="mx-auto max-w-[1180px] px-7 pt-24">
+    return <section id="how" className="mx-auto max-w-[1180px] px-7 pt-24">
         <span className="text-xs font-semibold uppercase tracking-widest text-primary">
             How it works
         </span>
@@ -46,5 +46,5 @@ def:pub HowItWorks() -> JsxElement {
                 </div>
             }}
         </div>
-    </section>
+    </section>;
 }

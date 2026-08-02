@@ -55,7 +55,7 @@ def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
     total = daysIn(year, month);
     offset = firstOffset(year, month);
 
-    <DropdownMenu
+    return <DropdownMenu
         open={pickerOpen}
         onOpenChange={lambda (o: bool) {
             pickerOpen = o;
@@ -136,5 +136,5 @@ def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
                 }}
             </div>
         </DropdownMenuContent>
-    </DropdownMenu>
+    </DropdownMenu>;
 }

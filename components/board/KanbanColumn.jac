@@ -26,7 +26,7 @@ def:pub KanbanColumn(
 ) -> JsxElement {
     has dragOver: bool = False;
 
-    <div
+    return <div
         className={
             "flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-muted/30 p-2 "
             + ("ring-2 ring-ring" if dragOver else "")
@@ -87,5 +87,5 @@ def:pub KanbanColumn(
                 {("Show " + str(extraCount) + " completed earlier") if not showingAll else "Show recent only"}
             </button>
         }}
-    </div>
+    </div>;
 }

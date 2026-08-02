@@ -61,7 +61,7 @@ def:pub DailyLogPage() -> JsxPage {
 
     shown = entries if viewMode == "week" else [e for e in entries if e.date == selectedDate];
 
-    <div className="space-y-6">
+    return <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Log</h1>
@@ -147,5 +147,5 @@ def:pub DailyLogPage() -> JsxPage {
                 onToggleSelect={toggleSelect}
             />
         }}
-    </div>
+    </div>;
 }

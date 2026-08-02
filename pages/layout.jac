@@ -42,7 +42,7 @@ def:pub Shell() -> JsxLayout {
         return base + "text-muted-foreground hover:bg-accent hover:text-foreground";
     }
 
-    <div className="min-h-screen bg-background text-foreground">
+    return <div className="min-h-screen bg-background text-foreground">
         {if chrome {
             <header key="nav" className="border-b">
                 <nav className="flex items-center gap-4 px-6 py-3 lg:px-10">
@@ -91,5 +91,5 @@ def:pub Shell() -> JsxLayout {
             <AssistantDock key="assistant" />
         }}
         <Toaster />
-    </div>
+    </div>;
 }

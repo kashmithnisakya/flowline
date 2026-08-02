@@ -4,8 +4,11 @@ Stateful shell: owns the data and every handler (bodies in index.impl.jac);
 the columns, cards, filters, and dialog are presentational components.
 """
 
-import from ...constants { STATUSES }
 import from ...models { Project, MemberView, TaskView }
+
+glob STATUSES: list[str] = [
+    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
+];
 import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.roster { ListMembers }
 import from ...walkers.vocab { ListVocab }
@@ -115,7 +118,7 @@ def:pub BoardPage() -> JsxPage {
     recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
     olderDoneCount = len(doneVisible) - len(recentDone);
 
-    <div className="space-y-4">
+    return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="font-display text-2xl font-bold tracking-tight">Board</h1>
             <div className="flex items-center gap-2">
@@ -193,5 +196,5 @@ def:pub BoardPage() -> JsxPage {
             onOpenChange={lambda (o: bool) { if not o { moveTaskId = ""; } }}
             onSave={saveMoveInfo}
         />
-    </div>
+    </div>;
 }

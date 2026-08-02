@@ -21,7 +21,7 @@ def:pub FilterBar(
         m for m in members
         if project == "all" or project in m.project_ids
     ];
-    <div className="flex flex-wrap items-center gap-2">
+    return <div className="flex flex-wrap items-center gap-2">
         <Select value={project} onValueChange={onProject}>
             <SelectTrigger className="h-8 w-44" size="sm">
                 <SelectValue placeholder="Project" />
@@ -63,5 +63,5 @@ def:pub FilterBar(
         >
             Hide Done
         </Button>
-    </div>
+    </div>;
 }

@@ -13,7 +13,7 @@ import from "@jac/runtime" { jacSsoLogin }
 def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxElement {
     async def start(platform: str) -> None;
 
-    <div className="grid grid-cols-2 gap-[9px]">
+    return <div className="grid grid-cols-2 gap-[9px]">
         <button
             type="button"
             className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-[11px] text-[13.5px] font-semibold transition-colors hover:border-foreground"
@@ -52,5 +52,5 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
             </svg>
             GitHub
         </button>
-    </div>
+    </div>;
 }

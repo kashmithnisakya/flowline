@@ -3,8 +3,24 @@
 import from ...models { Project, RepoView }
 import from ...walkers.projects { ListProjects, SaveProject, ArchiveProject }
 import from ...walkers.roster { ListRepos, AddRepo, RemoveRepo }
-import from ...lib.utils { normalizeRepoInput }
 import from ...components.projects.ProjectTable { ProjectTable }
+
+def normalizeRepoInput(raw: str) -> str {
+    cleaned = raw.strip();
+    cleaned = cleaned.replace("https://github.com/", "");
+    cleaned = cleaned.replace("http://github.com/", "");
+    cleaned = cleaned.replace("git@github.com:", "");
+    cleaned = cleaned.replace("www.github.com/", "");
+    if cleaned.endswith(".git") {
+        cleaned = cleaned[:-4];
+    }
+    cleaned = cleaned.strip("/");
+    parts = [p for p in cleaned.split("/") if p];
+    if len(parts) >= 2 {
+        return parts[0] + "/" + parts[1];
+    }
+    return cleaned;
+}
 import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
@@ -34,7 +50,7 @@ def:pub ProjectsPage() -> JsxPage {
 
     active = [p for p in projects if p.active];
 
-    <div className="space-y-8">
+    return <div className="space-y-8">
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Projects</h1>
@@ -71,5 +87,5 @@ def:pub ProjectsPage() -> JsxPage {
             onRepoDraft={lambda (v: str) { fRepoDraft = v; }}
             onRemoveRepo={removeRepo}
         />
-    </div>
+    </div>;
 }

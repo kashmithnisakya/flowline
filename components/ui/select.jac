@@ -9,28 +9,28 @@ import from "@hugeicons/core-free-icons" {
 }
 
 def:pub Select(props: any) -> JsxElement {
-    <SelectPrimitive.Root data-slot="select" {**props}/>
+    return <SelectPrimitive.Root data-slot="select" {**props}/>;
 }
 
 def:pub SelectGroup(props: any) -> JsxElement {
-    <SelectPrimitive.Group
+    return <SelectPrimitive.Group
         {**props}
         data-slot="select-group"
         className={cn("scroll-my-1 p-1 scroll-my-1 p-1", props["className"])}
-    />
+    />;
 }
 
 def:pub SelectValue(props: any) -> JsxElement {
-    <SelectPrimitive.Value
+    return <SelectPrimitive.Value
         data-slot="select-value"
         className={cn("flex flex-1 text-left", props["className"])}
         {**props}
-    />
+    />;
 }
 
 def:pub SelectTrigger(props: any) -> JsxElement {
     size = props["size"] or "default";
-    <SelectPrimitive.Trigger
+    return <SelectPrimitive.Trigger
         {**props}
         data-slot="select-trigger"
         data-size={size}
@@ -47,7 +47,7 @@ def:pub SelectTrigger(props: any) -> JsxElement {
                 className="text-muted-foreground size-4 pointer-events-none"
             />
         </SelectPrimitive.Icon>
-    </SelectPrimitive.Trigger>
+    </SelectPrimitive.Trigger>;
 }
 
 def:pub SelectContent(props: any) -> JsxElement {
@@ -57,7 +57,7 @@ def:pub SelectContent(props: any) -> JsxElement {
     if position == "popper" {
         popperClass = "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1";
     }
-    <SelectPrimitive.Portal>
+    return <SelectPrimitive.Portal>
         <SelectPrimitive.Content
             {**props}
             data-slot="select-content"
@@ -81,22 +81,22 @@ def:pub SelectContent(props: any) -> JsxElement {
             </SelectPrimitive.Viewport>
             <SelectScrollDownButton/>
         </SelectPrimitive.Content>
-    </SelectPrimitive.Portal>
+    </SelectPrimitive.Portal>;
 }
 
 def:pub SelectLabel(props: any) -> JsxElement {
-    <SelectPrimitive.Label
+    return <SelectPrimitive.Label
         {**props}
         data-slot="select-label"
         className={cn(
             "text-muted-foreground px-1.5 py-1 text-xs text-muted-foreground px-1.5 py-1 text-xs",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub SelectItem(props: any) -> JsxElement {
-    <SelectPrimitive.Item
+    return <SelectPrimitive.Item
         {**props}
         data-slot="select-item"
         className={cn(
@@ -116,22 +116,22 @@ def:pub SelectItem(props: any) -> JsxElement {
             </SelectPrimitive.ItemIndicator>
         </span>
         <SelectPrimitive.ItemText>{props["children"]}</SelectPrimitive.ItemText>
-    </SelectPrimitive.Item>
+    </SelectPrimitive.Item>;
 }
 
 def:pub SelectSeparator(props: any) -> JsxElement {
-    <SelectPrimitive.Separator
+    return <SelectPrimitive.Separator
         {**props}
         data-slot="select-separator"
         className={cn(
             "bg-border -mx-1 my-1 h-px bg-border -mx-1 my-1 h-px pointer-events-none",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub SelectScrollUpButton(props: any) -> JsxElement {
-    <SelectPrimitive.ScrollUpButton
+    return <SelectPrimitive.ScrollUpButton
         {**props}
         data-slot="select-scroll-up-button"
         className={cn(
@@ -140,11 +140,11 @@ def:pub SelectScrollUpButton(props: any) -> JsxElement {
         )}
     >
         <HugeiconsIcon icon={ArrowUpIcon} strokeWidth={2}/>
-    </SelectPrimitive.ScrollUpButton>
+    </SelectPrimitive.ScrollUpButton>;
 }
 
 def:pub SelectScrollDownButton(props: any) -> JsxElement {
-    <SelectPrimitive.ScrollDownButton
+    return <SelectPrimitive.ScrollDownButton
         {**props}
         data-slot="select-scroll-down-button"
         className={cn(
@@ -153,5 +153,5 @@ def:pub SelectScrollDownButton(props: any) -> JsxElement {
         )}
     >
         <HugeiconsIcon icon={ArrowDownIcon} strokeWidth={2}/>
-    </SelectPrimitive.ScrollDownButton>
+    </SelectPrimitive.ScrollDownButton>;
 }

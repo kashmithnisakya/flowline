@@ -67,7 +67,7 @@ def:pub Button(props: any) -> JsxElement {
             </Slot.Root>;
     }
 
-    <button
+    return <button
         data-slot="button"
         data-variant={variant}
         data-size={size}
@@ -75,7 +75,7 @@ def:pub Button(props: any) -> JsxElement {
         {**restProps}
     >
         {props["children"]}
-    </button>
+    </button>;
 }
 
 def:pub buttonVariants -> any {

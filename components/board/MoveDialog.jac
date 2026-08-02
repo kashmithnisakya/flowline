@@ -30,7 +30,7 @@ def:pub MoveDialog(
 ) -> JsxElement {
     isReview = status == "Review";
 
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    return <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
             <DialogHeader>
                 <DialogTitle>{"Review handoff" if isReview else ("Moved to " + status)}</DialogTitle>
@@ -93,5 +93,5 @@ def:pub MoveDialog(
                 </Button>
             </DialogFooter>
         </DialogContent>
-    </Dialog>
+    </Dialog>;
 }

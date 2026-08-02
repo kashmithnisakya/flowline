@@ -35,7 +35,7 @@ def:pub MemberTable(
         </Card>;
     }
 
-    <Card>
+    return <Card>
         <CardContent className="pt-4">
             <Table>
                 <TableHeader>
@@ -148,5 +148,5 @@ def:pub MemberTable(
                 </TableBody>
             </Table>
         </CardContent>
-    </Card>
+    </Card>;
 }

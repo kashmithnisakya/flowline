@@ -28,5 +28,5 @@ import from walkers.insights { Digest }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 
 def:pub app(children: any) -> JsxElement {
-    <>{children}</>
+    return <>{children}</>;
 }

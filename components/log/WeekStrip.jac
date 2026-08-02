@@ -31,7 +31,7 @@ def:pub WeekStrip(
     }
     monday = weekMonday(selectedDate);
 
-    <div className="flex flex-wrap items-center gap-1.5">
+    return <div className="flex flex-wrap items-center gap-1.5">
         {for i in range(7) {
             <button
                 key={DAY_NAMES[i]}
@@ -59,5 +59,5 @@ def:pub WeekStrip(
                 </span>
             </button>
         }}
-    </div>
+    </div>;
 }

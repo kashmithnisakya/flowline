@@ -57,7 +57,7 @@ def:pub RosterPage() -> JsxPage {
     customTags = [t for t in vocab if t.kind == "tag"];
     allTags = [t.value for t in customTags];
 
-    <div className="space-y-8">
+    return <div className="space-y-8">
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="font-display text-2xl font-bold tracking-tight">Workspace</h1>
@@ -115,5 +115,5 @@ def:pub RosterPage() -> JsxPage {
             onOpenChange={lambda (o: bool) { dialogOpen = o; }}
             onSave={saveMember}
         />
-    </div>
+    </div>;
 }

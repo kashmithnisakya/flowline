@@ -42,7 +42,7 @@ def:pub SsoCallbackPage() -> JsxPage {
         }
     }
 
-    <div className="flex min-h-[70svh] flex-col items-center justify-center gap-4 px-6 text-center">
+    return <div className="flex min-h-[70svh] flex-col items-center justify-center gap-4 px-6 text-center">
         {if failure {
             <div key="failed" className="max-w-sm space-y-4">
                 <h1 className="font-display text-2xl font-bold tracking-tight">
@@ -58,5 +58,5 @@ def:pub SsoCallbackPage() -> JsxPage {
                 Signing you in…
             </p>
         }}
-    </div>
+    </div>;
 }

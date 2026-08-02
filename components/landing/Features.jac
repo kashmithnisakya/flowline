@@ -44,7 +44,7 @@ glob FEATURES: list[Feature] = [
 ];
 
 def:pub Features() -> JsxElement {
-    <section id="product" className="mx-auto max-w-[1180px] px-7 pt-24">
+    return <section id="product" className="mx-auto max-w-[1180px] px-7 pt-24">
         <h2 className="font-display max-w-xl text-[clamp(2rem,4vw,2.9rem)] font-bold leading-tight tracking-[-0.04em]">
             Everything a standup does. None of the 9:45.
         </h2>
@@ -68,5 +68,5 @@ def:pub Features() -> JsxElement {
                 </Card>
             }}
         </div>
-    </section>
+    </section>;
 }
