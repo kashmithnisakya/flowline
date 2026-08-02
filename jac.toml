@@ -13,6 +13,11 @@ radius = "default"
 menuAccent = "subtle"
 menuColor = "default"
 [dependencies]
+# Required by [scale.monitoring]. Without it the metrics factory falls back to
+# a no-op collector whose is_enabled() is False, so /metrics is never
+# registered and the endpoint 404s with no warning.
+prometheus_client = "*"
+
 [dependencies.npm]
 sonner = "*"
 "@hugeicons/react" = "*"
@@ -53,8 +58,8 @@ max_output_retries = 3
 base_route_app = "app"
 
 [scale.sso]
-host = "http://localhost:8000"
-client_auth_callback_url = "http://localhost:8000/auth/callback"
+host = "${HOST:-http://localhost:8000}"
+client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
 
 [scale.sso.google]
 client_id = "${GOOGLE_CLIENT_ID}"
@@ -63,6 +68,12 @@ client_secret = "${GOOGLE_CLIENT_SECRET}"
 [scale.sso.github]
 client_id = "${GITHUB_CLIENT_ID}"
 client_secret = "${GITHUB_CLIENT_SECRET}"
+
+[scale.monitoring]
+enabled = true
+namespace = "standup"
+walker_metrics = true
+prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 
 [jacpack]
 name = 'standup'
