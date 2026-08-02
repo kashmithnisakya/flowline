@@ -6,7 +6,7 @@ No LLM lives here on purpose. This module is three things at once:
   (c) a server-side source for the Overview page, which recomputes in the browser today.
 
 NEVER nest `root spawn` in this module. A nested walker's `.reports` comes back EMPTY
-and its rows leak into the outer walker's reports (jac 0.34.6 `_sv_on_complete` merges
+and its rows leak into the outer walker's reports (jac 0.35.1 `_sv_on_complete` merges
 into the outer frame and returns early). Everything here traverses `[root-->]` directly.
 """
 
