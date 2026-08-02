@@ -210,27 +210,27 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
     if failed {
         toast("Move failed. Restoring the board.");
         await loadAll();
-    } elif status in HANDOFF_STATUSES {
-        # The handoff dialog IS the confirmation for these columns, so no
-        # toast on top of it.
+        return;
+    }
+    # Every successful move confirms itself and offers the undo: a card can
+    # land out of sight (Hide Done, or a column below the fold), and the
+    # handoff dialog is skippable, so it cannot be the only feedback.
+    toast(
+        "Moved to " + status,
+        {
+            "description": title,
+            "action": {
+                "label": "Undo",
+                "onClick": lambda { moveTo(taskId, oldStatus); }
+            }
+        }
+    );
+    if status in HANDOFF_STATUSES {
+        # Review / Blocked / Changes Requested also ask for optional detail.
         mForm = BLANK_MOVE;
         moveStatus = status;
         moveTaskTitle = title;
         moveTaskId = taskId;
-    } else {
-        # Columns without a dialog get a quiet confirmation. It carries the
-        # undo because a card can land out of sight (Hide Done, or a column
-        # below the fold), and a mis-drop is otherwise silent.
-        toast(
-            "Moved to " + status,
-            {
-                "description": title,
-                "action": {
-                    "label": "Undo",
-                    "onClick": lambda { moveTo(taskId, oldStatus); }
-                }
-            }
-        );
     }
 }
 
