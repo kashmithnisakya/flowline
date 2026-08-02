@@ -71,6 +71,7 @@ client_secret = "${GITHUB_CLIENT_SECRET}"
 
 [scale.monitoring]
 enabled = true
+endpoint = "/metrics"
 namespace = "standup"
 walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
