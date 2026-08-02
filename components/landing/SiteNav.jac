@@ -4,7 +4,7 @@ import from "@jac/runtime" { Link }
 import from ..ui.button { Button }
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
-    <header className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur">
+    return <header className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur">
         <nav className="mx-auto flex max-w-[1180px] items-center gap-8 px-7 py-4">
             <Link to="/" className="flex items-center gap-2">
                 <img src="/static/brand/logo-mark.svg" alt="" width={28} height={28} />
@@ -39,5 +39,5 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                 }}
             </div>
         </nav>
-    </header>
+    </header>;
 }

@@ -5,7 +5,9 @@ ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 """
 
 import from ...models { TaskView }
-import from ...constants { STATUSES }
+glob STATUSES: list[str] = [
+    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
+];
 
 glob MONTH_SHORT: list[str] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -40,7 +42,7 @@ def:pub TaskCard(
         "secondary" if task.priority == "Medium" else "outline"
     );
 
-    <Card
+    return <Card
         draggable={True}
         onDragStart={lambda (e: DragEvent) {
             dt = e.dataTransfer;
@@ -113,5 +115,5 @@ def:pub TaskCard(
                 </Button>
             </div>
         </CardContent>
-    </Card>
+    </Card>;
 }

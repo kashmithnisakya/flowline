@@ -2,7 +2,7 @@ import from "sonner" { Toaster as SonnerPrimitive }
 
 def:pub Toaster(props: any) -> JsxElement {
     theme = props["theme"] or "system";
-    <SonnerPrimitive
+    return <SonnerPrimitive
         theme={theme}
         className="toaster group"
         toastOptions={{"classNames": {"toast": "rounded-2xl"}}}
@@ -13,5 +13,5 @@ def:pub Toaster(props: any) -> JsxElement {
             "--border-radius": "var(--radius)"
         }}
         {**props}
-    />
+    />;
 }

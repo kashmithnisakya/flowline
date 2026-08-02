@@ -89,7 +89,7 @@ def:pub OverviewPage() -> JsxPage {
         }
     }
 
-    <div className="space-y-8">
+    return <div className="space-y-8">
         <div>
             <h1 className="font-display text-2xl font-bold tracking-tight">Overview</h1>
             <p className="text-sm text-muted-foreground">
@@ -231,5 +231,5 @@ def:pub OverviewPage() -> JsxPage {
                 </Card>
             </div>
         }}
-    </div>
+    </div>;
 }

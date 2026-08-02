@@ -29,7 +29,7 @@ def:pub ProjectDialog(
     onRepoDraft: Callable[[str], None] = None,
     onRemoveRepo: Callable[[str], None] = None
 ) -> JsxElement {
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    return <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>{"Edit project" if editing else "New project"}</DialogTitle>
@@ -82,5 +82,5 @@ def:pub ProjectDialog(
                 </Button>
             </DialogFooter>
         </DialogContent>
-    </Dialog>
+    </Dialog>;
 }

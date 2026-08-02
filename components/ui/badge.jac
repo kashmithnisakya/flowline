@@ -37,7 +37,7 @@ def:pub Badge(props: any) -> JsxElement {
             />;
     }
 
-    <span {**attrs} data-slot="badge" data-variant={variant} className={computedClass}/>
+    return <span {**attrs} data-slot="badge" data-variant={variant} className={computedClass}/>;
 }
 
 def:pub badgeVariants -> any {

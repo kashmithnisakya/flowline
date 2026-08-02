@@ -63,3 +63,7 @@ client_secret = "${GOOGLE_CLIENT_SECRET}"
 [scale.sso.github]
 client_id = "${GITHUB_CLIENT_ID}"
 client_secret = "${GITHUB_CLIENT_SECRET}"
+
+[jacpack]
+name = 'standup'
+description = 'Jac IDE snapshot for standup'

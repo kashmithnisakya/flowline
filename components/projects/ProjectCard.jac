@@ -23,7 +23,7 @@ def:pub ProjectCard(
     onEdit: Callable[[Project], None],
     onArchive: Callable[[str], None]
 ) -> JsxElement {
-    <Card className="gap-3 py-5 transition-shadow hover:shadow-md">
+    return <Card className="gap-3 py-5 transition-shadow hover:shadow-md">
         <CardHeader className="gap-1">
             <CardTitle className="flex items-center gap-2 text-base">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
@@ -62,5 +62,5 @@ def:pub ProjectCard(
                 Archive
             </Button>
         </CardFooter>
-    </Card>
+    </Card>;
 }

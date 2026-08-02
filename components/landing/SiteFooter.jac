@@ -3,7 +3,7 @@
 import from ..ui.button { Button }
 
 def:pub SiteFooter(loggedIn: bool) -> JsxElement {
-    <footer className="mx-auto max-w-[1180px] px-7 pt-24 pb-14">
+    return <footer className="mx-auto max-w-[1180px] px-7 pt-24 pb-14">
         <div className="rounded-3xl bg-foreground px-8 py-14 text-center text-background">
             <h2 className="font-display mx-auto max-w-lg text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.02] tracking-[-0.045em]">
                 Tomorrow at 9:45,
@@ -48,5 +48,5 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                 </a>
             </div>
         </div>
-    </footer>
+    </footer>;
 }

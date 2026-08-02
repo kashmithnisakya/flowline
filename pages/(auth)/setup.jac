@@ -48,7 +48,7 @@ def:pub SetupPage() -> JsxPage {
     def addCategory -> None;
     def addTag -> None;
 
-    <div className="mx-auto flex min-h-[70svh] max-w-lg items-center">
+    return <div className="mx-auto flex min-h-[70svh] max-w-lg items-center">
         {if step == 0 {
             <p key="loading" className="w-full text-center text-sm text-muted-foreground">Loading…</p>
         } elif step == 1 {
@@ -199,5 +199,5 @@ def:pub SetupPage() -> JsxPage {
                 </CardFooter>
             </Card>
         }}
-    </div>
+    </div>;
 }

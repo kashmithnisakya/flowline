@@ -51,7 +51,7 @@ glob FAQS: list[QA] = [
 ];
 
 def:pub Faq() -> JsxElement {
-    <section id="faq" className="mx-auto max-w-[840px] px-7 pt-24">
+    return <section id="faq" className="mx-auto max-w-[840px] px-7 pt-24">
         <h2 className="font-display text-[clamp(1.8rem,4vw,2.4rem)] font-bold leading-tight tracking-[-0.035em]">
             Questions worth asking first
         </h2>
@@ -75,5 +75,5 @@ def:pub Faq() -> JsxElement {
                 </details>
             }}
         </div>
-    </section>
+    </section>;
 }

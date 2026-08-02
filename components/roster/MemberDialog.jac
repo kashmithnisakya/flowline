@@ -33,7 +33,7 @@ def:pub MemberDialog(
     onOpenChange: Callable[[bool], None],
     onSave: Callable[[], None]
 ) -> JsxElement {
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    return <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-xl">
             <DialogHeader>
                 <DialogTitle>{"Edit member" if editing else "Add member"}</DialogTitle>
@@ -149,5 +149,5 @@ def:pub MemberDialog(
                 </Button>
             </DialogFooter>
         </DialogContent>
-    </Dialog>
+    </Dialog>;
 }

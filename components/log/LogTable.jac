@@ -39,7 +39,7 @@ def:pub LogTable(
         </Card>;
     }
 
-    <Card>
+    return <Card>
         <CardContent className="pt-4">
             <Table>
                 <TableHeader>
@@ -127,5 +127,5 @@ def:pub LogTable(
                 </TableBody>
             </Table>
         </CardContent>
-    </Card>
+    </Card>;
 }

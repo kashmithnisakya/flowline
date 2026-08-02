@@ -7,7 +7,7 @@ def:pub Separator(props: any) -> JsxElement {
     if decorative is None {
         decorative = True;
     }
-    <SeparatorPrimitive.Root
+    return <SeparatorPrimitive.Root
         {**props}
         data-slot="separator"
         decorative={decorative}
@@ -16,5 +16,5 @@ def:pub Separator(props: any) -> JsxElement {
             "bg-border shrink-0 data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch",
             props["className"]
         )}
-    />
+    />;
 }

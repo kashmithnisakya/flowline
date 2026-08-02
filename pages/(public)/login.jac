@@ -62,7 +62,7 @@ def:pub LoginPage() -> JsxPage {
     # centering would let that extra height push the card upward, so the
     # tabs and heading jumped every time you switched modes. Anchored at
     # the top, the form only ever grows downward.
-    <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20">
+    return <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20">
         <AuthAside />
         <div className="mx-auto w-full max-w-md">
             <div className="flex gap-[2px] rounded-xl bg-foreground/[0.06] p-1">
@@ -179,5 +179,5 @@ def:pub LoginPage() -> JsxPage {
                 </button>
             </p>
         </div>
-    </div>
+    </div>;
 }

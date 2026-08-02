@@ -21,7 +21,7 @@ def:pub VocabPanel(
     onAdd: Callable[[str], None],
     onRemove: Callable[[str], None]
 ) -> JsxElement {
-    <>
+    return <>
     <Card>
         <CardHeader>
             <CardTitle>Categories</CardTitle>
@@ -110,5 +110,5 @@ def:pub VocabPanel(
             </div>
         </CardContent>
     </Card>
-    </>
+    </>;
 }

@@ -5,35 +5,35 @@ import from "@hugeicons/react" { HugeiconsIcon }
 import from "@hugeicons/core-free-icons" { Cancel01Icon }
 
 def:pub Dialog(props: any) -> JsxElement {
-    <DialogPrimitive.Root data-slot="dialog" {**props}/>
+    return <DialogPrimitive.Root data-slot="dialog" {**props}/>;
 }
 
 def:pub DialogTrigger(props: any) -> JsxElement {
-    <DialogPrimitive.Trigger data-slot="dialog-trigger" {**props}/>
+    return <DialogPrimitive.Trigger data-slot="dialog-trigger" {**props}/>;
 }
 
 def:pub DialogPortal(props: any) -> JsxElement {
-    <DialogPrimitive.Portal data-slot="dialog-portal" {**props}/>
+    return <DialogPrimitive.Portal data-slot="dialog-portal" {**props}/>;
 }
 
 def:pub DialogClose(props: any) -> JsxElement {
-    <DialogPrimitive.Close data-slot="dialog-close" {**props}/>
+    return <DialogPrimitive.Close data-slot="dialog-close" {**props}/>;
 }
 
 def:pub DialogOverlay(props: any) -> JsxElement {
-    <DialogPrimitive.Overlay
+    return <DialogPrimitive.Overlay
         {**props}
         data-slot="dialog-overlay"
         className={cn(
             "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DialogContent(props: any) -> JsxElement {
     showCloseButton = props["showCloseButton"] is not False;
-    <DialogPortal>
+    return <DialogPortal>
         <DialogOverlay/>
         <DialogPrimitive.Content
             {**props}
@@ -58,22 +58,22 @@ def:pub DialogContent(props: any) -> JsxElement {
                     </button>
                 </DialogPrimitive.Close>}
         </DialogPrimitive.Content>
-    </DialogPortal>
+    </DialogPortal>;
 }
 
 def:pub DialogHeader(props: any) -> JsxElement {
     attrs: dict[str, any] = {** props};
-    <div
+    return <div
         {**attrs}
         data-slot="dialog-header"
         className={cn("gap-2 flex flex-col gap-2", props["className"])}
-    />
+    />;
 }
 
 def:pub DialogFooter(props: any) -> JsxElement {
     attrs: dict[str, any] = {** props};
     showCloseButton = props["showCloseButton"] or False;
-    <div
+    return <div
         {**attrs}
         data-slot="dialog-footer"
         className={cn(
@@ -89,25 +89,25 @@ def:pub DialogFooter(props: any) -> JsxElement {
                     Close
                 </button>
             </DialogPrimitive.Close>}
-    </div>
+    </div>;
 }
 
 def:pub DialogTitle(props: any) -> JsxElement {
-    <DialogPrimitive.Title
+    return <DialogPrimitive.Title
         {**props}
         data-slot="dialog-title"
         className={cn(
             "text-base leading-none font-medium text-base leading-none font-medium", props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DialogDescription(props: any) -> JsxElement {
-    <DialogPrimitive.Description
+    return <DialogPrimitive.Description
         {**props}
         data-slot="dialog-description"
         className={cn(
             "text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3 text-muted-foreground text-sm", props["className"]
         )}
-    />
+    />;
 }

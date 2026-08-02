@@ -6,7 +6,10 @@ project membership, and picking someone outside the selected project
 adds them to it on save. A Review status reveals the handoff fields.
 """
 
-import from ...constants { STATUSES, PRIORITIES }
+glob STATUSES: list[str] = [
+    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
+];
+glob PRIORITIES: list[str] = ["High", "Medium", "Low"];
 import from ...models { Project, MemberView }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
@@ -53,7 +56,7 @@ def:pub TaskDialog(
         }
     }
 
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    return <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
                 <DialogTitle>{"Edit task" if editing else "New task"}</DialogTitle>
@@ -269,5 +272,5 @@ def:pub TaskDialog(
                 </div>
             </DialogFooter>
         </DialogContent>
-    </Dialog>
+    </Dialog>;
 }

@@ -4,21 +4,21 @@ import from "@hugeicons/react" { HugeiconsIcon }
 import from "@hugeicons/core-free-icons" { Tick02Icon, ArrowRight01Icon }
 
 def:pub DropdownMenu(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {**props}/>
+    return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {**props}/>;
 }
 
 def:pub DropdownMenuPortal(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {**props}/>
+    return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {**props}/>;
 }
 
 def:pub DropdownMenuTrigger(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {**props}/>
+    return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {**props}/>;
 }
 
 def:pub DropdownMenuContent(props: any) -> JsxElement {
     align = props["align"] or "start";
     sideOffset = props["sideOffset"] or 4;
-    <DropdownMenuPrimitive.Portal>
+    return <DropdownMenuPrimitive.Portal>
         <DropdownMenuPrimitive.Content
             {**props}
             data-slot="dropdown-menu-content"
@@ -29,16 +29,16 @@ def:pub DropdownMenuContent(props: any) -> JsxElement {
                 props["className"]
             )}
         />
-    </DropdownMenuPrimitive.Portal>
+    </DropdownMenuPrimitive.Portal>;
 }
 
 def:pub DropdownMenuGroup(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {**props}/>
+    return <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {**props}/>;
 }
 
 def:pub DropdownMenuItem(props: any) -> JsxElement {
     variant = props["variant"] or "default";
-    <DropdownMenuPrimitive.Item
+    return <DropdownMenuPrimitive.Item
         {**props}
         data-slot="dropdown-menu-item"
         data-inset={props["inset"]}
@@ -47,11 +47,11 @@ def:pub DropdownMenuItem(props: any) -> JsxElement {
             "focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive not-data-[variant=destructive]:focus:**:text-accent-foreground gap-1.5 rounded-md px-1.5 py-1 text-sm data-inset:pl-7 [&_svg:not([class*='size-'])]:size-4 focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive not-data-[variant=destructive]:focus:**:text-accent-foreground gap-1.5 rounded-md px-1.5 py-1 text-sm data-inset:pl-7 [&_svg:not([class*='size-'])]:size-4 group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DropdownMenuCheckboxItem(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.CheckboxItem
+    return <DropdownMenuPrimitive.CheckboxItem
         {**props}
         data-slot="dropdown-menu-checkbox-item"
         data-inset={props["inset"]}
@@ -70,15 +70,15 @@ def:pub DropdownMenuCheckboxItem(props: any) -> JsxElement {
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {props["children"]}
-    </DropdownMenuPrimitive.CheckboxItem>
+    </DropdownMenuPrimitive.CheckboxItem>;
 }
 
 def:pub DropdownMenuRadioGroup(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {**props}/>
+    return <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {**props}/>;
 }
 
 def:pub DropdownMenuRadioItem(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.RadioItem
+    return <DropdownMenuPrimitive.RadioItem
         {**props}
         data-slot="dropdown-menu-radio-item"
         data-inset={props["inset"]}
@@ -96,11 +96,11 @@ def:pub DropdownMenuRadioItem(props: any) -> JsxElement {
             </DropdownMenuPrimitive.ItemIndicator>
         </span>
         {props["children"]}
-    </DropdownMenuPrimitive.RadioItem>
+    </DropdownMenuPrimitive.RadioItem>;
 }
 
 def:pub DropdownMenuLabel(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Label
+    return <DropdownMenuPrimitive.Label
         {**props}
         data-slot="dropdown-menu-label"
         data-inset={props["inset"]}
@@ -108,37 +108,37 @@ def:pub DropdownMenuLabel(props: any) -> JsxElement {
             "text-muted-foreground px-1.5 py-1 text-xs font-medium data-inset:pl-7 text-muted-foreground px-1.5 py-1 text-xs font-medium data-inset:pl-7",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DropdownMenuSeparator(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Separator
+    return <DropdownMenuPrimitive.Separator
         {**props}
         data-slot="dropdown-menu-separator"
         className={cn(
             "bg-border -mx-1 my-1 h-px bg-border -mx-1 my-1 h-px", props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DropdownMenuShortcut(props: any) -> JsxElement {
     attrs: dict[str, any] = {** props};
-    <span
+    return <span
         {**attrs}
         data-slot="dropdown-menu-shortcut"
         className={cn(
             "text-muted-foreground group-focus/dropdown-menu-item:text-accent-foreground ml-auto text-xs tracking-widest text-muted-foreground group-focus/dropdown-menu-item:text-accent-foreground ml-auto text-xs tracking-widest",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub DropdownMenuSub(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {**props}/>
+    return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {**props}/>;
 }
 
 def:pub DropdownMenuSubTrigger(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.SubTrigger
+    return <DropdownMenuPrimitive.SubTrigger
         {**props}
         data-slot="dropdown-menu-sub-trigger"
         data-inset={props["inset"]}
@@ -149,16 +149,16 @@ def:pub DropdownMenuSubTrigger(props: any) -> JsxElement {
     >
         {props["children"]}
         <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="ml-auto"/>
-    </DropdownMenuPrimitive.SubTrigger>
+    </DropdownMenuPrimitive.SubTrigger>;
 }
 
 def:pub DropdownMenuSubContent(props: any) -> JsxElement {
-    <DropdownMenuPrimitive.SubContent
+    return <DropdownMenuPrimitive.SubContent
         {**props}
         data-slot="dropdown-menu-sub-content"
         className={cn(
             "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-[96px] rounded-lg p-1 shadow-lg ring-1 duration-100 data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-[96px] rounded-lg p-1 shadow-lg ring-1 duration-100 z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden",
             props["className"]
         )}
-    />
+    />;
 }

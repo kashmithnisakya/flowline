@@ -7,7 +7,7 @@ log. No trial terms, no chat-tool integrations, no usage figures.
 import from ..ui.button { Button }
 
 def:pub Hero(loggedIn: bool) -> JsxElement {
-    <section className="mx-auto max-w-[1180px] px-7 pt-20 pb-6 text-center">
+    return <section className="mx-auto max-w-[1180px] px-7 pt-20 pb-6 text-center">
         <span className="inline-block rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
             For teams that hate status meetings
         </span>
@@ -50,5 +50,5 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
         <p className="mt-5 text-xs text-muted-foreground">
             One account is one organization · your data stays in your own workspace
         </p>
-    </section>
+    </section>;
 }

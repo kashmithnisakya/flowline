@@ -3,7 +3,7 @@
 import from ..ui.card { Card, CardContent }
 
 def:pub StatTile(label: str, value: str, hint: str = "") -> JsxElement {
-    <Card className="gap-0 py-4">
+    return <Card className="gap-0 py-4">
         <CardContent className="px-4">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {label}
@@ -13,5 +13,5 @@ def:pub StatTile(label: str, value: str, hint: str = "") -> JsxElement {
                 <div className="text-xs text-muted-foreground">{hint}</div>
             }}
         </CardContent>
-    </Card>
+    </Card>;
 }
