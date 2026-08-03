@@ -2,7 +2,7 @@
 
 import from models {
     Project, Member, Repo, Task, MemberView, RepoView, AssignedTo, HasRepo,
-    member_view, repo_view, resolve, on_attached, owned
+    member_view, repo_view, resolve, on_attached, owned, valid_full_name
 }
 
 # ------------------------------------------------------------------- roster
@@ -112,10 +112,13 @@ walker AddRepo {
         reports: list[RepoView] = [];
 
     can add with Root entry {
-        if not self.full_name.strip() {
+        fn = self.full_name.strip();
+        # The client normalizes pasted URLs, but the walker is the endpoint
+        # anyone can call, and this name later lands in an api.github.com
+        # path. Reject anything that is not plainly "org/repo".
+        if not fn or not valid_full_name(fn) {
             disengage;
         }
-        fn = self.full_name.strip();
         existing = [here-->[?:Repo, full_name == fn]];
         target = existing[0] if existing else None;
         if not target {

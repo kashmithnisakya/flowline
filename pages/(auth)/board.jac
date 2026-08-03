@@ -4,18 +4,22 @@ Stateful shell: owns the data and every handler (bodies in index.impl.jac);
 the columns, cards, filters, and dialog are presentational components.
 """
 
-import from ...models { Project, MemberView, TaskView }
+import from ...models {
+    Project, MemberView, TaskView, MilestoneView, RepoView
+}
 
 glob STATUSES: list[str] = [
     "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
 ];
 import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers }
+import from ...walkers.roster { ListMembers, ListRepos }
 import from ...walkers.vocab { ListVocab }
 import from ...models { VocabTerm }
 import from ...walkers.tasks {
     ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
 }
+import from ...walkers.roadmap { ListMilestones, SetTaskMilestone }
+import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -26,9 +30,9 @@ import from "sonner" { toast }
 import from "react" { useEffect }
 
 glob BLANK_TASK: dict[str, str] = {
-    "title": "", "category": "", "project": "none", "priority": "Medium",
-    "status": "Backlog", "due_date": "", "notes": "", "issue": "",
-    "pr": "", "reviewer": "none", "review_due": ""
+    "title": "", "category": "", "project": "none", "milestone": "none",
+    "priority": "Medium", "status": "Backlog", "due_date": "", "notes": "",
+    "issue": "", "pr": "", "reviewer": "none", "review_due": ""
 };
 
 glob BLANK_MOVE: dict[str, str] = {
@@ -44,6 +48,10 @@ def:pub BoardPage() -> JsxPage {
         tasks: list[TaskView] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
+        milestones: list[MilestoneView] = [],
+        repos: list[RepoView] = [],
+        ghConnected: bool = False,
+        syncing: bool = False,
         loading: bool = True,
         movesRef: Ref[any] = Ref(),
         fProject: str = "all",
@@ -100,6 +108,9 @@ def:pub BoardPage() -> JsxPage {
     async def saveMoveInfo -> None;
     def openCreate -> None;
     def openEdit(t: TaskView) -> None;
+    async def syncGithub -> None;
+    async def createIssue(repoId: str) -> None;
+    def markDoneFromPr(taskId: str) -> None;
 
     activeMembers = [m for m in members if m.active];
     activeProjects = [p for p in projects if p.active];
@@ -117,6 +128,14 @@ def:pub BoardPage() -> JsxPage {
     doneVisible = [t for t in visible if t.status == "Done"];
     recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
     olderDoneCount = len(doneVisible) - len(recentDone);
+    # The dialog hides its create-issue button once a task carries an issue,
+    # so the number comes from server truth rather than the form dict.
+    editingIssueNumber = 0;
+    for t in tasks {
+        if t.id == editingId {
+            editingIssueNumber = t.gh_issue_number;
+        }
+    }
 
     return <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -135,6 +154,16 @@ def:pub BoardPage() -> JsxPage {
                     onHideDone={lambda { hideDone = not hideDone; }}
                     categories={allCategories}
                 />
+                {if ghConnected {
+                    <Button
+                        key="sync"
+                        variant="outline"
+                        disabled={syncing}
+                        onClick={syncGithub}
+                    >
+                        Sync GitHub
+                    </Button>
+                }}
                 <Button onClick={openCreate}>New task</Button>
             </div>
         </div>
@@ -183,6 +212,11 @@ def:pub BoardPage() -> JsxPage {
             categories={allCategories}
             assignees={fAssignees}
             onToggleAssignee={toggleAssignee}
+            milestones={milestones}
+            repos={repos}
+            ghConnected={ghConnected}
+            ghIssueNumber={editingIssueNumber}
+            onCreateIssue={createIssue}
         />
 
         <MoveDialog

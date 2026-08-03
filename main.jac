@@ -8,7 +8,8 @@ the routed children.
 import ".styles.global.css";
 
 import from models {
-    Project, Member, Repo, Task, LogEntry, TaskView, MemberView
+    Project, Member, Repo, Task, LogEntry, TaskView, MemberView,
+    Milestone, MilestoneView, GithubConnectionView
 }
 import from walkers.projects {
     ListProjects, SaveProject, ArchiveProject,
@@ -24,6 +25,15 @@ import from walkers.log {
     ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntries
 }
 import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
+import from walkers.roadmap {
+    ListMilestones, SaveMilestone, DeleteMilestone, ReorderMilestone,
+    SetTaskMilestone
+}
+import from walkers.github {
+    GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,
+    ListGithubRepos, ListRepoIssues, ListRepoPulls, ImportIssues,
+    CreateIssueFromTask, SyncGithub
+}
 import from walkers.insights { Digest }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 

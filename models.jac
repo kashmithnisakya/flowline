@@ -24,6 +24,28 @@ def on_attached(holder: any, fresh: any) -> None {
     return;
 }
 
+# "org/repo" and nothing else. Repo names are interpolated straight into
+# api.github.com paths, so a name carrying `..`, `?` or `#` could redirect a
+# request to a different endpoint. Pure string work, so it lives here rather
+# than in the Python-importing helpers and both the storage path and every
+# API call can share one definition.
+def valid_full_name(full_name: str) -> bool {
+    if full_name.count("/") != 1 {
+        return False;
+    }
+    for part in full_name.split("/") {
+        if not part or len(part) > 100 {
+            return False;
+        }
+        for ch in part {
+            if not (ch.isalnum() or ch in "-_.") {
+                return False;
+            }
+        }
+    }
+    return True;
+}
+
 # Parentage check: does this node hang directly off the caller's root?
 # jobj/jid resolution is NOT authorization — every jid-addressed mutation
 # calls this first, or a guessed/leaked jid from another account would be
@@ -72,7 +94,16 @@ node Task {
         review_due: str = "",
         created_at: str = "",
         updated_at: str = "",
-        sort_order: float = 0.0;
+        sort_order: float = 0.0,
+        # GitHub identity. issue_link/pr_link stay the human URLs anyone can
+        # paste by hand; these are the machine key the API syncs against.
+        # gh_issue_number == 0 means "not linked to a real issue".
+        gh_repo: str = "",
+        gh_issue_number: int = 0,
+        gh_issue_state: str = "",
+        gh_synced_at: str = "",
+        pr_number: int = 0,
+        pr_state: str = "";
 
     def to_view -> TaskView {
         assignee_ids: list[str] = [];
@@ -88,6 +119,13 @@ node Task {
             project_id = jid(projects[0]);
             project_name = projects[0].name;
         }
+        milestone_id = "";
+        milestone_name = "";
+        stones = [self ->:InMilestone:->];
+        if stones {
+            milestone_id = jid(stones[0]);
+            milestone_name = stones[0].title;
+        }
         return TaskView(
             id=jid(self), title=self.title, category=self.category,
             priority=self.priority, status=self.status,
@@ -98,7 +136,11 @@ node Task {
             issue_link=self.issue_link, pr_link=self.pr_link,
             reviewer_id=self.reviewer_id, reviewer_name=self.reviewer_name,
             review_due=self.review_due,
-            project_id=project_id, project_name=project_name
+            project_id=project_id, project_name=project_name,
+            milestone_id=milestone_id, milestone_name=milestone_name,
+            gh_repo=self.gh_repo, gh_issue_number=self.gh_issue_number,
+            gh_issue_state=self.gh_issue_state, gh_synced_at=self.gh_synced_at,
+            pr_number=self.pr_number, pr_state=self.pr_state
         );
     }
 }
@@ -131,12 +173,47 @@ node VocabTerm {
         value: str;
 }
 
+# A phase on a project's roadmap. Dates are optional: an undated milestone
+# is a named bucket of work that has not been scheduled yet, and the
+# timeline lists those separately rather than guessing a position.
+node Milestone {
+    has title: str,
+        description: str = "",
+        start_date: str = "",
+        due_date: str = "",
+        status: str = "Planned",
+        color: str = "",
+        sort_order: float = 0.0,
+        created_at: str = "",
+        updated_at: str = "";
+}
+
+# The org's GitHub App installation. Singleton per root, get-or-created.
+#
+# It stores an installation id, NOT a credential: API calls mint a one-hour
+# installation token on demand (walkers/ghutil.jac) and keep it in process
+# memory. `pending_state` is the one-shot CSRF nonce for an install round
+# trip — without it, a forged callback could bind someone else's
+# installation to this workspace.
+node GithubConnection {
+    has installation_id: int = 0,
+        account_login: str = "",
+        account_avatar: str = "",
+        status: str = "ok",
+        connected_at: str = "",
+        last_sync_at: str = "",
+        pending_state: str = "",
+        pending_at: str = "";
+}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
 edge ForProject: Task --> Project {}
 edge OnProject: Member --> Project {}
+edge OnRoadmap: Milestone --> Project {}
+edge InMilestone: Task --> Milestone {}
 
 obj TaskView {
     has id: str,
@@ -157,7 +234,15 @@ obj TaskView {
         reviewer_name: str,
         review_due: str,
         project_id: str,
-        project_name: str;
+        project_name: str,
+        milestone_id: str = "",
+        milestone_name: str = "",
+        gh_repo: str = "",
+        gh_issue_number: int = 0,
+        gh_issue_state: str = "",
+        gh_synced_at: str = "",
+        pr_number: int = 0,
+        pr_state: str = "";
 }
 
 obj MemberView {
@@ -179,6 +264,65 @@ obj RepoView {
         project_name: str;
 }
 
+obj MilestoneView {
+    has id: str,
+        title: str,
+        description: str,
+        start_date: str,
+        due_date: str,
+        status: str,
+        color: str,
+        sort_order: float,
+        project_id: str,
+        project_name: str,
+        task_count: int = 0,
+        done_count: int = 0;
+}
+
+# What the client is allowed to know about the GitHub link. The connection
+# node itself is never reported: `report <node>` serializes every field, so
+# routing it through a view is what keeps internals off the wire.
+obj GithubConnectionView {
+    has connected: bool = False,
+        account_login: str = "",
+        account_avatar: str = "",
+        status: str = "",
+        connected_at: str = "",
+        last_sync_at: str = "",
+        configured: bool = False,
+        missing_config: list[str] = [];
+}
+
+# Live GitHub reads. These are request-scoped projections, never persisted,
+# so they can change shape freely.
+obj GhRepoRow {
+    has full_name: str,
+        private: bool = False,
+        description: str = "",
+        attached: bool = False;
+}
+
+obj GhIssueRow {
+    has number: int,
+        title: str,
+        state: str,
+        labels: list[str] = [],
+        assignee: str = "",
+        html_url: str = "",
+        already_imported: bool = False,
+        imported_task_id: str = "";
+}
+
+obj GhPrRow {
+    has number: int,
+        title: str,
+        state: str,
+        author: str = "",
+        html_url: str = "",
+        linked_task_id: str = "",
+        updated_at: str = "";
+}
+
 def repo_view(r: Repo) -> RepoView {
     project_id = "";
     project_name = "";
@@ -189,6 +333,31 @@ def repo_view(r: Repo) -> RepoView {
     return RepoView(
         id=jid(r), full_name=r.full_name,
         project_id=project_id, project_name=project_name
+    );
+}
+
+
+def milestone_view(m: Milestone) -> MilestoneView {
+    project_id = "";
+    project_name = "";
+    for p in [m ->:OnRoadmap:->] {
+        project_id = jid(p);
+        project_name = p.name;
+    }
+    total = 0;
+    done = 0;
+    for t in [m<-:InMilestone:<-] {
+        total = total + 1;
+        if t.status == "Done" {
+            done = done + 1;
+        }
+    }
+    return MilestoneView(
+        id=jid(m), title=m.title, description=m.description,
+        start_date=m.start_date, due_date=m.due_date, status=m.status,
+        color=m.color, sort_order=m.sort_order,
+        project_id=project_id, project_name=project_name,
+        task_count=total, done_count=done
     );
 }
 

@@ -10,7 +10,7 @@ glob STATUSES: list[str] = [
     "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
 ];
 glob PRIORITIES: list[str] = ["High", "Medium", "Low"];
-import from ...models { Project, MemberView }
+import from ...models { Project, MemberView, MilestoneView, RepoView }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -41,8 +41,17 @@ def:pub TaskDialog(
     onDelete: Callable[[], None],
     categories: list[str] = [],
     assignees: list[str] = [],
-    onToggleAssignee: Callable[[str], None] = None
+    onToggleAssignee: Callable[[str], None] = None,
+    milestones: list[MilestoneView] = [],
+    repos: list[RepoView] = [],
+    ghConnected: bool = False,
+    ghIssueNumber: int = 0,
+    onCreateIssue: Callable[[str], None] = None
 ) -> JsxElement {
+    # Which repo the new issue goes in, when the project tracks more than
+    # one. Purely local: the page never needs to know about the picker.
+    has repoChoice: str = "";
+
     selectedProject = form["project"];
     inProject = [
         m for m in members
@@ -55,6 +64,30 @@ def:pub TaskDialog(
             outsideSelected = True;
         }
     }
+    # A milestone belongs to exactly one project, so the list only ever
+    # offers the selected project's own phases.
+    projectMilestones = [
+        m for m in milestones
+        if selectedProject != "none" and m.project_id == selectedProject
+    ];
+    projectRepos = [
+        r for r in repos
+        if selectedProject != "none" and r.project_id == selectedProject
+    ];
+    chosenRepo = "";
+    if len(projectRepos) == 1 {
+        chosenRepo = projectRepos[0].id;
+    } else {
+        # A stale pick from a previous project must not reach the walker.
+        for r in projectRepos {
+            if r.id == repoChoice {
+                chosenRepo = r.id;
+            }
+        }
+    }
+    canCreateIssue = (
+        editing and ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0
+    );
 
     return <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
@@ -81,6 +114,21 @@ def:pub TaskDialog(
                                 <SelectItem value="none">No project</SelectItem>
                                 {for p in projects {
                                     <SelectItem key={jid(p)} value={jid(p)}>{p.name}</SelectItem>
+                                }}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Milestone</Label>
+                        <Select
+                            value={form["milestone"]}
+                            onValueChange={lambda (v: str) { onField("milestone", v); }}
+                        >
+                            <SelectTrigger><SelectValue placeholder="Milestone" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">No milestone</SelectItem>
+                                {for m in projectMilestones {
+                                    <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
                                 }}
                             </SelectContent>
                         </Select>
@@ -202,6 +250,44 @@ def:pub TaskDialog(
                         />
                     </div>
                 </div>
+                {if canCreateIssue {
+                    <div key="ghissue" className="grid gap-3 rounded-lg border bg-muted/30 p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            GitHub
+                        </div>
+                        {if len(projectRepos) > 1 {
+                            <Select
+                                key="repopick"
+                                value={repoChoice}
+                                onValueChange={lambda (v: str) { repoChoice = v; }}
+                            >
+                                <SelectTrigger><SelectValue placeholder="Pick a repo" /></SelectTrigger>
+                                <SelectContent>
+                                    {for r in projectRepos {
+                                        <SelectItem key={r.id} value={r.id}>{r.full_name}</SelectItem>
+                                    }}
+                                </SelectContent>
+                            </Select>
+                        }}
+                        <div>
+                            <Button
+                                variant="outline"
+                                disabled={saving or not chosenRepo}
+                                onClick={lambda {
+                                    if onCreateIssue and chosenRepo {
+                                        onCreateIssue(chosenRepo);
+                                    }
+                                }}
+                            >
+                                Create GitHub issue
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Opens a new issue from this task's title and notes, then links
+                            the two. Later edits here do not change the issue.
+                        </p>
+                    </div>
+                }}
                 {if form["status"] == "Review" {
                     <div key="review" className="grid gap-3 rounded-lg border bg-muted/30 p-3">
                         <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
