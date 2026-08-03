@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "Copy to .mcp.json (gitignored) and fill in your credentials.",
+    "Requires: jac install --extras mcp",
+    "Set STANDUP_MCP_WRITE to 1 only if you want the model to be able to",
+    "create, edit and move tasks. Read-only is the default."
+  ],
+  "mcpServers": {
+    "standup": {
+      "type": "stdio",
+      "command": "jac",
+      "args": ["run", "mcp_server/server.jac"],
+      "env": {
+        "STANDUP_URL": "http://localhost:8000",
+        "STANDUP_EMAIL": "you@example.com",
+        "STANDUP_PASSWORD": "change-me",
+        "STANDUP_MCP_WRITE": "0"
+      }
+    }
+  }
+}

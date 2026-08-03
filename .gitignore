@@ -8,6 +8,8 @@ PLAN.md
 .env
 .env.*
 !.env.example
+# Holds standup credentials for the MCP server; .mcp.json.example is the template.
+.mcp.json
 .ds-sync/
 CLAUDE.local.md
 .claude/settings.local.json

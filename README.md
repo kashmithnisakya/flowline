@@ -43,6 +43,19 @@ optional: without `OPENAI_API_KEY` the app runs fine and only the assistant is
 unavailable, and leaving a Google or GitHub pair empty simply hides that
 sign-in button.
 
+## Drive it from an AI assistant
+
+An optional MCP server exposes the board and the daily log to Claude Code,
+Claude Desktop or Cursor, so you can ask *"what's blocked?"* or say *"move the
+auth task to review"* without opening the GUI.
+
+```bash
+jac install --extras mcp    # not part of the app's own dependencies
+```
+
+Read-only by default. See [mcp_server/README.md](mcp_server/README.md) for
+client configuration and the tool list.
+
 ## License
 
 [MIT](LICENSE)

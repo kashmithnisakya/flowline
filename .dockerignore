@@ -1,0 +1,16 @@
+# Host-specific build state. .jac/venv is a macOS venv and .jac/cache can serve
+# a stale build; the image rebuilds both with `jac install`.
+.jac/
+node_modules/
+.git/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode/
+.idea/
+.design-sync/
+ds-bundle/
+.jaccoder/
+PLAN.md

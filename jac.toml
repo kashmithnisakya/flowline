@@ -18,6 +18,12 @@ menuColor = "default"
 # registered and the endpoint 404s with no warning.
 prometheus_client = "*"
 
+# For mcp_server/ only, via `jac install --extras mcp`. Kept out of
+# [dependencies] because the app never imports it and mcp pulls ~20 transitive
+# packages that would otherwise ship into every deploy.
+[optional-dependencies.mcp]
+mcp = "==2.0.0"
+
 [dependencies.npm]
 sonner = "*"
 "@hugeicons/react" = "*"
