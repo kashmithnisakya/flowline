@@ -63,6 +63,14 @@ max_output_retries = 3
 [serve]
 base_route_app = "app"
 
+[scale.kubernetes]
+# The bundle PVC is ReadWriteMany. Without this, `jac start --scale` refuses to
+# generate manifests rather than leaving the bundle-loader pod Pending against a
+# ReadWriteOnce default. "standard" is minikube's single-node hostpath class,
+# which satisfies RWX locally. A real cluster needs a genuinely RWX-capable
+# class instead (EFS on EKS, Filestore on GKE, azurefile on AKS).
+bundle_storage_class = "standard"
+
 [scale.sso]
 host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
