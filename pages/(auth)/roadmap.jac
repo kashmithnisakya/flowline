@@ -11,9 +11,11 @@ import from ...walkers.projects { ListProjects }
 import from ...walkers.tasks { ListTasks }
 import from ...walkers.roadmap {
     ListMilestones, SaveMilestone, DeleteMilestone, ReorderMilestone,
-    SetTaskMilestone
+    SetTaskMilestone, LinkSteps, UnlinkSteps
 }
 import from ...components.roadmap.Timeline { Timeline }
+import from ...components.roadmap.Flow { Flow }
+import from ...components.roadmap.StepInspector { StepInspector }
 import from ...components.roadmap.MilestoneCard { MilestoneCard }
 import from ...components.roadmap.MilestoneDialog { MilestoneDialog }
 import from ...components.roadmap.AttachTasksDialog { AttachTasksDialog }
@@ -60,7 +62,11 @@ def:pub RoadmapPage() -> JsxPage {
         saving: bool = False,
         attachOpen: bool = False,
         attachStoneId: str = "",
-        attachIds: list[str] = [];
+        attachIds: list[str] = [],
+        view: str = "flow",
+        selectedId: str = "",
+        connectFrom: str = "",
+        selectedEdge: str = "";
 
     async can with entry {
         boot();
@@ -79,6 +85,11 @@ def:pub RoadmapPage() -> JsxPage {
     def openEdit(m: MilestoneView) -> None;
     def openAttach(milestoneId: str) -> None;
     def toggleAttach(taskId: str) -> None;
+    def selectStep(stepId: str) -> None;
+    def armConnect -> None;
+    def clearCanvas -> None;
+    async def deleteEdge(fromId: str, toId: str) -> None;
+    async def linkSteps(fromId: str, toId: str) -> None;
 
     activeProjects = [p for p in projects if p.active];
     scheduled = [m for m in milestones if m.start_date or m.due_date];
@@ -93,6 +104,54 @@ def:pub RoadmapPage() -> JsxPage {
             attachTitle = m.title;
         }
     }
+    # Single-element lists rather than a nullable: indexing a typed list
+    # yields the element type, so no narrowing is needed inside a JSX slot.
+    picked = [m for m in milestones if m.id == selectedId];
+    sourced = [m for m in milestones if m.id == connectFrom];
+    connectTitle = sourced[0].title if sourced else "";
+    readyCount = 0;
+    doneCount = 0;
+    for m in milestones {
+        if m.ready {
+            readyCount = readyCount + 1;
+        }
+        if m.status == "Done" {
+            doneCount = doneCount + 1;
+        }
+    }
+    # Targets an arrow may not point at: itself, anything it already leads to,
+    # and any ancestor (which would close a loop). The server refuses these
+    # anyway; dimming them here just makes a bad connection hard to attempt.
+    blockedTargets: list[str] = [];
+    if connectFrom {
+        byId: dict[str, MilestoneView] = {};
+        for m in milestones {
+            byId[m.id] = m;
+        }
+        blockedTargets = [connectFrom];
+        if connectFrom in byId {
+            for nid in byId[connectFrom].next_ids {
+                if nid not in blockedTargets {
+                    blockedTargets.append(nid);
+                }
+            }
+        }
+        frontier = [connectFrom];
+        at = 0;
+        while at < len(frontier) {
+            current = frontier[at];
+            at = at + 1;
+            if current not in byId {
+                continue;
+            }
+            for pid in byId[current].prev_ids {
+                if pid not in blockedTargets {
+                    blockedTargets.append(pid);
+                    frontier.append(pid);
+                }
+            }
+        }
+    }
 
     return <div className="space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -103,6 +162,22 @@ def:pub RoadmapPage() -> JsxPage {
                 </p>
             </div>
             <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-lg border p-0.5">
+                    <Button
+                        variant={"secondary" if view == "flow" else "ghost"}
+                        size="sm"
+                        onClick={lambda { view = "flow"; }}
+                    >
+                        Flow
+                    </Button>
+                    <Button
+                        variant={"secondary" if view == "timeline" else "ghost"}
+                        size="sm"
+                        onClick={lambda { view = "timeline"; }}
+                    >
+                        Timeline
+                    </Button>
+                </div>
                 <Select value={projectId} onValueChange={selectProject}>
                     <SelectTrigger className="h-9 w-52">
                         <SelectValue placeholder="Project" />
@@ -140,7 +215,71 @@ def:pub RoadmapPage() -> JsxPage {
             </Card>
         } else {
             <div key="body" className="space-y-8">
-                <Timeline milestones={milestones} today={localIso(new(Date))} />
+                {if view == "flow" {
+                    <div key="flow" className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                            <span>
+                                {
+                                    str(len(milestones)) + " steps · " + str(doneCount)
+                                    + " done · " + str(readyCount) + " ready"
+                                }
+                            </span>
+                            {if connectFrom {
+                                <span
+                                    key="connecting"
+                                    className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-foreground"
+                                >
+                                    {
+                                        "Connecting from "
+                                        + connectTitle
+                                        + " — click the step it leads to"
+                                    }
+                                </span>
+                            }}
+                        </div>
+                        <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+                            <Flow
+                                steps={milestones}
+                                selectedId={selectedId}
+                                connectFrom={connectFrom}
+                                selectedEdge={selectedEdge}
+                                blockedTargets={blockedTargets}
+                                onSelect={selectStep}
+                                onSelectEdge={lambda (k: str) { selectedEdge = k; }}
+                                onDeleteEdge={deleteEdge}
+                                onCanvasClick={clearCanvas}
+                            />
+                            <div>
+                                {if len(picked) > 0 {
+                                    <StepInspector
+                                        key={picked[0].id}
+                                        step={picked[0]}
+                                        tasks={[t for t in tasks if t.milestone_id == picked[0].id]}
+                                        incoming={[m for m in milestones if m.id in picked[0].prev_ids]}
+                                        outgoing={[m for m in milestones if m.id in picked[0].next_ids]}
+                                        connecting={bool(connectFrom)}
+                                        onConnect={armConnect}
+                                        onCancelConnect={lambda { connectFrom = ""; }}
+                                        onEdit={openEdit}
+                                        onAttach={openAttach}
+                                        onDetach={detachTask}
+                                        onUnlink={deleteEdge}
+                                    />
+                                } else {
+                                    <div
+                                        key="hint"
+                                        className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground"
+                                    >
+                                        Select a step to see what it waits on, what it leads
+                                        to, and to draw a new connection.
+                                    </div>
+                                }}
+                            </div>
+                        </div>
+                    </div>
+                } else {
+                    <div key="tl" className="space-y-8">
+                        <Timeline milestones={milestones} today={localIso(new(Date))} />
 
                 {if len(scheduled) > 0 {
                     <div key="sched" className="space-y-3">
@@ -186,6 +325,8 @@ def:pub RoadmapPage() -> JsxPage {
                                 />
                             }}
                         </div>
+                    </div>
+                }}
                     </div>
                 }}
             </div>

@@ -203,3 +203,64 @@ impl RoadmapPage.detachTask(taskId: str) -> None {
         toast("Failed to take the task off the milestone");
     }
 }
+
+impl RoadmapPage.selectStep(stepId: str) -> None {
+    # A click while armed means "connect to this one"; otherwise it selects.
+    if connectFrom and connectFrom != stepId {
+        source = connectFrom;
+        connectFrom = "";
+        linkSteps(source, stepId);
+        return;
+    }
+    selectedId = stepId;
+    selectedEdge = "";
+}
+
+impl RoadmapPage.armConnect -> None {
+    if selectedId {
+        connectFrom = selectedId;
+        selectedEdge = "";
+    }
+}
+
+impl RoadmapPage.clearCanvas -> None {
+    connectFrom = "";
+    selectedEdge = "";
+    selectedId = "";
+}
+
+impl RoadmapPage.linkSteps(fromId: str, toId: str) -> None {
+    pid = projectId;
+    try {
+        result = root spawn LinkSteps(from_id=fromId, to_id=toId);
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            # Any new arrow re-shapes the whole picture, so refetch rather
+            # than patching a layout the server owns.
+            await loadAll(pid);
+            if not payload["duplicate"] {
+                toast("Connected", {
+                    "action": {
+                        "label": "Undo",
+                        "onClick": lambda { deleteEdge(fromId, toId); }
+                    }
+                });
+            }
+        } elif payload {
+            toast(payload["message"] or "That connection is not allowed.");
+        }
+    } except Exception as e {
+        toast("Could not connect those steps");
+    }
+}
+
+impl RoadmapPage.deleteEdge(fromId: str, toId: str) -> None {
+    pid = projectId;
+    selectedEdge = "";
+    try {
+        root spawn UnlinkSteps(from_id=fromId, to_id=toId);
+        await loadAll(pid);
+    } except Exception as e {
+        toast("Could not remove that connection");
+    }
+}

@@ -27,7 +27,7 @@ import from walkers.log {
 import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
 import from walkers.roadmap {
     ListMilestones, SaveMilestone, DeleteMilestone, ReorderMilestone,
-    SetTaskMilestone
+    SetTaskMilestone, LinkSteps, UnlinkSteps
 }
 import from walkers.github {
     GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,

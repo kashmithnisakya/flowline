@@ -214,6 +214,10 @@ edge ForProject: Task --> Project {}
 edge OnProject: Member --> Project {}
 edge OnRoadmap: Milestone --> Project {}
 edge InMilestone: Task --> Milestone {}
+# The arrow on the roadmap: this step leads to that one. The graph must stay
+# acyclic (LinkSteps refuses anything that would close a loop), because both
+# the layout and the "ready to start" signal are derived from depth.
+edge LeadsTo: Milestone --> Milestone {}
 
 obj TaskView {
     has id: str,
@@ -276,7 +280,19 @@ obj MilestoneView {
         project_id: str,
         project_name: str,
         task_count: int = 0,
-        done_count: int = 0;
+        done_count: int = 0,
+        # Graph shape, computed per request in ListMilestones where every
+        # step is in hand. `depth` is the row (longest path from a step with
+        # no predecessor); `lane` is 0 on the spine and alternates -1, 1, -2,
+        # 2 outward for branches. `ready` means every predecessor is Done, so
+        # this is startable now.
+        depth: int = 0,
+        lane: int = 0,
+        component: int = 0,
+        ready: bool = False,
+        blocked_by: int = 0,
+        prev_ids: list[str] = [],
+        next_ids: list[str] = [];
 }
 
 # What the client is allowed to know about the GitHub link. The connection
@@ -352,12 +368,21 @@ def milestone_view(m: Milestone) -> MilestoneView {
             done = done + 1;
         }
     }
+    prev_ids: list[str] = [];
+    for p in [m<-:LeadsTo:<-] {
+        prev_ids.append(jid(p));
+    }
+    next_ids: list[str] = [];
+    for n in [m ->:LeadsTo:->] {
+        next_ids.append(jid(n));
+    }
     return MilestoneView(
         id=jid(m), title=m.title, description=m.description,
         start_date=m.start_date, due_date=m.due_date, status=m.status,
         color=m.color, sort_order=m.sort_order,
         project_id=project_id, project_name=project_name,
-        task_count=total, done_count=done
+        task_count=total, done_count=done,
+        prev_ids=prev_ids, next_ids=next_ids
     );
 }
 
