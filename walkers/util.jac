@@ -8,3 +8,19 @@ import datetime;
 def now_iso -> str {
     return datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat() + "Z";
 }
+
+
+# Age of a now_iso() stamp. An unreadable or empty stamp reads as ancient so
+# that callers expiring a one-shot token fail closed.
+def minutes_since(stamp: str) -> float {
+    if not stamp {
+        return 999999.0;
+    }
+    try {
+        then = datetime.datetime.fromisoformat(stamp.replace("Z", ""));
+    } except Exception {
+        return 999999.0;
+    }
+    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None);
+    return (now - then).total_seconds() / 60.0;
+}

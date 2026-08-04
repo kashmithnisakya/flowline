@@ -55,16 +55,16 @@ def:pub Shell() -> JsxLayout {
                     <Link to="/board" className={navClass("/board")}>
                         Board
                     </Link>
+                    <Link to="/roadmap" className={navClass("/roadmap")}>
+                        Roadmap
+                    </Link>
                     <Link to="/overview" className={navClass("/overview")}>
                         Overview
                     </Link>
                     <Link to="/log" className={navClass("/log")}>
                         Log
                     </Link>
-                    <Link to="/projects" className={navClass("/projects")}>
-                        Projects
-                    </Link>
-                    <Link to="/roster" className={navClass("/roster")}>
+                    <Link to="/workspace" className={navClass("/workspace")}>
                         Workspace
                     </Link>
                     <div className="ml-auto flex items-center gap-3">

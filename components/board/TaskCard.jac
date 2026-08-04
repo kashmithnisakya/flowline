@@ -24,12 +24,24 @@ def prettyDay(iso: str) -> str {
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
+import from .GitHubChip { GitHubChip }
 
 def:pub TaskCard(
     task: TaskView,
     onOpen: Callable[[TaskView], None],
-    onArrowMove: Callable[[TaskView, str], None]
+    onArrowMove: Callable[[TaskView, str], None],
+    onMarkDone: Callable[[str], None] = None
 ) -> JsxElement {
+    # The column does not forward a mark-done callback yet, so fall back to
+    # the arrow path. Both land in the page's moveTo, undo toast included.
+    def markDone(taskId: str) {
+        if onMarkDone {
+            onMarkDone(taskId);
+        } else {
+            onArrowMove(task, "Done");
+        }
+    }
+
     statusIdx = 0;
     for (i, s) in enumerate(STATUSES) {
         if s == task.status {
@@ -85,6 +97,9 @@ def:pub TaskCard(
                 <div key="blocked" className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
                     {task.notes}
                 </div>
+            }}
+            {if task.gh_issue_number > 0 or task.pr_state {
+                <GitHubChip key="github" task={task} onMarkDone={markDone} />
             }}
             <div className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100">
                 <Button

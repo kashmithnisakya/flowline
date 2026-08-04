@@ -1,16 +1,20 @@
-"""standup - Onboarding wizard: project -> vocabulary -> people.
+"""standup - Onboarding wizard: you -> project -> vocabulary -> people.
 
-The organization is created at signup, so the wizard starts at the first
-project, then seeds the workspace vocabulary (categories and tags), then
-the roster. Finishing lands on the board. Any half-typed member is saved
-by the finish button; typed input is never silently discarded.
+Signup takes credentials only, so the wizard opens by naming the
+organization and its project manager, then the first project, the workspace
+vocabulary (categories and tags), and the roster. Finishing lands on the
+board. Any half-typed member is saved by the finish button; typed input is
+never silently discarded.
+
+The wizard resumes where it stopped: an account with no organization name
+starts at step 1, one that has a name but no project starts at step 2.
 """
 
 import from ...models { MemberView }
 import from ...walkers.projects { ListProjects, SaveProject }
 import from ...walkers.roster { SaveMember }
 import from ...walkers.vocab { AddVocab }
-import from ...lib.session { fetchOrgName }
+import from ...lib.session { fetchProfile, patchProfile }
 import from ...components.ui.card {
     Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
 }
@@ -25,6 +29,7 @@ glob SUGGESTED_CATEGORIES: list[str] = ["Coding", "Review", "Planning", "Meeting
 def:pub SetupPage() -> JsxPage {
     has step: int = 0,
         orgName: str = "",
+        fullName: str = "",
         projectName: str = "",
         pickedCategories: list[str] = [],
         newCategory: str = "",
@@ -33,6 +38,7 @@ def:pub SetupPage() -> JsxPage {
         mName: str = "",
         mRole: str = "",
         added: list[MemberView] = [],
+        saveError: str = "",
         busy: bool = False;
 
     async can with entry {
@@ -40,6 +46,7 @@ def:pub SetupPage() -> JsxPage {
     }
 
     async def boot -> None;
+    async def saveProfile -> None;
     async def createProject -> None;
     async def saveVocabulary -> None;
     async def addPerson -> None;
@@ -52,13 +59,53 @@ def:pub SetupPage() -> JsxPage {
         {if step == 0 {
             <p key="loading" className="w-full text-center text-sm text-muted-foreground">Loading…</p>
         } elif step == 1 {
+            <Card key="profile" className="w-full">
+                <CardHeader>
+                    <CardTitle>Name your workspace</CardTitle>
+                    <CardDescription>
+                        Step 1 of 4: the organization name heads every page, and your
+                        name is who the daily log is written by. Both stay editable
+                        on the Workspace tab.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label>Organization</Label>
+                        <Input
+                            value={orgName}
+                            onChange={lambda (e: ChangeEvent) { orgName = e.target.value; }}
+                            placeholder="Acme Robotics"
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Your name</Label>
+                        <Input
+                            value={fullName}
+                            onChange={lambda (e: ChangeEvent) { fullName = e.target.value; }}
+                            placeholder="Priya Raman"
+                        />
+                    </div>
+                    {if saveError {
+                        <p key="err" className="text-sm text-destructive">{saveError}</p>
+                    }}
+                </CardContent>
+                <CardFooter className="justify-end">
+                    <Button
+                        onClick={saveProfile}
+                        disabled={busy or not orgName.strip() or not fullName.strip()}
+                    >
+                        Continue
+                    </Button>
+                </CardFooter>
+            </Card>
+        } elif step == 2 {
             <Card key="project" className="w-full">
                 <CardHeader>
                     <CardTitle>
                         {"Welcome to " + orgName if orgName else "Create your first project"}
                     </CardTitle>
                     <CardDescription>
-                        Step 1 of 3: tasks and daily logs are scoped to projects.
+                        Step 2 of 4: tasks and daily logs are scoped to projects.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -77,12 +124,12 @@ def:pub SetupPage() -> JsxPage {
                     </Button>
                 </CardFooter>
             </Card>
-        } elif step == 2 {
+        } elif step == 3 {
             <Card key="vocab" className="w-full">
                 <CardHeader>
                     <CardTitle>Your vocabulary</CardTitle>
                     <CardDescription>
-                        Step 2 of 3: categories label the work (board and log dropdowns);
+                        Step 3 of 4: categories label the work (board and log dropdowns);
                         tags label your people. Both stay editable on the Workspace tab.
                     </CardDescription>
                 </CardHeader>
@@ -164,7 +211,7 @@ def:pub SetupPage() -> JsxPage {
                 <CardHeader>
                     <CardTitle>Add your people</CardTitle>
                     <CardDescription>
-                        Step 3 of 3: team members are roster records (no accounts).
+                        Step 4 of 4: team members are roster records (no accounts).
                         You can add more any time on the Workspace tab.
                     </CardDescription>
                 </CardHeader>

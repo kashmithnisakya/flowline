@@ -32,9 +32,23 @@ glob FAQS: list[QA] = [
     ),
     QA(
         q="Does it connect to GitHub?",
-        a="You can attach an issue link and a PR link to any daily-log entry, and "
-            + "keep a list of the repos your team uses. There is no API sync yet. "
-            + "Nothing reads or writes GitHub on your behalf."
+        a="Yes, read-mostly. Install the GitHub App on the repos you pick and "
+            + "standup can list them, import issues as tasks, and show the state "
+            + "of open pull requests. The only thing it ever writes to GitHub is "
+            + "an issue you explicitly create from a task."
+    ),
+    QA(
+        q="Does it sync with GitHub in the background?",
+        a="No. Syncing happens when you press Sync, and nothing runs on a "
+            + "schedule. Standup also never moves a card for you: when an issue "
+            + "closes or a pull request merges, the card says so and you decide."
+    ),
+    QA(
+        q="Can I plan further out than the board?",
+        a="Each project has a roadmap of milestones: a phase, an optional date "
+            + "range, and the tasks that belong to it, drawn on a timeline. It is "
+            + "a planning view over the same tasks, not a second list to keep up "
+            + "to date."
     ),
     QA(
         q="Is there a Slack or Teams app?",

@@ -1,20 +1,50 @@
 """Implementations for the onboarding wizard."""
 
 impl SetupPage.boot -> None {
-    # The org exists from signup; only projects gate the wizard now.
+    # Signup no longer collects a name, so the wizard resumes at whichever
+    # step is still unanswered: no organization name means step 1, a named
+    # workspace with no project means step 2.
     try {
-        name = await fetchOrgName();
-        orgName = name;
+        profile = await fetchProfile();
+        existingOrg = str(profile["org_name"]) if profile["org_name"] else "";
+        existingWho = str(profile["full_name"]) if profile["full_name"] else "";
+        orgName = existingOrg;
+        fullName = existingWho;
+        if not existingOrg.strip() {
+            step = 1;
+            return;
+        }
         projResult = root spawn ListProjects();
         existing = projResult.reports[0] if projResult.reports else [];
         if len(existing) == 0 {
-            step = 1;
+            step = 2;
         } else {
             window.location.href = "/board";
         }
     } except Exception as e {
         step = 1;
     }
+}
+
+impl SetupPage.saveProfile -> None {
+    org = orgName.strip();
+    who = fullName.strip();
+    if not org or not who {
+        return;
+    }
+    saveError = "";
+    busy = True;
+    try {
+        ok = await patchProfile({"org_name": org, "full_name": who});
+        if ok {
+            step = 2;
+        } else {
+            saveError = "Could not save those names. Try again.";
+        }
+    } except Exception as e {
+        saveError = "Could not save those names. Try again.";
+    }
+    busy = False;
 }
 
 impl SetupPage.createProject -> None {
@@ -25,9 +55,9 @@ impl SetupPage.createProject -> None {
     busy = True;
     try {
         root spawn SaveProject(name=captured);
-        step = 2;
+        step = 3;
     } except Exception as e {
-        step = 1;
+        step = 2;
     }
     busy = False;
 }
@@ -67,9 +97,9 @@ impl SetupPage.saveVocabulary -> None {
         for t in pickedTags {
             root spawn AddVocab(kind="tag", value=t);
         }
-        step = 3;
+        step = 4;
     } except Exception as e {
-        step = 3;
+        step = 4;
     }
     busy = False;
 }

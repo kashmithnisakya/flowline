@@ -13,6 +13,16 @@ impl BoardPage.boot -> None {
     } except Exception as e {
         toast("Failed to load your workspace");
     }
+    # Cheap and never fails on its own: it only decides whether the board
+    # offers the GitHub affordances at all.
+    try {
+        gResult = root spawn GithubStatus();
+        if gResult.reports {
+            ghConnected = gResult.reports[0].connected;
+        }
+    } except Exception as e {
+        ghConnected = False;
+    }
     await loadAll();
 }
 
@@ -27,6 +37,8 @@ impl BoardPage.loadAll -> None {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
         vResult = root spawn ListVocab();
+        sResult = root spawn ListMilestones();
+        rResult = root spawn ListRepos();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
@@ -35,6 +47,8 @@ impl BoardPage.loadAll -> None {
             members = fetchedMembers;
             projects = fetchedProjects;
             vocab = vResult.reports[0] if vResult.reports else [];
+            milestones = sResult.reports[0] if sResult.reports else [];
+            repos = rResult.reports[0] if rResult.reports else [];
         }
         # A stale persisted filter (archived project) would show an empty
         # board with no hint — reset it to "all".
@@ -68,6 +82,12 @@ impl BoardPage.setField(key: str, value: str) -> None {
     # never updates (inputs appear frozen). Build a copy and subscript it.
     updated = {**form};
     updated[key] = value;
+    # A milestone lives on exactly one project, so the previous pick is
+    # meaningless the moment the project changes. Both keys go into the
+    # SAME copy: two assignments would make the second read a stale `form`.
+    if key == "project" {
+        updated["milestone"] = "none";
+    }
     form = updated;
 }
 
@@ -89,6 +109,7 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     form = {
         "title": t.title, "category": t.category,
         "project": t.project_id if t.project_id else "none",
+        "milestone": t.milestone_id if t.milestone_id else "none",
         "priority": t.priority, "status": t.status,
         "due_date": t.due_date, "notes": t.notes,
         "issue": t.issue_link, "pr": t.pr_link,
@@ -107,6 +128,7 @@ impl BoardPage.saveTask -> None {
     saving = True;
     project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
+    milestone = form["milestone"] if form["milestone"] != "none" else "";
     try {
         # Assigning people who are not on the task's project pulls them in.
         if project {
@@ -136,14 +158,27 @@ impl BoardPage.saveTask -> None {
                 reviewer_id=reviewer, review_due=form["review_due"],
                 assignee_ids=fAssignees, project_id=project
             );
+            # Always, including the empty case: that is how a task gets
+            # detached from the milestone it used to sit on.
+            root spawn SetTaskMilestone(
+                task_id=editingId, milestone_id=milestone
+            );
         } else {
-            root spawn CreateTask(
+            cResult = root spawn CreateTask(
                 title=title, category=form["category"],
                 priority=form["priority"], status=form["status"],
                 due_date=form["due_date"], notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 assignee_ids=fAssignees, project_id=project
             );
+            created = cResult.reports[0] if cResult.reports else None;
+            # A brand new task has nothing to detach, so the walker only
+            # runs when there is an actual milestone to attach it to.
+            if created and milestone {
+                root spawn SetTaskMilestone(
+                    task_id=created.id, milestone_id=milestone
+                );
+            }
         }
         dialogOpen = False;
         await loadAll();
@@ -270,4 +305,56 @@ impl BoardPage.arrowMove(t: TaskView, status: str) -> None {
     if status {
         moveTo(t.id, status);
     }
+}
+
+impl BoardPage.markDoneFromPr(taskId: str) -> None {
+    # Routed through the normal move so the card still gets its log entry
+    # and its undo toast. A merged PR suggests Done, it never forces it.
+    moveTo(taskId, "Done");
+}
+
+impl BoardPage.syncGithub -> None {
+    if syncing {
+        return;
+    }
+    syncing = True;
+    try {
+        result = root spawn SyncGithub();
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            # loadAll owns the refresh, including the movesRef fence: an
+            # in-flight drag keeps its optimistic state and the next poll
+            # picks the synced values up.
+            await loadAll();
+            toast("Synced " + str(payload["synced"]) + " tasks");
+        } else {
+            toast(str(payload["message"]) if payload else "Sync failed");
+        }
+    } except Exception as e {
+        toast("Failed to sync with GitHub");
+    }
+    syncing = False;
+}
+
+impl BoardPage.createIssue(repoId: str) -> None {
+    if not editingId or not repoId {
+        return;
+    }
+    saving = True;
+    try {
+        result = root spawn CreateIssueFromTask(
+            task_id=editingId, repo_id=repoId
+        );
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            opened = payload["task"];
+            toast("Opened issue #" + str(opened["gh_issue_number"]));
+            await loadAll();
+        } else {
+            toast(str(payload["message"]) if payload else "Could not open the issue");
+        }
+    } except Exception as e {
+        toast("Failed to open a GitHub issue");
+    }
+    saving = False;
 }

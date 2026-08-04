@@ -1,6 +1,6 @@
 """Implementations for the Projects page."""
 
-impl ProjectsPage.loadProjects -> None {
+impl ProjectsSection.loadProjects -> None {
     try {
         result = root spawn ListProjects();
         rResult = root spawn ListRepos();
@@ -12,7 +12,7 @@ impl ProjectsPage.loadProjects -> None {
     loading = False;
 }
 
-impl ProjectsPage.openCreate -> None {
+impl ProjectsSection.openCreate -> None {
     editingId = "";
     fName = "";
     fDescription = "";
@@ -20,7 +20,7 @@ impl ProjectsPage.openCreate -> None {
     dialogOpen = True;
 }
 
-impl ProjectsPage.openEdit(p: Project) -> None {
+impl ProjectsSection.openEdit(p: Project) -> None {
     editingId = jid(p);
     fName = p.name;
     fDescription = p.description;
@@ -28,7 +28,7 @@ impl ProjectsPage.openEdit(p: Project) -> None {
     dialogOpen = True;
 }
 
-impl ProjectsPage.saveProject -> None {
+impl ProjectsSection.saveProject -> None {
     if not fName.strip() {
         return;
     }
@@ -55,7 +55,7 @@ impl ProjectsPage.saveProject -> None {
     saving = False;
 }
 
-impl ProjectsPage.archiveProject(projectId: str) -> None {
+impl ProjectsSection.archiveProject(projectId: str) -> None {
     try {
         root spawn ArchiveProject(project_id=projectId);
         await loadProjects();
@@ -65,7 +65,7 @@ impl ProjectsPage.archiveProject(projectId: str) -> None {
 }
 
 
-impl ProjectsPage.removeRepo(repoId: str) -> None {
+impl ProjectsSection.removeRepo(repoId: str) -> None {
     try {
         root spawn RemoveRepo(repo_id=repoId);
         await loadProjects();

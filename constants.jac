@@ -10,3 +10,7 @@ glob STATUSES: list[str] = [
 ];
 
 glob PRIORITIES: list[str] = ["High", "Medium", "Low"];
+
+# Roadmap milestone states. Deliberately coarser than the board's six
+# columns: a milestone is a phase, not a card.
+glob MILESTONE_STATUSES: list[str] = ["Planned", "In Progress", "Done"];
