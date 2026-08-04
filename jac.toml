@@ -14,12 +14,25 @@ menuAccent = "subtle"
 menuColor = "default"
 
 [dependencies]
+# Required by [scale.monitoring]. Without it the metrics factory falls back to
+# a no-op collector whose is_enabled() is False, so /metrics is never
+# registered and the endpoint 404s with no warning.
 prometheus_client = "*"
+# walkers/ghutil.jac talks to the GitHub REST API and signs the GitHub App
+# JWT. All three arrive transitively today (litellm pulls them in), but a
+# runtime upgrade that drops that chain would break the GitHub tab with an
+# ImportError, so they are named here as direct dependencies.
 requests = "*"
 pyjwt = "*"
+# PyJWT needs it for RS256; the App JWT is unsigned-able without it.
 cryptography = "*"
 
 [dependencies.npm]
+# Task notes are written as markdown and rendered by
+# components/common/Markdown.jac. react-markdown never emits raw HTML, so
+# the notes stay safe to display; remark-gfm adds task lists, tables,
+# strikethrough and bare-URL autolinks. Note that `jac install` rewrites
+# this file and drops comments, so check them back in after running it.
 "react-markdown" = "*"
 "remark-gfm" = "*"
 sonner = "*"
