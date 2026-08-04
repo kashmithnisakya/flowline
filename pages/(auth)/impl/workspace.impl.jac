@@ -1,6 +1,6 @@
 """Implementations for the Workspace page."""
 
-impl RosterPage.loadAll -> None {
+impl WorkspacePage.loadAll -> None {
     try {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
@@ -14,7 +14,7 @@ impl RosterPage.loadAll -> None {
     loading = False;
 }
 
-impl RosterPage.setField(key: str, value: str) -> None {
+impl WorkspacePage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
     # LITERAL "key" property. Build a copy and subscript it instead.
     updated = {**form};
@@ -22,7 +22,7 @@ impl RosterPage.setField(key: str, value: str) -> None {
     form = updated;
 }
 
-impl RosterPage.addRole -> None {
+impl WorkspacePage.addRole -> None {
     draft = form["roleDraft"].strip();
     if not draft or draft in mRoles {
         return;
@@ -31,11 +31,11 @@ impl RosterPage.addRole -> None {
     setField("roleDraft", "");
 }
 
-impl RosterPage.removeRole(role: str) -> None {
+impl WorkspacePage.removeRole(role: str) -> None {
     mRoles = [r for r in mRoles if r != role];
 }
 
-impl RosterPage.toggleTag(tag: str) -> None {
+impl WorkspacePage.toggleTag(tag: str) -> None {
     if tag in mTags {
         mTags = [t for t in mTags if t != tag];
     } else {
@@ -43,7 +43,7 @@ impl RosterPage.toggleTag(tag: str) -> None {
     }
 }
 
-impl RosterPage.toggleProject(projectId: str) -> None {
+impl WorkspacePage.toggleProject(projectId: str) -> None {
     if projectId in mProjects {
         mProjects = [p for p in mProjects if p != projectId];
     } else {
@@ -51,7 +51,7 @@ impl RosterPage.toggleProject(projectId: str) -> None {
     }
 }
 
-impl RosterPage.openCreate -> None {
+impl WorkspacePage.openCreate -> None {
     editingId = "";
     form = BLANK_MEMBER;
     mRoles = [];
@@ -60,7 +60,7 @@ impl RosterPage.openCreate -> None {
     dialogOpen = True;
 }
 
-impl RosterPage.openEdit(m: MemberView) -> None {
+impl WorkspacePage.openEdit(m: MemberView) -> None {
     editingId = m.id;
     form = {
         "name": m.name, "email": m.email,
@@ -72,7 +72,7 @@ impl RosterPage.openEdit(m: MemberView) -> None {
     dialogOpen = True;
 }
 
-impl RosterPage.saveMember -> None {
+impl WorkspacePage.saveMember -> None {
     name = form["name"].strip();
     if not name {
         return;
@@ -113,7 +113,7 @@ impl RosterPage.saveMember -> None {
     saving = False;
 }
 
-impl RosterPage.archiveMember(memberId: str) -> None {
+impl WorkspacePage.archiveMember(memberId: str) -> None {
     try {
         root spawn ArchiveMember(member_id=memberId);
         await loadAll();
@@ -122,7 +122,7 @@ impl RosterPage.archiveMember(memberId: str) -> None {
     }
 }
 
-impl RosterPage.assignTo(memberId: str, projectId: str) -> None {
+impl WorkspacePage.assignTo(memberId: str, projectId: str) -> None {
     if not projectId {
         return;
     }
@@ -134,7 +134,7 @@ impl RosterPage.assignTo(memberId: str, projectId: str) -> None {
     }
 }
 
-impl RosterPage.unassignFrom(memberId: str, projectName: str) -> None {
+impl WorkspacePage.unassignFrom(memberId: str, projectName: str) -> None {
     # The badge carries the project NAME; resolve it to a jid via the
     # loaded projects list.
     target = "";
@@ -154,7 +154,7 @@ impl RosterPage.unassignFrom(memberId: str, projectName: str) -> None {
     }
 }
 
-impl RosterPage.addVocab(kind: str) -> None {
+impl WorkspacePage.addVocab(kind: str) -> None {
     value = newCategory.strip() if kind == "category" else newTag.strip();
     if not value {
         return;
@@ -172,7 +172,7 @@ impl RosterPage.addVocab(kind: str) -> None {
     }
 }
 
-impl RosterPage.removeVocab(termId: str) -> None {
+impl WorkspacePage.removeVocab(termId: str) -> None {
     try {
         root spawn RemoveVocab(term_id=termId);
         await loadAll();
@@ -181,7 +181,7 @@ impl RosterPage.removeVocab(termId: str) -> None {
     }
 }
 
-impl RosterPage.selectTab(value: str) -> None {
+impl WorkspacePage.selectTab(value: str) -> None {
     tab = value;
     # Keep the tab in the URL so it is linkable and survives a reload, but
     # replace rather than push: Back should leave the page, not undo a tab

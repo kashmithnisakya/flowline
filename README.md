@@ -58,8 +58,8 @@ Create one at <https://github.com/settings/apps/new>:
 
 | Field | Value |
 | --- | --- |
-| Callback URL | `<HOST>/roster?tab=github` |
-| Setup URL | `<HOST>/roster?tab=github`, with "Redirect on update" ticked |
+| Callback URL | `<HOST>/workspace?tab=github` |
+| Setup URL | `<HOST>/workspace?tab=github`, with "Redirect on update" ticked |
 | Request user authorization (OAuth) during installation | **on** |
 | Webhooks | off |
 | Repository permissions | Issues: read and write · Pull requests: read · Metadata: read |

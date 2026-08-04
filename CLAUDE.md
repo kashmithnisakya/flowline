@@ -89,7 +89,7 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/board`, `/log`, `/roster`, `/projects`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/board`, `/log`, `/workspace`, `/roadmap`, `/setup` | `pages/(auth)/…` | auto-guarded |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page

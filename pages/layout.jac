@@ -64,7 +64,7 @@ def:pub Shell() -> JsxLayout {
                     <Link to="/log" className={navClass("/log")}>
                         Log
                     </Link>
-                    <Link to="/roster" className={navClass("/roster")}>
+                    <Link to="/workspace" className={navClass("/workspace")}>
                         Workspace
                     </Link>
                     <div className="ml-auto flex items-center gap-3">

@@ -9,7 +9,7 @@ import from ...components.ui.skeleton { Skeleton }
 
 def:pub ProjectsPage() -> JsxPage {
     can with entry {
-        window.location.replace("/roster?tab=projects");
+        window.location.replace("/workspace?tab=projects");
     }
 
     return <Skeleton className="h-48 w-full" />;
