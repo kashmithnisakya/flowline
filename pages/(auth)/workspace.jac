@@ -27,7 +27,6 @@ import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
-import from ...lib.session { fetchOrgName }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
@@ -56,7 +55,6 @@ def:pub WorkspacePage() -> JsxPage {
         mProjects: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
-        orgName: str = "",
         # The header owns each tab's primary action, but Projects and GitHub
         # keep their own state. Bumping a counter is how the header reaches
         # in without the page having to own their dialogs too.
@@ -81,11 +79,9 @@ def:pub WorkspacePage() -> JsxPage {
             tab = "github";
         }
         loadAll();
-        loadOrgName();
     }
 
     async def loadAll -> None;
-    async def loadOrgName -> None;
     async def saveMember -> None;
     async def archiveMember(memberId: str) -> None;
     async def assignTo(memberId: str, projectId: str) -> None;
@@ -113,19 +109,9 @@ def:pub WorkspacePage() -> JsxPage {
     # edge rather than underlining a horizontal strip.
     return <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <div className="flex items-start justify-between gap-6">
-            <div className="flex flex-col gap-2">
-                <h1 className="font-display text-3xl font-semibold tracking-tight">
-                    Workspace
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                    {
-                        (orgName + " — organization, projects, people, vocabulary and "
-                            + "GitHub, configured in one place.")
-                        if orgName
-                        else "Organization, projects, people, vocabulary and GitHub, configured in one place."
-                    }
-                </p>
-            </div>
+            <h1 className="font-display text-3xl font-semibold tracking-tight">
+                Workspace
+            </h1>
             <div className="flex shrink-0 items-center gap-2">
                 {if tab == "projects" {
                     <Button key="np" onClick={lambda { projectsNonce = projectsNonce + 1; }}>
