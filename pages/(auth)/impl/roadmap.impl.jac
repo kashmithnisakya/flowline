@@ -99,19 +99,7 @@ impl RoadmapPage.saveMilestone -> None {
     }
     saving = True;
     pid = projectId;
-    # Read before the call: a `has` read after a walker call is the
-    # render-time snapshot, so where the new step lands has to be worked out
-    # from what we already know. It mirrors the server rule in layout_steps:
-    # with no arrows anywhere the whole project sits on the canvas, so a new
-    # step joins it there; once even one arrow exists the new step has none of
-    # its own and waits in the tray.
     creating = not editingId;
-    anyArrows = False;
-    for m in milestones {
-        if m.prev_ids or m.next_ids {
-            anyArrows = True;
-        }
-    }
     try {
         root spawn SaveMilestone(
             milestone_id=editingId, project_id=pid, title=title,
@@ -122,11 +110,7 @@ impl RoadmapPage.saveMilestone -> None {
         confirmDelete = False;
         await loadAll(pid);
         if creating {
-            if anyArrows {
-                toast(title + " is in the tray; connect it to put it on the graph");
-            } else {
-                toast(title + " is on the canvas; drag from its border to connect it");
-            }
+            toast(title + " is on the canvas; drag from its border to connect it");
         }
     } except Exception as e {
         toast("Failed to save the milestone");
@@ -323,7 +307,8 @@ impl RoadmapPage.hitNode(e: MouseEvent) -> dict[str, any] {
     if not btn or not btn.style or not btn.style.left or not btn.style.width {
         return miss;
     }
-    # The tray chips are buttons too, but they carry no inline width.
+    # Only a real node carries an inline width this wide; the test also filters
+    # the 20px chip that removes an arrow.
     if float(parseFloat(btn.style.width)) < 100.0 {
         return miss;
     }
@@ -444,7 +429,7 @@ impl RoadmapPage.endDrag(e: MouseEvent) -> None {
         landed = (hit["step"] as MilestoneView).id if hit else "";
         if not landed or landed == wiring {
             # Released on empty canvas: stay armed so the click path can finish
-            # the connection, which is how a tray step joins the graph.
+            # the connection instead of silently losing the aim.
             return;
         }
         swallowRef.current = True;

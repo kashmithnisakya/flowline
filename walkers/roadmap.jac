@@ -246,6 +246,7 @@ def layout_steps(views: list[MilestoneView]) -> None {
         by_id[v.id] = v;
     }
     grid: list[MilestoneView] = [];
+    loose: list[MilestoneView] = [];
     for v in views {
         linked = False;
         for pid in v.prev_ids {
@@ -261,23 +262,8 @@ def layout_steps(views: list[MilestoneView]) -> None {
         if linked {
             grid.append(v);
         } else {
-            v.depth = -1;
-            v.lane = 0;
-            v.component = -1;
+            loose.append(v);
         }
-    }
-    if not grid {
-        seeded = [v for v in views];
-        seeded.sort(key=lambda (m: MilestoneView) { m.sort_order; });
-        for (i, v) in enumerate(seeded) {
-            v.depth = 0;
-            v.component = 0;
-            # 0, 1, -1, 2, -2, ... so the first step keeps the spine and the
-            # rest alternate outward, the same shape a real row gets.
-            out = (i + 1) // 2;
-            v.lane = out if i % 2 == 1 else 0 - out;
-        }
-        return;
     }
     # Weakly connected groups: follow arrows in both directions, because two
     # steps feeding the same third one belong on the same picture.
@@ -323,6 +309,25 @@ def layout_steps(views: list[MilestoneView]) -> None {
         deepest = layout_component(members, by_id, index, row_offset);
         # One blank row between groups so they read as separate roadmaps.
         row_offset = row_offset + deepest + 2;
+    }
+    # Unwired steps share the rows below whatever graph exists, in the same
+    # 0, 1, -1, 2, -2 lane shape a real row gets. With nothing wired at all
+    # `row_offset` is still 0, so a project's first steps simply start at the
+    # top of the canvas.
+    if loose {
+        loose.sort(key=lambda (m: MilestoneView) { m.sort_order; });
+        comp = len(ordered);
+        # Wrapped rather than one endless row: five across is about the width
+        # of a branching graph, so the canvas never scrolls sideways just to
+        # show steps nobody has connected yet.
+        per_row = 5;
+        for (i, v) in enumerate(loose) {
+            slot = i % per_row;
+            out = (slot + 1) // 2;
+            v.depth = row_offset + i // per_row;
+            v.lane = out if slot % 2 == 1 else 0 - out;
+            v.component = comp;
+        }
     }
     # A step is startable when every arrow into it comes from finished work.
     for v in views {

@@ -33,13 +33,13 @@ import from "sonner" { toast }
 # looking, so the panel says plainly what the two drags do.
 glob HOW_TO: list[list[str]] = [
     ["New step",
-     "puts it straight on the canvas while the roadmap is still empty. Once arrows exist, a new step waits in the tray until you connect it."],
+     "drops straight onto the canvas and waits below the graph until you give it an arrow."],
     ["Drag from a step's border",
      "onto another step to draw the arrow; the cursor turns to a crosshair when you are on it. Illegal targets dim as soon as you start."],
     ["Drag from the middle",
      "to move a step instead. It snaps to the next row or lane and swaps with whatever is there. Reset layout hands the arrangement back to the arrows."],
     ["Release on empty canvas",
-     "to keep aiming, then click the target; that is how a tray step joins the graph. Click an arrow for its remove chip."]
+     "to keep aiming, then click the step you meant. Click an arrow for its remove chip."]
 ];
 
 # "Planned", not the design's "Backlog": MILESTONE_STATUSES is
