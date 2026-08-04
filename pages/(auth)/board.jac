@@ -7,10 +7,12 @@ the columns, cards, filters, and dialog are presentational components.
 import from ...models {
     Project, MemberView, TaskView, MilestoneView, RepoView
 }
+# The one client import of constants.jac. Beyond removing a duplicated copy of
+# the vocabulary, it is what makes the Jac compiler emit constants.js at all:
+# the client compiles lazily, so a module nothing imports produces no output
+# and the design-sync bundle barrel cannot resolve it.
+import from ...constants { STATUSES }
 
-glob STATUSES: list[str] = [
-    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
-];
 import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.roster { ListMembers, ListRepos }
 import from ...walkers.vocab { ListVocab }

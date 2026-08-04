@@ -6,10 +6,9 @@ project membership, and picking someone outside the selected project
 adds them to it on save. A Review status reveals the handoff fields.
 """
 
-glob STATUSES: list[str] = [
-    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
-];
-glob PRIORITIES: list[str] = ["High", "Medium", "Low"];
+# The board vocabulary comes from constants.jac rather than a local copy;
+# importing it is also what keeps that module in the compiled client.
+import from ...constants { STATUSES, PRIORITIES }
 import from ...models { Project, MemberView, MilestoneView, RepoView }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
