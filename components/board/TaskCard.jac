@@ -21,6 +21,7 @@ def prettyDay(iso: str) -> str {
     }
     return MONTH_SHORT[int(iso[5:7]) - 1] + " " + str(int(iso[8:10]));
 }
+import from ..common.Markdown { Markdown }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
@@ -95,7 +96,7 @@ def:pub TaskCard(
             }}
             {if task.status == "Blocked" and task.notes {
                 <div key="blocked" className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-                    {task.notes}
+                    <Markdown text={task.notes} />
                 </div>
             }}
             {if task.gh_issue_number > 0 or task.pr_state {

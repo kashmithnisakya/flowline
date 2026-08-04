@@ -43,7 +43,12 @@ def todayIso -> str {
     return shifted.toISOString()[:10];
 }
 
-def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
+def:pub DatePicker(
+    value: str,
+    onChange: Callable[[str], None],
+    clearable: bool = False,
+    className: str = ""
+) -> JsxElement {
     has pickerOpen: bool = False,
         viewYear: int = 0,
         viewMonth: int = -1;
@@ -67,7 +72,12 @@ def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
         }}
     >
         <DropdownMenuTrigger asChild={False}>
-            <span className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-accent">
+            <span
+                className={
+                    "inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-accent"
+                    + (" " + className if className else "")
+                }
+            >
                 {prettyLabel(value) if value else "Pick a date"}
             </span>
         </DropdownMenuTrigger>
@@ -135,6 +145,19 @@ def:pub DatePicker(value: str, onChange: Callable[[str], None]) -> JsxElement {
                     </button>
                 }}
             </div>
+            {if clearable and value {
+                <button
+                    key="clear"
+                    type="button"
+                    className="mt-2 w-full rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent"
+                    onClick={lambda {
+                        onChange("");
+                        pickerOpen = False;
+                    }}
+                >
+                    Clear
+                </button>
+            }}
         </DropdownMenuContent>
     </DropdownMenu>;
 }

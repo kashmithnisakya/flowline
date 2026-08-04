@@ -12,6 +12,7 @@ font = "figtree"
 radius = "default"
 menuAccent = "subtle"
 menuColor = "default"
+
 [dependencies]
 # Required by [scale.monitoring]. Without it the metrics factory falls back to
 # a no-op collector whose is_enabled() is False, so /metrics is never
@@ -27,6 +28,13 @@ pyjwt = "*"
 cryptography = "*"
 
 [dependencies.npm]
+# Task notes are written as markdown and rendered by
+# components/common/Markdown.jac. react-markdown never emits raw HTML, so
+# the notes stay safe to display; remark-gfm adds task lists, tables,
+# strikethrough and bare-URL autolinks. Note that `jac install` rewrites
+# this file and drops comments, so check them back in after running it.
+"react-markdown" = "*"
+"remark-gfm" = "*"
 sonner = "*"
 "@hugeicons/react" = "*"
 "@hugeicons/core-free-icons" = "*"

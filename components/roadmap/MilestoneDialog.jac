@@ -6,6 +6,7 @@ milestone with no dates is a named bucket, and the page lists it under
 Unscheduled instead of the timeline.
 """
 
+import from ..log.DatePicker { DatePicker }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.dialog {
@@ -81,19 +82,25 @@ def:pub MilestoneDialog(
                 <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                         <Label>Start date</Label>
-                        <Input
-                            type="date"
-                            value={form["start_date"]}
-                            onChange={lambda (e: ChangeEvent) { onField("start_date", e.target.value); }}
-                        />
+                        <div>
+                            <DatePicker
+                                value={form["start_date"]}
+                                clearable={True}
+                                className="w-full justify-between"
+                                onChange={lambda (d: str) { onField("start_date", d); }}
+                            />
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label>Target date</Label>
-                        <Input
-                            type="date"
-                            value={form["due_date"]}
-                            onChange={lambda (e: ChangeEvent) { onField("due_date", e.target.value); }}
-                        />
+                        <div>
+                            <DatePicker
+                                value={form["due_date"]}
+                                clearable={True}
+                                className="w-full justify-between"
+                                onChange={lambda (d: str) { onField("due_date", d); }}
+                            />
+                        </div>
                     </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
