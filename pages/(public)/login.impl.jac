@@ -12,21 +12,17 @@ impl LoginPage.submit(e: FormEvent) -> None {
         return;
     }
     signingUp = mode == "signup";
-    if signingUp and (not orgName.strip() or not fullName.strip()) {
-        return;
-    }
     error = "";
     busy = True;
     addr = email.strip();
     pw = password;
-    org = orgName.strip();
-    who = fullName.strip();
     try {
         if signingUp {
-            # The org name and PM name ride along as the account profile —
-            # jacSignup takes it directly, so there is no org-creation step.
+            # The profile starts empty on purpose: the setup wizard collects
+            # the organization and PM name, where there is room to say what
+            # they are for. jacSignup still needs the argument.
             res: dict = {};
-            res = await jacSignup(addr, pw, {"org_name": org, "full_name": who});
+            res = await jacSignup(addr, pw, {});
             if not res["success"] {
                 error = "Signup failed. Is that email already registered?";
                 busy = False;

@@ -180,3 +180,15 @@ impl RosterPage.removeVocab(termId: str) -> None {
         toast("Failed to remove the term");
     }
 }
+
+impl RosterPage.selectTab(value: str) -> None {
+    tab = value;
+    # Keep the tab in the URL so it is linkable and survives a reload, but
+    # replace rather than push: Back should leave the page, not undo a tab
+    # flip. Any OAuth callback params are dropped here too, which is what
+    # stops a refresh replaying a burned install nonce.
+    w: any = window;
+    blank: dict[str, any] = {};
+    here = str(w.location.pathname);
+    w.history.replaceState(blank, "", here + "?tab=" + value);
+}

@@ -6,7 +6,7 @@ inventing its own wording: only the server knows whether GitHub was
 unreachable, unconfigured, or simply said no.
 """
 
-impl GithubPage.boot -> None {
+impl GithubSection.boot -> None {
     # GitHub redirects the install round trip back to this page. Finish it
     # before anything reads status, then scrub the params: the nonce is burned
     # server-side on first use, so a replay could only produce an error.
@@ -46,7 +46,7 @@ impl GithubPage.boot -> None {
     loading = False;
 }
 
-impl GithubPage.loadStatus -> None {
+impl GithubSection.loadStatus -> None {
     try {
         result = root spawn GithubStatus();
         view = result.reports[0] if result.reports else None;
@@ -59,7 +59,7 @@ impl GithubPage.loadStatus -> None {
     }
 }
 
-impl GithubPage.loadWorkspace -> None {
+impl GithubSection.loadWorkspace -> None {
     try {
         rResult = root spawn ListRepos();
         pResult = root spawn ListProjects();
@@ -76,7 +76,7 @@ impl GithubPage.loadWorkspace -> None {
     }
 }
 
-impl GithubPage.startInstall -> None {
+impl GithubSection.startInstall -> None {
     if starting {
         return;
     }
@@ -102,7 +102,7 @@ impl GithubPage.startInstall -> None {
     starting = False;
 }
 
-impl GithubPage.disconnect -> None {
+impl GithubSection.disconnect -> None {
     # Two clicks, no dialog: the first arms the button and reveals what is and
     # is not lost, the second does it.
     if not confirmDisconnect {
@@ -124,12 +124,12 @@ impl GithubPage.disconnect -> None {
     }
 }
 
-impl GithubPage.openPicker -> None {
+impl GithubSection.openPicker -> None {
     pickerOpen = True;
     await searchRepos();
 }
 
-impl GithubPage.searchRepos -> None {
+impl GithubSection.searchRepos -> None {
     pickerLoading = True;
     blank: dict[str, any] = {};
     try {
@@ -147,7 +147,7 @@ impl GithubPage.searchRepos -> None {
     pickerLoading = False;
 }
 
-impl GithubPage.attachRepo(fullName: str) -> None {
+impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;
     }
@@ -164,7 +164,7 @@ impl GithubPage.attachRepo(fullName: str) -> None {
     attaching = "";
 }
 
-impl GithubPage.loadIssues(reset: bool) -> None {
+impl GithubSection.loadIssues(reset: bool) -> None {
     if not repoId {
         return;
     }
@@ -204,7 +204,7 @@ impl GithubPage.loadIssues(reset: bool) -> None {
     issueMore = False;
 }
 
-impl GithubPage.loadPulls(reset: bool) -> None {
+impl GithubSection.loadPulls(reset: bool) -> None {
     if not repoId {
         return;
     }
@@ -239,7 +239,7 @@ impl GithubPage.loadPulls(reset: bool) -> None {
     prMore = False;
 }
 
-impl GithubPage.toggleIssue(number: int) -> None {
+impl GithubSection.toggleIssue(number: int) -> None {
     if number in selected {
         selected = [n for n in selected if n != number];
     } else {
@@ -247,7 +247,7 @@ impl GithubPage.toggleIssue(number: int) -> None {
     }
 }
 
-impl GithubPage.selectRepo(value: str) -> None {
+impl GithubSection.selectRepo(value: str) -> None {
     repoId = value;
     issues = [];
     pulls = [];
@@ -256,7 +256,7 @@ impl GithubPage.selectRepo(value: str) -> None {
     prPage = 1;
 }
 
-impl GithubPage.importSelected -> None {
+impl GithubSection.importSelected -> None {
     if importing or not selected {
         return;
     }

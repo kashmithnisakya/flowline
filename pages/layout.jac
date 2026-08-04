@@ -64,14 +64,8 @@ def:pub Shell() -> JsxLayout {
                     <Link to="/log" className={navClass("/log")}>
                         Log
                     </Link>
-                    <Link to="/projects" className={navClass("/projects")}>
-                        Projects
-                    </Link>
                     <Link to="/roster" className={navClass("/roster")}>
                         Workspace
-                    </Link>
-                    <Link to="/github" className={navClass("/github")}>
-                        GitHub
                     </Link>
                     <div className="ml-auto flex items-center gap-3">
                         {if orgName {

@@ -1,9 +1,11 @@
 """standup - Login / Signup, the public front door.
 
-The account IS the organization: signing up creates the workspace, so the
-form takes the organization name and hands it to jacSignup as the account
-profile. jacSignup does NOT create a session — always signup, check success,
-then login.
+Signing up asks for credentials and nothing else. The account IS the
+organization, but naming it (and yourself) belongs to the setup wizard,
+where there is room to explain what the names are for: a signup form is a
+door, not a questionnaire, and every field on it is a reason to leave.
+jacSignup does NOT create a session — always signup, check success, then
+login; the wizard fills the profile in afterwards.
 
 Layout follows the design: a brand panel beside a tabbed auth card, with
 Google/GitHub sign-in wired to jac-scale's /sso endpoints. There is still no
@@ -20,8 +22,6 @@ import from ...lib.utils { cn }
 
 def:pub LoginPage() -> JsxPage {
     has mode: str = "login",
-        fullName: str = "",
-        orgName: str = "",
         email: str = "",
         password: str = "",
         showPassword: bool = False,
@@ -50,18 +50,14 @@ def:pub LoginPage() -> JsxPage {
     def switchMode(next: str) -> None;
 
     signup = mode == "signup";
-    ready = (
-        not busy and bool(email.strip()) and bool(password)
-        and (not signup or (bool(orgName.strip()) and bool(fullName.strip())))
-    );
+    ready = not busy and bool(email.strip()) and bool(password);
     tabBase = "flex-1 rounded-[9px] py-2 text-[13.5px] font-semibold transition-colors";
     tabOn = "bg-card text-foreground shadow-sm";
     tabOff = "text-muted-foreground hover:text-foreground";
 
-    # items-start on purpose: signup adds a name/organization row, and
-    # centering would let that extra height push the card upward, so the
-    # tabs and heading jumped every time you switched modes. Anchored at
-    # the top, the form only ever grows downward.
+    # items-start on purpose: the two modes differ slightly in height, and
+    # centering would let that push the card upward so the tabs and heading
+    # jumped on every switch. Anchored at the top, the form only grows down.
     return <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20">
         <AuthAside />
         <div className="mx-auto w-full max-w-md">
@@ -86,7 +82,7 @@ def:pub LoginPage() -> JsxPage {
                 {"Start your first standup." if signup else "Welcome back."}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {"Create your organization's workspace. You'll be its project manager."
+                {"Email and a password is all it takes. You'll name your organization next."
                     if signup else "Your team's log is waiting in the archive."}
             </p>
 
@@ -112,26 +108,6 @@ def:pub LoginPage() -> JsxPage {
             </div>
 
             <form onSubmit={submit} className="flex flex-col gap-[13px]">
-                {if signup {
-                    <div key="who" className="grid grid-cols-2 gap-[9px]">
-                        <div className="grid gap-1.5">
-                            <Label className="text-[12.5px]">Your name</Label>
-                            <Input
-                                value={fullName}
-                                onChange={lambda (ev: ChangeEvent) { fullName = ev.target.value; }}
-                                placeholder="Priya Raman"
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label className="text-[12.5px]">Organization</Label>
-                            <Input
-                                value={orgName}
-                                onChange={lambda (ev: ChangeEvent) { orgName = ev.target.value; }}
-                                placeholder="Acme Robotics"
-                            />
-                        </div>
-                    </div>
-                }}
                 <div className="grid gap-1.5">
                     <Label className="text-[12.5px]">Work email</Label>
                     <Input
