@@ -27,6 +27,7 @@ import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
+import from ...lib.session { fetchOrgName }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
@@ -55,6 +56,12 @@ def:pub WorkspacePage() -> JsxPage {
         mProjects: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
+        orgName: str = "",
+        # The header owns each tab's primary action, but Projects and GitHub
+        # keep their own state. Bumping a counter is how the header reaches
+        # in without the page having to own their dialogs too.
+        projectsNonce: int = 0,
+        githubNonce: int = 0,
         saving: bool = False;
 
     async can with entry {
@@ -74,9 +81,11 @@ def:pub WorkspacePage() -> JsxPage {
             tab = "github";
         }
         loadAll();
+        loadOrgName();
     }
 
     async def loadAll -> None;
+    async def loadOrgName -> None;
     async def saveMember -> None;
     async def archiveMember(memberId: str) -> None;
     async def assignTo(memberId: str, projectId: str) -> None;
@@ -98,37 +107,63 @@ def:pub WorkspacePage() -> JsxPage {
     customTags = [t for t in vocab if t.kind == "tag"];
     allTags = [t.value for t in customTags];
 
-    return <div className="space-y-6">
-        <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight">Workspace</h1>
-            <p className="text-sm text-muted-foreground">
-                Everything you configure: your organization, projects, people, the
-                vocabulary your board and logs use, and GitHub.
-            </p>
+    # The header carries one primary action at a time, swapping with the tab.
+    # The nav is a vertical rail: Tabs lays out as a row when orientation is
+    # vertical, and the line variant moves the active indicator to the rail
+    # edge rather than underlining a horizontal strip.
+    return <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <div className="flex items-start justify-between gap-6">
+            <div className="flex flex-col gap-2">
+                <h1 className="font-display text-3xl font-semibold tracking-tight">
+                    Workspace
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                    {
+                        (orgName + " — organization, projects, people, vocabulary and "
+                            + "GitHub, configured in one place.")
+                        if orgName
+                        else "Organization, projects, people, vocabulary and GitHub, configured in one place."
+                    }
+                </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+                {if tab == "projects" {
+                    <Button key="np" onClick={lambda { projectsNonce = projectsNonce + 1; }}>
+                        New project
+                    </Button>
+                } elif tab == "people" {
+                    <Button key="am" onClick={openCreate}>Add member</Button>
+                } elif tab == "github" {
+                    <Button key="br" onClick={lambda { githubNonce = githubNonce + 1; }}>
+                        Browse GitHub repos
+                    </Button>
+                }}
+            </div>
         </div>
 
-        <Tabs value={tab} onValueChange={selectTab}>
-            <TabsList>
-                {for entry in TABS {
-                    <TabsTrigger key={entry[0]} value={entry[0]}>{entry[1]}</TabsTrigger>
-                }}
-            </TabsList>
+        <Tabs value={tab} onValueChange={selectTab} orientation="vertical">
+            <div className="w-44 shrink-0">
+                <TabsList variant="line">
+                    {for entry in TABS {
+                        <TabsTrigger key={entry[0]} value={entry[0]}>{entry[1]}</TabsTrigger>
+                    }}
+                </TabsList>
+            </div>
 
-            <TabsContent value="organization" className="pt-4">
-                <OrganizationSection />
-            </TabsContent>
-
-            <TabsContent value="projects" className="pt-4">
-                <ProjectsSection />
-            </TabsContent>
-
-            <TabsContent value="people" className="space-y-4 pt-4">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                        {str(len(active)) + " on the roster. They are records, not accounts."}
-                    </p>
-                    <Button onClick={openCreate}>Add member</Button>
+            <TabsContent value="organization">
+                <div className="max-w-2xl">
+                    <OrganizationSection />
                 </div>
+            </TabsContent>
+
+            <TabsContent value="projects">
+                <ProjectsSection openNonce={projectsNonce} />
+            </TabsContent>
+
+            <TabsContent value="people" className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                    {str(len(active)) + " on the roster. They are records, not accounts."}
+                </p>
                 {if loading {
                     <Skeleton key="sk" className="h-48 w-full" />
                 } else {
@@ -143,8 +178,12 @@ def:pub WorkspacePage() -> JsxPage {
                 }}
             </TabsContent>
 
-            <TabsContent value="vocabulary" className="pt-4">
-                <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <TabsContent value="vocabulary" className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                    Categories and tags are defined per organization. The board, the
+                    log and the roster all pick from these two lists.
+                </p>
+                <div className="grid items-start gap-6 md:grid-cols-2">
                     <VocabPanel
                         customCategories={customCategories}
                         customTags={customTags}
@@ -158,8 +197,8 @@ def:pub WorkspacePage() -> JsxPage {
                 </div>
             </TabsContent>
 
-            <TabsContent value="github" className="pt-4">
-                <GithubSection />
+            <TabsContent value="github">
+                <GithubSection openNonce={githubNonce} />
             </TabsContent>
         </Tabs>
 

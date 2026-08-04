@@ -192,3 +192,16 @@ impl WorkspacePage.selectTab(value: str) -> None {
     here = str(w.location.pathname);
     w.history.replaceState(blank, "", here + "?tab=" + value);
 }
+
+impl WorkspacePage.loadOrgName -> None {
+    # Only for the header line. The Organization tab loads and owns the
+    # editable copy; this one is read-only and refreshes on reload.
+    try {
+        name = await fetchOrgName();
+        if name {
+            orgName = name;
+        }
+    } except Exception as e {
+        orgName = "";
+    }
+}

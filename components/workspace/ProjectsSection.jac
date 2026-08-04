@@ -25,8 +25,9 @@ import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
+import from "react" { useEffect }
 
-def:pub ProjectsSection() -> JsxElement {
+def:pub ProjectsSection(openNonce: int = 0) -> JsxElement {
     has projects: list[Project] = [],
         repos: list[RepoView] = [],
         loading: bool = True,
@@ -35,11 +36,14 @@ def:pub ProjectsSection() -> JsxElement {
         fName: str = "",
         fDescription: str = "",
         fRepoDraft: str = "",
-        saving: bool = False;
+        saving: bool = False,
+        handled: Ref[any] = Ref();
 
     async can with entry {
         loadProjects();
     }
+
+
 
     async def loadProjects -> None;
     async def removeRepo(repoId: str) -> None;
@@ -48,15 +52,27 @@ def:pub ProjectsSection() -> JsxElement {
     def openCreate -> None;
     def openEdit(p: Project) -> None;
 
+    # The page header owns this tab's primary action and signals it by bumping
+    # a counter. Switching tabs UNMOUNTS this panel, so the effect re-runs on
+    # remount; `handled` stores (nonce + 1) so a fresh ref reads as 0 and a
+    # remount records the current value instead of firing the action again.
+    if not handled.current {
+        handled.current = openNonce + 1;
+    }
+
+    useEffect(lambda {
+        if openNonce + 1 != handled.current {
+            handled.current = openNonce + 1;
+            openCreate();
+        }
+    }, [openNonce]);
+
     active = [p for p in projects if p.active];
 
     return <div className="space-y-8">
-        <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-                {str(len(active)) + " active. Tasks, logs and repos are scoped to these."}
-            </p>
-            <Button onClick={openCreate}>New project</Button>
-        </div>
+        <p className="text-sm text-muted-foreground">
+            {str(len(active)) + " active. Tasks, logs and repos are scoped to these."}
+        </p>
 
         {if loading {
             <Skeleton key="sk" className="h-48 w-full" />

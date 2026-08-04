@@ -27,6 +27,7 @@ import from ...components.ui.select {
 }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
+import from "react" { useEffect }
 
 # "2026-08-03T14:20:05" -> "2026-08-03 14:20". Empty in, empty out.
 def shortStamp(iso: str) -> str {
@@ -36,7 +37,7 @@ def shortStamp(iso: str) -> str {
     return iso[:16].replace("T", " ");
 }
 
-def:pub GithubSection() -> JsxElement {
+def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     has conn: GithubConnectionView | None = None,
         configGaps: list[str] = [],
         loading: bool = True,
@@ -67,11 +68,14 @@ def:pub GithubSection() -> JsxElement {
         prPage: int = 1,
         prHasMore: bool = False,
         prLoading: bool = False,
-        prMore: bool = False;
+        prMore: bool = False,
+        handled: Ref[any] = Ref();
 
     async can with entry {
         boot();
     }
+
+
 
     # The repo, the tab and the state filters all address the same two reads,
     # so one dependent effect covers every way of changing what is shown.
@@ -98,6 +102,21 @@ def:pub GithubSection() -> JsxElement {
     async def importSelected -> None;
     def toggleIssue(number: int) -> None;
     def selectRepo(value: str) -> None;
+
+    # The page header owns this tab's primary action and signals it by bumping
+    # a counter. Switching tabs UNMOUNTS this panel, so the effect re-runs on
+    # remount; `handled` stores (nonce + 1) so a fresh ref reads as 0 and a
+    # remount records the current value instead of firing the action again.
+    if not handled.current {
+        handled.current = openNonce + 1;
+    }
+
+    useEffect(lambda {
+        if openNonce + 1 != handled.current {
+            handled.current = openNonce + 1;
+            openPicker();
+        }
+    }, [openNonce]);
 
     # Initialised before the branch: a name first assigned inside an `if` is
     # block-scoped in the compiled JS and is gone after it.
@@ -184,9 +203,6 @@ def:pub GithubSection() -> JsxElement {
                                     }}
                                 </SelectContent>
                             </Select>
-                            <Button variant="outline" onClick={openPicker}>
-                                Browse GitHub repos
-                            </Button>
                             <div className="ml-auto inline-flex gap-1 rounded-lg border p-1">
                                 <Button
                                     variant={"secondary" if tab == "issues" else "ghost"}

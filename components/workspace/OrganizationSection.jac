@@ -31,11 +31,11 @@ def:pub OrganizationSection() -> JsxElement {
         <CardHeader>
             <CardTitle>Organization</CardTitle>
             <CardDescription>
-                The organization name heads every page. Your name is who the daily
-                log is written by.
+                The only place these two are editable. The organization name heads
+                every page in standup.
             </CardDescription>
         </CardHeader>
-        <CardContent className="grid max-w-md gap-4">
+        <CardContent className="flex flex-col gap-4">
             {if loading {
                 <Skeleton key="sk" className="h-24 w-full" />
             } else {
@@ -55,6 +55,9 @@ def:pub OrganizationSection() -> JsxElement {
                             onChange={lambda (e: ChangeEvent) { fullName = e.target.value; }}
                             placeholder="Priya Raman"
                         />
+                        <p className="text-xs text-muted-foreground">
+                            Signs the entries you write in the daily log.
+                        </p>
                     </div>
                     <div>
                         <Button
