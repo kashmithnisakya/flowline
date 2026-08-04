@@ -4,12 +4,17 @@ The form is a plain dict owned by the page; assignees ride separately as
 a list (tasks take several people in v2.5). Assignee chips group by
 project membership, and picking someone outside the selected project
 adds them to it on save. A Review status reveals the handoff fields.
+
+The body is one two-column grid. Title, Assignees, the GitHub issue link
+and Notes span both columns; the five classification selects and the due
+date pair off two per row. It collapses to a single column below sm.
 """
 
 # The board vocabulary comes from constants.jac rather than a local copy;
 # importing it is also what keeps that module in the compiled client.
 import from ...constants { STATUSES, PRIORITIES }
 import from ...models { Project, MemberView, MilestoneView, RepoView }
+import from ..common.Markdown { Markdown }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -26,6 +31,13 @@ import from ..ui.dropdown_menu {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem
 }
+
+# Every control fills its cell, so the labels above them line up as a
+# grid instead of a ragged row of chips.
+glob FIELD: str = "w-full";
+
+# A field that takes the whole row rather than half of it.
+glob WIDE: str = "grid gap-2 sm:col-span-2";
 
 def:pub TaskDialog(
     open: bool,
@@ -49,7 +61,12 @@ def:pub TaskDialog(
 ) -> JsxElement {
     # Which repo the new issue goes in, when the project tracks more than
     # one. Purely local: the page never needs to know about the picker.
-    has repoChoice: str = "";
+    # Notes open rendered, not raw: the markdown is the point of writing
+    # them. The Edit button flips to the textarea and back.
+    has repoChoice: str = "",
+        notesEditing: bool = False;
+
+    hasNotes = bool(form["notes"] and form["notes"].strip());
 
     selectedProject = form["project"];
     inProject = [
@@ -89,26 +106,84 @@ def:pub TaskDialog(
     );
 
     return <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[calc(100dvh-6rem)] p-6 sm:max-w-3xl">
             <DialogHeader>
                 <DialogTitle>{"Edit task" if editing else "New task"}</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
-                <div className="grid gap-2">
-                    <Label>Title</Label>
-                    <Input
-                        value={form["title"]}
-                        onChange={lambda (e: ChangeEvent) { onField("title", e.target.value); }}
-                    />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
+                <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                    <div className={WIDE}>
+                        <Label>Title</Label>
+                        <Input
+                            className="h-10 md:text-base"
+                            value={form["title"]}
+                            onChange={lambda (e: ChangeEvent) { onField("title", e.target.value); }}
+                        />
+                    </div>
+                    <div className={WIDE}>
+                        <Label>Assignees</Label>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild={False}>
+                                <span className="flex h-8 w-full cursor-pointer items-center justify-between rounded-lg border bg-card px-2.5 text-sm hover:bg-accent">
+                                    <span className={"truncate" + ("" if len(assignees) > 0 else " text-muted-foreground")}>
+                                        {
+                                            ", ".join([m.name for m in members if m.id in assignees])
+                                            if len(assignees) > 0
+                                            else "Pick assignees"
+                                        }
+                                    </span>
+                                    <span className="ml-2 shrink-0 text-muted-foreground">⌄</span>
+                                </span>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-64">
+                                {if len(inProject) > 0 {
+                                    <DropdownMenuLabel key="inl">On this project</DropdownMenuLabel>
+                                }}
+                                {for m in inProject {
+                                    <DropdownMenuCheckboxItem
+                                        key={m.id}
+                                        checked={m.id in assignees}
+                                        onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                        onSelect={lambda (e: any) { e.preventDefault(); }}
+                                    >
+                                        {m.name}
+                                    </DropdownMenuCheckboxItem>
+                                }}
+                                {if len(inProject) > 0 and len(outsiders) > 0 {
+                                    <DropdownMenuSeparator key="sep" />
+                                }}
+                                {if len(outsiders) > 0 {
+                                    <DropdownMenuLabel key="ol">
+                                        {"Other people" if selectedProject != "none" else "People"}
+                                    </DropdownMenuLabel>
+                                }}
+                                {for m in outsiders {
+                                    <DropdownMenuCheckboxItem
+                                        key={m.id}
+                                        checked={m.id in assignees}
+                                        onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
+                                        onSelect={lambda (e: any) { e.preventDefault(); }}
+                                    >
+                                        {m.name}
+                                    </DropdownMenuCheckboxItem>
+                                }}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        {if outsideSelected {
+                            <p key="hint" className="text-xs text-muted-foreground">
+                                Some picks are not on this project yet. Saving adds them to it.
+                            </p>
+                        }}
+                    </div>
+                    <div className="grid content-start gap-2">
                         <Label>Project</Label>
                         <Select
                             value={form["project"]}
                             onValueChange={lambda (v: str) { onField("project", v); }}
                         >
-                            <SelectTrigger><SelectValue placeholder="Project" /></SelectTrigger>
+                            <SelectTrigger className={FIELD}>
+                                <SelectValue placeholder="No project" />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">No project</SelectItem>
                                 {for p in projects {
@@ -117,13 +192,15 @@ def:pub TaskDialog(
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label>Milestone</Label>
                         <Select
                             value={form["milestone"]}
                             onValueChange={lambda (v: str) { onField("milestone", v); }}
                         >
-                            <SelectTrigger><SelectValue placeholder="Milestone" /></SelectTrigger>
+                            <SelectTrigger className={FIELD}>
+                                <SelectValue placeholder="No milestone" />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">No milestone</SelectItem>
                                 {for m in projectMilestones {
@@ -132,41 +209,15 @@ def:pub TaskDialog(
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2">
-                        <Label>Category</Label>
-                        <Select
-                            value={form["category"]}
-                            onValueChange={lambda (v: str) { onField("category", v); }}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
-                            <SelectContent>
-                                {for c in categories {
-                                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                                }}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label>Priority</Label>
-                        <Select
-                            value={form["priority"]}
-                            onValueChange={lambda (v: str) { onField("priority", v); }}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
-                            <SelectContent>
-                                {for p in PRIORITIES {
-                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                }}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label>Status</Label>
                         <Select
                             value={form["status"]}
                             onValueChange={lambda (v: str) { onField("status", v); }}
                         >
-                            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                            <SelectTrigger className={FIELD}>
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
                             <SelectContent>
                                 {for s in STATUSES {
                                     <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -174,76 +225,51 @@ def:pub TaskDialog(
                             </SelectContent>
                         </Select>
                     </div>
-                </div>
-                <div className="grid gap-2">
-                    <Label>Assignees</Label>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild={False}>
-                            <span className="flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border bg-card px-3 text-sm hover:bg-accent">
-                                <span className={"truncate" + ("" if len(assignees) > 0 else " text-muted-foreground")}>
-                                    {
-                                        ", ".join([m.name for m in members if m.id in assignees])
-                                        if len(assignees) > 0
-                                        else "Pick assignees"
-                                    }
-                                </span>
-                                <span className="ml-2 shrink-0 text-muted-foreground">⌄</span>
-                            </span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-64">
-                            {if len(inProject) > 0 {
-                                <DropdownMenuLabel key="inl">On this project</DropdownMenuLabel>
-                            }}
-                            {for m in inProject {
-                                <DropdownMenuCheckboxItem
-                                    key={m.id}
-                                    checked={m.id in assignees}
-                                    onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
-                                    onSelect={lambda (e: any) { e.preventDefault(); }}
-                                >
-                                    {m.name}
-                                </DropdownMenuCheckboxItem>
-                            }}
-                            {if len(inProject) > 0 and len(outsiders) > 0 {
-                                <DropdownMenuSeparator key="sep" />
-                            }}
-                            {if len(outsiders) > 0 {
-                                <DropdownMenuLabel key="ol">
-                                    {"Other people" if selectedProject != "none" else "People"}
-                                </DropdownMenuLabel>
-                            }}
-                            {for m in outsiders {
-                                <DropdownMenuCheckboxItem
-                                    key={m.id}
-                                    checked={m.id in assignees}
-                                    onCheckedChange={lambda { if onToggleAssignee { onToggleAssignee(m.id); } }}
-                                    onSelect={lambda (e: any) { e.preventDefault(); }}
-                                >
-                                    {m.name}
-                                </DropdownMenuCheckboxItem>
-                            }}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    {if outsideSelected {
-                        <p key="hint" className="text-xs text-muted-foreground">
-                            Some picks are not on this project yet. Saving adds them to it.
-                        </p>
-                    }}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
-                        <Label>Due date</Label>
-                        <div>
-                            <DatePicker
-                                value={form["due_date"]}
-                                onChange={lambda (d: str) { onField("due_date", d); }}
-                            />
-                        </div>
+                    <div className="grid content-start gap-2">
+                        <Label>Priority</Label>
+                        <Select
+                            value={form["priority"]}
+                            onValueChange={lambda (v: str) { onField("priority", v); }}
+                        >
+                            <SelectTrigger className={FIELD}>
+                                <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {for p in PRIORITIES {
+                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                }}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
+                        <Label>Category</Label>
+                        <Select
+                            value={form["category"]}
+                            onValueChange={lambda (v: str) { onField("category", v); }}
+                        >
+                            <SelectTrigger className={FIELD}>
+                                <SelectValue placeholder="No category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {for c in categories {
+                                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                                }}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid content-start gap-2">
+                        <Label>Due date</Label>
+                        <DatePicker
+                            value={form["due_date"]}
+                            clearable={True}
+                            className="w-full justify-between"
+                            onChange={lambda (d: str) { onField("due_date", d); }}
+                        />
+                    </div>
+                    <div className={WIDE}>
                         <Label>GitHub issue (optional)</Label>
                         <Input
-                            placeholder="https://github.com/..."
+                            placeholder="https://github.com/owner/repo/issues/12"
                             value={form["issue"]}
                             onChange={lambda (e: ChangeEvent) { onField("issue", e.target.value); }}
                         />
@@ -260,7 +286,9 @@ def:pub TaskDialog(
                                 value={repoChoice}
                                 onValueChange={lambda (v: str) { repoChoice = v; }}
                             >
-                                <SelectTrigger><SelectValue placeholder="Pick a repo" /></SelectTrigger>
+                                <SelectTrigger className={FIELD}>
+                                    <SelectValue placeholder="Pick a repo" />
+                                </SelectTrigger>
                                 <SelectContent>
                                     {for r in projectRepos {
                                         <SelectItem key={r.id} value={r.id}>{r.full_name}</SelectItem>
@@ -292,14 +320,16 @@ def:pub TaskDialog(
                         <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Review handoff (optional)
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="grid gap-2">
+                        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                            <div className="grid content-start gap-2">
                                 <Label>Reviewer</Label>
                                 <Select
                                     value={form["reviewer"]}
                                     onValueChange={lambda (v: str) { onField("reviewer", v); }}
                                 >
-                                    <SelectTrigger><SelectValue placeholder="Reviewer" /></SelectTrigger>
+                                    <SelectTrigger className={FIELD}>
+                                        <SelectValue placeholder="No reviewer" />
+                                    </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">No reviewer</SelectItem>
                                         {for m in members {
@@ -308,35 +338,65 @@ def:pub TaskDialog(
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="grid gap-2">
+                            <div className="grid content-start gap-2">
                                 <Label>Review by</Label>
-                                <div>
-                                    <DatePicker
-                                        value={form["review_due"]}
-                                        onChange={lambda (d: str) { onField("review_due", d); }}
-                                    />
-                                </div>
+                                <DatePicker
+                                    value={form["review_due"]}
+                                    clearable={True}
+                                    className="w-full justify-between"
+                                    onChange={lambda (d: str) { onField("review_due", d); }}
+                                />
                             </div>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label>PR link</Label>
-                            <Input
-                                placeholder="https://github.com/..."
-                                value={form["pr"]}
-                                onChange={lambda (e: ChangeEvent) { onField("pr", e.target.value); }}
-                            />
+                            <div className={WIDE}>
+                                <Label>PR link</Label>
+                                <Input
+                                    placeholder="https://github.com/..."
+                                    value={form["pr"]}
+                                    onChange={lambda (e: ChangeEvent) { onField("pr", e.target.value); }}
+                                />
+                            </div>
                         </div>
                     </div>
                 }}
                 <div className="grid gap-2">
-                    <Label>Notes / blockers</Label>
-                    <Textarea
-                        value={form["notes"]}
-                        onChange={lambda (e: ChangeEvent) { onField("notes", e.target.value); }}
-                    />
+                    <div className="flex items-center justify-between">
+                        <Label>Notes / blockers</Label>
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={lambda { notesEditing = not notesEditing; }}
+                        >
+                            {"Preview" if notesEditing else "Edit"}
+                        </Button>
+                    </div>
+                    {if notesEditing {
+                        <Textarea
+                            key="write"
+                            className="min-h-40"
+                            placeholder="Markdown works here: **bold**, - lists, `code`, links."
+                            value={form["notes"]}
+                            onChange={lambda (e: ChangeEvent) { onField("notes", e.target.value); }}
+                        />
+                    } elif hasNotes {
+                        <div
+                            key="preview"
+                            className="min-h-40 rounded-lg border bg-muted/30 p-3 text-sm"
+                        >
+                            <Markdown text={form["notes"]} />
+                        </div>
+                    } else {
+                        <button
+                            key="empty"
+                            type="button"
+                            onClick={lambda { notesEditing = True; }}
+                            className="flex min-h-40 items-start rounded-lg border border-dashed bg-muted/30 p-3 text-left text-sm text-muted-foreground hover:bg-muted/50"
+                        >
+                            Nothing yet. Click to write; markdown is rendered here.
+                        </button>
+                    }}
                 </div>
             </div>
-            <DialogFooter className="gap-2 sm:justify-between">
+            <DialogFooter className="-mx-6 -mb-6 gap-2 px-6 sm:justify-between">
                 {if editing {
                     <Button key="del" variant="destructive" onClick={onDelete} disabled={saving}>
                         Delete
