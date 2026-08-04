@@ -223,8 +223,13 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
                         {if not repoId {
                             <Card key="norepo">
-                                <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                                    Attach a repo to read its issues and pull requests.
+                                <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                                    <p className="text-sm text-muted-foreground">
+                                        Attach a repo to read its issues and pull requests.
+                                    </p>
+                                    <Button size="sm" onClick={openPicker}>
+                                        Attach a repo
+                                    </Button>
                                 </CardContent>
                             </Card>
                         } else {

@@ -50,6 +50,11 @@ impl RoadmapPage.loadAll(pid: str) -> None {
 impl RoadmapPage.selectProject(v: str) -> None {
     projectId = v;
     loading = True;
+    selectedId = "";
+    selectedEdge = "";
+    connectFrom = "";
+    manual = {};
+    hasManual = False;
     await loadAll(v);
 }
 
@@ -77,7 +82,7 @@ impl RoadmapPage.openEdit(m: MilestoneView) -> None {
         "start_date": m.start_date,
         "due_date": m.due_date,
         "status": m.status if m.status else "Planned",
-        "color": m.color if m.color else "violet"
+        "color": m.color if m.color else "sky"
     };
     confirmDelete = False;
     dialogOpen = True;
@@ -94,6 +99,19 @@ impl RoadmapPage.saveMilestone -> None {
     }
     saving = True;
     pid = projectId;
+    # Read before the call: a `has` read after a walker call is the
+    # render-time snapshot, so where the new step lands has to be worked out
+    # from what we already know. It mirrors the server rule in layout_steps:
+    # with no arrows anywhere the whole project sits on the canvas, so a new
+    # step joins it there; once even one arrow exists the new step has none of
+    # its own and waits in the tray.
+    creating = not editingId;
+    anyArrows = False;
+    for m in milestones {
+        if m.prev_ids or m.next_ids {
+            anyArrows = True;
+        }
+    }
     try {
         root spawn SaveMilestone(
             milestone_id=editingId, project_id=pid, title=title,
@@ -103,6 +121,13 @@ impl RoadmapPage.saveMilestone -> None {
         dialogOpen = False;
         confirmDelete = False;
         await loadAll(pid);
+        if creating {
+            if anyArrows {
+                toast(title + " is in the tray; connect it to put it on the graph");
+            } else {
+                toast(title + " is on the canvas; drag from its border to connect it");
+            }
+        }
     } except Exception as e {
         toast("Failed to save the milestone");
     }
@@ -121,38 +146,30 @@ impl RoadmapPage.deleteMilestone -> None {
     }
     saving = True;
     pid = projectId;
+    gone = editingId;
     try {
-        root spawn DeleteMilestone(milestone_id=editingId);
+        root spawn DeleteMilestone(milestone_id=gone);
         dialogOpen = False;
         confirmDelete = False;
+        if gone in manual {
+            left = {k: v for (k, v) in manual.items() if k != gone};
+            manual = left;
+            hasManual = False;
+            for k in left {
+                hasManual = True;
+            }
+        }
+        if selectedId == gone {
+            selectedId = "";
+        }
+        if connectFrom == gone {
+            connectFrom = "";
+        }
         await loadAll(pid);
     } except Exception as e {
         toast("Failed to delete the milestone");
     }
     saving = False;
-}
-
-impl RoadmapPage.moveMilestone(milestoneId: str, delta: int) -> None {
-    at = indexOf(milestones, milestoneId);
-    target = at + delta;
-    if at < 0 or target < 0 or target >= len(milestones) {
-        return;
-    }
-    # ReorderMilestone names the sibling to land AFTER, so moving up means
-    # naming the one two slots back, or the empty id for the front.
-    afterId = "";
-    if delta < 0 {
-        afterId = milestones[at - 2].id if at >= 2 else "";
-    } else {
-        afterId = milestones[at + 1].id;
-    }
-    pid = projectId;
-    try {
-        root spawn ReorderMilestone(milestone_id=milestoneId, after_id=afterId);
-        await loadAll(pid);
-    } except Exception as e {
-        toast("Failed to reorder the milestones");
-    }
 }
 
 impl RoadmapPage.openAttach(milestoneId: str) -> None {

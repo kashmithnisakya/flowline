@@ -266,6 +266,19 @@ def layout_steps(views: list[MilestoneView]) -> None {
             v.component = -1;
         }
     }
+    if not grid {
+        seeded = [v for v in views];
+        seeded.sort(key=lambda (m: MilestoneView) { m.sort_order; });
+        for (i, v) in enumerate(seeded) {
+            v.depth = 0;
+            v.component = 0;
+            # 0, 1, -1, 2, -2, ... so the first step keeps the spine and the
+            # rest alternate outward, the same shape a real row gets.
+            out = (i + 1) // 2;
+            v.lane = out if i % 2 == 1 else 0 - out;
+        }
+        return;
+    }
     # Weakly connected groups: follow arrows in both directions, because two
     # steps feeding the same third one belong on the same picture.
     seen: dict[str, bool] = {};
