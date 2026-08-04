@@ -27,6 +27,19 @@ import from ...components.ui.select {
 }
 import from "sonner" { toast }
 
+# The canvas is direct-manipulation and nothing about it is discoverable from
+# looking, so the panel says plainly what the two drags do.
+glob HOW_TO: list[list[str]] = [
+    ["New step",
+     "adds it to the tray under the canvas. Nothing is on the graph until it has an arrow."],
+    ["Drag from a step's border",
+     "onto another step to draw the arrow; the cursor turns to a crosshair when you are on it. Illegal targets dim as soon as you start."],
+    ["Drag from the middle",
+     "to move a step instead. It snaps to the next row or lane and swaps with whatever is there. Reset layout hands the arrangement back to the arrows."],
+    ["Release on empty canvas",
+     "to keep aiming, then click the target; that is how a tray step joins the graph. Click an arrow for its remove chip."]
+];
+
 glob BLANK_MILESTONE: dict[str, str] = {
     "title": "", "description": "", "start_date": "", "due_date": "",
     "status": "Planned", "color": "violet"
@@ -66,7 +79,20 @@ def:pub RoadmapPage() -> JsxPage {
         view: str = "flow",
         selectedId: str = "",
         connectFrom: str = "",
-        selectedEdge: str = "";
+        selectedEdge: str = "",
+        # A dragged step overrides its computed cell for this session only.
+        # Nothing is persisted: reload, or Reset layout, and the arrows decide
+        # again. That is deliberate, a stored position outlives the graph it
+        # described and then contradicts it.
+        manual: dict[str, list[int]] = {},
+        # len() on a dict compiles to `.length`, which is undefined on a plain
+        # JS object, so `len(manual) > 0` is silently always false. Track it.
+        hasManual: bool = False,
+        dragRef: Ref[any] = Ref(),
+        wireRef: Ref[any] = Ref(),
+        swallowRef: Ref[any] = Ref(),
+        stepsRef: Ref[any] = Ref(),
+        manualRef: Ref[any] = Ref();
 
     async can with entry {
         boot();
@@ -90,6 +116,11 @@ def:pub RoadmapPage() -> JsxPage {
     def clearCanvas -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
+    def hitNode(e: MouseEvent) -> dict[str, any];
+    def beginDrag(e: MouseEvent) -> None;
+    def moveDrag(e: MouseEvent) -> None;
+    async def endDrag(e: MouseEvent) -> None;
+    def resetLayout -> None;
 
     activeProjects = [p for p in projects if p.active];
     scheduled = [m for m in milestones if m.start_date or m.due_date];
@@ -153,15 +184,27 @@ def:pub RoadmapPage() -> JsxPage {
         }
     }
 
-    return <div className="space-y-8">
+    # Flow applies the drag overrides itself; client code cannot construct a
+    # MilestoneView, so the page passes the map rather than a rebuilt list.
+    stepsRef.current = milestones;
+    manualRef.current = manual;
+    connectTitle = sourced[0].title if sourced else "";
+
+    return <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight">Roadmap</h1>
+                <h1 className="font-display text-3xl font-semibold tracking-tight">Roadmap</h1>
                 <p className="text-sm text-muted-foreground">
-                    The phases of one project, and how far each has got.
+                    Every step of this project, what each one waits on, and what it
+                    unblocks.
                 </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
+                {if hasManual {
+                    <Button key="reset" variant="ghost" onClick={resetLayout}>
+                        Reset layout
+                    </Button>
+                }}
                 <div className="flex items-center rounded-lg border p-0.5">
                     <Button
                         variant={"secondary" if view == "flow" else "ghost"}
@@ -188,7 +231,7 @@ def:pub RoadmapPage() -> JsxPage {
                         }}
                     </SelectContent>
                 </Select>
-                <Button onClick={openCreate} disabled={not projectId}>New milestone</Button>
+                <Button onClick={openCreate} disabled={not projectId}>New step</Button>
             </div>
         </div>
 
@@ -216,40 +259,65 @@ def:pub RoadmapPage() -> JsxPage {
         } else {
             <div key="body" className="space-y-8">
                 {if view == "flow" {
-                    <div key="flow" className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div key="flow" className="flex flex-col gap-4">
+                        <div className="hidden">
                             <span>
                                 {
                                     str(len(milestones)) + " steps · " + str(doneCount)
                                     + " done · " + str(readyCount) + " ready"
                                 }
                             </span>
-                            {if connectFrom {
-                                <span
-                                    key="connecting"
-                                    className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-foreground"
-                                >
-                                    {
-                                        "Connecting from "
-                                        + connectTitle
-                                        + " — click the step it leads to"
-                                    }
-                                </span>
-                            }}
                         </div>
-                        <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-                            <Flow
-                                steps={milestones}
-                                selectedId={selectedId}
-                                connectFrom={connectFrom}
-                                selectedEdge={selectedEdge}
-                                blockedTargets={blockedTargets}
-                                onSelect={selectStep}
-                                onSelectEdge={lambda (k: str) { selectedEdge = k; }}
-                                onDeleteEdge={deleteEdge}
-                                onCanvasClick={clearCanvas}
-                            />
-                            <div>
+
+                        {if connectFrom {
+                            <div
+                                key="connecting"
+                                className="flex items-center justify-between gap-4 rounded-lg border border-dashed bg-muted p-3"
+                            >
+                                <p className="text-sm text-pretty">
+                                    <span className="font-medium">
+                                        {"Drawing an arrow out of " + connectTitle + "."}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                        {" Click the step it leads to — anything that would "
+                                            + "loop back on itself is dimmed. Dragging is off "
+                                            + "until this is done."}
+                                    </span>
+                                </p>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={lambda { connectFrom = ""; }}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        }}
+
+                        <div
+                            className="grid items-start gap-6"
+                            style={{"gridTemplateColumns": "minmax(0,1fr) 21rem"}}
+                        >
+                            <div
+                                onMouseDown={beginDrag}
+                                onMouseMove={moveDrag}
+                                onMouseUp={endDrag}
+                                onMouseLeave={endDrag}
+                            >
+                                <Flow
+                                    steps={milestones}
+                                    overrides={manual}
+                                    selectedId={selectedId}
+                                    connectFrom={connectFrom}
+                                    selectedEdge={selectedEdge}
+                                    blockedTargets={blockedTargets}
+                                    onSelect={selectStep}
+                                    onSelectEdge={lambda (k: str) { selectedEdge = k; }}
+                                    onDeleteEdge={deleteEdge}
+                                    onCanvasClick={clearCanvas}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-4">
                                 {if len(picked) > 0 {
                                     <StepInspector
                                         key={picked[0].id}
@@ -266,14 +334,34 @@ def:pub RoadmapPage() -> JsxPage {
                                         onUnlink={deleteEdge}
                                     />
                                 } else {
-                                    <div
-                                        key="hint"
-                                        className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground"
-                                    >
-                                        Select a step to see what it waits on, what it leads
-                                        to, and to draw a new connection.
+                                    <div key="hint" className="rounded-lg border border-dashed p-6">
+                                        <p className="text-sm font-medium">Nothing selected</p>
+                                        <p className="mt-1 text-sm text-pretty text-muted-foreground">
+                                            Click a step on the canvas to see what it waits on,
+                                            what it unblocks, and the tasks hanging off it.
+                                        </p>
                                     </div>
                                 }}
+                                <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+                                    <h2 className="font-display text-sm font-semibold">
+                                        Building the graph
+                                    </h2>
+                                    <div className="flex flex-col gap-2">
+                                        {for (i, line) in enumerate(HOW_TO) {
+                                            <div key={str(i)} className="flex items-baseline gap-2">
+                                                <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                                                    {str(i + 1)}
+                                                </span>
+                                                <p className="text-xs text-pretty text-muted-foreground">
+                                                    <span className="font-medium text-foreground">
+                                                        {line[0]}
+                                                    </span>
+                                                    {" " + line[1]}
+                                                </p>
+                                            </div>
+                                        }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

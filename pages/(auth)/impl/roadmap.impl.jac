@@ -205,6 +205,13 @@ impl RoadmapPage.detachTask(taskId: str) -> None {
 }
 
 impl RoadmapPage.selectStep(stepId: str) -> None {
+    # A drag ends with a click on the node it started from, so the drag marks
+    # that one click to be ignored; without this, moving a step also selects
+    # it and finishing a wire also re-fires the connect.
+    if swallowRef.current {
+        swallowRef.current = False;
+        return;
+    }
     # A click while armed means "connect to this one"; otherwise it selects.
     if connectFrom and connectFrom != stepId {
         source = connectFrom;
@@ -263,4 +270,211 @@ impl RoadmapPage.deleteEdge(fromId: str, toId: str) -> None {
     } except Exception as e {
         toast("Could not remove that connection");
     }
+}
+
+# Flow's grid geometry, mirrored here so a pointer position maps back to a
+# cell. These MUST match components/roadmap/Flow.jac; a change there without a
+# change here silently misplaces every drag.
+glob LANE_PX: float = 240.0;
+glob ROW_PX: float = 140.0;
+glob PAD: float = 40.0;
+glob NODE_W: float = 208.0;
+glob NODE_W_B: float = 184.0;
+# How close to a node's edge counts as grabbing its border rather than its body.
+glob EDGE_ZONE: float = 14.0;
+
+# The cell a step is actually drawn in: its dragged override, else the one the
+# walker computed from the arrows.
+def cellFor(s: MilestoneView, cells: dict[str, list[int]]) -> list[int] {
+    if s.id in cells {
+        return cells[s.id];
+    }
+    return [s.depth, s.lane];
+}
+
+# Which step is under the pointer, and whether the pointer is in its border
+# strip. Flow positions each node with an inline left/top, so matching those
+# numbers against the cell arithmetic identifies the step without Flow having
+# to expose anything.
+impl RoadmapPage.hitNode(e: MouseEvent) -> dict[str, any] {
+    miss: dict[str, any] = {};
+    target: any = e.target;
+    if not target or not target.closest {
+        return miss;
+    }
+    btn: any = target.closest("button");
+    if not btn or not btn.style or not btn.style.left or not btn.style.width {
+        return miss;
+    }
+    # The tray chips are buttons too, but they carry no inline width.
+    if float(parseFloat(btn.style.width)) < 100.0 {
+        return miss;
+    }
+    left = float(parseFloat(btn.style.left));
+    top = float(parseFloat(btn.style.top));
+    # The ref holds the same list Flow was handed; typing it here is what lets
+    # the arithmetic below stay checked.
+    # Same effective cell Flow drew with, or the hit test lands on the
+    # pre-drag position of anything that has been moved.
+    cells: dict[str, list[int]] = manualRef.current or {};
+    grid: list[MilestoneView] = [];
+    for raw in (stepsRef.current or []) {
+        step = raw as MilestoneView;
+        if cellFor(step, cells)[0] >= 0 {
+            grid.append(step);
+        }
+    }
+    minLane = 0;
+    for s in grid {
+        if cellFor(s, cells)[1] < minLane {
+            minLane = cellFor(s, cells)[1];
+        }
+    }
+    found: list[MilestoneView] = [];
+    for s in grid {
+        cell = cellFor(s, cells);
+        width = NODE_W if cell[1] == 0 else NODE_W_B;
+        centre = PAD + float(cell[1] - minLane) * LANE_PX + LANE_PX / 2.0;
+        if abs(centre - width / 2.0 - left) < 2.0
+            and abs(PAD + float(cell[0]) * ROW_PX - top) < 2.0 {
+            found.append(s);
+        }
+    }
+    if not found {
+        return miss;
+    }
+    box: any = btn.getBoundingClientRect();
+    dx = float(e.clientX) - float(box.left);
+    dy = float(e.clientY) - float(box.top);
+    onEdge = (
+        dx < EDGE_ZONE or dy < EDGE_ZONE
+        or (float(box.width) - dx) < EDGE_ZONE
+        or (float(box.height) - dy) < EDGE_ZONE
+    );
+    return {"step": found[0], "onEdge": onEdge};
+}
+
+impl RoadmapPage.beginDrag(e: MouseEvent) -> None {
+    if connectFrom {
+        return;
+    }
+    hit = hitNode(e);
+    if not hit {
+        return;
+    }
+    e.preventDefault();
+    step = hit["step"] as MilestoneView;
+    if hit["onEdge"] {
+        # The border is the port: dragging off it draws an arrow.
+        wireRef.current = step.id;
+        connectFrom = step.id;
+        selectedId = step.id;
+        selectedEdge = "";
+        return;
+    }
+    start = cellFor(step, manualRef.current or {});
+    dragRef.current = {
+        "id": step.id, "x": float(e.clientX), "y": float(e.clientY),
+        "depth": start[0], "lane": start[1], "moved": False
+    };
+}
+
+impl RoadmapPage.moveDrag(e: MouseEvent) -> None {
+    surface: any = e.currentTarget;
+    drag = dragRef.current;
+    if surface {
+        if drag {
+            surface.style.cursor = "grabbing";
+        } elif wireRef.current or connectFrom {
+            surface.style.cursor = "crosshair";
+        } else {
+            over = hitNode(e);
+            if over {
+                surface.style.cursor = "crosshair" if over["onEdge"] else "grab";
+            } else {
+                surface.style.cursor = "";
+            }
+        }
+    }
+    if not drag {
+        return;
+    }
+    row = int(drag["depth"]) + int(round((float(e.clientY) - float(drag["y"])) / ROW_PX));
+    if row < 0 {
+        row = 0;
+    }
+    col = int(drag["lane"]) + int(round((float(e.clientX) - float(drag["x"])) / LANE_PX));
+    current = manual[drag["id"]] if drag["id"] in manual else [];
+    atRow = current[0] if current else int(drag["depth"]);
+    atCol = current[1] if current else int(drag["lane"]);
+    if atRow == row and atCol == col {
+        return;
+    }
+    if row != int(drag["depth"]) or col != int(drag["lane"]) {
+        drag["moved"] = True;
+    }
+    updated = {**manual};
+    updated[drag["id"]] = [row, col];
+    manual = updated;
+    hasManual = True;
+}
+
+impl RoadmapPage.endDrag(e: MouseEvent) -> None {
+    wiring = wireRef.current;
+    if wiring {
+        wireRef.current = None;
+        hit = hitNode(e);
+        landed = (hit["step"] as MilestoneView).id if hit else "";
+        if not landed or landed == wiring {
+            # Released on empty canvas: stay armed so the click path can finish
+            # the connection, which is how a tray step joins the graph.
+            return;
+        }
+        swallowRef.current = True;
+        if landed in blockedTargets {
+            connectFrom = "";
+            toast("That arrow would loop back on itself");
+            return;
+        }
+        connectFrom = "";
+        await linkSteps(wiring, landed);
+        return;
+    }
+    drag = dragRef.current;
+    if not drag {
+        return;
+    }
+    dragRef.current = None;
+    if not drag["moved"] {
+        return;
+    }
+    swallowRef.current = True;
+    cell = manual[drag["id"]] if drag["id"] in manual else [];
+    if not cell {
+        return;
+    }
+    # Two steps in one cell would overlap, so the one already there takes the
+    # dragged step's old cell.
+    seen: dict[str, list[int]] = manualRef.current or {};
+    clash: list[MilestoneView] = [];
+    for raw in (stepsRef.current or []) {
+        other = raw as MilestoneView;
+        cellAt = cellFor(other, seen);
+        if other.id != drag["id"] and cellAt[0] == cell[0] and cellAt[1] == cell[1] {
+            clash.append(other);
+        }
+    }
+    if clash {
+        swapped = {**manual};
+        swapped[clash[0].id] = [int(drag["depth"]), int(drag["lane"])];
+        manual = swapped;
+        hasManual = True;
+        toast("Swapped with " + clash[0].title);
+    }
+}
+
+impl RoadmapPage.resetLayout -> None {
+    manual = {};
+    hasManual = False;
+    toast("Layout back to the arrows");
 }

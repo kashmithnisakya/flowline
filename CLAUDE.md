@@ -126,6 +126,9 @@ File-based routing with route groups:
 - **`max()`/`min()` over a list compiles to JS `Math.max(array)`, which is
   `NaN`.** Any guard like `max(xs) > 0` then silently fails. Compute peaks
   with an explicit loop in client code.
+- **`len()` on a dict compiles to `.length`**, which is `undefined` on a plain
+  JS object, so `len(d) > 0` is silently always false (it type-checks). Track
+  emptiness with a separate `bool` field. `len()` on a list is fine.
 - **A name first assigned inside an `if` is block-scoped in the compiled JS**
   and is `ReferenceError` after the branch. Initialise it before the branch.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;

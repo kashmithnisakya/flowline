@@ -63,6 +63,7 @@ def colorKey(raw: str) -> str {
 
 def:pub Flow(
     steps: list[MilestoneView],
+    overrides: dict[str, list[int]] = {},
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
@@ -72,8 +73,19 @@ def:pub Flow(
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None
 ) -> JsxElement {
-    grid = [s for s in steps if s.depth >= 0];
-    tray = [s for s in steps if s.depth < 0];
+    # A dragged step keeps its arrows but takes the cell the user put it in.
+    def rowOf(s: MilestoneView) -> int {
+        cell = overrides[s.id] if s.id in overrides else [];
+        return cell[0] if cell else s.depth;
+    }
+
+    def laneOf(s: MilestoneView) -> int {
+        cell = overrides[s.id] if s.id in overrides else [];
+        return cell[1] if cell else s.lane;
+    }
+
+    grid = [s for s in steps if rowOf(s) >= 0];
+    tray = [s for s in steps if rowOf(s) < 0];
 
     # Explicit loops: max() over a list compiles to Math.max(array), which is
     # NaN. Seeded at 0 so a lone spine step still centres.
@@ -81,14 +93,14 @@ def:pub Flow(
     maxLane = 0;
     maxDepth = 0;
     for s in grid {
-        if s.lane < minLane {
-            minLane = s.lane;
+        if laneOf(s) < minLane {
+            minLane = laneOf(s);
         }
-        if s.lane > maxLane {
-            maxLane = s.lane;
+        if laneOf(s) > maxLane {
+            maxLane = laneOf(s);
         }
-        if s.depth > maxDepth {
-            maxDepth = s.depth;
+        if rowOf(s) > maxDepth {
+            maxDepth = rowOf(s);
         }
     }
     laneSpan = maxLane - minLane + 1;
@@ -96,15 +108,15 @@ def:pub Flow(
     canvasH = PAD * 2 + (maxDepth + 1) * ROW_PX;
 
     def centreX(s: MilestoneView) -> float {
-        return PAD + (s.lane - minLane) * LANE_PX + LANE_PX / 2;
+        return PAD + (laneOf(s) - minLane) * LANE_PX + LANE_PX / 2;
     }
 
     def widthOf(s: MilestoneView) -> int {
-        return NODE_W if s.lane == 0 else NODE_W_B;
+        return NODE_W if laneOf(s) == 0 else NODE_W_B;
     }
 
     def topY(s: MilestoneView) -> float {
-        return PAD + s.depth * ROW_PX;
+        return PAD + rowOf(s) * ROW_PX;
     }
 
     byId: dict[str, MilestoneView] = {};
@@ -138,8 +150,8 @@ def:pub Flow(
                 + ", " + str(x2) + " " + str(y2 - bend)
                 + ", " + str(x2) + " " + str(y2)
             );
-            onSpine = s.lane == 0 and target.lane == 0;
-            crossing = s.lane * target.lane < 0;
+            onSpine = laneOf(s) == 0 and laneOf(target) == 0;
+            crossing = laneOf(s) * laneOf(target) < 0;
             tone = "text-muted-foreground/50";
             if s.status == "Done" and target.status == "Done" {
                 tone = "text-emerald-600/40";
@@ -239,7 +251,7 @@ def:pub Flow(
                             + (
                                 "border-2 font-semibold text-sm "
                                     + SPINE_TINT[colorKey(s.color)]
-                                if s.lane == 0
+                                if laneOf(s) == 0
                                 else "border text-xs " + BRANCH_TINT[colorKey(s.color)]
                             )
                             + (" opacity-70" if s.status == "Done" else "")
