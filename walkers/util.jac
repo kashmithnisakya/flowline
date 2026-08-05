@@ -6,7 +6,7 @@ import datetime;
 
 
 def now_iso -> str {
-    return datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat() + "Z";
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z";
 }
 
 
@@ -21,6 +21,6 @@ def minutes_since(stamp: str) -> float {
     } except Exception {
         return 999999.0;
     }
-    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None);
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None);
     return (now - then).total_seconds() / 60.0;
 }
