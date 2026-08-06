@@ -7,6 +7,7 @@ a logged-in visitor browsing / should not see two navs stacked.
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from ..lib.session { fetchOrgName }
+import from ..lib.theme { getThemePref, applyTheme, watchTheme }
 import from ..components.ui.button { Button }
 # Note: the wrapper lives in toaster.jac, not sonner.jac — a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
@@ -16,11 +17,13 @@ import from ..components.assistant.AssistantDock { AssistantDock }
 
 glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"];
 
-def:pub Shell() -> JsxLayout {
+def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
         orgName: str = "";
 
     async can with entry {
+        applyTheme(getThemePref());
+        watchTheme();
         isIn = jacIsLoggedIn();
         loggedIn = isIn;
         if isIn {
@@ -42,54 +45,68 @@ def:pub Shell() -> JsxLayout {
         return base + "text-muted-foreground hover:bg-accent hover:text-foreground";
     }
 
-    return <div className="min-h-screen bg-background text-foreground">
-        {if chrome {
-            <header key="nav" className="border-b">
-                <nav className="flex items-center gap-4 px-6 py-3 lg:px-10">
-                    <Link to="/board" className="mr-2 flex items-center gap-2">
-                        <img src="/static/brand/logo-mark.svg" alt="" width={30} height={30} />
-                        <span className="font-display text-xl font-bold tracking-tight">
-                            standup<span className="text-primary ml-0.5">.</span>
-                        </span>
-                    </Link>
-                    <Link to="/board" className={navClass("/board")}>
-                        Board
-                    </Link>
-                    <Link to="/roadmap" className={navClass("/roadmap")}>
-                        Roadmap
-                    </Link>
-                    <Link to="/overview" className={navClass("/overview")}>
-                        Overview
-                    </Link>
-                    <Link to="/log" className={navClass("/log")}>
-                        Log
-                    </Link>
-                    <Link to="/workspace" className={navClass("/workspace")}>
-                        Workspace
-                    </Link>
-                    <div className="ml-auto flex items-center gap-3">
-                        {if orgName {
-                            <span key="org" className="text-sm font-medium text-muted-foreground">
-                                {orgName}
+    return
+        <div className="min-h-screen bg-background text-foreground">
+            {if chrome {
+                <header key="nav" className="border-b">
+                    <nav className="flex items-center gap-4 px-6 py-3 lg:px-10">
+                        <Link to="/board" className="mr-2 flex items-center gap-2">
+                            <img
+                                src="/static/brand/logo-mark.svg"
+                                alt=""
+                                width={30}
+                                height={30}
+                            />
+                            <span
+                                className="font-display text-xl font-bold tracking-tight"
+                            >
+                                standup
+                                <span className="text-primary ml-0.5">.</span>
                             </span>
-                        }}
-                        <Button variant="outline" size="sm" onClick={logout}>
-                            Log out
-                        </Button>
-                    </div>
-                </nav>
-            </header>
-        }}
-        {if chrome {
-            <main key="app" className="px-6 py-6 lg:px-10">
-                <Outlet />
-            </main>
-        } else {
-            <Outlet key="bare" />
-        }}
-        {if chrome {
-            <AssistantDock key="assistant" />
-        }}
-        <Toaster />
-    </div>;
+                        </Link>
+                        <Link to="/board" className={navClass("/board")}>Board</Link>
+                        <Link to="/workflow" className={navClass("/workflow")}>
+                            Workflow
+                        </Link>
+                        <Link to="/roadmap" className={navClass("/roadmap")}>
+                            Roadmap
+                        </Link>
+                        <Link to="/overview" className={navClass("/overview")}>
+                            Overview
+                        </Link>
+                        <Link to="/log" className={navClass("/log")}>Log</Link>
+                        <Link to="/workspace" className={navClass("/workspace")}>
+                            Workspace
+                        </Link>
+                        <Link to="/settings" className={navClass("/settings")}>
+                            Settings
+                        </Link>
+                        <div className="ml-auto flex items-center gap-3">
+                            {if orgName {
+                                <span
+                                    key="org"
+                                    className="text-sm font-medium text-muted-foreground"
+                                >
+                                    {orgName}
+                                </span>
+                            }}
+                            <Button variant="outline" size="sm" onClick={logout}>
+                                Log out
+                            </Button>
+                        </div>
+                    </nav>
+                </header>
+            }}
+            {if chrome {
+                <main key="app" className="px-6 py-6 lg:px-10">
+                    <Outlet/>
+                </main>
+            } else {
+                <Outlet key="bare"/>
+            } }
+            {if chrome {
+                <AssistantDock key="assistant"/>
+            }}
+            <Toaster/>
+        </div>;
 }

@@ -9,7 +9,8 @@ import ".styles.global.css";
 
 import from models {
     Project, Member, Repo, Task, LogEntry, TaskView, MemberView,
-    Milestone, MilestoneView, GithubConnectionView
+    Milestone, MilestoneView, GithubConnectionView, WorkflowStep,
+    WorkflowMeta, StepView
 }
 import from walkers.projects {
     ListProjects, SaveProject, ArchiveProject,
@@ -28,6 +29,10 @@ import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
 import from walkers.roadmap {
     ListMilestones, SaveMilestone, DeleteMilestone, ReorderMilestone,
     SetTaskMilestone, LinkSteps, UnlinkSteps
+}
+import from walkers.workflow {
+    GetWorkflow, ApplyTemplate, SaveStep, MoveStep, DeleteStep,
+    LinkTransition, UnlinkTransition, GetWorkflowMeta, RenameWorkflow
 }
 import from walkers.github {
     GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,

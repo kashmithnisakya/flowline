@@ -241,7 +241,7 @@ def:pub SetupPage() -> JsxPage {
                 </CardContent>
                 <CardFooter className="justify-end">
                     <Button onClick={finish} disabled={busy}>
-                        Go to the board
+                        Design your workflow
                     </Button>
                 </CardFooter>
             </Card>
