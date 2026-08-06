@@ -10,9 +10,9 @@ and Notes span both columns; the five classification selects and the due
 date pair off two per row. It collapses to a single column below sm.
 """
 
-# The board vocabulary comes from constants.jac rather than a local copy;
-# importing it is also what keeps that module in the compiled client.
-import from ...constants { STATUSES, PRIORITIES }
+# constants.jac is server-only (imported by walkers); define board vocabulary locally.
+glob STATUSES: list[str] = ["Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"];
+glob PRIORITIES: list[str] = ["High", "Medium", "Low"];
 import from ...models { Project, MemberView, MilestoneView, RepoView }
 import from ..common.Markdown { Markdown }
 import from ..log.DatePicker { DatePicker }

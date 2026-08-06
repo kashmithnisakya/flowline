@@ -17,30 +17,30 @@ glob _tabsListVariants: any = cva(
 
 def:pub Tabs(props: any) -> JsxElement {
     orientation = props["orientation"] or "horizontal";
-    <TabsPrimitive.Root
+    return <TabsPrimitive.Root
         {**props}
         data-slot="tabs"
         data-orientation={orientation}
         className={cn(
             "gap-2 group/tabs flex data-horizontal:flex-col", props["className"]
         )}
-    />
+    />;
 }
 
 def:pub TabsList(props: any) -> JsxElement {
     variant = props["variant"] or "default";
-    <TabsPrimitive.List
+    return <TabsPrimitive.List
         {**props}
         data-slot="tabs-list"
         data-variant={variant}
         className={cn(
             _tabsListVariants.call(None, {"variant": variant}), props["className"]
         )}
-    />
+    />;
 }
 
 def:pub TabsTrigger(props: any) -> JsxElement {
-    <TabsPrimitive.Trigger
+    return <TabsPrimitive.Trigger
         {**props}
         data-slot="tabs-trigger"
         className={cn(
@@ -50,15 +50,15 @@ def:pub TabsTrigger(props: any) -> JsxElement {
             "after:bg-foreground after:absolute after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
             props["className"]
         )}
-    />
+    />;
 }
 
 def:pub TabsContent(props: any) -> JsxElement {
-    <TabsPrimitive.Content
+    return <TabsPrimitive.Content
         {**props}
         data-slot="tabs-content"
         className={cn("text-sm flex-1 outline-none", props["className"])}
-    />
+    />;
 }
 
 def:pub tabsListVariants -> any {

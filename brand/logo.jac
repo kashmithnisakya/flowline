@@ -24,7 +24,7 @@ glob EMBER: str = "#E8552F";
 glob OUT_DIR: str = "assets/brand";
 
 # Bar geometry on the 56x56 tile: (x, y, height).
-glob BARS: list[tuple] = [(12.0, 34.0, 12.0), (24.5, 27.0, 19.0), (37.0, 20.0, 26.0)];
+glob BARS: list[tuple[float, float, float]] = [(12.0, 34.0, 12.0), (24.5, 27.0, 19.0), (37.0, 20.0, 26.0)];
 glob BAR_W: float = 7.0;
 glob BAR_R: float = 3.5;
 glob TILE: float = 56.0;
