@@ -99,13 +99,16 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     if not today {
         return;
     }
+    # Server-side, a filtered re-query is answered from committed storage,
+    # so a bucket created in this request is invisible to it. Use the
+    # freshly connected node directly instead of querying it back.
     days = [holder-->[?:LogDay, date == today]];
-    if not days {
-        fresh = holder ++> LogDay(date=today);
-        on_attached(holder, fresh);
-        days = [holder-->[?:LogDay, date == today]];
+    if days {
+        day = days[0];
+    } else {
+        day = holder ++> LogDay(date=today);
+        on_attached(holder, day);
     }
-    day = days[0];
     names: list[str] = [];
     tag_pool: list[str] = [];
     for a in [task ->:AssignedTo:->] {
