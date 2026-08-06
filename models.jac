@@ -206,6 +206,30 @@ node GithubConnection {
         pending_at: str = "";
 }
 
+# One step of the org's workflow: a named column-to-be with a semantic
+# `kind` behind the user's label. The kind, not the name, is what the rest
+# of the app will key behavior on ("done" is terminal, "blocked" raises
+# attention), so a renamed step never breaks anything. Position is the
+# designer's canvas placement in px — persisted, unlike roadmap layout,
+# because a workflow is drawn by hand rather than derived from arrows.
+node WorkflowStep {
+    has name: str,
+        kind: str = "active",
+        color: str = "",
+        x: float = 0.0,
+        y: float = 0.0,
+        sort_order: float = 0.0,
+        created_at: str = "",
+        updated_at: str = "";
+}
+
+# The workflow's own record: singleton per root, get-or-created. Steps stay
+# flat off the root; this carries only what the graph itself cannot — the
+# display name.
+node WorkflowMeta {
+    has name: str = "Workflow";
+}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
@@ -218,6 +242,10 @@ edge InMilestone: Task --> Milestone {}
 # acyclic (LinkSteps refuses anything that would close a loop), because both
 # the layout and the "ready to start" signal are derived from depth.
 edge LeadsTo: Milestone --> Milestone {}
+# A workflow transition. Unlike LeadsTo, cycles are ALLOWED by design: a
+# review step looping back to development is the whole point of letting orgs
+# draw their own flow. Only self-loops are refused, at link time.
+edge FlowsTo: WorkflowStep --> WorkflowStep {}
 
 obj TaskView {
     has id: str,
@@ -291,6 +319,18 @@ obj MilestoneView {
         component: int = 0,
         ready: bool = False,
         blocked_by: int = 0,
+        prev_ids: list[str] = [],
+        next_ids: list[str] = [];
+}
+
+obj StepView {
+    has id: str,
+        name: str,
+        kind: str,
+        color: str,
+        x: float,
+        y: float,
+        sort_order: float,
         prev_ids: list[str] = [],
         next_ids: list[str] = [];
 }
@@ -382,6 +422,23 @@ def milestone_view(m: Milestone) -> MilestoneView {
         color=m.color, sort_order=m.sort_order,
         project_id=project_id, project_name=project_name,
         task_count=total, done_count=done,
+        prev_ids=prev_ids, next_ids=next_ids
+    );
+}
+
+
+def step_view(s: WorkflowStep) -> StepView {
+    prev_ids: list[str] = [];
+    for p in [s<-:FlowsTo:<-] {
+        prev_ids.append(jid(p));
+    }
+    next_ids: list[str] = [];
+    for n in [s ->:FlowsTo:->] {
+        next_ids.append(jid(n));
+    }
+    return StepView(
+        id=jid(s), name=s.name, kind=s.kind, color=s.color,
+        x=s.x, y=s.y, sort_order=s.sort_order,
         prev_ids=prev_ids, next_ids=next_ids
     );
 }

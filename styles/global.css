@@ -7,8 +7,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* standup brand — ink on warm paper with an ember accent.
-       Generated palette source of truth: PLAN.md / brand/logo.jac */
+    /* standup brand, light — ink on warm paper with an ember accent.
+       Generated palette source of truth: brand/logo.jac.
+       Dark mode deliberately switches families: pine ink + teal (below). */
+    color-scheme: light;
     --background: #F6F2EB;          /* paper */
     --foreground: #14120F;          /* ink */
     --card: #FFFDFA;                /* surface */
@@ -46,39 +48,42 @@
 }
 
 .dark {
-    --background: #14120F;
-    --foreground: #F6F2EB;
-    --card: #1D1A16;
-    --card-foreground: #F6F2EB;
-    --popover: #1D1A16;
-    --popover-foreground: #F6F2EB;
-    --primary: #E8552F;
-    --primary-foreground: #F6F2EB;
-    --secondary: #2A2620;
-    --secondary-foreground: #F6F2EB;
-    --muted: #2A2620;
-    --muted-foreground: #8A8275;
-    --accent: #3C372F;
-    --accent-foreground: #F6F2EB;
-    --destructive: #E8552F;
-    --border: rgba(246, 242, 235, .12);
-    --input: rgba(246, 242, 235, .16);
-    --ring: #E8552F;
-    --success: #4E8C74;
-    --warning: #E8A22F;
-    --chart-1: #E8552F;
-    --chart-2: #4E8C74;
-    --chart-3: #E8A22F;
-    --chart-4: #8A8275;
-    --chart-5: #C9C1B4;
-    --sidebar: #1D1A16;
-    --sidebar-foreground: #F6F2EB;
-    --sidebar-primary: #E8552F;
-    --sidebar-primary-foreground: #F6F2EB;
-    --sidebar-accent: #3C372F;
-    --sidebar-accent-foreground: #F6F2EB;
-    --sidebar-border: rgba(246, 242, 235, .12);
-    --sidebar-ring: #E8552F;
+    /* Native chrome (scrollbars, form controls) must follow the theme or
+       the canvas scrollbars render as white strips on the dark ground. */
+    color-scheme: dark;
+    --background: #101514;
+    --foreground: #E6EDEB;
+    --card: #181F1E;
+    --card-foreground: #E6EDEB;
+    --popover: #181F1E;
+    --popover-foreground: #E6EDEB;
+    --primary: #2DD4BF;
+    --primary-foreground: #06211D;
+    --secondary: #1F2827;
+    --secondary-foreground: #E6EDEB;
+    --muted: #1F2827;
+    --muted-foreground: #93A5A1;
+    --accent: #24302E;
+    --accent-foreground: #E6EDEB;
+    --destructive: #E11D48;
+    --border: rgba(230, 237, 235, .12);
+    --input: rgba(230, 237, 235, .16);
+    --ring: #2DD4BF;
+    --success: #34D399;
+    --warning: #FBBF24;
+    --chart-1: #2DD4BF;
+    --chart-2: #818CF8;
+    --chart-3: #FBBF24;
+    --chart-4: #38BDF8;
+    --chart-5: #FB7185;
+    --sidebar: #181F1E;
+    --sidebar-foreground: #E6EDEB;
+    --sidebar-primary: #2DD4BF;
+    --sidebar-primary-foreground: #06211D;
+    --sidebar-accent: #24302E;
+    --sidebar-accent-foreground: #E6EDEB;
+    --sidebar-border: rgba(230, 237, 235, .12);
+    --sidebar-ring: #2DD4BF;
 }
 
 @theme inline {

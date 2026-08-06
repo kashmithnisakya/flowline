@@ -134,5 +134,7 @@ impl SetupPage.finish -> None {
     if mName.strip() {
         await addPerson();
     }
-    window.location.href = "/board";
+    # New orgs land on the workflow picker: choosing how work moves is the
+    # last piece of setup, and the board reads better once it exists.
+    window.location.href = "/workflow";
 }
