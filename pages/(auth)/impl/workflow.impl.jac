@@ -186,7 +186,14 @@ impl WorkflowPage.deleteStep -> None {
     saving = True;
     gone = selectedId;
     try {
-        root spawn DeleteStep(step_id=gone);
+        result = root spawn DeleteStep(step_id=gone);
+        payload = result.reports[0] if result.reports else None;
+        if payload and not payload["ok"] {
+            confirmDelete = False;
+            saving = False;
+            toast(payload["message"] or "That step cannot be deleted.");
+            return;
+        }
         selectedId = "";
         selectedEdge = "";
         confirmDelete = False;

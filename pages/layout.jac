@@ -64,13 +64,10 @@ def:pub Shell -> JsxLayout {
                                 <span className="text-primary ml-0.5">.</span>
                             </span>
                         </Link>
-                        <Link to="/board" className={navClass("/board")}>Board</Link>
                         <Link to="/workflow" className={navClass("/workflow")}>
                             Workflow
                         </Link>
-                        <Link to="/roadmap" className={navClass("/roadmap")}>
-                            Roadmap
-                        </Link>
+                        <Link to="/board" className={navClass("/board")}>Board</Link>
                         <Link to="/overview" className={navClass("/overview")}>
                             Overview
                         </Link>

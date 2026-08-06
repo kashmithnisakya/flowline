@@ -29,7 +29,10 @@ def:pub isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
 
 glob NODE_W: float = 176.0,
      NODE_H: float = 64.0,
-     EDGE_ZONE: float = 12.0;
+     EDGE_ZONE: float = 12.0,
+     # Working room kept beyond the furthest step, so there is always
+     # somewhere to drag to without the canvas jumping.
+     MARGIN: float = 120.0;
 
 
 # How close to a node's edge counts as grabbing its border (the wire port)
@@ -46,15 +49,23 @@ def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
 
 # Canvas big enough for every node plus working room to drag into.
 def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
-    w = 640.0;
-    h = 440.0;
+    # Content plus a margin to drag into. Deliberately NOT padded out to some
+    # minimum: the surface is stretched to the viewport box with a CSS
+    # min-width/height instead, so a workflow that fits shows no scrollbars
+    # at all, and the canvas only starts scrolling once a step is dragged
+    # past the edge.
+    # A blank canvas still needs a surface to draw the empty state on; the
+    # CSS min-width/height stretches this to the viewport box, and content
+    # grows it from there.
+    w = 320.0;
+    h = 240.0;
     for s in steps {
         pos = stepXY(s, live);
-        if pos[0] + NODE_W + 220.0 > w {
-            w = pos[0] + NODE_W + 220.0;
+        if pos[0] + NODE_W + MARGIN > w {
+            w = pos[0] + NODE_W + MARGIN;
         }
-        if pos[1] + NODE_H + 180.0 > h {
-            h = pos[1] + NODE_H + 180.0;
+        if pos[1] + NODE_H + MARGIN > h {
+            h = pos[1] + NODE_H + MARGIN;
         }
     }
     return [w, h];

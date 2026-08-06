@@ -36,8 +36,7 @@ impl BoardPage.loadAll -> None {
         tResult = root spawn ListTasks();
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        vResult = root spawn ListVocab();
-        sResult = root spawn ListMilestones();
+        sResult = root spawn GetWorkflow();
         rResult = root spawn ListRepos();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
@@ -46,8 +45,7 @@ impl BoardPage.loadAll -> None {
             tasks = fetchedTasks;
             members = fetchedMembers;
             projects = fetchedProjects;
-            vocab = vResult.reports[0] if vResult.reports else [];
-            milestones = sResult.reports[0] if sResult.reports else [];
+            steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
         }
         # A stale persisted filter (archived project) would show an empty
@@ -80,14 +78,8 @@ impl BoardPage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
     # LITERAL "key" property — the variable is ignored and the real field
     # never updates (inputs appear frozen). Build a copy and subscript it.
-    updated = {**form};
+    updated = {** form};
     updated[key] = value;
-    # A milestone lives on exactly one project, so the previous pick is
-    # meaningless the moment the project changes. Both keys go into the
-    # SAME copy: two assignments would make the second read a stale `form`.
-    if key == "project" {
-        updated["milestone"] = "none";
-    }
     form = updated;
 }
 
@@ -95,9 +87,13 @@ impl BoardPage.openCreate -> None {
     editingId = "";
     d = new(Date);
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    # A new task lands in the first column of the workflow (or the first
+    # legacy status), never a hardcoded "Backlog" that may not exist.
+    keys = columnKeys();
     form = {
-        **BLANK_TASK,
+        ** BLANK_TASK,
         "project": fProject if fProject != "all" else "none",
+        "status": keys[0] if keys else "Backlog",
         "due_date": shifted.toISOString()[:10]
     };
     fAssignees = [];
@@ -107,13 +103,16 @@ impl BoardPage.openCreate -> None {
 impl BoardPage.openEdit(t: TaskView) -> None {
     editingId = t.id;
     form = {
-        "title": t.title, "category": t.category,
-        "project": t.project_id if t.project_id else "none",
-        "milestone": t.milestone_id if t.milestone_id else "none",
-        "priority": t.priority, "status": t.status,
-        "due_date": t.due_date, "notes": t.notes,
-        "issue": t.issue_link, "pr": t.pr_link,
-        "reviewer": t.reviewer_id if t.reviewer_id else "none",
+        "title": t.title,
+        "category": t.category,
+        "project": t.project_id or "none",
+        "priority": t.priority,
+        "status": columnKeyOf(t),
+        "due_date": t.due_date,
+        "notes": t.notes,
+        "issue": t.issue_link,
+        "pr": t.pr_link,
+        "reviewer": t.reviewer_id or "none",
         "review_due": t.review_due
     };
     fAssignees = t.assignee_ids;
@@ -128,7 +127,6 @@ impl BoardPage.saveTask -> None {
     saving = True;
     project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
-    milestone = form["milestone"] if form["milestone"] != "none" else "";
     try {
         # Assigning people who are not on the task's project pulls them in.
         if project {
@@ -151,34 +149,34 @@ impl BoardPage.saveTask -> None {
         }
         if editingId {
             root spawn UpdateTask(
-                task_id=editingId, title=title, category=form["category"],
-                priority=form["priority"], status=form["status"],
-                due_date=form["due_date"], notes=form["notes"],
-                issue_link=form["issue"].strip(), pr_link=form["pr"].strip(),
-                reviewer_id=reviewer, review_due=form["review_due"],
-                assignee_ids=fAssignees, project_id=project
-            );
-            # Always, including the empty case: that is how a task gets
-            # detached from the milestone it used to sit on.
-            root spawn SetTaskMilestone(
-                task_id=editingId, milestone_id=milestone
+                task_id=editingId,
+                title=title,
+                category=form["category"],
+                priority=form["priority"],
+                status=mappedStatus(form["status"]),
+                step_id=form["status"] if len(steps) > 0 else "",
+                due_date=form["due_date"],
+                notes=form["notes"],
+                issue_link=form["issue"].strip(),
+                pr_link=form["pr"].strip(),
+                reviewer_id=reviewer,
+                review_due=form["review_due"],
+                assignee_ids=fAssignees,
+                project_id=project
             );
         } else {
             cResult = root spawn CreateTask(
-                title=title, category=form["category"],
-                priority=form["priority"], status=form["status"],
-                due_date=form["due_date"], notes=form["notes"],
+                title=title,
+                category=form["category"],
+                priority=form["priority"],
+                status=mappedStatus(form["status"]),
+                step_id=form["status"] if len(steps) > 0 else "",
+                due_date=form["due_date"],
+                notes=form["notes"],
                 issue_link=form["issue"].strip(),
-                assignee_ids=fAssignees, project_id=project
+                assignee_ids=fAssignees,
+                project_id=project
             );
-            created = cResult.reports[0] if cResult.reports else None;
-            # A brand new task has nothing to detach, so the walker only
-            # runs when there is an actual milestone to attach it to.
-            if created and milestone {
-                root spawn SetTaskMilestone(
-                    task_id=created.id, milestone_id=milestone
-                );
-            }
         }
         dialogOpen = False;
         await loadAll();
@@ -203,27 +201,132 @@ impl BoardPage.deleteTask -> None {
     saving = False;
 }
 
-impl BoardPage.moveTo(taskId: str, status: str) -> None {
+# ------------------------------------------------------------------ columns
+# The board's columns are the org's workflow steps. Until an org designs one,
+# the classic six statuses stand in, so a brand-new workspace still has a
+# board. Every helper works in both modes.
+
+impl BoardPage.columnKeys -> list[str] {
+    keys: list[str] = [];
+    if len(steps) > 0 {
+        # Left-to-right on the canvas, so the board reads in the order the
+        # org DREW its workflow rather than the order the steps happened to
+        # be created in. Ties (a vertical branch) fall back to sort_order,
+        # which keeps the result stable.
+        ordered = [st for st in steps];
+        ordered.sort(key=lambda (st: StepView) { st.sort_order; });
+        ordered.sort(key=lambda (st: StepView) { st.x; });
+        for st in ordered {
+            keys.append(st.id);
+        }
+        return keys;
+    }
+    for legacy in STATUSES {
+        keys.append(legacy);
+    }
+    return keys;
+}
+
+impl BoardPage.columnLabel(key: str) -> str {
+    for st in steps {
+        if st.id == key {
+            return st.name;
+        }
+    }
+    return key if key in STATUSES else "";
+}
+
+impl BoardPage.columnKind(key: str) -> str {
+    for st in steps {
+        if st.id == key {
+            return st.kind;
+        }
+    }
+    return STATUS_KIND[key] if key in STATUS_KIND else "active";
+}
+
+impl BoardPage.doneColumnKey -> str {
+    for key in columnKeys() {
+        if columnKind(key) == "done" {
+            return key;
+        }
+    }
+    return "";
+}
+
+# The legacy status a column stands for. Written alongside step_id on every
+# move so insights, GitHub sync and the assistant keep reading `status`.
+impl BoardPage.mappedStatus(key: str) -> str {
+    # Without a workflow the key already IS the status; routing it through
+    # kind would collapse "Changes Requested" into "In Progress".
+    if len(steps) == 0 {
+        return key if key in STATUSES else "Backlog";
+    }
+    kind = columnKind(key);
+    return KIND_STATUS[kind] if kind in KIND_STATUS else "In Progress";
+}
+
+# Which column a task is drawn in. A task written before workflows existed
+# (or whose step was deleted) has no step_id, so its status decides: it lands
+# in the first column of the matching kind.
+impl BoardPage.columnKeyOf(t: TaskView) -> str {
+    keys = columnKeys();
+    if t.step_id {
+        for key in keys {
+            if key == t.step_id {
+                return key;
+            }
+        }
+    }
+    # Legacy mode: the column key IS the status, so match it exactly first.
+    # STATUS_KIND collapses "Changes Requested" onto "In Progress"'s kind, so
+    # the fallback below would swallow that whole column.
+    for key in keys {
+        if key == t.status {
+            return key;
+        }
+    }
+    kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+    for key in keys {
+        if columnKind(key) == kind {
+            return key;
+        }
+    }
+    return keys[0] if keys else "";
+}
+
+impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     # Optimistic: mutate the card in state and rebind; the server computes
     # the authoritative end-of-column order. movesRef fences the poll so a
     # stale fetch cannot snap the card back mid-flight; on failure the board
     # refetches server truth instead of rebinding a stale local snapshot.
-    oldStatus = "";
+    # A column key is a workflow step jid, or a legacy status string when the
+    # org has not designed a workflow yet. Both land in the same walker.
+    onWorkflow = len(steps) > 0;
+    label = columnLabel(columnKey);
+    if not label {
+        return;
+    }
+    oldKey = "";
+    oldLabel = "";
     peak = 0.0;
     for t in tasks {
         if t.id == taskId {
-            oldStatus = t.status;
+            oldKey = columnKeyOf(t);
+            oldLabel = columnLabel(oldKey);
         }
-        if t.status == status and t.sort_order > peak {
+        if columnKeyOf(t) == columnKey and t.sort_order > peak {
             peak = t.sort_order;
         }
     }
-    if not oldStatus or oldStatus == status {
+    if not oldKey or oldKey == columnKey {
         return;
     }
+    landing = mappedStatus(columnKey);
     for t in tasks {
         if t.id == taskId {
-            t.status = status;
+            t.status = landing;
+            t.step_id = columnKey if onWorkflow else "";
             t.sort_order = peak + 1024.0;
         }
     }
@@ -231,7 +334,11 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
     movesRef.current = (movesRef.current or 0) + 1;
     failed = False;
     try {
-        root spawn MoveTask(task_id=taskId, status=status);
+        if onWorkflow {
+            root spawn MoveTask(task_id=taskId, step_id=columnKey, step_name=label);
+        } else {
+            root spawn MoveTask(task_id=taskId, status=columnKey);
+        }
     } except Exception as e {
         failed = True;
     }
@@ -251,33 +358,35 @@ impl BoardPage.moveTo(taskId: str, status: str) -> None {
     # land out of sight (Hide Done, or a column below the fold), and the
     # handoff dialog is skippable, so it cannot be the only feedback.
     toast(
-        "Moved to " + status,
+        "Moved to " + label,
         {
             "description": title,
-            "action": {
-                "label": "Undo",
-                "onClick": lambda { moveTo(taskId, oldStatus); }
-            }
+            "action": {"label": "Undo", "onClick": lambda { moveTo(taskId, oldKey); }}
         }
     );
-    if status in HANDOFF_STATUSES {
-        # Review / Blocked / Changes Requested also ask for optional detail.
+    if columnKind(columnKey) in HANDOFF_KINDS {
+        # A handoff or a stop also asks for the optional detail.
         mForm = BLANK_MOVE;
-        moveStatus = status;
+        moveStatus = label;
+        moveKind = columnKind(columnKey);
         moveTaskTitle = title;
         moveTaskId = taskId;
     }
 }
 
 impl BoardPage.setMoveField(key: str, value: str) -> None {
-    updated = {**mForm};
+    updated = {** mForm};
     updated[key] = value;
     mForm = updated;
 }
 
 impl BoardPage.toggleAssignee(memberId: str) -> None {
     if memberId in fAssignees {
-        fAssignees = [a for a in fAssignees if a != memberId];
+        fAssignees = [
+            a
+            for a in fAssignees
+            if a != memberId
+        ];
     } else {
         fAssignees = fAssignees + [memberId];
     }
@@ -301,16 +410,21 @@ impl BoardPage.saveMoveInfo -> None {
     saving = False;
 }
 
-impl BoardPage.arrowMove(t: TaskView, status: str) -> None {
-    if status {
-        moveTo(t.id, status);
+impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
+    if columnKey {
+        moveTo(t.id, columnKey);
     }
 }
 
 impl BoardPage.markDoneFromPr(taskId: str) -> None {
     # Routed through the normal move so the card still gets its log entry
-    # and its undo toast. A merged PR suggests Done, it never forces it.
-    moveTo(taskId, "Done");
+    # and its undo toast. A merged PR suggests done, it never forces it.
+    for key in columnKeys() {
+        if columnKind(key) == "done" {
+            moveTo(taskId, key);
+            return;
+        }
+    }
 }
 
 impl BoardPage.syncGithub -> None {
@@ -342,9 +456,7 @@ impl BoardPage.createIssue(repoId: str) -> None {
     }
     saving = True;
     try {
-        result = root spawn CreateIssueFromTask(
-            task_id=editingId, repo_id=repoId
-        );
+        result = root spawn CreateIssueFromTask(task_id=editingId, repo_id=repoId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             opened = payload["task"];

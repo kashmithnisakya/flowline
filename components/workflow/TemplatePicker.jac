@@ -74,7 +74,7 @@ def:pub TemplatePicker(
     onScratch: Callable[[], None] = None
 ) -> JsxElement {
     return
-        <div className="mx-auto flex max-w-5xl flex-col gap-8">
+        <div className="flex w-full flex-col gap-8">
             <div className="flex flex-col items-center gap-2 pt-6 text-center">
                 <h2 className="font-display text-2xl font-semibold tracking-tight">
                     How does your team move work?

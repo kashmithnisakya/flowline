@@ -64,7 +64,7 @@ def:pub FlowCanvas(
     return
         <div
             className="select-none overflow-auto rounded-lg border bg-card"
-            style={{"maxHeight": "72vh"}}
+            style={{"height": "min(74vh, 44rem)"}}
             onClick={lambda { if onCanvasClick { onCanvasClick(); }}}
         >
             <div

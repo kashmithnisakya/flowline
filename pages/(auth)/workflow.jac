@@ -224,7 +224,7 @@ def:pub WorkflowPage -> JsxPage {
     showPicker = not loading and len(steps) == 0 and not scratch;
 
     return
-        <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <div className="flex w-full flex-col gap-6">
             {if loading or showPicker {
                 <div key="head" className="flex flex-col gap-2">
                     <h1 className="font-display text-3xl font-semibold tracking-tight">
