@@ -114,7 +114,7 @@ walker CreateTask {
 
 walker find_task {
     """Lookup base: resolve the jid once, verify org parentage, then visit.
-    Every task mutation subclasses this — jobj resolution alone is NOT
+    Every task mutation subclasses this, jobj resolution alone is NOT
     authorization."""
     has task_id: str = "";
 

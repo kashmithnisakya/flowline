@@ -1,6 +1,6 @@
 """The workflow as a diagram: free-form step cards over SVG transitions.
 
-Purely presentational — positions come in as data (persisted x/y plus the
+Purely presentational, positions come in as data (persisted x/y plus the
 page's live drag overrides) and every interaction is a callback. Unlike the
 roadmap's Flow, edges travel in any direction and loops are legal. Every
 transition is drawn the same way: the arrowhead already says which way work

@@ -132,7 +132,7 @@ walker WriteStandup {
 walker ProposeAction {
     """Returns a suggestion only. The client confirms it and then calls the
     ordinary CreateTask / MoveTask walkers, so the model never mutates."""
-    # NOTE: not `request` — the serve layer reserves that name for the HTTP
+    # NOTE: not `request`, the serve layer reserves that name for the HTTP
     # request object and the body field never reaches the walker.
     has instruction: str = "",
         from_date: str = "",

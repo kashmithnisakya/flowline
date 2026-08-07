@@ -5,7 +5,7 @@ Auth is a GitHub App installation, not a stored token. The workspace keeps
 an installation id; every call mints a short-lived installation token in
 `ghutil` and drops it. Nothing here ever reports a credential.
 
-Error contract: every walker except `GithubStatus` reports ONE dict —
+Error contract: every walker except `GithubStatus` reports ONE dict , 
 `{"ok": True, ...}` or `{"ok": False, "error": <code>, "message": <text>}`.
 GitHub calls fail in ways the client must explain (not configured, revoked,
 rate limited), which a bare view object cannot express. `GithubStatus`

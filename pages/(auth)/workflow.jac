@@ -2,7 +2,7 @@
 
 Stateful shell over three faces of one graph: the template picker when no
 workflow exists yet, the designer when editing, and a read-only diagram the
-rest of the time. One workflow per organization — steps hang off the root
+rest of the time. One workflow per organization, steps hang off the root
 like everything else, so there is no project selector here.
 
 Validation is advisory on purpose: the chip points out a missing start or
@@ -11,8 +11,8 @@ to the org, loops and all.
 
 The editor floats OVER the canvas rather than taking a column beside it: the
 drawing is the page and the editor is a layer on top. Note that a `#` comment
-placed among JSX children is not a comment at all — it renders as visible
-text — so notes like this one stay in the docstring.
+placed among JSX children is not a comment at all, it renders as visible
+text, so notes like this one stay in the docstring.
 """
 
 import from ...models { StepView }
@@ -155,10 +155,10 @@ def:pub WorkflowPage -> JsxPage {
     issues: list[str] = [];
     if len(steps) > 0 {
         if startCount == 0 {
-            issues.append("No start step yet — mark where new work lands.");
+            issues.append("No start step yet, mark where new work lands.");
         }
         if doneCount == 0 {
-            issues.append("No done step yet — every flow needs a terminal step.");
+            issues.append("No done step yet, every flow needs a terminal step.");
         }
         if startCount > 0 {
             seen: dict[str, bool] = {};
@@ -240,7 +240,7 @@ def:pub WorkflowPage -> JsxPage {
                         Workflow
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        The steps work moves through in your organization, drawn your way — branches and loops included.
+                        The steps work moves through in your organization, drawn your way, branches and loops included.
                     </p>
                 </div>
             }}
@@ -339,7 +339,7 @@ def:pub WorkflowPage -> JsxPage {
                                         + "."}
                                 </span>
                                 <span className="text-muted-foreground">
-                                    {" Click the step it flows into — backwards is fine,"
+                                    {" Click the step it flows into, backwards is fine,"
                                         + " loops are the point."}
                                 </span>
                             </p>

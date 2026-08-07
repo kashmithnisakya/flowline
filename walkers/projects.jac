@@ -53,7 +53,7 @@ walker SaveProject {
 }
 
 walker ArchiveProject {
-    """active=False — tasks and history keep pointing at it."""
+    """active=False, tasks and history keep pointing at it."""
     has project_id: str;
 
     can archive with Root entry {
