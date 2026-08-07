@@ -262,14 +262,17 @@ def:pub BoardPage -> JsxPage {
                     </Button>
                 </div>
             } else {
-                # Fluid grid: however many columns the workflow has, they share
-                # the viewport width and wrap into rows when they stop fitting.
-                # No horizontal scrollbar at any width or column count.
+                # ONE row, always: however many steps the workflow has, the
+                # columns divide the width between them. A workflow that wraps
+                # onto a second row stops reading as a pipeline, and a
+                # horizontal scrollbar hides the end of it.
                 <div
                     key="columns"
-                    className="grid items-start justify-start gap-3"
+                    className="grid items-start gap-3"
                     style={{
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(min(11rem, 100%), 22rem))"
+                        "gridTemplateColumns": "repeat("
+                            + str(len(colKeys))
+                            + ", minmax(0, 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {

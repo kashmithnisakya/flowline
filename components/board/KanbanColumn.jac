@@ -8,7 +8,7 @@ exists yet) and carries its own label and accent colour.
 import from ...models { TaskView }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
-import from ..workflow.kinds { DOT_VAR, colorKey }
+import from ..workflow.kinds { DOT_VAR, COLUMN_TINT, colorKey }
 
 # Accent per step kind, so a column reads the same on the board as its step
 # does on the workflow canvas.
@@ -43,8 +43,9 @@ def:pub KanbanColumn(
 
     return
         <div
-            className={"flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-muted/30 p-2 "
-                + ("ring-2 ring-ring" if dragOver else "")}
+            className={"flex w-full min-w-0 flex-col gap-2 rounded-xl border p-2 "
+                + (COLUMN_TINT[colorKey(color)] if color else "bg-muted/30")
+                + (" ring-2 ring-ring" if dragOver else "")}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();
                 dt = e.dataTransfer;
