@@ -35,6 +35,25 @@ impl WorkflowPage.reload(pid: str) -> None {
     fitZoom();
 }
 
+impl WorkflowPage.peekStep(stepId: str) -> None {
+    # Fetching per click rather than holding every task in page state: the
+    # server already owns the placement rule, and a workspace can have far
+    # more tasks than the panel will ever show.
+    peekId = stepId;
+    peekTasks = [];
+    peekLoading = True;
+    pid = projectId;
+    try {
+        result = root spawn ListStepTasks(
+            step_id=stepId, project_id=pid if pid and pid != "all" else ""
+        );
+        peekTasks = result.reports[0] if result.reports else [];
+    } except Exception as e {
+        toast("Could not load the work on that step");
+    }
+    peekLoading = False;
+}
+
 impl WorkflowPage.selectProject(v: str) -> None {
     projectId = v;
     localStorage.setItem("standup_project", v);

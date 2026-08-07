@@ -141,6 +141,11 @@ File-based routing with route groups:
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
   bundle and broke the build; that helper lives in `walkers/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
+- **`xs and xs[0].field` is not a safe guard.** A bare `and` compiles to a
+  JS `&&`, and an empty array is truthy in JS, so the guard passes and the
+  index throws at render time. Guard with `len(xs) > 0`. (A plain
+  `xs[0] if xs else ...` ternary does get the truthiness helper; only the
+  `and` form loses it.)
 - **`jac check` does not catch a missing import inside a walker.** A `glob`
   or edge name that was never imported (`STATUS_KIND`, `ForProject`) still
   type-checks clean, then raises `name '...' is not defined` at request time

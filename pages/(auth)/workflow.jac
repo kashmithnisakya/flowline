@@ -15,7 +15,7 @@ placed among JSX children is not a comment at all, it renders as visible
 text, so notes like this one stay in the docstring.
 """
 
-import from ...models { Project, StepView }
+import from ...models { Project, StepView, TaskView }
 import from ...constants { STEP_KINDS, KIND_COLORS }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.workflow {
@@ -27,16 +27,25 @@ import from ...walkers.workflow {
     LinkTransition,
     UnlinkTransition,
     GetWorkflowMeta,
-    RenameWorkflow
+    RenameWorkflow,
+    ListStepTasks
 }
 import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
 import from ...components.workflow.geometry { hitStep, stepXY, canvasSize }
-import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL }
+import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.ui.dialog {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription
+}
+import from ...components.ui.badge { Badge }
 import from ...components.ui.select {
     Select,
     SelectTrigger,
@@ -79,6 +88,11 @@ def:pub WorkflowPage -> JsxPage {
         # A dragged step's live position, canvas px, for this drag only. The
         # persisted x/y takes over again after MoveStep + reload.
         live: dict[str, list[float]] = {},
+        # Clicking a step outside edit mode opens its work rather than
+        # selecting it: the count says how much, this says what.
+        peekId: str = "",
+        peekTasks: list[TaskView] = [],
+        peekLoading: bool = False,
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
         busyRef: Ref[any] = Ref(),
@@ -106,6 +120,7 @@ def:pub WorkflowPage -> JsxPage {
     async def boot -> None;
     async def reload(pid: str) -> None;
     async def selectProject(v: str) -> None;
+    async def peekStep(stepId: str) -> None;
     async def loadMeta -> None;
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
@@ -131,6 +146,23 @@ def:pub WorkflowPage -> JsxPage {
     stepsRef.current = steps;
     liveRef.current = live;
 
+    peeked = [
+        s
+        for s in steps
+        if s.id == peekId
+    ];
+    # len(), not truthiness: `peeked and ...` compiles to a bare JS `&&`, and
+    # an empty array is truthy there, so the guard passed and the index threw.
+    peekName = peeked[0].name if len(peeked) > 0 else "";
+    peekKind = "";
+    peekColor = "slate";
+    if len(peeked) > 0 {
+        peekColor = colorKey(peeked[0].color);
+        if peeked[0].kind in KIND_LABEL {
+            peekKind = KIND_LABEL[peeked[0].kind];
+        }
+    }
+
     activeProjects = [
         p
         for p in projects
@@ -140,6 +172,17 @@ def:pub WorkflowPage -> JsxPage {
     for s in steps {
         taskTotal = taskTotal + s.task_count;
     }
+
+    # The panel obeys the project filter, so say which scope produced this
+    # list. Without it a short list under a narrowed filter reads as missing
+    # work rather than as work belonging to another project.
+    peekScope = "across all projects";
+    for p in activeProjects {
+        if jid(p) == projectId {
+            peekScope = "in " + p.name;
+        }
+    }
+    peekNoun = "task" if len(peekTasks) == 1 else "tasks";
 
     byId: dict[str, StepView] = {};
     for s in steps {
@@ -530,8 +573,84 @@ def:pub WorkflowPage -> JsxPage {
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
                         onZoomFit={fitZoom}
+                        onSelect={peekStep}
                     />
                 </div>
             }   }
+            <Dialog
+                open={bool(peekId)}
+                onOpenChange={lambda (o: bool) { if not o { peekId = ""; }}}
+            >
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <span
+                                className={"h-2.5 w-2.5 shrink-0 rounded-full "
+                                    + DOT_FILL[peekColor]}
+                            />
+                            {peekName + (" · " + peekKind if peekKind else "")}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {str(len(peekTasks)) + " " + peekNoun + " " + peekScope}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                        {if peekLoading {
+                            <p
+                                key="loading"
+                                className="py-6 text-center text-sm text-muted-foreground"
+                            >
+                                Loading…
+                            </p>
+                        } elif len(peekTasks) == 0 {
+                            <p
+                                key="empty"
+                                className="py-6 text-center text-sm text-muted-foreground"
+                            >
+                                Nothing is sitting on this step.
+                            </p>
+                        } else {
+                            <div key="rows" className="flex flex-col gap-2">
+                                {for t in peekTasks {
+                                    <div
+                                        key={t.id}
+                                        className={"flex flex-col gap-1 rounded-lg border bg-card p-3 "
+                                            + CARD_BAR[peekColor]}
+                                    >
+                                        <span className="text-sm font-medium">
+                                            {t.title}
+                                        </span>
+                                        <div
+                                            className="flex flex-wrap items-center gap-1.5"
+                                        >
+                                            {if t.project_name {
+                                                <Badge key="p" variant="secondary">
+                                                    {t.project_name}
+                                                </Badge>
+                                            }}
+                                            {if t.priority {
+                                                <Badge key="pr" variant="outline">
+                                                    {t.priority}
+                                                </Badge>
+                                            }}
+                                            {if len(t.assignee_names) > 0 {
+                                                <span
+                                                    key="who"
+                                                    className="text-xs text-muted-foreground"
+                                                >
+                                                    {", ".join(t.assignee_names)}
+                                                </span>
+                                            }}
+                                        </div>
+                                    </div>
+                                }}
+                            </div>
+                        }  }
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        Open the Board to move or edit any of these.
+                    </p>
+                </DialogContent>
+            </Dialog>
         </div>;
 }
