@@ -77,14 +77,14 @@ glob STATUSES: list[str] = [
                  {
                      "name": "Changes requested",
                      "kind": "active",
-                     "color": "indigo",
+                     "color": "rose",
                      "x": 560.0,
                      "y": 220.0
                  },
                  {
                      "name": "Blocked",
                      "kind": "blocked",
-                     "color": "rose",
+                     "color": "slate",
                      "x": 300.0,
                      "y": 220.0
                  },
@@ -113,28 +113,28 @@ glob STATUSES: list[str] = [
                  {
                      "name": "DOMX review",
                      "kind": "handoff",
-                     "color": "amber",
+                     "color": "indigo",
                      "x": 300.0,
                      "y": 320.0
                  },
                  {
                      "name": "Driving",
                      "kind": "active",
-                     "color": "indigo",
+                     "color": "amber",
                      "x": 300.0,
                      "y": 40.0
                  },
                  {
                      "name": "Arch review",
                      "kind": "handoff",
-                     "color": "amber",
+                     "color": "rose",
                      "x": 560.0,
                      "y": 40.0
                  },
                  {
                      "name": "Merged, needs deslop",
                      "kind": "active",
-                     "color": "indigo",
+                     "color": "slate",
                      "x": 820.0,
                      "y": 140.0
                  },
@@ -164,14 +164,14 @@ glob STATUSES: list[str] = [
                  {
                      "name": "In progress",
                      "kind": "active",
-                     "color": "indigo",
+                     "color": "amber",
                      "x": 560.0,
                      "y": 60.0
                  },
                  {
                      "name": "Waiting on customer",
                      "kind": "handoff",
-                     "color": "amber",
+                     "color": "rose",
                      "x": 560.0,
                      "y": 240.0
                  },

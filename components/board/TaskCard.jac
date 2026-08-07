@@ -5,7 +5,7 @@ ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 """
 
 import from ...models { TaskView }
-import from ..workflow.kinds { CARD_TINT, colorKey }
+import from ..workflow.kinds { CARD_BAR, colorKey }
 
 glob MONTH_SHORT: list[str] = [
          "Jan",
@@ -86,7 +86,14 @@ def:pub TaskCard(
                 onOpen(task);
             }}}
             className={"group cursor-grab gap-0 py-0 transition-shadow hover:shadow-md active:cursor-grabbing "
-                + (CARD_TINT[colorKey(color)] if color else "border-border/70")}
+                + (
+                    # The COLUMN carries the step's colour; a card only
+                    # wears a bar of it. Tinting both made the board shout,
+                    # and the grouping is already clear from the panel.
+                    ("bg-card " + CARD_BAR[colorKey(color)])
+                        if color
+                        else "border-border/70"
+                )}
         >
             <CardContent className="space-y-2 p-3">
                 <div className="text-sm font-medium leading-snug">{task.title}</div>
