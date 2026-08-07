@@ -56,7 +56,7 @@ def:pub KanbanColumn(
             }}
             onDragLeave={lambda (e: DragEvent) {
                 e.preventDefault();
-                # dragleave fires when entering a child card too — only clear
+                # dragleave fires when entering a child card too, only clear
                 # the highlight when the pointer actually left the column.
                 ct: any = e.currentTarget;
                 rt: any = e.relatedTarget;

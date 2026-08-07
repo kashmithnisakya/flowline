@@ -16,7 +16,7 @@ glob KIND_LABEL: dict[str, str] = {
          "active": "being worked on",
          "handoff": "waiting on someone",
          "blocked": "needs attention",
-         "done": "finished — terminal"
+         "done": "finished - terminal"
      },
      COLOR_KEYS: list[str] = ["sky", "indigo", "amber", "rose", "emerald", "slate"],
      DOT_FILL: dict[str, str] = {
@@ -34,14 +34,10 @@ glob KIND_LABEL: dict[str, str] = {
          "rose": "text-rose-500",
          "emerald": "text-emerald-500",
          "slate": "text-slate-500"
-     };
-
-# The step's own colour, as a card tint: a coloured border plus a pale but
-# OPAQUE fill. Opaque matters — a translucent wash lets the canvas dot grid
-# show through and print dots across the step name. Saturated fills turn a
-# ten-step canvas into a rainbow; this gives each step an identity without
-# shouting.
-glob CARD_TINT: dict[str, str] = {
+     },
+     # The step's own colour as a card tint: coloured border plus pale opaque fill.
+     # Opaque matters - a translucent wash lets the canvas dot grid show through.
+     CARD_TINT: dict[str, str] = {
          "sky": "border-sky-500/60 bg-sky-50 dark:bg-sky-900",
          "indigo": "border-indigo-500/60 bg-indigo-50 dark:bg-indigo-900",
          "amber": "border-amber-500/60 bg-amber-50 dark:bg-amber-900",
@@ -69,9 +65,7 @@ glob CARD_BAR: dict[str, str] = {
          "slate": "border-l-4 border-l-slate-500"
      };
 
-# The step's colour as a COLUMN panel: a soft fill inside a coloured border,
-# so a board reads as its workflow at a glance. Lighter than the card tint
-# on purpose — the cards sit inside it and still need to stand out.
+# The step's colour as a COLUMN panel: a soft fill inside a coloured border.
 glob COLUMN_TINT: dict[str, str] = {
          "sky": "border-sky-400/70 bg-sky-50 dark:border-sky-500/40 dark:bg-sky-950/40",
          "indigo": "border-indigo-400/70 bg-indigo-50 dark:border-indigo-500/40 dark:bg-indigo-950/40",
@@ -86,5 +80,6 @@ def colorKey(raw: str) -> str {
     if raw in DOT_FILL {
         return raw;
     }
+    # Default to slate
     return "slate";
 }

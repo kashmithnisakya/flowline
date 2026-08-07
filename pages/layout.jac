@@ -1,7 +1,7 @@
 """standup - root layout.
 
 App pages get the nav, org name and logout. Public pages (the landing page
-and the auth screens) render bare — the landing brings its own header, and
+and the auth screens) render bare, the landing brings its own header, and
 a logged-in visitor browsing / should not see two navs stacked.
 """
 
@@ -9,7 +9,7 @@ import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout
 import from ..lib.session { fetchOrgName }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme }
 import from ..components.ui.button { Button }
-# Note: the wrapper lives in toaster.jac, not sonner.jac — a module named
+# Note: the wrapper lives in toaster.jac, not sonner.jac, a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
 # producing a self-rendering Toaster and an infinite React mount loop.
 import from ..components.ui.toaster { Toaster }

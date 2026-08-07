@@ -1,27 +1,45 @@
 # standup
 
-A kanban board and an automatic daily log for teams that hate status meetings.
+A board that follows the workflow your team actually uses, and a written daily
+log it fills in for you. For teams that hate status meetings.
+
 Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
 JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-https://github.com/user-attachments/assets/96b39f11-1718-4682-a7b9-7275f3bbc562
+https://github.com/user-attachments/assets/80ab532f-0515-4312-8362-c8f526fad165
+
+## Design your workflow, get your board
+
+Most tools hand every team the same columns. Here you draw the steps your team
+really uses, connect them however work moves (loops and branches included), and
+the board becomes those steps, in the order you drew them, each in its own
+colour.
+
+Start from a template (Classic Kanban, Software flow, Jaseci flow, Support
+flow) or from a blank canvas. Drag a step to move it, drag from its border onto
+another step to draw a transition, click a transition to remove it. The canvas
+zooms rather than scrolls, so the whole graph stays on screen.
+
+Every step carries a *kind* behind the name you chose: start, active, handoff,
+blocked or done. The name is yours, the kind is what the app understands, which
+is why renaming a step never changes how anything behaves.
 
 ## What it does
 
-- A six-column board per organization, scoped by project, with drag and drop
-- The board writes the log: task creation and every status move land in the
-  activity feed automatically, with timestamps, issue/PR links and the people involved
-- Review handoffs: moving a task to Review asks (optionally) for a reviewer,
-  a review-by date and the PR link; Blocked asks what is blocking it
-- Multi-assignee tasks, org-defined categories and tags, repos attached to projects
-- A roadmap per project: milestones with optional date ranges on a timeline,
-  each showing how many of its tasks are done
-- GitHub, on demand: install the app on the repos you choose, import issues as
-  tasks, watch pull-request state on the cards, and open an issue from a task
-- An Overview tab with headline numbers, per-project progress and per-person activity
-- An assistant that reads the whole workspace and writes the standup note for you,
-  answers questions about your own board, and turns "add a task for Nadia on the
-  docs site" into a suggestion you confirm before anything is written
+- **A workflow per organization** and a board built from it: your steps, your
+  order, your colours, all on one row however many there are
+- **The board writes the log**: creating a task and every move land in the
+  activity feed automatically, with timestamps, issue/PR links and who was involved
+- **Handoffs ask for detail**: moving work to a handoff or blocked step asks
+  (optionally) for a reviewer, a review-by date, a PR link or what is blocking it
+- **Multi-assignee tasks**, free-text categories and tags, repos attached to projects
+- **GitHub, on demand**: install the app on the repos you choose, import issues
+  as tasks, watch pull-request state on the cards, and open an issue from a task
+- **An Overview tab** with headline numbers, per-project progress and per-person activity
+- **An assistant** that reads the whole workspace and writes the standup note for
+  you, answers questions about your own board, and turns "add a task for Nadia on
+  the docs site" into a suggestion you confirm before anything is written
+- **Light and dark**, chosen on the Settings tab or followed from your device
 
 ## Install Jac
 

@@ -11,14 +11,22 @@ import from models {
     WorkflowMeta,
     Task,
     StepView,
+    TaskView,
     FlowsTo,
+    ForProject,
     step_view,
     resolve,
     on_attached,
     owned
 }
 import from walkers.util { now_iso }
-import from constants { STEP_KINDS, KIND_COLORS, KIND_STATUS, WORKFLOW_TEMPLATES }
+import from constants {
+    STEP_KINDS,
+    KIND_COLORS,
+    KIND_STATUS,
+    STATUS_KIND,
+    WORKFLOW_TEMPLATES
+}
 
 
 # A step's kind IS the semantics every other part of the app reads, through
@@ -92,7 +100,14 @@ walker RenameWorkflow {
 
 
 walker GetWorkflow {
-    has results: list[StepView] = [],
+    """The org's steps, each carrying how much work sits on it.
+
+    `project_id` narrows the count to one project; empty counts everything.
+    The count is computed here rather than on the client so the placement
+    rule (step first, then the legacy status fallback) has exactly one
+    implementation for the board and the workflow view to share."""
+    has project_id: str = "",
+        results: list[StepView] = [],
         reports: list[list[StepView]] = [];
 
     can start with Root entry {
@@ -105,6 +120,93 @@ walker GetWorkflow {
 
     can deliver with Root exit {
         self.results.sort(key=lambda (s: StepView) { s.sort_order; });
+        # Count into a plain map first, then stamp the views: mutating a
+        # view through a dict lookup is more than the checker can follow.
+        counts: dict[str, int] = {};
+        known: list[str] = [];
+        first_of_kind: dict[str, str] = {};
+        for v in self.results {
+            counts[v.id] = 0;
+            known.append(v.id);
+            if v.kind not in first_of_kind {
+                first_of_kind[v.kind] = v.id;
+            }
+        }
+        for t in [here-->[?:Task]] {
+            if self.project_id {
+                owning = [t->:ForProject:->];
+                if not owning or jid(owning[0]) != self.project_id {
+                    continue;
+                }
+            }
+            landing: str = "";
+            if t.step_id and t.step_id in known {
+                landing = t.step_id;
+            } else {
+                kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+                if kind in first_of_kind {
+                    landing = str(first_of_kind[kind]);
+                }
+            }
+            if landing {
+                counts[landing] = int(counts[landing]) + 1;
+            }
+        }
+        for v in self.results {
+            v.task_count = counts[v.id];
+        }
+        report self.results;
+    }
+}
+
+
+walker ListStepTasks {
+    """The work sitting on one step, for the panel the workflow view opens.
+
+    Placement repeats GetWorkflow's rule (a task's own step, else the first
+    step whose kind matches its legacy status) rather than the client
+    guessing, so the list and the count on the card can never disagree."""
+    has step_id: str = "",
+        project_id: str = "",
+        results: list[TaskView] = [],
+        reports: list[list[TaskView]] = [];
+
+    can gather with Root entry {
+        target = resolve(self.step_id);
+        if not isinstance(target, WorkflowStep) or not owned(here, target) {
+            report self.results;
+            disengage;
+        }
+        wanted = jid(target);
+        known: list[str] = [];
+        first_of_kind: dict[str, str] = {};
+        for st in [here-->[?:WorkflowStep]] {
+            known.append(jid(st));
+            if st.kind not in first_of_kind {
+                first_of_kind[st.kind] = jid(st);
+            }
+        }
+        for t in [here-->[?:Task]] {
+            if self.project_id {
+                owning = [t->:ForProject:->];
+                if not owning or jid(owning[0]) != self.project_id {
+                    continue;
+                }
+            }
+            landing: str = "";
+            if t.step_id and t.step_id in known {
+                landing = t.step_id;
+            } else {
+                kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+                if kind in first_of_kind {
+                    landing = str(first_of_kind[kind]);
+                }
+            }
+            if landing == wanted {
+                self.results.append(t.to_view());
+            }
+        }
+        self.results.sort(key=lambda (t: TaskView) { t.sort_order; });
         report self.results;
     }
 }

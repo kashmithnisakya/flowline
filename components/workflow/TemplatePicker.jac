@@ -1,7 +1,7 @@
 """First-run gallery: pick how the team moves work.
 
-The mini previews are rendered from WORKFLOW_TEMPLATES itself — the same
-data ApplyTemplate seeds from — so a preview can never drift from what
+The mini previews are rendered from WORKFLOW_TEMPLATES itself, the same
+data ApplyTemplate seeds from, so a preview can never drift from what
 actually gets created. Everything is editable after choosing; the choice is
 a starting point, not a commitment.
 """
@@ -27,7 +27,7 @@ def thumbY(raw: dict[str, any]) -> float {
 }
 
 
-# Render-ready thumbnail data, materialised through typed locals — the
+# Render-ready thumbnail data, materialised through typed locals, the
 # checker cannot subscript the template's nested `any` values inside JSX.
 def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
     raws: list[dict[str, any]] = t["steps"];
@@ -42,8 +42,7 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
                 "x1": thumbX(a),
                 "y1": thumbY(a),
                 "x2": thumbX(b),
-                "y2": thumbY(b),
-                "back": thumbX(b) < thumbX(a) - 2.0
+                "y2": thumbY(b)
             }
         );
     }
@@ -80,7 +79,7 @@ def:pub TemplatePicker(
                     How does your team move work?
                 </h2>
                 <p className="max-w-md text-sm text-muted-foreground">
-                    Start from a template or design your own. You can reshape everything later — steps, names, connections, loops.
+                    Start from a template or design your own. You can reshape everything later, steps, names, connections, loops.
                 </p>
             </div>
             <div
@@ -103,14 +102,9 @@ def:pub TemplatePicker(
                                             y1={l["y1"]}
                                             x2={l["x2"]}
                                             y2={l["y2"]}
-                                            className={"text-amber-700 dark:text-warning"
-                                                if l["back"]
-                                                else "text-muted-foreground/50"}
+                                            className="text-muted-foreground/50"
                                             stroke="currentColor"
                                             strokeWidth={1.5}
-                                            strokeDasharray={"3 3"
-                                                if l["back"]
-                                                else "0"}
                                         />
                                     }}
                                     {for d in thumbDots(t) {

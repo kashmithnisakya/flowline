@@ -26,7 +26,7 @@ async def:pub fetchProfile -> dict[str, any] {
     }
 }
 
-# PATCH /user/me — merges the given keys into the existing profile.
+# PATCH /user/me, merges the given keys into the existing profile.
 async def:pub patchProfile(changes: dict[str, any]) -> bool {
     try {
         response = await fetch("/user/me", {
