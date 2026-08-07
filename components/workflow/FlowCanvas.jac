@@ -193,6 +193,19 @@ def:pub FlowCanvas(
                                     + DOT_FILL[colorKey(s.color)]}
                             />
                             <span className="truncate" title={s.name}>{s.name}</span>
+                            <span
+                                className={"ml-auto shrink-0 rounded-full px-1.5 text-[11px] font-medium tabular-nums "
+                                    + (
+                                        "bg-foreground/10"
+                                            if s.task_count > 0
+                                            else "text-muted-foreground"
+                                    )}
+                                title={str(s.task_count)
+                                    + (" task" if s.task_count == 1 else " tasks")
+                                    + " here"}
+                            >
+                                {str(s.task_count)}
+                            </span>
                         </div>
                         <div
                             className="mt-0.5 pl-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"

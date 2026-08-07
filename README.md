@@ -6,11 +6,7 @@ log it fills in for you. For teams that hate status meetings.
 Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
 JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-<video src="https://github.com/kashmithnisakya/standup/raw/main/docs/standup-demo.mp4" controls muted playsinline width="100%"></video>
-
-[Watch the walkthrough](docs/standup-demo.mp4): sign in, name the workspace,
-add two people, pick the Jaseci flow template, then two tasks on the board it
-produces.
+<Add video URl here>
 
 ## Design your workflow, get your board
 

@@ -141,6 +141,11 @@ File-based routing with route groups:
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
   bundle and broke the build; that helper lives in `walkers/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
+- **`jac check` does not catch a missing import inside a walker.** A `glob`
+  or edge name that was never imported (`STATUS_KIND`, `ForProject`) still
+  type-checks clean, then raises `name '...' is not defined` at request time
+  and 500s the walker. Only running the endpoint finds it, which is what the
+  API gate suite is for.
 - **A `#` comment among JSX children renders as visible text.** Comments are
   only comments outside the JSX tree; inside it they become a text node and
   ship to the page. Keep notes in the docstring or above the `return`.

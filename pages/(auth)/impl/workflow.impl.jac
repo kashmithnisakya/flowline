@@ -8,12 +8,24 @@ await, a `has` read after a walker call is a stale render-time snapshot.
 
 impl WorkflowPage.boot -> None {
     loadMeta();
-    await reload();
+    # The board persists its project filter under the same key, so the two
+    # tabs stay on the same project rather than each keeping a private idea
+    # of what you are looking at.
+    stored = localStorage.getItem("standup_project") or "";
+    picked = stored or "all";
+    projectId = picked;
+    try {
+        result = root spawn ListProjects();
+        projects = result.reports[0] if result.reports else [];
+    } except Exception as e {
+        projects = [];
+    }
+    await reload(picked);
 }
 
-impl WorkflowPage.reload -> None {
+impl WorkflowPage.reload(pid: str) -> None {
     try {
-        result = root spawn GetWorkflow();
+        result = root spawn GetWorkflow(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
     } except Exception as e {
         toast("Failed to load your workflow");
@@ -21,6 +33,12 @@ impl WorkflowPage.reload -> None {
     loading = False;
     # Open showing the whole graph rather than a corner of it.
     fitZoom();
+}
+
+impl WorkflowPage.selectProject(v: str) -> None {
+    projectId = v;
+    localStorage.setItem("standup_project", v);
+    await reload(v);
 }
 
 impl WorkflowPage.loadMeta -> None {
@@ -121,7 +139,7 @@ impl WorkflowPage.commitName -> None {
                 y=ny
             );
             made = result.reports[0] if result.reports else None;
-            await reload();
+            await reload(projectId);
             creatingStep = False;
             if made {
                 selectedId = made.id;
@@ -151,7 +169,7 @@ impl WorkflowPage.commitName -> None {
     saving = True;
     try {
         root spawn SaveStep(step_id=selectedId, name=name);
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Failed to rename the step");
     }
@@ -169,7 +187,7 @@ impl WorkflowPage.commitField(key: str, value: str) -> None {
         } elif key == "color" {
             root spawn SaveStep(step_id=selectedId, color=value);
         }
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Failed to update the step");
     }
@@ -202,7 +220,7 @@ impl WorkflowPage.deleteStep -> None {
         if connectFrom == gone {
             connectFrom = "";
         }
-        await reload();
+        await reload(projectId);
         toast("Step deleted");
     } except Exception as e {
         toast("Failed to delete the step");
@@ -215,7 +233,7 @@ impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
-            await reload();
+            await reload(projectId);
             if not payload["duplicate"] {
                 toast(
                     "Connected",
@@ -239,7 +257,7 @@ impl WorkflowPage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Could not remove that transition");
     }
@@ -507,7 +525,7 @@ impl WorkflowPage.endDrag(e: MouseEvent) -> None {
     ny = float(drag["ly"]);
     try {
         root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
-        await reload();
+        await reload(projectId);
     } except Exception as err {
         toast("Failed to save the position");
     }

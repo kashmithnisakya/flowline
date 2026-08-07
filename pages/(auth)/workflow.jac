@@ -15,8 +15,9 @@ placed among JSX children is not a comment at all, it renders as visible
 text, so notes like this one stay in the docstring.
 """
 
-import from ...models { StepView }
+import from ...models { Project, StepView }
 import from ...constants { STEP_KINDS, KIND_COLORS }
+import from ...walkers.projects { ListProjects }
 import from ...walkers.workflow {
     GetWorkflow,
     ApplyTemplate,
@@ -36,6 +37,13 @@ import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.ui.select {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
+}
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -48,6 +56,10 @@ glob BLANK_STEP: dict[str, str] = {
 
 def:pub WorkflowPage -> JsxPage {
     has steps: list[StepView] = [],
+        projects: list[Project] = [],
+        # Shared with the board through one localStorage key, so the project
+        # you are looking at follows you between the two tabs.
+        projectId: str = "all",
         loading: bool = True,
         editing: bool = False,
         scratch: bool = False,
@@ -92,7 +104,8 @@ def:pub WorkflowPage -> JsxPage {
     useEffect(lambda { fitZoom(); }, [len(steps), editing]);
 
     async def boot -> None;
-    async def reload -> None;
+    async def reload(pid: str) -> None;
+    async def selectProject(v: str) -> None;
     async def loadMeta -> None;
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
@@ -117,6 +130,16 @@ def:pub WorkflowPage -> JsxPage {
 
     stepsRef.current = steps;
     liveRef.current = live;
+
+    activeProjects = [
+        p
+        for p in projects
+        if p.active
+    ];
+    taskTotal = 0;
+    for s in steps {
+        taskTotal = taskTotal + s.task_count;
+    }
 
     byId: dict[str, StepView] = {};
     for s in steps {
@@ -457,7 +480,9 @@ def:pub WorkflowPage -> JsxPage {
                             {str(len(steps))
                                 + " steps · "
                                 + str(linkCount)
-                                + " transitions"}
+                                + " transitions · "
+                                + str(taskTotal)
+                                + (" task" if taskTotal == 1 else " tasks")}
                         </span>
                         <div className="flex-1"/>
                         {if len(issues) > 0 {
@@ -468,6 +493,19 @@ def:pub WorkflowPage -> JsxPage {
                                 {"⚠ " + issues[0]}
                             </span>
                         }}
+                        <Select value={projectId} onValueChange={selectProject}>
+                            <SelectTrigger className="w-44">
+                                <SelectValue placeholder="All projects"/>
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                                <SelectItem value="all">All projects</SelectItem>
+                                {for p in activeProjects {
+                                    <SelectItem key={jid(p)} value={jid(p)}>
+                                        {p.name}
+                                    </SelectItem>
+                                }}
+                            </SelectContent>
+                        </Select>
                         <Button key="edit" onClick={lambda { editing = True; }}>
                             Edit workflow
                         </Button>

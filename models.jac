@@ -356,7 +356,10 @@ obj StepView {
         y: float,
         sort_order: float,
         prev_ids: list[str] = [],
-        next_ids: list[str] = [];
+        next_ids: list[str] = [],
+        # How much work is sitting here, counted per request in GetWorkflow
+        # because it depends on the project filter the caller asked for.
+        task_count: int = 0;
 }
 
 # What the client is allowed to know about the GitHub link. The connection
