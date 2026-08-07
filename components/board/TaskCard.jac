@@ -5,6 +5,7 @@ ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 """
 
 import from ...models { TaskView }
+import from ..workflow.kinds { CARD_TINT, colorKey }
 
 glob MONTH_SHORT: list[str] = [
          "Jan",
@@ -42,6 +43,10 @@ def:pub TaskCard(
     # The neighbouring columns, supplied by the column that renders this card:
     # the board's columns come from the org's workflow now, so a card cannot
     # work out where "left" and "right" go on its own.
+    # The colour of the step this card sits in, so a column reads as one
+    # block of work: every card in "Architecting" is the same, and moving it
+    # to "DOMX review" recolours it.
+    color: str = "",
     prevKey: str = "",
     prevLabel: str = "",
     nextKey: str = "",
@@ -80,7 +85,8 @@ def:pub TaskCard(
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className="group cursor-grab gap-0 border-border/70 py-0 transition-shadow hover:shadow-md active:cursor-grabbing"
+            className={"group cursor-grab gap-0 py-0 transition-shadow hover:shadow-md active:cursor-grabbing "
+                + (CARD_TINT[colorKey(color)] if color else "border-border/70")}
         >
             <CardContent className="space-y-2 p-3">
                 <div className="text-sm font-medium leading-snug">{task.title}</div>

@@ -141,6 +141,9 @@ File-based routing with route groups:
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
   bundle and broke the build; that helper lives in `walkers/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
+- **A `#` comment among JSX children renders as visible text.** Comments are
+  only comments outside the JSX tree; inside it they become a text node and
+  ship to the page. Keep notes in the docstring or above the `return`.
 - **A page method named `set<Field>` collides with the state setter.** A
   `has zoom: float` compiles to `const [zoom, setZoom] = useState(...)`, so a
   `def setZoom` in the same component is a duplicate declaration and the

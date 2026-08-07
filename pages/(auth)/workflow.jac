@@ -8,6 +8,11 @@ like everything else, so there is no project selector here.
 Validation is advisory on purpose: the chip points out a missing start or
 done step and unreachable steps, but never blocks saving. The graph belongs
 to the org, loops and all.
+
+The editor floats OVER the canvas rather than taking a column beside it: the
+drawing is the page and the editor is a layer on top. Note that a `#` comment
+placed among JSX children is not a comment at all — it renders as visible
+text — so notes like this one stay in the docstring.
 """
 
 import from ...models { StepView }
@@ -32,6 +37,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
+import from "react" { useEffect }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -78,6 +84,12 @@ def:pub WorkflowPage -> JsxPage {
     async can with entry {
         boot();
     }
+
+    # Fit whenever the visible area changes: first load (the viewport has no
+    # measured size until then), a template or a new step widening the graph,
+    # and entering edit mode, where the floating editor covers the right
+    # third of the canvas.
+    useEffect(lambda { fitZoom(); }, [len(steps), editing]);
 
     async def boot -> None;
     async def reload -> None;
@@ -340,7 +352,6 @@ def:pub WorkflowPage -> JsxPage {
                             </Button>
                         </div>
                     }}
-                    # The panel floats over the canvas rather than stealing a # column from it: the drawing is the page, and the editor # is a layer on top of it.
                     <div className="relative">
                         <div
                             onMouseDown={beginDrag}

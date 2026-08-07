@@ -192,7 +192,7 @@ def:pub FlowCanvas(
                                 className={"h-2 w-2 shrink-0 rounded-full "
                                     + DOT_FILL[colorKey(s.color)]}
                             />
-                            <span className="truncate">{s.name}</span>
+                            <span className="truncate" title={s.name}>{s.name}</span>
                         </div>
                         <div
                             className="mt-0.5 pl-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"

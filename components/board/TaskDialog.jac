@@ -287,7 +287,6 @@ def:pub TaskDialog(
                             </Select>
                         </div>
                         <div className="grid content-start gap-2">
-                            # Free text with the org's existing categories as # suggestions: picking from a fixed vocabulary # could never grow its own first entry.
                             <Label htmlFor="task-category">Category</Label>
                             <Input
                                 id="task-category"
