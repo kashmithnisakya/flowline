@@ -63,7 +63,7 @@ walker SaveMember {
 }
 
 walker ArchiveMember {
-    """active=False, never delete — history edges must survive. Open
+    """active=False, never delete, history edges must survive. Open
     (non-Done) tasks lose their AssignedTo edge so live work returns to
     Unassigned; Done-task edges stay for history."""
     has member_id: str;

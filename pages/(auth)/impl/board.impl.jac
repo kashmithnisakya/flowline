@@ -28,7 +28,7 @@ impl BoardPage.boot -> None {
 
 impl BoardPage.loadAll -> None {
     # While a move is in flight its optimistic state is newer than anything
-    # a concurrent fetch started earlier could return — skip.
+    # a concurrent fetch started earlier could return, skip.
     if movesRef.current {
         return;
     }
@@ -49,7 +49,7 @@ impl BoardPage.loadAll -> None {
             repos = rResult.reports[0] if rResult.reports else [];
         }
         # A stale persisted filter (archived project) would show an empty
-        # board with no hint — reset it to "all".
+        # board with no hint, reset it to "all".
         stored = localStorage.getItem("standup_project") or "";
         if stored and stored != "all" {
             found = False;
@@ -76,7 +76,7 @@ impl BoardPage.setProjectFilter(v: str) -> None {
 
 impl BoardPage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
-    # LITERAL "key" property — the variable is ignored and the real field
+    # LITERAL "key" property, the variable is ignored and the real field
     # never updates (inputs appear frozen). Build a copy and subscript it.
     updated = {** form};
     updated[key] = value;

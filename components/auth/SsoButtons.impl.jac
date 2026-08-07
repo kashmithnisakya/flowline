@@ -2,7 +2,7 @@
 
 impl SsoButtons.start(platform: str) -> None {
     # jac-scale requires client_callback on the initiate call (it 422s
-    # without one), which jacSsoLogin does not send — so build the URL by
+    # without one), which jacSsoLogin does not send, so build the URL by
     # hand. The server only honours the value when it is a safe loopback;
     # otherwise it falls back to [scale.sso] client_auth_callback_url.
     back = encodeURIComponent(window.location.origin + "/auth/callback");
@@ -22,9 +22,11 @@ impl SsoButtons.start(platform: str) -> None {
     }
     if not configured {
         onFailure(
-            platform.capitalize() + " sign-in isn't configured yet. Add its "
-            + "client_id and client_secret under [scale.sso." + platform
-            + "] in jac.toml."
+            platform.capitalize()
+                + " sign-in isn't configured yet. Add its "
+                + "client_id and client_secret under [scale.sso."
+                + platform
+                + "] in jac.toml."
         );
         return;
     }

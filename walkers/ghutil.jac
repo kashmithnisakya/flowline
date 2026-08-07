@@ -303,7 +303,7 @@ def exchange_code(code: str) -> str {
 # Installation ids are small integers, so without this an attacker could hand
 # a victim's browser someone else's id and bind the victim's workspace to an
 # installation they control. Returns the installation record, or {} on any
-# failure — callers treat empty as "not proven, refuse".
+# failure, callers treat empty as "not proven, refuse".
 def user_owns_installation(user_token: str, installation_id: int) -> dict[str, any] {
     nothing: dict[str, any] = {};
     if not user_token {

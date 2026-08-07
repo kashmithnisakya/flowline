@@ -58,7 +58,8 @@ import from walkers.workflow {
     LinkTransition,
     UnlinkTransition,
     GetWorkflowMeta,
-    RenameWorkflow
+    RenameWorkflow,
+    ListStepTasks
 }
 import from walkers.github {
     GithubStatus,

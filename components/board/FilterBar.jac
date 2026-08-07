@@ -1,7 +1,13 @@
 """Board filters: project (persisted), assignee, category, hide-Done."""
 
 import from ...models { Project, MemberView }
-import from ..ui.select { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+import from ..ui.select {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
+}
 import from ..ui.button { Button }
 
 def:pub FilterBar(
@@ -18,50 +24,52 @@ def:pub FilterBar(
     categories: list[str] = []
 ) -> JsxElement {
     shownMembers = [
-        m for m in members
+        m
+        for m in members
         if project == "all" or project in m.project_ids
     ];
-    return <div className="flex flex-wrap items-center gap-2">
-        <Select value={project} onValueChange={onProject}>
-            <SelectTrigger className="h-8 w-44" size="sm">
-                <SelectValue placeholder="Project" />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="all">All projects</SelectItem>
-                {for p in projects {
-                    <SelectItem key={jid(p)} value={jid(p)}>{p.name}</SelectItem>
-                }}
-            </SelectContent>
-        </Select>
-        <Select value={assignee} onValueChange={onAssignee}>
-            <SelectTrigger className="h-8 w-40" size="sm">
-                <SelectValue placeholder="Assignee" />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="All">Everyone</SelectItem>
-                {for m in shownMembers {
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                }}
-            </SelectContent>
-        </Select>
-        <Select value={category} onValueChange={onCategory}>
-            <SelectTrigger className="h-8 w-40" size="sm">
-                <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="All">All categories</SelectItem>
-                {for c in categories {
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                }}
-            </SelectContent>
-        </Select>
-        <Button
-            variant={"default" if hideDone else "outline"}
-            size="sm"
-            className="h-8"
-            onClick={lambda { onHideDone(); }}
-        >
-            Hide Done
-        </Button>
-    </div>;
+    return
+        <div className="flex flex-wrap items-center gap-2">
+            <Select value={project} onValueChange={onProject}>
+                <SelectTrigger className="h-8 w-44" size="sm">
+                    <SelectValue placeholder="Project"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All projects</SelectItem>
+                    {for p in projects {
+                        <SelectItem key={jid(p)} value={jid(p)}>{p.name}</SelectItem>
+                    }}
+                </SelectContent>
+            </Select>
+            <Select value={assignee} onValueChange={onAssignee}>
+                <SelectTrigger className="h-8 w-40" size="sm">
+                    <SelectValue placeholder="Assignee"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="All">Everyone</SelectItem>
+                    {for m in shownMembers {
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    }}
+                </SelectContent>
+            </Select>
+            <Select value={category} onValueChange={onCategory}>
+                <SelectTrigger className="h-8 w-40" size="sm">
+                    <SelectValue placeholder="Category"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="All">All categories</SelectItem>
+                    {for c in categories {
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                    }}
+                </SelectContent>
+            </Select>
+            <Button
+                variant={"default" if hideDone else "outline"}
+                size="sm"
+                className="h-8"
+                onClick={lambda { onHideDone(); }}
+            >
+                Hide Done
+            </Button>
+        </div>;
 }

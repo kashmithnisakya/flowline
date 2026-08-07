@@ -3,17 +3,29 @@
 Loaders and mutations reload through GetWorkflow rather than patching local
 state: a transition or a delete can change every step's prev/next lists, and
 the walker is the only place that truth lives. Locals are read before any
-await — a `has` read after a walker call is a stale render-time snapshot.
+await, a `has` read after a walker call is a stale render-time snapshot.
 """
 
 impl WorkflowPage.boot -> None {
     loadMeta();
-    await reload();
+    # The board persists its project filter under the same key, so the two
+    # tabs stay on the same project rather than each keeping a private idea
+    # of what you are looking at.
+    stored = localStorage.getItem("standup_project") or "";
+    picked = stored or "all";
+    projectId = picked;
+    try {
+        result = root spawn ListProjects();
+        projects = result.reports[0] if result.reports else [];
+    } except Exception as e {
+        projects = [];
+    }
+    await reload(picked);
 }
 
-impl WorkflowPage.reload -> None {
+impl WorkflowPage.reload(pid: str) -> None {
     try {
-        result = root spawn GetWorkflow();
+        result = root spawn GetWorkflow(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
     } except Exception as e {
         toast("Failed to load your workflow");
@@ -21,6 +33,31 @@ impl WorkflowPage.reload -> None {
     loading = False;
     # Open showing the whole graph rather than a corner of it.
     fitZoom();
+}
+
+impl WorkflowPage.peekStep(stepId: str) -> None {
+    # Fetching per click rather than holding every task in page state: the
+    # server already owns the placement rule, and a workspace can have far
+    # more tasks than the panel will ever show.
+    peekId = stepId;
+    peekTasks = [];
+    peekLoading = True;
+    pid = projectId;
+    try {
+        result = root spawn ListStepTasks(
+            step_id=stepId, project_id=pid if pid and pid != "all" else ""
+        );
+        peekTasks = result.reports[0] if result.reports else [];
+    } except Exception as e {
+        toast("Could not load the work on that step");
+    }
+    peekLoading = False;
+}
+
+impl WorkflowPage.selectProject(v: str) -> None {
+    projectId = v;
+    localStorage.setItem("standup_project", v);
+    await reload(v);
 }
 
 impl WorkflowPage.loadMeta -> None {
@@ -43,7 +80,7 @@ impl WorkflowPage.pickTemplate(key: str) -> None {
         if len(fresh) > 0 {
             steps = fresh;
             editing = True;
-            toast("Your workflow is in — drag anything to make it yours");
+            toast("Your workflow is in, drag anything to make it yours");
         } else {
             toast("That template could not be applied");
         }
@@ -121,7 +158,7 @@ impl WorkflowPage.commitName -> None {
                 y=ny
             );
             made = result.reports[0] if result.reports else None;
-            await reload();
+            await reload(projectId);
             creatingStep = False;
             if made {
                 selectedId = made.id;
@@ -151,7 +188,7 @@ impl WorkflowPage.commitName -> None {
     saving = True;
     try {
         root spawn SaveStep(step_id=selectedId, name=name);
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Failed to rename the step");
     }
@@ -169,7 +206,7 @@ impl WorkflowPage.commitField(key: str, value: str) -> None {
         } elif key == "color" {
             root spawn SaveStep(step_id=selectedId, color=value);
         }
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Failed to update the step");
     }
@@ -202,7 +239,7 @@ impl WorkflowPage.deleteStep -> None {
         if connectFrom == gone {
             connectFrom = "";
         }
-        await reload();
+        await reload(projectId);
         toast("Step deleted");
     } except Exception as e {
         toast("Failed to delete the step");
@@ -215,7 +252,7 @@ impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
-            await reload();
+            await reload(projectId);
             if not payload["duplicate"] {
                 toast(
                     "Connected",
@@ -239,7 +276,7 @@ impl WorkflowPage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
-        await reload();
+        await reload(projectId);
     } except Exception as e {
         toast("Could not remove that transition");
     }
@@ -287,7 +324,7 @@ impl WorkflowPage.armConnect -> None {
 
 impl WorkflowPage.clearCanvas -> None {
     # A drag whose mousedown and mouseup land on different elements makes the
-    # browser fire the click on their common ancestor — the canvas — not on
+    # browser fire the click on their common ancestor, the canvas, not on
     # either card. So the swallow flag has to be consumable here too, or
     # finishing a wire would immediately wipe the selection it just made and
     # leave the flag set to eat the NEXT genuine click.
@@ -395,7 +432,7 @@ impl WorkflowPage.beginDrag(e: MouseEvent) -> None {
     step = hit["step"] as StepView;
     if hit["onEdge"] {
         # The border is the port: dragging off it draws a transition.
-        # Grabbing a port also cancels an open New step panel — the panel and
+        # Grabbing a port also cancels an open New step panel, the panel and
         # the inspector share `form`, so leaving it open would overwrite the
         # half-typed name and let Add to canvas create a duplicate.
         wireRef.current = step.id;
@@ -507,7 +544,7 @@ impl WorkflowPage.endDrag(e: MouseEvent) -> None {
     ny = float(drag["ly"]);
     try {
         root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
-        await reload();
+        await reload(projectId);
     } except Exception as err {
         toast("Failed to save the position");
     }
