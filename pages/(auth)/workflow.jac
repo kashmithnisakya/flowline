@@ -570,6 +570,7 @@ def:pub WorkflowPage -> JsxPage {
                     <FlowCanvas
                         steps={steps}
                         zoom={zoom}
+                        showGrid={False}
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
                         onZoomFit={fitZoom}

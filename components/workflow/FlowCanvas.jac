@@ -6,8 +6,8 @@ roadmap's Flow, edges travel in any direction and loops are legal. Every
 transition is drawn the same way: the arrowhead already says which way work
 moves, and a second style for "backwards" needed a legend to mean anything.
 
-The viewport never scrolls. It fills its box, the dot grid covers all of it,
-and a zoom control shrinks the drawing to fit instead: a scrollbar hides
+The viewport never scrolls. It fills its box and a zoom control shrinks the
+drawing to fit instead: a scrollbar hides
 half the graph behind a gesture, where a zoom level tells you at a glance
 that there is more and puts it back on screen in one click. The control
 sends a DELTA rather than a target, because two quick clicks would both
@@ -26,6 +26,7 @@ def:pub FlowCanvas(
     connectFrom: str = "",
     selectedEdge: str = "",
     zoom: float = 1.0,
+    showGrid: bool = True,
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
@@ -75,16 +76,21 @@ def:pub FlowCanvas(
     # the board rather than the cards changing size against a fixed mesh.
     gridPitch = 22.0 * zoom;
 
+    # The grid is an editing affordance: it says the cards can be dragged and
+    # gives them something to line up against. The read-only view has nothing
+    # to align, so there it is only texture behind the diagram.
+    boxStyle: dict[str, str] = {"height": "min(74vh, 44rem)"};
+    if showGrid {
+        boxStyle["backgroundImage"] = "radial-gradient(var(--color-muted-foreground) 1px, transparent 1px)";
+        boxStyle["backgroundSize"] = str(gridPitch) + "px " + str(gridPitch) + "px";
+        boxStyle["backgroundPosition"] = "8px 8px";
+    }
+
     return
         <div
             ref={viewportRef}
             className="relative select-none overflow-hidden rounded-lg border bg-card"
-            style={{
-                "height": "min(74vh, 44rem)",
-                "backgroundImage": "radial-gradient(var(--color-muted-foreground) 1px, transparent 1px)",
-                "backgroundSize": str(gridPitch) + "px " + str(gridPitch) + "px",
-                "backgroundPosition": "8px 8px"
-            }}
+            style={boxStyle}
             onClick={lambda { if onCanvasClick { onCanvasClick(); }}}
         >
             <div
