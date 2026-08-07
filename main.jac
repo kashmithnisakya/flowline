@@ -8,36 +8,69 @@ the routed children.
 import ".styles.global.css";
 
 import from models {
-    Project, Member, Repo, Task, LogEntry, TaskView, MemberView,
-    Milestone, MilestoneView, GithubConnectionView, WorkflowStep,
-    WorkflowMeta, StepView
+    Project,
+    Member,
+    Repo,
+    Task,
+    LogEntry,
+    TaskView,
+    MemberView,
+    GithubConnectionView,
+    WorkflowStep,
+    WorkflowMeta,
+    StepView
 }
 import from walkers.projects {
-    ListProjects, SaveProject, ArchiveProject,
-    AssignToProject, UnassignFromProject
+    ListProjects,
+    SaveProject,
+    ArchiveProject,
+    AssignToProject,
+    UnassignFromProject
 }
 import from walkers.roster {
-    ListMembers, SaveMember, ArchiveMember, ListRepos, AddRepo, RemoveRepo
+    ListMembers,
+    SaveMember,
+    ArchiveMember,
+    ListRepos,
+    AddRepo,
+    RemoveRepo
 }
 import from walkers.tasks {
-    ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
+    ListTasks,
+    CreateTask,
+    UpdateTask,
+    MoveTask,
+    SetMoveInfo,
+    DeleteTask
 }
 import from walkers.log {
-    ListLogEntries, LogActivity, UpdateLogEntry, DeleteLogEntries
-}
-import from walkers.vocab { ListVocab, AddVocab, RemoveVocab }
-import from walkers.roadmap {
-    ListMilestones, SaveMilestone, DeleteMilestone, ReorderMilestone,
-    SetTaskMilestone, LinkSteps, UnlinkSteps
+    ListLogEntries,
+    LogActivity,
+    UpdateLogEntry,
+    DeleteLogEntries
 }
 import from walkers.workflow {
-    GetWorkflow, ApplyTemplate, SaveStep, MoveStep, DeleteStep,
-    LinkTransition, UnlinkTransition, GetWorkflowMeta, RenameWorkflow
+    GetWorkflow,
+    ApplyTemplate,
+    SaveStep,
+    MoveStep,
+    DeleteStep,
+    LinkTransition,
+    UnlinkTransition,
+    GetWorkflowMeta,
+    RenameWorkflow
 }
 import from walkers.github {
-    GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,
-    ListGithubRepos, ListRepoIssues, ListRepoPulls, ImportIssues,
-    CreateIssueFromTask, SyncGithub
+    GithubStatus,
+    StartGithubInstall,
+    CompleteGithubInstall,
+    DisconnectGithub,
+    ListGithubRepos,
+    ListRepoIssues,
+    ListRepoPulls,
+    ImportIssues,
+    CreateIssueFromTask,
+    SyncGithub
 }
 import from walkers.insights { Digest }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }

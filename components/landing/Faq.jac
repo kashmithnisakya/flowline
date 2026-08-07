@@ -44,11 +44,11 @@ glob FAQS: list[QA] = [
             + "closes or a pull request merges, the card says so and you decide."
     ),
     QA(
-        q="Can I plan further out than the board?",
-        a="Each project has a roadmap of milestones: a phase, an optional date "
-            + "range, and the tasks that belong to it, drawn on a timeline. It is "
-            + "a planning view over the same tasks, not a second list to keep up "
-            + "to date."
+        q="Do we have to use the same columns as everyone else?",
+        a="No. You design the workflow: name the steps your team actually "
+            + "uses and connect them however work moves, loops included. The "
+            + "board is those steps, so the two can never disagree. Start from "
+            + "a template if you would rather not draw one."
     ),
     QA(
         q="Is there a Slack or Teams app?",

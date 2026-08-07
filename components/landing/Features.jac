@@ -1,4 +1,4 @@
-"""What the product actually ships today — four cards, no roadmap items."""
+"""What the product actually ships today — four cards, nothing aspirational."""
 
 import from ..ui.card { Card, CardContent }
 
@@ -12,11 +12,11 @@ obj Feature {
 glob FEATURES: list[Feature] = [
     Feature(
         n="01",
-        title="A board per project",
-        body="Six columns from Backlog to Blocked, drag-and-drop between them, "
-            + "filters by project, assignee and category. Where the work sits is "
-            + "a glance, not a round-the-room.",
-        tag="Board"
+        title="A workflow you design",
+        body="Name the steps your team actually uses and connect them however "
+            + "work moves, loops included. The board is those steps, with "
+            + "drag-and-drop between them and filters by project and assignee.",
+        tag="Workflow"
     ),
     Feature(
         n="02",

@@ -9,6 +9,7 @@ point. Only self-loops are refused, and duplicate transitions are deduped.
 import from models {
     WorkflowStep,
     WorkflowMeta,
+    Task,
     StepView,
     FlowsTo,
     step_view,
@@ -17,7 +18,22 @@ import from models {
     owned
 }
 import from walkers.util { now_iso }
-import from constants { STEP_KINDS, KIND_COLORS, WORKFLOW_TEMPLATES }
+import from constants { STEP_KINDS, KIND_COLORS, KIND_STATUS, WORKFLOW_TEMPLATES }
+
+
+# A step's kind IS the semantics every other part of the app reads, through
+# each task's `status`. Re-point the tasks sitting on this step whenever the
+# kind changes, or "done" work would keep reporting as "In Progress" to
+# insights, the digest and the assistant.
+def restatus_tasks(holder: Root, step: WorkflowStep) {
+    landing = KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
+    target = jid(step);
+    for t in [holder-->[?:Task]] {
+        if t.step_id == target and t.status != landing {
+            t.status = landing;
+        }
+    }
+}
 
 
 # Canvas bound in px. Positions come straight off the wire, so this is the
@@ -205,8 +221,12 @@ walker SaveStep {
             if self.name.strip() {
                 target.name = self.name.strip();
             }
+            kind_changed = self.kind in STEP_KINDS and self.kind != target.kind;
             if self.kind in STEP_KINDS {
                 target.kind = self.kind;
+            }
+            if kind_changed {
+                restatus_tasks(here, target);
             }
             if self.color {
                 target.color = self.color;
@@ -265,11 +285,48 @@ walker MoveStep(find_step) {
 
 walker DeleteStep(find_step) {
     """Removes the step; every FlowsTo transition touching it dies with the
-    node. Phase 2 adds a refusal while tasks still sit on the step."""
+    node, and any task sitting on it falls back to its status.
+
+    Refuses to remove the LAST start or done step: the board places
+    workflow-less tasks by kind, and an org with no way in or no way out has
+    a board work cannot leave."""
+    has reports: list[dict[str, any]] = [];
+
     can remove with WorkflowStep entry {
+        owners = [here<--];
+        holder = owners[0];
+        kind = here.kind;
+        if kind == "start" or kind == "done" {
+            siblings = 0;
+            for s in [holder-->[?:WorkflowStep]] {
+                if s.kind == kind and jid(s) != jid(here) {
+                    siblings = siblings + 1;
+                }
+            }
+            if siblings == 0 {
+                report {
+                    "ok": False,
+                    "error": "last_of_kind",
+                    "message": (
+                        "This is the only "
+                        + kind
+                        + " step. Give another step "
+                        + "that kind first, then delete this one."
+                    )
+                };
+                disengage;
+            }
+        }
         gone = jid(here);
+        # Tasks keep their status, so they land by kind rather than vanishing
+        # into whichever column happens to be first.
+        for t in [holder-->[?:Task]] {
+            if t.step_id == gone {
+                t.step_id = "";
+            }
+        }
         del here;
-        report {"deleted": gone};
+        report {"ok": True, "deleted": gone};
         disengage;
     }
 }
