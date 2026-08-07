@@ -4,10 +4,8 @@ impl WorkspacePage.loadAll -> None {
     try {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        vResult = root spawn ListVocab();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
-        vocab = vResult.reports[0] if vResult.reports else [];
     } except Exception as e {
         toast("Failed to load the workspace");
     }
@@ -17,7 +15,7 @@ impl WorkspacePage.loadAll -> None {
 impl WorkspacePage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
     # LITERAL "key" property. Build a copy and subscript it instead.
-    updated = {**form};
+    updated = {** form};
     updated[key] = value;
     form = updated;
 }
@@ -31,13 +29,30 @@ impl WorkspacePage.addRole -> None {
     setField("roleDraft", "");
 }
 
+impl WorkspacePage.addTag -> None {
+    draft = form["tagDraft"].strip();
+    if not draft or draft in mTags {
+        return;
+    }
+    mTags = mTags + [draft];
+    setField("tagDraft", "");
+}
+
 impl WorkspacePage.removeRole(role: str) -> None {
-    mRoles = [r for r in mRoles if r != role];
+    mRoles = [
+        r
+        for r in mRoles
+        if r != role
+    ];
 }
 
 impl WorkspacePage.toggleTag(tag: str) -> None {
     if tag in mTags {
-        mTags = [t for t in mTags if t != tag];
+        mTags = [
+            t
+            for t in mTags
+            if t != tag
+        ];
     } else {
         mTags = mTags + [tag];
     }
@@ -45,7 +60,11 @@ impl WorkspacePage.toggleTag(tag: str) -> None {
 
 impl WorkspacePage.toggleProject(projectId: str) -> None {
     if projectId in mProjects {
-        mProjects = [p for p in mProjects if p != projectId];
+        mProjects = [
+            p
+            for p in mProjects
+            if p != projectId
+        ];
     } else {
         mProjects = mProjects + [projectId];
     }
@@ -63,8 +82,10 @@ impl WorkspacePage.openCreate -> None {
 impl WorkspacePage.openEdit(m: MemberView) -> None {
     editingId = m.id;
     form = {
-        "name": m.name, "email": m.email,
-        "github": m.github_username, "roleDraft": ""
+        "name": m.name,
+        "email": m.email,
+        "github": m.github_username,
+        "roleDraft": ""
     };
     mRoles = m.roles;
     mTags = m.tags;
@@ -87,8 +108,11 @@ impl WorkspacePage.saveMember -> None {
     }
     try {
         result = root spawn SaveMember(
-            member_id=editingId, name=name, roles=roles,
-            email=form["email"].strip(), github_username=form["github"].strip(),
+            member_id=editingId,
+            name=name,
+            roles=roles,
+            email=form["email"].strip(),
+            github_username=form["github"].strip(),
             tags=mTags
         );
         saved = result.reports[0] if result.reports else None;
@@ -154,32 +178,6 @@ impl WorkspacePage.unassignFrom(memberId: str, projectName: str) -> None {
     }
 }
 
-impl WorkspacePage.addVocab(kind: str) -> None {
-    value = newCategory.strip() if kind == "category" else newTag.strip();
-    if not value {
-        return;
-    }
-    try {
-        root spawn AddVocab(kind=kind, value=value);
-        if kind == "category" {
-            newCategory = "";
-        } else {
-            newTag = "";
-        }
-        await loadAll();
-    } except Exception as e {
-        toast("Failed to add the term");
-    }
-}
-
-impl WorkspacePage.removeVocab(termId: str) -> None {
-    try {
-        root spawn RemoveVocab(term_id=termId);
-        await loadAll();
-    } except Exception as e {
-        toast("Failed to remove the term");
-    }
-}
 
 impl WorkspacePage.selectTab(value: str) -> None {
     tab = value;

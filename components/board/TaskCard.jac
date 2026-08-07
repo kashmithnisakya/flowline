@@ -5,14 +5,22 @@ ignored), with arrow-button click-to-move as the no-drag/touch fallback.
 """
 
 import from ...models { TaskView }
-glob STATUSES: list[str] = [
-    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
-];
+import from ..workflow.kinds { CARD_BAR, colorKey }
 
 glob MONTH_SHORT: list[str] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-];
+         "Jan",
+         "Feb",
+         "Mar",
+         "Apr",
+         "May",
+         "Jun",
+         "Jul",
+         "Aug",
+         "Sep",
+         "Oct",
+         "Nov",
+         "Dec"
+     ];
 
 # "2026-08-07" -> "Aug 7"
 def prettyDay(iso: str) -> str {
@@ -21,6 +29,7 @@ def prettyDay(iso: str) -> str {
     }
     return MONTH_SHORT[int(iso[5:7]) - 1] + " " + str(int(iso[8:10]));
 }
+
 import from ..common.Markdown { Markdown }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
@@ -31,6 +40,18 @@ def:pub TaskCard(
     task: TaskView,
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
+    # The neighbouring columns, supplied by the column that renders this card:
+    # the board's columns come from the org's workflow now, so a card cannot
+    # work out where "left" and "right" go on its own.
+    # The colour of the step this card sits in, so a column reads as one
+    # block of work: every card in "Architecting" is the same, and moving it
+    # to "DOMX review" recolours it.
+    color: str = "",
+    prevKey: str = "",
+    prevLabel: str = "",
+    nextKey: str = "",
+    nextLabel: str = "",
+    doneKey: str = "",
     onMarkDone: Callable[[str], None] = None
 ) -> JsxElement {
     # The column does not forward a mark-done callback yet, so fall back to
@@ -38,98 +59,111 @@ def:pub TaskCard(
     def markDone(taskId: str) {
         if onMarkDone {
             onMarkDone(taskId);
-        } else {
-            onArrowMove(task, "Done");
+        } elif doneKey {
+            onArrowMove(task, doneKey);
         }
     }
+    priorityVariant = "destructive"
+        if task.priority == "High"
+        else ("secondary" if task.priority == "Medium" else "outline");
 
-    statusIdx = 0;
-    for (i, s) in enumerate(STATUSES) {
-        if s == task.status {
-            statusIdx = i;
-        }
-    }
-    prevStatus = STATUSES[statusIdx - 1] if statusIdx > 0 else "";
-    nextStatus = STATUSES[statusIdx + 1] if statusIdx < len(STATUSES) - 1 else "";
-    priorityVariant = "destructive" if task.priority == "High" else (
-        "secondary" if task.priority == "Medium" else "outline"
-    );
-
-    return <Card
-        draggable={True}
-        onDragStart={lambda (e: DragEvent) {
-            dt = e.dataTransfer;
-            if dt {
-                dt.setData("text/x-standup-task", task.id);
-                dt.effectAllowed = "move";
-            }
-        }}
-        onClick={lambda { onOpen(task); }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={lambda (e: KeyboardEvent) {
-            if e.key == "Enter" or e.key == " " {
+    return
+        <Card
+            draggable={True}
+            onDragStart={lambda (e: DragEvent) {
+                dt = e.dataTransfer;
+                if dt {
+                    dt.setData("text/x-standup-task", task.id);
+                    dt.effectAllowed = "move";
+                }
+            }}
+            onClick={lambda { onOpen(task); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter"
+                or e.key == " " {
                 e.preventDefault();
                 onOpen(task);
-            }
-        }}
-        className="group cursor-grab gap-0 border-border/70 py-0 transition-shadow hover:shadow-md active:cursor-grabbing"
-    >
-        <CardContent className="space-y-2 p-3">
-            <div className="text-sm font-medium leading-snug">{task.title}</div>
-            <div className="flex flex-wrap items-center gap-1">
-                {if task.project_name {
-                    <Badge key="project" variant="secondary">{task.project_name}</Badge>
-                }}
-                {if task.priority {
-                    <Badge key="priority" variant={priorityVariant}>{task.priority}</Badge>
-                }}
-                {if task.category {
-                    <Badge key="category" variant="outline">{task.category}</Badge>
-                }}
-            </div>
-            {if len(task.assignee_names) > 0 or task.due_date {
-                <div key="meta" className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="truncate">{", ".join(task.assignee_names)}</span>
-                    <span className="shrink-0">{prettyDay(task.due_date)}</span>
-                </div>
-            }}
-            {if task.status == "Blocked" and task.notes {
-                <div key="blocked" className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-                    <Markdown text={task.notes} />
-                </div>
-            }}
-            {if task.gh_issue_number > 0 or task.pr_state {
-                <GitHubChip key="github" task={task} onMarkDone={markDone} />
-            }}
-            <div className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100">
-                <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-foreground"
-                    disabled={not prevStatus}
-                    title={"Move to " + prevStatus if prevStatus else ""}
-                    onClick={lambda (e: MouseEvent) {
-                        e.stopPropagation();
-                        onArrowMove(task, prevStatus);
+            }}}
+            className={"group cursor-grab gap-0 py-0 transition-shadow hover:shadow-md active:cursor-grabbing "
+                + (
+                    # The COLUMN carries the step's colour; a card only
+                    # wears a bar of it. Tinting both made the board shout,
+                    # and the grouping is already clear from the panel.
+                    ("bg-card " + CARD_BAR[colorKey(color)])
+                        if color
+                        else "border-border/70"
+                )}
+        >
+            <CardContent className="space-y-2 p-3">
+                <div className="text-sm font-medium leading-snug">{task.title}</div>
+                <div className="flex flex-wrap items-center gap-1">
+                    {if task.project_name {
+                        <Badge key="project" variant="secondary">
+                            {task.project_name}
+                        </Badge>
                     }}
-                >
-                    ←
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-foreground"
-                    disabled={not nextStatus}
-                    title={"Move to " + nextStatus if nextStatus else ""}
-                    onClick={lambda (e: MouseEvent) {
-                        e.stopPropagation();
-                        onArrowMove(task, nextStatus);
+                    {if task.priority {
+                        <Badge key="priority" variant={priorityVariant}>
+                            {task.priority}
+                        </Badge>
                     }}
+                    {if task.category {
+                        <Badge key="category" variant="outline">{task.category}</Badge>
+                    }}
+                </div>
+                {if len(task.assignee_names) > 0 or task.due_date {
+                    <div
+                        key="meta"
+                        className="flex items-center justify-between text-xs text-muted-foreground"
+                    >
+                        <span className="truncate">
+                            {", ".join(task.assignee_names)}
+                        </span>
+                        <span className="shrink-0">{prettyDay(task.due_date)}</span>
+                    </div>
+                }}
+                {if task.status == "Blocked" and task.notes {
+                    <div
+                        key="blocked"
+                        className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+                    >
+                        <Markdown text={task.notes}/>
+                    </div>
+                }}
+                {if task.gh_issue_number > 0 or task.pr_state {
+                    <GitHubChip key="github" task={task} onMarkDone={markDone}/>
+                }}
+                <div
+                    className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100"
                 >
-                    →
-                </Button>
-            </div>
-        </CardContent>
-    </Card>;
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        disabled={not prevKey}
+                        title={"Move to " + prevLabel if prevKey else ""}
+                        onClick={lambda (e: MouseEvent) {
+                            e.stopPropagation();
+                            onArrowMove(task, prevKey);
+                        }}
+                    >
+                        ←
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        disabled={not nextKey}
+                        title={"Move to " + nextLabel if nextKey else ""}
+                        onClick={lambda (e: MouseEvent) {
+                            e.stopPropagation();
+                            onArrowMove(task, nextKey);
+                        }}
+                    >
+                        →
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>;
 }

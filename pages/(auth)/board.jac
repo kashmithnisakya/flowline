@@ -1,26 +1,32 @@
-"""standup - Board page (/board): the 6-column kanban, scoped by project.
+"""standup - Board page (/board): the org's workflow as a kanban.
 
-Stateful shell: owns the data and every handler (bodies in index.impl.jac);
+The columns ARE the workflow steps, in the order they were designed, so the
+board and the Workflow tab can never disagree. An org that has not designed
+one yet falls back to the classic six statuses.
+
+Stateful shell: owns the data and every handler (bodies in the impl annex);
 the columns, cards, filters, and dialog are presentational components.
 """
 
-import from ...models {
-    Project, MemberView, TaskView, MilestoneView, RepoView
-}
-# The one client import of constants.jac. Beyond removing a duplicated copy of
-# the vocabulary, it is what makes the Jac compiler emit constants.js at all:
-# the client compiles lazily, so a module nothing imports produces no output
-# and the design-sync bundle barrel cannot resolve it.
-import from ...constants { STATUSES }
+import from ...models { Project, MemberView, TaskView, StepView, RepoView }
+# The one client import of constants.jac. Beyond sharing the status/kind
+# mapping with the server, it is what makes the Jac compiler emit
+# constants.js at all: the client compiles lazily, so a module nothing
+# imports produces no output and the design-sync bundle barrel cannot
+# resolve it.
+import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
 import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.roster { ListMembers, ListRepos }
-import from ...walkers.vocab { ListVocab }
-import from ...models { VocabTerm }
 import from ...walkers.tasks {
-    ListTasks, CreateTask, UpdateTask, MoveTask, SetMoveInfo, DeleteTask
+    ListTasks,
+    CreateTask,
+    UpdateTask,
+    MoveTask,
+    SetMoveInfo,
+    DeleteTask
 }
-import from ...walkers.roadmap { ListMilestones, SetTaskMilestone }
+import from ...walkers.workflow { GetWorkflow }
 import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
@@ -32,25 +38,35 @@ import from "sonner" { toast }
 import from "react" { useEffect }
 
 glob BLANK_TASK: dict[str, str] = {
-    "title": "", "category": "", "project": "none", "milestone": "none",
-    "priority": "Medium", "status": "Backlog", "due_date": "", "notes": "",
-    "issue": "", "pr": "", "reviewer": "none", "review_due": ""
-};
+         "title": "",
+         "category": "",
+         "project": "none",
+         "priority": "Medium",
+         "status": "Backlog",
+         "due_date": "",
+         "notes": "",
+         "issue": "",
+         "pr": "",
+         "reviewer": "none",
+         "review_due": ""
+     },
+     BLANK_MOVE: dict[str, str] = {
+         "reviewer": "none",
+         "review_due": "",
+         "pr": "",
+         "note": ""
+     },
+     # Step kinds whose moves open the optional handoff dialog: work that
+     # has been passed to someone else, or has stopped.
+     HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
 
-glob BLANK_MOVE: dict[str, str] = {
-    "reviewer": "none", "review_due": "", "pr": "", "note": ""
-};
 
-# Statuses whose moves open the optional handoff dialog.
-glob HANDOFF_STATUSES: list[str] = ["Review", "Blocked", "Changes Requested"];
-
-def:pub BoardPage() -> JsxPage {
+def:pub BoardPage -> JsxPage {
     has showAllDone: bool = False,
-        vocab: list[VocabTerm] = [],
         tasks: list[TaskView] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
-        milestones: list[MilestoneView] = [],
+        steps: list[StepView] = [],
         repos: list[RepoView] = [],
         ghConnected: bool = False,
         syncing: bool = False,
@@ -67,6 +83,7 @@ def:pub BoardPage() -> JsxPage {
         moveTaskId: str = "",
         moveTaskTitle: str = "",
         moveStatus: str = "",
+        moveKind: str = "handoff",
         mForm: dict[str, str] = BLANK_MOVE,
         saving: bool = False;
 
@@ -82,27 +99,40 @@ def:pub BoardPage() -> JsxPage {
     # Live-ish board: refetch on tab focus plus a 60s poll. One manual
     # useEffect so the listener/interval handles are visible to the cleanup
     # (entry/exit abilities compile to separate closures).
-    useEffect(lambda {
-        onFocus = lambda { loadAll(); };
-        window.addEventListener("focus", onFocus);
-        # The assistant dock lives in the layout, not in this tree, so an
-        # applied proposal announces itself with an event rather than leaving
-        # the new card invisible until the next poll.
-        window.addEventListener("standup:refresh", onFocus);
-        timer = window.setInterval(lambda { loadAll(); }, 60000);
-        return lambda {
-            window.removeEventListener("focus", onFocus);
-            window.removeEventListener("standup:refresh", onFocus);
-            window.clearInterval(timer);
-        };
-    }, []);
+    useEffect(
+        lambda {
+            onFocus = lambda { loadAll(); };
+            window.addEventListener("focus", onFocus);
+            # The assistant dock lives in the layout, not in this tree, so an
+            # applied proposal announces itself with an event rather than leaving
+            # the new card invisible until the next poll.
+            window.addEventListener("standup:refresh", onFocus);
+            timer = window.setInterval(lambda { loadAll(); }, 60000);
+            return lambda {
+                window.removeEventListener("focus", onFocus);
+                window.removeEventListener("standup:refresh", onFocus);
+                window.clearInterval(timer);
+            };
+        },
+        []
+    );
 
     async def boot -> None;
     async def loadAll -> None;
     async def saveTask -> None;
     async def deleteTask -> None;
-    async def moveTo(taskId: str, status: str) -> None;
-    def arrowMove(t: TaskView, status: str) -> None;
+    # The columns ARE the workflow, so every column question routes through
+    # these rather than a status literal. Page methods, not module defs,
+    # because they all read `steps`.
+    def columnKeys -> list[str];
+    def columnLabel(key: str) -> str;
+    def columnKind(key: str) -> str;
+    def columnColor(key: str) -> str;
+    def columnKeyOf(t: TaskView) -> str;
+    def mappedStatus(key: str) -> str;
+    def doneColumnKey -> str;
+    async def moveTo(taskId: str, columnKey: str) -> None;
+    def arrowMove(t: TaskView, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setField(key: str, value: str) -> None;
     def setMoveField(key: str, value: str) -> None;
@@ -114,21 +144,54 @@ def:pub BoardPage() -> JsxPage {
     async def createIssue(repoId: str) -> None;
     def markDoneFromPr(taskId: str) -> None;
 
-    activeMembers = [m for m in members if m.active];
-    activeProjects = [p for p in projects if p.active];
-    allCategories = [t.value for t in vocab if t.kind == "category"];
+    activeMembers = [
+        m
+        for m in members
+        if m.active
+    ];
+    activeProjects = [
+        p
+        for p in projects
+        if p.active
+    ];
+    # Categories are whatever the org has actually typed on its tasks.
+    allCategories: list[str] = [];
+    for t in tasks {
+        if t.category and t.category not in allCategories {
+            allCategories.append(t.category);
+        }
+    }
+    allCategories.sort();
+
+    colKeys = columnKeys();
+    doneKey = doneColumnKey();
+    # No workflow AND nothing to show: six empty placeholder columns are noise
+    # on a workspace that has not decided what its columns are yet. A legacy
+    # org that HAS tasks still gets the fallback columns, because hiding the
+    # board would hide its work.
+    noWorkflow = len(steps) == 0 and len(tasks) == 0;
+
     visible = [
-        t for t in tasks
+        t
+        for t in tasks
         if (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or fAssignee in t.assignee_ids)
-        and (fCategory == "All" or t.category == fCategory)
-        and (not hideDone or t.status != "Done")
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
+            and (not hideDone or t.status != "Done")
     ];
     weekAgoDate = new(Date);
     weekAgoDate.setDate(weekAgoDate.getDate() - 7);
     weekAgo = weekAgoDate.toISOString()[:10];
-    doneVisible = [t for t in visible if t.status == "Done"];
-    recentDone = [t for t in doneVisible if t.updated_at[:10] >= weekAgo];
+    doneVisible = [
+        t
+        for t in visible
+        if doneKey and columnKeyOf(t) == doneKey
+    ];
+    recentDone = [
+        t
+        for t in doneVisible
+        if t.updated_at[:10] >= weekAgo
+    ];
     olderDoneCount = len(doneVisible) - len(recentDone);
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
@@ -139,98 +202,149 @@ def:pub BoardPage() -> JsxPage {
         }
     }
 
-    return <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="font-display text-2xl font-bold tracking-tight">Board</h1>
-            <div className="flex items-center gap-2">
-                <FilterBar
-                    projects={activeProjects}
-                    members={activeMembers}
-                    project={fProject}
-                    assignee={fAssignee}
-                    category={fCategory}
-                    hideDone={hideDone}
-                    onProject={setProjectFilter}
-                    onAssignee={lambda (v: str) { fAssignee = v; }}
-                    onCategory={lambda (v: str) { fCategory = v; }}
-                    onHideDone={lambda { hideDone = not hideDone; }}
-                    categories={allCategories}
-                />
-                {if ghConnected {
-                    <Button
-                        key="sync"
-                        variant="outline"
-                        disabled={syncing}
-                        onClick={syncGithub}
-                    >
-                        Sync GitHub
+    return
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="font-display text-2xl font-bold tracking-tight">
+                    Board
+                </h1>
+                {if not noWorkflow {
+                    <div key="tools" className="flex items-center gap-2">
+                        <FilterBar
+                            projects={activeProjects}
+                            members={activeMembers}
+                            project={fProject}
+                            assignee={fAssignee}
+                            category={fCategory}
+                            hideDone={hideDone}
+                            onProject={setProjectFilter}
+                            onAssignee={lambda (v: str) { fAssignee = v; }}
+                            onCategory={lambda (v: str) { fCategory = v; }}
+                            onHideDone={lambda { hideDone = not hideDone; }}
+                            categories={allCategories}
+                        />
+                        {if ghConnected {
+                            <Button
+                                key="sync"
+                                variant="outline"
+                                disabled={syncing}
+                                onClick={syncGithub}
+                            >
+                                Sync GitHub
+                            </Button>
+                        }}
+                        <Button onClick={openCreate}>New task</Button>
+                    </div>
+                }}
+            </div>
+            {if loading {
+                <div
+                    key="skeletons"
+                    className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6"
+                >
+                    <Skeleton key="s1" className="h-72 w-full"/>
+                    <Skeleton key="s2" className="h-72 w-full"/>
+                    <Skeleton key="s3" className="h-72 w-full"/>
+                </div>
+            } elif noWorkflow {
+                <div
+                    key="noworkflow"
+                    className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center"
+                >
+                    <h2 className="font-display text-lg font-semibold">
+                        Your board is the workflow you design
+                    </h2>
+                    <p className="max-w-md text-sm text-pretty text-muted-foreground">
+                        Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
+                    </p>
+                    <Button onClick={lambda { window.location.href = "/workflow"; }}>
+                        Design your workflow
                     </Button>
-                }}
-                <Button onClick={openCreate}>New task</Button>
-            </div>
-        </div>
-
-        {if loading {
-            <div key="skeletons" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <Skeleton key="s1" className="h-72 w-full" />
-                <Skeleton key="s2" className="h-72 w-full" />
-                <Skeleton key="s3" className="h-72 w-full" />
-            </div>
-        } else {
-            # Fluid grid: all six columns share the viewport width on xl, wrap
-            # into rows below it. No horizontal scrollbar at any width.
-            <div key="columns" className="grid grid-cols-2 items-start gap-3 md:grid-cols-3 xl:grid-cols-6">
-                {for s in STATUSES {
-                    <KanbanColumn
-                        key={s}
-                        status={s}
-                        tasks={
-                            (doneVisible if showAllDone else recentDone)
-                            if s == "Done"
-                            else [t for t in visible if t.status == s]
-                        }
-                        onOpen={openEdit}
-                        onArrowMove={arrowMove}
-                        onDropTask={moveTo}
-                        extraCount={olderDoneCount if s == "Done" and not showAllDone else 0}
-                        showingAll={showAllDone if s == "Done" else False}
-                        onToggleOlder={lambda { showAllDone = not showAllDone; }}
-                    />
-                }}
-            </div>
-        }}
-
-        <TaskDialog
-            open={dialogOpen}
-            editing={bool(editingId)}
-            form={form}
-            projects={activeProjects}
-            members={activeMembers}
-            saving={saving}
-            onField={setField}
-            onOpenChange={lambda (o: bool) { dialogOpen = o; }}
-            onSave={saveTask}
-            onDelete={deleteTask}
-            categories={allCategories}
-            assignees={fAssignees}
-            onToggleAssignee={toggleAssignee}
-            milestones={milestones}
-            repos={repos}
-            ghConnected={ghConnected}
-            ghIssueNumber={editingIssueNumber}
-            onCreateIssue={createIssue}
-        />
-
-        <MoveDialog
-            open={bool(moveTaskId)}
-            status={moveStatus}
-            taskTitle={moveTaskTitle}
-            members={activeMembers}
-            form={mForm}
-            saving={saving}
-            onField={setMoveField}
-            onOpenChange={lambda (o: bool) { if not o { moveTaskId = ""; } }}
-            onSave={saveMoveInfo}
-        />
-    </div>;
+                </div>
+            } else {
+                # ONE row, always: however many steps the workflow has, the
+                # columns divide the width between them. A workflow that wraps
+                # onto a second row stops reading as a pipeline, and a
+                # horizontal scrollbar hides the end of it.
+                <div
+                    key="columns"
+                    className="grid items-start gap-3"
+                    style={{
+                        "gridTemplateColumns": "repeat("
+                            + str(len(colKeys))
+                            + ", minmax(0, 1fr))"
+                    }}
+                >
+                    {for (ci, key) in enumerate(colKeys) {
+                        <KanbanColumn
+                            key={key}
+                            columnKey={key}
+                            label={columnLabel(key)}
+                            kind={columnKind(key)}
+                            color={columnColor(key)}
+                            tasks={(doneVisible if showAllDone else recentDone)
+                                if key == doneKey
+                                else [
+                                    t
+                                    for t in visible
+                                    if columnKeyOf(t) == key
+                                ]}
+                            onOpen={openEdit}
+                            onArrowMove={arrowMove}
+                            onDropTask={moveTo}
+                            prevKey={colKeys[ci - 1] if ci > 0 else ""}
+                            prevLabel={columnLabel(colKeys[ci - 1]) if ci > 0 else ""}
+                            nextKey={colKeys[ci + 1] if ci < len(colKeys) - 1 else ""}
+                            nextLabel={columnLabel(colKeys[ci + 1])
+                                if ci < len(colKeys) - 1
+                                else ""}
+                            doneKey={doneKey}
+                            extraCount={olderDoneCount
+                                if key == doneKey and not showAllDone
+                                else 0}
+                            showingAll={showAllDone if key == doneKey else False}
+                            onToggleOlder={lambda { showAllDone = not showAllDone; }}
+                        />
+                    }}
+                </div>
+            }  }
+            <TaskDialog
+                open={dialogOpen}
+                editing={bool(editingId)}
+                form={form}
+                projects={activeProjects}
+                members={activeMembers}
+                saving={saving}
+                onField={setField}
+                onOpenChange={lambda (o: bool) { dialogOpen = o; }}
+                onSave={saveTask}
+                onDelete={deleteTask}
+                categories={allCategories}
+                columnKeys={colKeys}
+                columnLabels={[columnLabel(k) for k in colKeys]}
+                handoffKeys={[
+                    k
+                    for k in colKeys
+                    if columnKind(k) in HANDOFF_KINDS
+                ]}
+                assignees={fAssignees}
+                onToggleAssignee={toggleAssignee}
+                repos={repos}
+                ghConnected={ghConnected}
+                ghIssueNumber={editingIssueNumber}
+                onCreateIssue={createIssue}
+            />
+            <MoveDialog
+                open={bool(moveTaskId)}
+                status={moveStatus}
+                kind={moveKind}
+                taskTitle={moveTaskTitle}
+                members={activeMembers}
+                form={mForm}
+                saving={saving}
+                onField={setMoveField}
+                onOpenChange={lambda (o: bool) { if not o { moveTaskId = ""; }}}
+                onSave={saveMoveInfo}
+            />
+        </div>;
 }

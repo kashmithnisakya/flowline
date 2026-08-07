@@ -84,6 +84,15 @@ node Task {
     has title: str,
         category: str,
         priority: str,
+        # The board column this task sits in, as a WorkflowStep jid. Empty on
+        # every task written before workflows existed, and on any task whose
+        # step was deleted; the board falls back to `status` for those, so
+        # this is additive and old rows keep working.
+        step_id: str = "",
+        # Legacy column AND the semantic signal the rest of the app reads
+        # ("Done" is terminal, "Blocked" needs attention). A move keeps it in
+        # step with the step's kind, so insights, GitHub sync and the
+        # assistant never have to learn about steps.
         status: str = "Backlog",
         due_date: str = "",
         notes: str = "",
@@ -108,39 +117,53 @@ node Task {
     def to_view -> TaskView {
         assignee_ids: list[str] = [];
         assignee_names: list[str] = [];
-        for a in [self ->:AssignedTo:->] {
+        for a in [self->:AssignedTo:->] {
             assignee_ids.append(jid(a));
             assignee_names.append(a.name);
         }
         project_id = "";
         project_name = "";
-        projects = [self ->:ForProject:->];
+        projects = [self->:ForProject:->];
         if projects {
             project_id = jid(projects[0]);
             project_name = projects[0].name;
         }
         milestone_id = "";
         milestone_name = "";
-        stones = [self ->:InMilestone:->];
+        stones = [self->:InMilestone:->];
         if stones {
             milestone_id = jid(stones[0]);
             milestone_name = stones[0].title;
         }
         return TaskView(
-            id=jid(self), title=self.title, category=self.category,
-            priority=self.priority, status=self.status,
-            due_date=self.due_date, notes=self.notes,
-            created_at=self.created_at, updated_at=self.updated_at,
+            id=jid(self),
+            title=self.title,
+            category=self.category,
+            priority=self.priority,
+            status=self.status,
+            step_id=self.step_id,
+            due_date=self.due_date,
+            notes=self.notes,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
             sort_order=self.sort_order,
-            assignee_ids=assignee_ids, assignee_names=assignee_names,
-            issue_link=self.issue_link, pr_link=self.pr_link,
-            reviewer_id=self.reviewer_id, reviewer_name=self.reviewer_name,
+            assignee_ids=assignee_ids,
+            assignee_names=assignee_names,
+            issue_link=self.issue_link,
+            pr_link=self.pr_link,
+            reviewer_id=self.reviewer_id,
+            reviewer_name=self.reviewer_name,
             review_due=self.review_due,
-            project_id=project_id, project_name=project_name,
-            milestone_id=milestone_id, milestone_name=milestone_name,
-            gh_repo=self.gh_repo, gh_issue_number=self.gh_issue_number,
-            gh_issue_state=self.gh_issue_state, gh_synced_at=self.gh_synced_at,
-            pr_number=self.pr_number, pr_state=self.pr_state
+            project_id=project_id,
+            project_name=project_name,
+            milestone_id=milestone_id,
+            milestone_name=milestone_name,
+            gh_repo=self.gh_repo,
+            gh_issue_number=self.gh_issue_number,
+            gh_issue_state=self.gh_issue_state,
+            gh_synced_at=self.gh_synced_at,
+            pr_number=self.pr_number,
+            pr_state=self.pr_state
         );
     }
 }
@@ -206,6 +229,30 @@ node GithubConnection {
         pending_at: str = "";
 }
 
+# One step of the org's workflow: a named column-to-be with a semantic
+# `kind` behind the user's label. The kind, not the name, is what the rest
+# of the app will key behavior on ("done" is terminal, "blocked" raises
+# attention), so a renamed step never breaks anything. Position is the
+# designer's canvas placement in px — persisted, unlike roadmap layout,
+# because a workflow is drawn by hand rather than derived from arrows.
+node WorkflowStep {
+    has name: str,
+        kind: str = "active",
+        color: str = "",
+        x: float = 0.0,
+        y: float = 0.0,
+        sort_order: float = 0.0,
+        created_at: str = "",
+        updated_at: str = "";
+}
+
+# The workflow's own record: singleton per root, get-or-created. Steps stay
+# flat off the root; this carries only what the graph itself cannot — the
+# display name.
+node WorkflowMeta {
+    has name: str = "Workflow";
+}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
@@ -218,6 +265,10 @@ edge InMilestone: Task --> Milestone {}
 # acyclic (LinkSteps refuses anything that would close a loop), because both
 # the layout and the "ready to start" signal are derived from depth.
 edge LeadsTo: Milestone --> Milestone {}
+# A workflow transition. Unlike LeadsTo, cycles are ALLOWED by design: a
+# review step looping back to development is the whole point of letting orgs
+# draw their own flow. Only self-loops are refused, at link time.
+edge FlowsTo: WorkflowStep --> WorkflowStep {}
 
 obj TaskView {
     has id: str,
@@ -239,6 +290,7 @@ obj TaskView {
         review_due: str,
         project_id: str,
         project_name: str,
+        step_id: str = "",
         milestone_id: str = "",
         milestone_name: str = "",
         gh_repo: str = "",
@@ -295,6 +347,18 @@ obj MilestoneView {
         next_ids: list[str] = [];
 }
 
+obj StepView {
+    has id: str,
+        name: str,
+        kind: str,
+        color: str,
+        x: float,
+        y: float,
+        sort_order: float,
+        prev_ids: list[str] = [],
+        next_ids: list[str] = [];
+}
+
 # What the client is allowed to know about the GitHub link. The connection
 # node itself is never reported: `report <node>` serializes every field, so
 # routing it through a view is what keeps internals off the wire.
@@ -347,8 +411,10 @@ def repo_view(r: Repo) -> RepoView {
         project_name = p.name;
     }
     return RepoView(
-        id=jid(r), full_name=r.full_name,
-        project_id=project_id, project_name=project_name
+        id=jid(r),
+        full_name=r.full_name,
+        project_id=project_id,
+        project_name=project_name
     );
 }
 
@@ -356,7 +422,7 @@ def repo_view(r: Repo) -> RepoView {
 def milestone_view(m: Milestone) -> MilestoneView {
     project_id = "";
     project_name = "";
-    for p in [m ->:OnRoadmap:->] {
+    for p in [m->:OnRoadmap:->] {
         project_id = jid(p);
         project_name = p.name;
     }
@@ -373,16 +439,47 @@ def milestone_view(m: Milestone) -> MilestoneView {
         prev_ids.append(jid(p));
     }
     next_ids: list[str] = [];
-    for n in [m ->:LeadsTo:->] {
+    for n in [m->:LeadsTo:->] {
         next_ids.append(jid(n));
     }
     return MilestoneView(
-        id=jid(m), title=m.title, description=m.description,
-        start_date=m.start_date, due_date=m.due_date, status=m.status,
-        color=m.color, sort_order=m.sort_order,
-        project_id=project_id, project_name=project_name,
-        task_count=total, done_count=done,
-        prev_ids=prev_ids, next_ids=next_ids
+        id=jid(m),
+        title=m.title,
+        description=m.description,
+        start_date=m.start_date,
+        due_date=m.due_date,
+        status=m.status,
+        color=m.color,
+        sort_order=m.sort_order,
+        project_id=project_id,
+        project_name=project_name,
+        task_count=total,
+        done_count=done,
+        prev_ids=prev_ids,
+        next_ids=next_ids
+    );
+}
+
+
+def step_view(s: WorkflowStep) -> StepView {
+    prev_ids: list[str] = [];
+    for p in [s<-:FlowsTo:<-] {
+        prev_ids.append(jid(p));
+    }
+    next_ids: list[str] = [];
+    for n in [s->:FlowsTo:->] {
+        next_ids.append(jid(n));
+    }
+    return StepView(
+        id=jid(s),
+        name=s.name,
+        kind=s.kind,
+        color=s.color,
+        x=s.x,
+        y=s.y,
+        sort_order=s.sort_order,
+        prev_ids=prev_ids,
+        next_ids=next_ids
     );
 }
 
@@ -390,14 +487,19 @@ def milestone_view(m: Milestone) -> MilestoneView {
 def member_view(m: Member) -> MemberView {
     ids: list[str] = [];
     names: list[str] = [];
-    for p in [m ->:OnProject:->] {
+    for p in [m->:OnProject:->] {
         ids.append(jid(p));
         names.append(p.name);
     }
     return MemberView(
-        id=jid(m), name=m.name, roles=m.roles, email=m.email,
-        github_username=m.github_username, tags=m.tags,
-        active=m.active, project_ids=ids, project_names=names
+        id=jid(m),
+        name=m.name,
+        roles=m.roles,
+        email=m.email,
+        github_username=m.github_username,
+        tags=m.tags,
+        active=m.active,
+        project_ids=ids,
+        project_names=names
     );
 }
-

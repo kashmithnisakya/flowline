@@ -62,47 +62,6 @@ impl SetupPage.createProject -> None {
     busy = False;
 }
 
-impl SetupPage.toggleCategory(value: str) -> None {
-    if value in pickedCategories {
-        pickedCategories = [c for c in pickedCategories if c != value];
-    } else {
-        pickedCategories = pickedCategories + [value];
-    }
-}
-
-impl SetupPage.addCategory -> None {
-    captured = newCategory.strip();
-    if not captured or captured in pickedCategories {
-        return;
-    }
-    pickedCategories = pickedCategories + [captured];
-    newCategory = "";
-}
-
-impl SetupPage.addTag -> None {
-    captured = newTag.strip();
-    if not captured or captured in pickedTags {
-        return;
-    }
-    pickedTags = pickedTags + [captured];
-    newTag = "";
-}
-
-impl SetupPage.saveVocabulary -> None {
-    busy = True;
-    try {
-        for c in pickedCategories {
-            root spawn AddVocab(kind="category", value=c);
-        }
-        for t in pickedTags {
-            root spawn AddVocab(kind="tag", value=t);
-        }
-        step = 4;
-    } except Exception as e {
-        step = 4;
-    }
-    busy = False;
-}
 
 impl SetupPage.addPerson -> None {
     captured = mName.strip();
@@ -113,8 +72,7 @@ impl SetupPage.addPerson -> None {
     busy = True;
     try {
         result = root spawn SaveMember(
-            name=captured,
-            roles=[capturedRole] if capturedRole else []
+            name=captured, roles=[capturedRole] if capturedRole else []
         );
         fresh = result.reports[0] if result.reports else None;
         if fresh {
@@ -134,5 +92,7 @@ impl SetupPage.finish -> None {
     if mName.strip() {
         await addPerson();
     }
-    window.location.href = "/board";
+    # New orgs land on the workflow picker: choosing how work moves is the
+    # last piece of setup, and the board reads better once it exists.
+    window.location.href = "/workflow";
 }
