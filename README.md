@@ -6,7 +6,7 @@ log it fills in for you. For teams that hate status meetings.
 Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
 JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
-<Add video URl here>
+https://github.com/user-attachments/assets/80ab532f-0515-4312-8362-c8f526fad165
 
 ## Design your workflow, get your board
 
