@@ -165,6 +165,11 @@ def:pub BoardPage -> JsxPage {
 
     colKeys = columnKeys();
     doneKey = doneColumnKey();
+    # No workflow AND nothing to show: six empty placeholder columns are noise
+    # on a workspace that has not decided what its columns are yet. A legacy
+    # org that HAS tasks still gets the fallback columns, because hiding the
+    # board would hide its work.
+    noWorkflow = len(steps) == 0 and len(tasks) == 0;
 
     visible = [
         t
@@ -203,32 +208,34 @@ def:pub BoardPage -> JsxPage {
                 <h1 className="font-display text-2xl font-bold tracking-tight">
                     Board
                 </h1>
-                <div className="flex items-center gap-2">
-                    <FilterBar
-                        projects={activeProjects}
-                        members={activeMembers}
-                        project={fProject}
-                        assignee={fAssignee}
-                        category={fCategory}
-                        hideDone={hideDone}
-                        onProject={setProjectFilter}
-                        onAssignee={lambda (v: str) { fAssignee = v; }}
-                        onCategory={lambda (v: str) { fCategory = v; }}
-                        onHideDone={lambda { hideDone = not hideDone; }}
-                        categories={allCategories}
-                    />
-                    {if ghConnected {
-                        <Button
-                            key="sync"
-                            variant="outline"
-                            disabled={syncing}
-                            onClick={syncGithub}
-                        >
-                            Sync GitHub
-                        </Button>
-                    }}
-                    <Button onClick={openCreate}>New task</Button>
-                </div>
+                {if not noWorkflow {
+                    <div key="tools" className="flex items-center gap-2">
+                        <FilterBar
+                            projects={activeProjects}
+                            members={activeMembers}
+                            project={fProject}
+                            assignee={fAssignee}
+                            category={fCategory}
+                            hideDone={hideDone}
+                            onProject={setProjectFilter}
+                            onAssignee={lambda (v: str) { fAssignee = v; }}
+                            onCategory={lambda (v: str) { fCategory = v; }}
+                            onHideDone={lambda { hideDone = not hideDone; }}
+                            categories={allCategories}
+                        />
+                        {if ghConnected {
+                            <Button
+                                key="sync"
+                                variant="outline"
+                                disabled={syncing}
+                                onClick={syncGithub}
+                            >
+                                Sync GitHub
+                            </Button>
+                        }}
+                        <Button onClick={openCreate}>New task</Button>
+                    </div>
+                }}
             </div>
             {if loading {
                 <div
@@ -238,6 +245,21 @@ def:pub BoardPage -> JsxPage {
                     <Skeleton key="s1" className="h-72 w-full"/>
                     <Skeleton key="s2" className="h-72 w-full"/>
                     <Skeleton key="s3" className="h-72 w-full"/>
+                </div>
+            } elif noWorkflow {
+                <div
+                    key="noworkflow"
+                    className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center"
+                >
+                    <h2 className="font-display text-lg font-semibold">
+                        Your board is the workflow you design
+                    </h2>
+                    <p className="max-w-md text-sm text-pretty text-muted-foreground">
+                        Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
+                    </p>
+                    <Button onClick={lambda { window.location.href = "/workflow"; }}>
+                        Design your workflow
+                    </Button>
                 </div>
             } else {
                 # Fluid grid: however many columns the workflow has, they share
@@ -256,6 +278,7 @@ def:pub BoardPage -> JsxPage {
                             columnKey={key}
                             label={columnLabel(key)}
                             kind={columnKind(key)}
+                            color={columnColor(key)}
                             tasks={(doneVisible if showAllDone else recentDone)
                                 if key == doneKey
                                 else [
@@ -281,7 +304,7 @@ def:pub BoardPage -> JsxPage {
                         />
                     }}
                 </div>
-            } }
+            }  }
             <TaskDialog
                 open={dialogOpen}
                 editing={bool(editingId)}

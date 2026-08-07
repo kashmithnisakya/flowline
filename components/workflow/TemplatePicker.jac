@@ -83,7 +83,12 @@ def:pub TemplatePicker(
                     Start from a template or design your own. You can reshape everything later — steps, names, connections, loops.
                 </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+                className="grid gap-4"
+                style={{
+                    "gridTemplateColumns": "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))"
+                }}
+            >
                 {for t in WORKFLOW_TEMPLATES {
                     <Card key={t["key"]} className="flex flex-col">
                         <CardContent className="flex flex-1 flex-col gap-3 py-4">

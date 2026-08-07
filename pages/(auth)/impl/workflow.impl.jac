@@ -342,7 +342,12 @@ impl WorkflowPage.fitZoom -> None {
         return;
     }
     size = canvasSize(steps, live);
-    boxW = float(view.clientWidth) - 32.0;
+    # The editor floats over the canvas, so the space it covers is not space
+    # a card can use: fit into what is actually visible.
+    # Reserved for the whole of edit mode, not per selection: re-fitting
+    # every time a card is clicked would make the zoom jump under the cursor.
+    panel = 336.0 if editing else 0.0;
+    boxW = float(view.clientWidth) - 32.0 - panel;
     boxH = float(view.clientHeight) - 32.0;
     if size[0] <= 0.0 or size[1] <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
         zoomRef.current = 1.0;

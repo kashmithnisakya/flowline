@@ -94,7 +94,6 @@ def:pub MemberDialog(
                     </div>
                     <div className="grid gap-1.5">
                         <Label>Tags</Label>
-                        # Tags are free text, typed here and reused as chips once # anyone on the roster carries them. There is no separate # vocabulary to maintain.
                         <div className="flex flex-wrap items-center gap-1.5">
                             {for t in memberTags {
                                 <Badge

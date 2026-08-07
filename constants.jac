@@ -99,6 +99,56 @@ glob STATUSES: list[str] = [
              "links": [[0, 1], [1, 2], [2, 5], [2, 3], [3, 1], [1, 4], [4, 1]]
          },
          {
+             "key": "jaseci",
+             "name": "Jaseci flow",
+             "description": "Architect, build with a design review running alongside, then arch review, merge and deslop.",
+             "steps": [
+                 {
+                     "name": "Architecting",
+                     "kind": "start",
+                     "color": "sky",
+                     "x": 40.0,
+                     "y": 180.0
+                 },
+                 {
+                     "name": "DOMX review",
+                     "kind": "handoff",
+                     "color": "amber",
+                     "x": 300.0,
+                     "y": 320.0
+                 },
+                 {
+                     "name": "Driving",
+                     "kind": "active",
+                     "color": "indigo",
+                     "x": 300.0,
+                     "y": 40.0
+                 },
+                 {
+                     "name": "Arch review",
+                     "kind": "handoff",
+                     "color": "amber",
+                     "x": 560.0,
+                     "y": 40.0
+                 },
+                 {
+                     "name": "Merged, needs deslop",
+                     "kind": "active",
+                     "color": "indigo",
+                     "x": 820.0,
+                     "y": 140.0
+                 },
+                 {
+                     "name": "Done",
+                     "kind": "done",
+                     "color": "emerald",
+                     "x": 1080.0,
+                     "y": 260.0
+                 }
+             ],
+             "links": [[0, 2], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]
+         },
+         {
              "key": "support",
              "name": "Support flow",
              "description": "Triage, work, wait on the customer, resolve. Waiting loops back.",

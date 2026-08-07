@@ -97,6 +97,7 @@ def:pub KanbanColumn(
                     task={t}
                     onOpen={onOpen}
                     onArrowMove={onArrowMove}
+                    color={color}
                     prevKey={prevKey}
                     prevLabel={prevLabel}
                     nextKey={nextKey}
