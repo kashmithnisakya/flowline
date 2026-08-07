@@ -141,6 +141,11 @@ File-based routing with route groups:
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
   bundle and broke the build; that helper lives in `walkers/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
+- **A page method named `set<Field>` collides with the state setter.** A
+  `has zoom: float` compiles to `const [zoom, setZoom] = useState(...)`, so a
+  `def setZoom` in the same component is a duplicate declaration and the
+  whole Vite build fails with a 503 at request time (`jac check` passes —
+  the clash only exists in the emitted JS). Name the method something else.
 - **A docstring as the first statement of a plain `def` is a parse error** —
   use a `#` comment above the `def`.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a

@@ -19,6 +19,8 @@ impl WorkflowPage.reload -> None {
         toast("Failed to load your workflow");
     }
     loading = False;
+    # Open showing the whole graph rather than a corner of it.
+    fitZoom();
 }
 
 impl WorkflowPage.loadMeta -> None {
@@ -314,13 +316,65 @@ impl WorkflowPage.setField(key: str, value: str) -> None {
     }
 }
 
+# Far enough out to see a sprawling flow, far enough in to read a card.
+def clampZoom(v: float) -> float {
+    if v < 0.3 {
+        return 0.3;
+    }
+    if v > 2.0 {
+        return 2.0;
+    }
+    return v;
+}
+
+impl WorkflowPage.zoomBy(delta: float) -> None {
+    current = float(zoomRef.current) if zoomRef.current else zoom;
+    z = clampZoom(current + delta);
+    zoomRef.current = z;
+    zoom = z;
+}
+
+impl WorkflowPage.fitZoom -> None {
+    view: any = viewportRef.current;
+    if not view {
+        zoomRef.current = 1.0;
+        zoom = 1.0;
+        return;
+    }
+    size = canvasSize(steps, live);
+    boxW = float(view.clientWidth) - 32.0;
+    boxH = float(view.clientHeight) - 32.0;
+    if size[0] <= 0.0 or size[1] <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
+        zoomRef.current = 1.0;
+        zoom = 1.0;
+        return;
+    }
+    byW = boxW / size[0];
+    byH = boxH / size[1];
+    best = byW if byW < byH else byH;
+    # Never zoom PAST 1:1 just to fill the box: a three-step workflow blown
+    # up to 180% looks broken, it does not look close.
+    if best > 1.0 {
+        best = 1.0;
+    }
+    zoomRef.current = clampZoom(best);
+    zoom = clampZoom(best);
+}
+
 impl WorkflowPage.pointerXY(e: MouseEvent) -> list[float] {
     surface: any = canvasRef.current;
     if not surface or not surface.getBoundingClientRect {
         return [-1.0, -1.0];
     }
+    # The surface is CSS-scaled, so its rect is in screen px while every
+    # position we compare against is in canvas px. Undo the scale here and
+    # the whole hit-test/drag layer stays zoom-agnostic.
     box: any = surface.getBoundingClientRect();
-    return [float(e.clientX) - float(box.left), float(e.clientY) - float(box.top)];
+    scale = float(zoomRef.current) if zoomRef.current else 1.0;
+    return [
+        (float(e.clientX) - float(box.left)) / scale,
+        (float(e.clientY) - float(box.top)) / scale
+    ];
 }
 
 impl WorkflowPage.beginDrag(e: MouseEvent) -> None {

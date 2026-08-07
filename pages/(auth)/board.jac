@@ -127,6 +127,7 @@ def:pub BoardPage -> JsxPage {
     def columnKeys -> list[str];
     def columnLabel(key: str) -> str;
     def columnKind(key: str) -> str;
+    def columnColor(key: str) -> str;
     def columnKeyOf(t: TaskView) -> str;
     def mappedStatus(key: str) -> str;
     def doneColumnKey -> str;

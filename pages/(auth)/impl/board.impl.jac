@@ -245,6 +245,15 @@ impl BoardPage.columnKind(key: str) -> str {
     return STATUS_KIND[key] if key in STATUS_KIND else "active";
 }
 
+impl BoardPage.columnColor(key: str) -> str {
+    for st in steps {
+        if st.id == key {
+            return st.color;
+        }
+    }
+    return "";
+}
+
 impl BoardPage.doneColumnKey -> str {
     for key in columnKeys() {
         if columnKind(key) == "done" {
