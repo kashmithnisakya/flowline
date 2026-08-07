@@ -4,7 +4,7 @@ Signing up asks for credentials and nothing else. The account IS the
 organization, but naming it (and yourself) belongs to the setup wizard,
 where there is room to explain what the names are for: a signup form is a
 door, not a questionnaire, and every field on it is a reason to leave.
-jacSignup does NOT create a session — always signup, check success, then
+jacSignup does NOT create a session, always signup, check success, then
 login; the wizard fills the profile in afterwards.
 
 Layout follows the design: a brand panel beside a tabbed auth card, with

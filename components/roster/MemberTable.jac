@@ -4,16 +4,22 @@ import from ...models { Project, MemberView }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
 import from ..ui.card { Card, CardContent }
-import from ..ui.table {
-    Table, TableHeader, TableBody, TableRow, TableHead, TableCell
-}
+import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 import from ..ui.select {
-    Select, SelectTrigger, SelectValue, SelectContent, SelectItem
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
 }
 
 # "Ishara Perera" -> "IP" for the avatar circle.
 def initialsOf(name: str) -> str {
-    parts = [w for w in name.split() if w];
+    parts = [
+        w
+        for w in name.split()
+        if w
+    ];
     first = parts[0][:1] if len(parts) > 0 else "?";
     second = parts[1][:1] if len(parts) > 1 else "";
     return (first + second).upper();
@@ -28,125 +34,180 @@ def:pub MemberTable(
     onUnassign: Callable[[str, str], None]
 ) -> JsxElement {
     if len(members) == 0 {
-        return <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                No members yet. Add your team with “Add member”.
-            </CardContent>
-        </Card>;
+        return
+            <Card>
+                <CardContent
+                    className="py-10 text-center text-sm text-muted-foreground"
+                >
+                    No members yet. Add your team with “Add member”.
+                </CardContent>
+            </Card>;
     }
 
-    return <Card>
-        <CardContent className="pt-4">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Member</TableHead>
-                        <TableHead>Roles</TableHead>
-                        <TableHead>Projects</TableHead>
-                        <TableHead>Tags</TableHead>
-                        <TableHead>Contact</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {for m in members {
-                        <TableRow key={m.id}>
-                            <TableCell>
-                                <div className="flex items-center gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                        {initialsOf(m.name)}
-                                    </span>
-                                    <div className="min-w-0">
-                                        <div className="truncate font-medium">{m.name}</div>
-                                    </div>
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                {if len(m.roles) > 0 {
-                                    <div className="flex flex-wrap gap-1">
-                                        {for r in m.roles {
-                                            <Badge key={r} variant="secondary" className="font-normal">{r}</Badge>
-                                        }}
-                                    </div>
-                                } else {
-                                    <span key="dash" className="text-muted-foreground">·</span>
-                                }}
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex flex-wrap items-center gap-1">
-                                    {for pname in m.project_names {
-                                        <Badge
-                                            key={pname}
-                                            variant="secondary"
-                                            className="cursor-pointer"
-                                            title="Click to unassign"
-                                            onClick={lambda { onUnassign(m.id, pname); }}
-                                        >
-                                            {pname} ✕
-                                        </Badge>
-                                    }}
-                                    {if len(projects) > 0 {
-                                        <Select key="assign"
-                                            value=""
-                                            onValueChange={lambda (v: str) { onAssign(m.id, v); }}
-                                        >
-                                            <SelectTrigger
-                                                className="h-6 w-auto border-dashed px-2 text-xs text-muted-foreground"
-                                                size="sm"
-                                                title="Assign to a project"
-                                            >
-                                                <SelectValue placeholder="+ Assign" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {for p in projects {
-                                                    <SelectItem key={jid(p)} value={jid(p)}>{p.name}</SelectItem>
-                                                }}
-                                            </SelectContent>
-                                        </Select>
-                                    }}
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                {if len(m.tags) > 0 {
-                                    <div className="flex flex-wrap gap-1">
-                                        {for t in m.tags {
-                                            <Badge key={t} variant="outline" className="font-normal">{t}</Badge>
-                                        }}
-                                    </div>
-                                } else {
-                                    <span key="dash" className="text-muted-foreground">·</span>
-                                }}
-                            </TableCell>
-                            <TableCell>
-                                <div className="grid gap-0.5 text-xs text-muted-foreground">
-                                    {if m.email {
-                                        <span key="mail" className="truncate">{m.email}</span>
-                                    }}
-                                    {if m.github_username {
-                                        <span key="gh" className="truncate font-mono">@{m.github_username}</span>
-                                    }}
-                                    {if not m.email and not m.github_username {
-                                        <span key="dash">·</span>
-                                    }}
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" onClick={lambda { onEdit(m); }}>
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive"
-                                    onClick={lambda { onArchive(m.id); }}
-                                >
-                                    Archive
-                                </Button>
-                            </TableCell>
+    return
+        <Card>
+            <CardContent className="pt-4">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Member</TableHead>
+                            <TableHead>Roles</TableHead>
+                            <TableHead>Projects</TableHead>
+                            <TableHead>Tags</TableHead>
+                            <TableHead>Contact</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                    }}
-                </TableBody>
-            </Table>
-        </CardContent>
-    </Card>;
+                    </TableHeader>
+                    <TableBody>
+                        {for m in members {
+                            <TableRow key={m.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary"
+                                        >
+                                            {initialsOf(m.name)}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <div className="truncate font-medium">
+                                                {m.name}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {if len(m.roles) > 0 {
+                                        <div className="flex flex-wrap gap-1">
+                                            {for r in m.roles {
+                                                <Badge
+                                                    key={r}
+                                                    variant="secondary"
+                                                    className="font-normal"
+                                                >
+                                                    {r}
+                                                </Badge>
+                                            }}
+                                        </div>
+                                    } else {
+                                        <span
+                                            key="dash"
+                                            className="text-muted-foreground"
+                                        >
+                                            ·
+                                        </span>
+                                    } }
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        {for pname in m.project_names {
+                                            <Badge
+                                                key={pname}
+                                                variant="secondary"
+                                                className="cursor-pointer"
+                                                title="Click to unassign"
+                                                onClick={lambda { onUnassign(
+                                                    m.id, pname
+                                                ); }}
+                                            >
+                                                {pname} ✕
+                                            </Badge>
+                                        }}
+                                        {if len(projects) > 0 {
+                                            <Select
+                                                key="assign"
+                                                value=""
+                                                onValueChange={lambda (v: str) { onAssign(
+                                                    m.id, v
+                                                ); }}
+                                            >
+                                                <SelectTrigger
+                                                    className="h-6 w-auto border-dashed px-2 text-xs text-muted-foreground"
+                                                    size="sm"
+                                                    title="Assign to a project"
+                                                >
+                                                    <SelectValue
+                                                        placeholder="+ Assign"
+                                                    />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {for p in projects {
+                                                        <SelectItem
+                                                            key={jid(p)}
+                                                            value={jid(p)}
+                                                        >
+                                                            {p.name}
+                                                        </SelectItem>
+                                                    }}
+                                                </SelectContent>
+                                            </Select>
+                                        }}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {if len(m.tags) > 0 {
+                                        <div className="flex flex-wrap gap-1">
+                                            {for t in m.tags {
+                                                <Badge
+                                                    key={t}
+                                                    variant="outline"
+                                                    className="font-normal"
+                                                >
+                                                    {t}
+                                                </Badge>
+                                            }}
+                                        </div>
+                                    } else {
+                                        <span
+                                            key="dash"
+                                            className="text-muted-foreground"
+                                        >
+                                            ·
+                                        </span>
+                                    } }
+                                </TableCell>
+                                <TableCell>
+                                    <div
+                                        className="grid gap-0.5 text-xs text-muted-foreground"
+                                    >
+                                        {if m.email {
+                                            <span key="mail" className="truncate">
+                                                {m.email}
+                                            </span>
+                                        }}
+                                        {if m.github_username {
+                                            <span
+                                                key="gh"
+                                                className="truncate font-mono"
+                                            >
+                                                @{m.github_username}
+                                            </span>
+                                        }}
+                                        {if not m.email and not m.github_username {
+                                            <span key="dash">·</span>
+                                        }}
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={lambda { onEdit(m); }}
+                                    >
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive"
+                                        onClick={lambda { onArchive(m.id); }}
+                                    >
+                                        Archive
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        }}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>;
 }

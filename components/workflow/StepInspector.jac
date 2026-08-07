@@ -1,7 +1,7 @@
 """Editor panel for the step selected on the workflow canvas.
 
 No save button on purpose: the name commits on blur or Enter, kind and
-color commit on pick — SaveStep's empty-means-keep semantics make each a
+color commit on pick, SaveStep's empty-means-keep semantics make each a
 safe partial update. Connections are removable rows in both directions.
 """
 
@@ -97,7 +97,7 @@ def:pub StepInspector(
                         <SelectContent position="popper">
                             {for k in STEP_KINDS {
                                 <SelectItem key={k} value={k}>
-                                    {KIND_LABEL[k] + " — " + KIND_HINT[k]}
+                                    {KIND_LABEL[k] + ", " + KIND_HINT[k]}
                                 </SelectItem>
                             }}
                         </SelectContent>

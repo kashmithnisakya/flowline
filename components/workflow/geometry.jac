@@ -16,7 +16,7 @@ import from ...models { StepView }
 # Does this transition travel backwards? One definition, shared by the canvas
 # and the inspector, so the two renderings of the same edge cannot disagree.
 # Node size is constant, so top-left deltas equal centre deltas.
-def:pub isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
+def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
     dx = tx - fx;
     dy = ty - fy;
     ax = dx if dx >= 0.0 else 0.0 - dx;
@@ -114,7 +114,7 @@ def hitStep(
 # entering through the borders that face each other along the dominant axis.
 # `twoWay` shifts the curve sideways so an A→B / B→A pair reads as two arcs
 # rather than one doubled line. Returns the path, the arrowhead triangle,
-# the true curve midpoint for the delete chip, and `back` — whether the edge
+# the true curve midpoint for the delete chip, and `back`, whether the edge
 # travels right-to-left or bottom-to-top, which the canvas styles as a
 # return path.
 def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, any] {
@@ -242,7 +242,7 @@ def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, 
         "d": d,
         "arrow": arrow,
         # Cubic midpoint: (p1 + 3c1 + 3c2 + p2) / 8, exact because the
-        # handles are known — no curve sampling.
+        # handles are known, no curve sampling.
         "mx": (sx + 3.0 * h1x + 3.0 * h2x + ex) / 8.0,
         "my": (sy + 3.0 * h1y + 3.0 * h2y + ey) / 8.0,
         "back": back

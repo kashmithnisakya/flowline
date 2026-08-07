@@ -3,7 +3,7 @@
 Loaders and mutations reload through GetWorkflow rather than patching local
 state: a transition or a delete can change every step's prev/next lists, and
 the walker is the only place that truth lives. Locals are read before any
-await — a `has` read after a walker call is a stale render-time snapshot.
+await, a `has` read after a walker call is a stale render-time snapshot.
 """
 
 impl WorkflowPage.boot -> None {
@@ -43,7 +43,7 @@ impl WorkflowPage.pickTemplate(key: str) -> None {
         if len(fresh) > 0 {
             steps = fresh;
             editing = True;
-            toast("Your workflow is in — drag anything to make it yours");
+            toast("Your workflow is in, drag anything to make it yours");
         } else {
             toast("That template could not be applied");
         }
@@ -287,7 +287,7 @@ impl WorkflowPage.armConnect -> None {
 
 impl WorkflowPage.clearCanvas -> None {
     # A drag whose mousedown and mouseup land on different elements makes the
-    # browser fire the click on their common ancestor — the canvas — not on
+    # browser fire the click on their common ancestor, the canvas, not on
     # either card. So the swallow flag has to be consumable here too, or
     # finishing a wire would immediately wipe the selection it just made and
     # leave the flag set to eat the NEXT genuine click.
@@ -395,7 +395,7 @@ impl WorkflowPage.beginDrag(e: MouseEvent) -> None {
     step = hit["step"] as StepView;
     if hit["onEdge"] {
         # The border is the port: dragging off it draws a transition.
-        # Grabbing a port also cancels an open New step panel — the panel and
+        # Grabbing a port also cancels an open New step panel, the panel and
         # the inspector share `form`, so leaving it open would overwrite the
         # half-typed name and let Add to canvas create a duplicate.
         wireRef.current = step.id;
