@@ -2,9 +2,7 @@
 
 No save button on purpose: the name commits on blur or Enter, kind and
 color commit on pick — SaveStep's empty-means-keep semantics make each a
-safe partial update. Connections are removable rows in both directions; a
-row whose edge travels backwards on the canvas is drawn dashed in the
-warning tone with a return arrow, matching the canvas.
+safe partial update. Connections are removable rows in both directions.
 """
 
 import from ...models { StepView }
@@ -25,6 +23,7 @@ import from ..ui.select {
 
 def:pub StepInspector(
     step: StepView,
+    className: str = "",
     steps: list[StepView] = [],
     form: dict[str, str] = {},
     connecting: bool = False,
@@ -55,15 +54,11 @@ def:pub StepInspector(
     }
 
     def rowClass(back: bool) -> str {
-        base = "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs ";
-        if back {
-            return base + "border-dashed border-amber-700/80 dark:border-warning/70";
-        }
-        return base + "bg-muted/40";
+        return "flex items-center justify-between rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs";
     }
 
     return
-        <Card className="lg:sticky lg:top-6">
+        <Card className={"overflow-y-auto " + className}>
             <CardContent className="space-y-4 py-4">
                 <div className="space-y-1.5">
                     <div
@@ -152,10 +147,7 @@ def:pub StepInspector(
                                     key={nid}
                                     className={rowClass(isBack(step.id, nid))}
                                 >
-                                    <span>
-                                        {rowLabel(nid)
-                                            + (" ↩" if isBack(step.id, nid) else "")}
-                                    </span>
+                                    <span>{rowLabel(nid)}</span>
                                     <button
                                         type="button"
                                         title="Remove this transition"
@@ -188,10 +180,7 @@ def:pub StepInspector(
                                     key={pid}
                                     className={rowClass(isBack(pid, step.id))}
                                 >
-                                    <span>
-                                        {rowLabel(pid)
-                                            + (" ↩" if isBack(pid, step.id) else "")}
-                                    </span>
+                                    <span>{rowLabel(pid)}</span>
                                     <button
                                         type="button"
                                         title="Remove this transition"

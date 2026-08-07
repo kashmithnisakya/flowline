@@ -8,6 +8,7 @@ exists yet) and carries its own label and accent colour.
 import from ...models { TaskView }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
+import from ..workflow.kinds { DOT_VAR, colorKey }
 
 # Accent per step kind, so a column reads the same on the board as its step
 # does on the workflow canvas.
@@ -24,6 +25,7 @@ def:pub KanbanColumn(
     columnKey: str,
     label: str,
     kind: str,
+    color: str = "",
     tasks: list[TaskView],
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
@@ -77,7 +79,13 @@ def:pub KanbanColumn(
                 >
                     <span
                         className="h-2 w-2 shrink-0 rounded-full"
-                        style={{"background": KIND_DOT.get(kind, "var(--chart-4)")}}
+                        style={{
+                            "background": (
+                                DOT_VAR[colorKey(color)]
+                                    if color
+                                    else KIND_DOT.get(kind, "var(--chart-4)")
+                            )
+                        }}
                     />
                     <span className="truncate" title={label}>{label}</span>
                 </span>

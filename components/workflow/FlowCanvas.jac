@@ -2,14 +2,21 @@
 
 Purely presentational — positions come in as data (persisted x/y plus the
 page's live drag overrides) and every interaction is a callback. Unlike the
-roadmap's Flow, edges travel in any direction and loops are legal; an edge
-that runs right-to-left or bottom-to-top is drawn dashed in the warning
-tone, because it reads as work flowing backwards on purpose.
+roadmap's Flow, edges travel in any direction and loops are legal. Every
+transition is drawn the same way: the arrowhead already says which way work
+moves, and a second style for "backwards" needed a legend to mean anything.
+
+The viewport never scrolls. It fills its box, the dot grid covers all of it,
+and a zoom control shrinks the drawing to fit instead: a scrollbar hides
+half the graph behind a gesture, where a zoom level tells you at a glance
+that there is more and puts it back on screen in one click. The control
+sends a DELTA rather than a target, because two quick clicks would both
+read the same render-time zoom and only one would count.
 """
 
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
-import from .kinds { KIND_LABEL, DOT_FILL, colorKey }
+import from .kinds { KIND_LABEL, DOT_FILL, CARD_TINT, colorKey }
 
 
 def:pub FlowCanvas(
@@ -18,11 +25,15 @@ def:pub FlowCanvas(
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
+    zoom: float = 1.0,
     canvasRef: Ref[any] = None,
+    viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
     onSelectEdge: Callable[[str], None] = None,
     onDeleteEdge: Callable[[str, str], None] = None,
-    onCanvasClick: Callable[[], None] = None
+    onCanvasClick: Callable[[], None] = None,
+    onZoomBy: Callable[[float], None] = None,
+    onZoomFit: Callable[[], None] = None
 ) -> JsxElement {
     byId: dict[str, StepView] = {};
     for s in steps {
@@ -60,28 +71,31 @@ def:pub FlowCanvas(
     }
 
     connecting = bool(connectFrom);
+    # The grid scales with the drawing, so zooming reads as moving away from
+    # the board rather than the cards changing size against a fixed mesh.
+    gridPitch = 22.0 * zoom;
 
     return
         <div
-            className="select-none overflow-auto rounded-lg border bg-card"
-            style={{"height": "min(74vh, 44rem)"}}
+            ref={viewportRef}
+            className="relative select-none overflow-hidden rounded-lg border bg-card"
+            style={{
+                "height": "min(74vh, 44rem)",
+                "backgroundImage": "radial-gradient(var(--color-muted-foreground) 1px, transparent 1px)",
+                "backgroundSize": str(gridPitch) + "px " + str(gridPitch) + "px",
+                "backgroundPosition": "8px 8px"
+            }}
             onClick={lambda { if onCanvasClick { onCanvasClick(); }}}
         >
             <div
                 ref={canvasRef}
-                className="relative"
-                style={{
-                    "width": str(size[0]) + "px",
-                    "height": str(size[1]) + "px",
-                    "backgroundImage": "radial-gradient(var(--color-muted-foreground) 1px, transparent 1px)",
-                    "backgroundSize": "22px 22px",
-                    "backgroundPosition": "8px 8px"
-                }}
+                className="absolute inset-0 origin-top-left"
+                style={{"transform": "scale(" + str(zoom) + ")"}}
             >
                 <svg
                     width={size[0]}
                     height={size[1]}
-                    className="absolute inset-0"
+                    className="absolute left-0 top-0"
                     style={{"pointerEvents": "none"}}
                 >
                     {for l in links {
@@ -89,11 +103,7 @@ def:pub FlowCanvas(
                             key={l["key"]}
                             className={"text-primary"
                                 if selectedEdge == l["key"]
-                                else (
-                                    "text-amber-700 dark:text-warning/80"
-                                        if l["back"]
-                                        else "text-muted-foreground/60"
-                                )}
+                                else "text-muted-foreground/60"}
                         >
                             <path
                                 d={l["d"]}
@@ -101,7 +111,6 @@ def:pub FlowCanvas(
                                 stroke="currentColor"
                                 strokeWidth={2}
                                 strokeLinecap="round"
-                                strokeDasharray={"6 5" if l["back"] else "0"}
                             />
                             <path d={l["arrow"]} fill="currentColor" stroke="none"/>
                             <path
@@ -148,7 +157,8 @@ def:pub FlowCanvas(
                     <button
                         key={s.id}
                         type="button"
-                        className={"absolute z-10 rounded-lg border bg-card px-3 py-2 text-left shadow-sm transition-shadow hover:shadow-md "
+                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm transition-shadow hover:shadow-md "
+                            + CARD_TINT[colorKey(s.color)]
                             + (
                                 " border-primary ring-2 ring-primary/40"
                                     if selectedId == s.id
@@ -191,21 +201,50 @@ def:pub FlowCanvas(
                         </div>
                     </button>
                 }}
-                {if len(steps) == 0 {
+            </div>
+            {if len(steps) == 0 {
+                <div
+                    key="empty"
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
                     <div
-                        key="empty"
-                        className="absolute inset-0 flex items-center justify-center"
+                        className="rounded-lg border border-dashed bg-card/80 p-8 text-center"
                     >
-                        <div
-                            className="rounded-lg border border-dashed p-8 text-center"
-                        >
-                            <p className="text-sm font-medium">A blank canvas.</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Add a step, then drag from its border to another step to draw how work flows.
-                            </p>
-                        </div>
+                        <p className="text-sm font-medium">A blank canvas.</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Add a step, then drag from its border to another step to draw how work flows.
+                        </p>
                     </div>
-                }}
+                </div>
+            }}
+            <div
+                className="absolute bottom-4 left-4 z-30 flex items-center gap-1 rounded-full border bg-background/95 px-1 py-1 shadow-sm backdrop-blur"
+                onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+            >
+                <button
+                    type="button"
+                    title="Zoom out"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={lambda { if onZoomBy { onZoomBy(-0.1); }}}
+                >
+                    −
+                </button>
+                <button
+                    type="button"
+                    title="Fit the whole workflow"
+                    className="min-w-14 rounded-full px-2 text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={lambda { if onZoomFit { onZoomFit(); }}}
+                >
+                    {str(int(zoom * 100.0 + 0.5)) + "%"}
+                </button>
+                <button
+                    type="button"
+                    title="Zoom in"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={lambda { if onZoomBy { onZoomBy(0.1); }}}
+                >
+                    +
+                </button>
             </div>
         </div>;
 }

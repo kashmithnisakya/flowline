@@ -26,7 +26,7 @@ import from ...walkers.workflow {
 import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
-import from ...components.workflow.geometry { hitStep, stepXY }
+import from ...components.workflow.geometry { hitStep, stepXY, canvasSize }
 import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -37,20 +37,9 @@ glob BLANK_STEP: dict[str, str] = {
          "name": "",
          "kind": "active",
          "color": "indigo"
-     },
-     HOW_TO: list[list[str]] = [
-         ["Add step", "asks for a name, then drops the card on the canvas."],
-         ["Drag a card", "to move it. The position saves when you let go."],
-         [
-             "Drag from a card's border",
-             "onto another card to draw a transition. Backwards is fine — loops are the point."
-         ],
-         ["Click a transition", "for its remove chip. Click a card to edit it here."]
-     ];
+     };
 
 
-# The canvas is direct-manipulation and nothing about it is discoverable
-# from looking, so the panel says plainly what the drags do.
 def:pub WorkflowPage -> JsxPage {
     has steps: list[StepView] = [],
         loading: bool = True,
@@ -72,7 +61,13 @@ def:pub WorkflowPage -> JsxPage {
         # A dragged step's live position, canvas px, for this drag only. The
         # persisted x/y takes over again after MoveStep + reload.
         live: dict[str, list[float]] = {},
+        # Zoom instead of scrollbars: the canvas never scrolls, it scales.
+        zoom: float = 1.0,
         busyRef: Ref[any] = Ref(),
+        viewportRef: Ref[any] = Ref(),
+        # Mirrors `zoom` for handlers: a render-time read would make two
+        # quick clicks on the same button collapse into one step.
+        zoomRef: Ref[any] = Ref(),
         dragRef: Ref[any] = Ref(),
         wireRef: Ref[any] = Ref(),
         swallowRef: Ref[any] = Ref(),
@@ -101,6 +96,8 @@ def:pub WorkflowPage -> JsxPage {
     def armConnect -> None;
     def clearCanvas -> None;
     def setField(key: str, value: str) -> None;
+    def zoomBy(delta: float) -> None;
+    def fitZoom -> None;
     def pointerXY(e: MouseEvent) -> list[float];
     def beginDrag(e: MouseEvent) -> None;
     def moveDrag(e: MouseEvent) -> None;
@@ -343,10 +340,8 @@ def:pub WorkflowPage -> JsxPage {
                             </Button>
                         </div>
                     }}
-                    <div
-                        className="grid items-start gap-6"
-                        style={{"gridTemplateColumns": "minmax(0,1fr) 21rem"}}
-                    >
+                    # The panel floats over the canvas rather than stealing a # column from it: the drawing is the page, and the editor # is a layer on top of it.
+                    <div className="relative">
                         <div
                             onMouseDown={beginDrag}
                             onMouseMove={moveDrag}
@@ -359,18 +354,24 @@ def:pub WorkflowPage -> JsxPage {
                                 selectedId={selectedId}
                                 connectFrom={connectFrom}
                                 selectedEdge={selectedEdge}
+                                zoom={zoom}
                                 canvasRef={canvasRef}
+                                viewportRef={viewportRef}
+                                onZoomBy={zoomBy}
+                                onZoomFit={fitZoom}
                                 onSelect={selectStep}
                                 onSelectEdge={lambda (k: str) { selectedEdge = k; }}
                                 onDeleteEdge={deleteEdge}
                                 onCanvasClick={clearCanvas}
                             />
                         </div>
-                        <div className="flex flex-col gap-4">
+                        <div
+                            className="pointer-events-none absolute inset-y-0 right-0 flex w-[21rem] max-w-[calc(100%-1rem)] flex-col gap-4 overflow-y-auto p-4"
+                        >
                             {if creatingStep {
                                 <div
                                     key="create"
-                                    className="flex flex-col gap-3 rounded-lg border bg-card p-4"
+                                    className="pointer-events-auto flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg"
                                 >
                                     <div
                                         className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
@@ -412,6 +413,7 @@ def:pub WorkflowPage -> JsxPage {
                                 </div>
                             } elif len(picked) > 0 {
                                 <StepInspector
+                                    className="pointer-events-auto shadow-lg"
                                     key={picked[0].id}
                                     step={picked[0]}
                                     steps={steps}
@@ -426,52 +428,7 @@ def:pub WorkflowPage -> JsxPage {
                                     onDelete={deleteStep}
                                     onUnlink={deleteEdge}
                                 />
-                            } else {
-                                <div
-                                    key="hint"
-                                    className="rounded-lg border border-dashed p-6"
-                                >
-                                    <p className="text-sm font-medium">
-                                        Nothing selected
-                                    </p>
-                                    <p
-                                        className="mt-1 text-sm text-pretty text-muted-foreground"
-                                    >
-                                        Click a step to rename it, change what it means, or connect it onward.
-                                    </p>
-                                </div>
-                            }  }
-                            <div
-                                className="flex flex-col gap-3 rounded-lg border bg-card p-4"
-                            >
-                                <h2 className="font-display text-sm font-semibold">
-                                    Designing the flow
-                                </h2>
-                                <div className="flex flex-col gap-2">
-                                    {for (i, line) in enumerate(HOW_TO) {
-                                        <div
-                                            key={str(i)}
-                                            className="flex items-baseline gap-2"
-                                        >
-                                            <span
-                                                className="text-xs font-medium tabular-nums text-muted-foreground"
-                                            >
-                                                {str(i + 1)}
-                                            </span>
-                                            <p
-                                                className="text-xs text-pretty text-muted-foreground"
-                                            >
-                                                <span
-                                                    className="font-medium text-foreground"
-                                                >
-                                                    {line[0]}
-                                                </span>
-                                                {" " + line[1]}
-                                            </p>
-                                        </div>
-                                    }}
-                                </div>
-                            </div>
+                            } }
                         </div>
                     </div>
                 </div>
@@ -518,7 +475,13 @@ def:pub WorkflowPage -> JsxPage {
                             </span>
                         }}
                     </div>
-                    <FlowCanvas steps={steps}/>
+                    <FlowCanvas
+                        steps={steps}
+                        zoom={zoom}
+                        viewportRef={viewportRef}
+                        onZoomBy={zoomBy}
+                        onZoomFit={fitZoom}
+                    />
                 </div>
             }   }
         </div>;
