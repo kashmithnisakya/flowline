@@ -33,7 +33,9 @@ import from ...walkers.workflow {
 import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
-import from ...components.workflow.geometry { hitStep, stepXY, canvasSize }
+import from ...components.workflow.geometry {
+    hitStep, stepXY, canvasSize, NODE_W, NODE_H
+}
 import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -95,6 +97,11 @@ def:pub WorkflowPage -> JsxPage {
         peekLoading: bool = False,
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
+        # Screen-px offset that centers the diagram in the viewport. Applied
+        # before the scale on the canvas surface, so pointerXY's rect math
+        # keeps working untouched.
+        panX: float = 0.0,
+        panY: float = 0.0,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -117,6 +124,19 @@ def:pub WorkflowPage -> JsxPage {
     # third of the canvas.
     useEffect(lambda { fitZoom(); }, [len(steps), editing]);
 
+    # Refit when the window itself changes size: the canvas tracks the
+    # viewport height, so a resize moves the centering target.
+    useEffect(
+        lambda {
+            onResize = lambda { fitZoom(); };
+            window.addEventListener("resize", onResize);
+            return lambda {
+                window.removeEventListener("resize", onResize);
+            };
+        },
+        []
+    );
+
     async def boot -> None;
     async def reload(pid: str) -> None;
     async def selectProject(v: str) -> None;
@@ -138,6 +158,7 @@ def:pub WorkflowPage -> JsxPage {
     def setField(key: str, value: str) -> None;
     def zoomBy(delta: float) -> None;
     def fitZoom -> None;
+    def recenterPan -> None;
     def pointerXY(e: MouseEvent) -> list[float];
     def beginDrag(e: MouseEvent) -> None;
     def moveDrag(e: MouseEvent) -> None;
@@ -450,6 +471,8 @@ def:pub WorkflowPage -> JsxPage {
                                 connectFrom={connectFrom}
                                 selectedEdge={selectedEdge}
                                 zoom={zoom}
+                                panX={panX}
+                                panY={panY}
                                 canvasRef={canvasRef}
                                 viewportRef={viewportRef}
                                 onZoomBy={zoomBy}
@@ -633,6 +656,8 @@ def:pub WorkflowPage -> JsxPage {
                     <FlowCanvas
                         steps={steps}
                         zoom={zoom}
+                        panX={panX}
+                        panY={panY}
                         showGrid={False}
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
