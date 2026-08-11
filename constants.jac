@@ -55,7 +55,7 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "model + PR owner",
-                     "x": 780.0,
+                     "x": 720.0,
                      "y": 200.0
                  },
                  {
@@ -63,7 +63,7 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "original architect",
-                     "x": 1140.0,
+                     "x": 1040.0,
                      "y": 200.0
                  },
                  # Merged but not finished: the change is live and another PR
@@ -74,15 +74,15 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "amber",
                      "owner": "follow-up PR owner",
-                     "x": 1500.0,
-                     "y": 430.0
+                     "x": 1320.0,
+                     "y": 370.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1860.0,
+                     "x": 1570.0,
                      "y": 200.0
                  }
              ],
