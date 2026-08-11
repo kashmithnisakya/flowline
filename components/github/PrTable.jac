@@ -141,6 +141,17 @@ def:pub PrTable(
                                         else "No pull requests in this repo for that state."
                                 }
                             </p>
+                            {if state != "all" {
+                                <Button
+                                    key="allstates"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-3"
+                                    onClick={lambda { onState("all"); }}
+                                >
+                                    Show all states
+                                </Button>
+                            }}
                         </div>
                     } else {
                         <Table key="table">

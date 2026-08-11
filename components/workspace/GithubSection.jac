@@ -287,12 +287,36 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 <SelectContent>
                                     {for r in repos {
                                         <SelectItem key={r.id} value={r.id}>
-                                            {r.full_name
-                                                + (" · " + r.project_name if r.project_name else "")}
+                                            {r.full_name}
                                         </SelectItem>
                                     }}
                                 </SelectContent>
                             </Select>
+                            {for r in [
+                                x
+                                for x in repos
+                                if x.id == repoId and x.project_name
+                            ] {
+                                <span
+                                    key={"proj-" + r.id}
+                                    className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground lg:inline-flex"
+                                    title={"Imports land in " + r.project_name + " unless you pick another project"}
+                                >
+                                    <svg
+                                        width={12}
+                                        height={12}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                    >
+                                        <path d="M5 12h14"/>
+                                        <path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                    {r.project_name}
+                                </span>
+                            }}
                             <div className="relative min-w-56 flex-1 sm:max-w-xs">
                                 <svg
                                     className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
