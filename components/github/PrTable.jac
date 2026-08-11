@@ -72,6 +72,7 @@ def:pub PrTable(
     loadingMore: bool,
     hasMore: bool,
     state: str,
+    query: str,
     onState: Callable[[str], None],
     onLoadMore: Callable[[], None]
 ) -> JsxElement {
@@ -130,10 +131,27 @@ def:pub PrTable(
                                 <path d="M13 6h3a2 2 0 0 1 2 2v7" />
                                 <path d="M6 9v12" />
                             </svg>
-                            <p className="mt-3 text-sm font-medium">Nothing to show</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                No pull requests in this repo for that state.
+                            <p className="mt-3 text-sm font-medium">
+                                {"No matches" if query else "Nothing to show"}
                             </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {
+                                    "No pull requests match \"" + query + "\" for that state."
+                                        if query
+                                        else "No pull requests in this repo for that state."
+                                }
+                            </p>
+                            {if state != "all" {
+                                <Button
+                                    key="allstates"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-3"
+                                    onClick={lambda { onState("all"); }}
+                                >
+                                    Show all states
+                                </Button>
+                            }}
                         </div>
                     } else {
                         <Table key="table">

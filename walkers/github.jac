@@ -523,6 +523,121 @@ walker ListRepoPulls {
 }
 
 
+walker SearchRepoItems {
+    """One page of GitHub search results scoped to one repo.
+
+    `kind` picks issues or pull requests; rows come back in the same shapes
+    the list walkers use, so the tables and the import bar work unchanged.
+    GitHub's search API allows ~30 requests a minute, so the client only
+    calls this on an explicit search action, never per keystroke. A foreign
+    repo jid reports an empty page, like the list walkers."""
+    has repo_id: str = "",
+        kind: str = "issues",
+        query: str = "",
+        state: str = "open",
+        page: int = 1,
+        reports: list[dict[str, any]] = [];
+
+    can search with Root entry {
+        full_name = owned_full_name(here, self.repo_id);
+        if not full_name {
+            report {"ok": True, "rows": [], "page": self.page, "has_more": False};
+            disengage;
+        }
+        terms = self.query.strip();
+        if not terms {
+            report {"ok": True, "rows": [], "page": self.page, "has_more": False};
+            disengage;
+        }
+        c = connection_of(here);
+        token = token_of(c);
+        if not token {
+            report not_connected();
+            disengage;
+        }
+        pulls = self.kind == "pulls";
+        q: str = "repo:" + full_name + (" is:pr" if pulls else " is:issue");
+        want = self.state if self.state in ["open", "closed", "all"] else "open";
+        if want != "all" {
+            q = q + " state:" + want;
+        }
+        q = q + " " + terms;
+        page = self.page if self.page > 0 else 1;
+        result = gh_request(
+            token, "GET", "/search/issues",
+            {"q": q, "per_page": PAGE_SIZE, "page": page}
+        );
+        if not result["ok"] {
+            mark_invalid(c, result);
+            report result;
+            disengage;
+        }
+        data = result["data"];
+        items: list[any] = [];
+        total = 0;
+        if isinstance(data, dict) {
+            got = data.get("items") or [];
+            if isinstance(got, list) {
+                items = got;
+            }
+            total = int(data.get("total_count") or 0);
+        }
+        owned_tasks = [here-->[?:Task]];
+        issue_rows: list[GhIssueRow] = [];
+        pr_rows: list[GhPrRow] = [];
+        for item in items {
+            if not isinstance(item, dict) {
+                continue;
+            }
+            if pulls {
+                number = int(item.get("number") or 0);
+                url = str(item.get("html_url") or "");
+                author = "";
+                who = item.get("user") or {};
+                if isinstance(who, dict) {
+                    author = str(who.get("login") or "");
+                }
+                linked = "";
+                for t in owned_tasks {
+                    if t.gh_repo == full_name and t.pr_number == number {
+                        linked = jid(t);
+                    } elif url and t.pr_link == url {
+                        linked = jid(t);
+                    }
+                }
+                # Search items nest merge status under pull_request rather
+                # than at the top level, so pr_state_of needs a flattened view.
+                flat: dict[str, any] = {
+                    "state": item.get("state"),
+                    "draft": item.get("draft")
+                };
+                pr_meta = item.get("pull_request") or {};
+                if isinstance(pr_meta, dict) {
+                    flat["merged_at"] = pr_meta.get("merged_at");
+                }
+                pr_rows.append(GhPrRow(
+                    number=number, title=str(item.get("title") or ""),
+                    state=pr_state_of(flat), author=author, html_url=url,
+                    linked_task_id=linked,
+                    updated_at=str(item.get("updated_at") or "")
+                ));
+            } else {
+                if item.get("pull_request") {
+                    continue;
+                }
+                issue_rows.append(issue_row(item, owned_tasks, full_name));
+            }
+        }
+        report {
+            "ok": True,
+            "rows": pr_rows if pulls else issue_rows,
+            "page": page,
+            "has_more": total > page * PAGE_SIZE
+        };
+    }
+}
+
+
 # ---------------------------------------------------------------- writes
 
 walker ImportIssues {
