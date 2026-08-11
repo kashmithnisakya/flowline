@@ -20,6 +20,83 @@ glob STATUSES: list[str] = [
      },
      WORKFLOW_TEMPLATES: list[dict[str, any]] = [
          {
+             "key": "jaseci",
+             "name": "Jaseci flow",
+             "description": "How we actually work: plan an issue with a model, approve it if it is big, let the model build, review, and the person who raised it validates.",
+             "steps": [
+                 {
+                     "name": "Plan",
+                     "kind": "start",
+                     "color": "sky",
+                     "owner": "person + model",
+                     "x": 40.0,
+                     "y": 140.0
+                 },
+                 {
+                     "name": "Approve",
+                     "kind": "handoff",
+                     "color": "indigo",
+                     "owner": "domain expert",
+                     "x": 340.0,
+                     "y": 20.0
+                 },
+                 {
+                     "name": "Build",
+                     "kind": "active",
+                     "color": "amber",
+                     "owner": "model + PR owner",
+                     "x": 640.0,
+                     "y": 140.0
+                 },
+                 {
+                     "name": "Review",
+                     "kind": "handoff",
+                     "color": "rose",
+                     "owner": "expert or area lead",
+                     "x": 940.0,
+                     "y": 140.0
+                 },
+                 # Validate and Done sit a row lower so the "still broken"
+                 # return to Build travels beneath Review instead of straight
+                 # through it.
+                 {
+                     "name": "Validate",
+                     "kind": "handoff",
+                     "color": "slate",
+                     "owner": "whoever raised it",
+                     "x": 1180.0,
+                     "y": 320.0
+                 },
+                 {
+                     "name": "Done",
+                     "kind": "done",
+                     "color": "emerald",
+                     "owner": "",
+                     "x": 1480.0,
+                     "y": 320.0
+                 }
+             ],
+             # Forward first, then the three send-backs. A review that can
+             # only approve is a review nobody needs, so the return paths are
+             # part of the model rather than an omission: Approve returns the
+             # plan, Review and Validate return the work.
+             "links": [
+                 [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
+                 [1, 0], [3, 2], [4, 2]
+             ],
+             "link_labels": [
+                 "needs a design call",
+                 "small enough to just build",
+                 "plan approved",
+                 "PR ready and tested",
+                 "approved, merged",
+                 "confirmed working",
+                 "rethink the plan",
+                 "changes requested",
+                 "still broken"
+             ]
+         },
+         {
              "key": "kanban",
              "name": "Classic Kanban",
              "description": "The straight line you know: To do, In progress, Done.",
@@ -97,56 +174,6 @@ glob STATUSES: list[str] = [
                  }
              ],
              "links": [[0, 1], [1, 2], [2, 5], [2, 3], [3, 1], [1, 4], [4, 1]]
-         },
-         {
-             "key": "jaseci",
-             "name": "Jaseci flow",
-             "description": "Architect, build with a design review running alongside, then arch review, merge and deslop.",
-             "steps": [
-                 {
-                     "name": "Architecting",
-                     "kind": "start",
-                     "color": "sky",
-                     "x": 40.0,
-                     "y": 180.0
-                 },
-                 {
-                     "name": "DOMX review",
-                     "kind": "handoff",
-                     "color": "indigo",
-                     "x": 300.0,
-                     "y": 320.0
-                 },
-                 {
-                     "name": "Driving",
-                     "kind": "active",
-                     "color": "amber",
-                     "x": 300.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Arch review",
-                     "kind": "handoff",
-                     "color": "rose",
-                     "x": 560.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Merged, needs deslop",
-                     "kind": "active",
-                     "color": "slate",
-                     "x": 820.0,
-                     "y": 140.0
-                 },
-                 {
-                     "name": "Done",
-                     "kind": "done",
-                     "color": "emerald",
-                     "x": 1080.0,
-                     "y": 260.0
-                 }
-             ],
-             "links": [[0, 2], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]
          },
          {
              "key": "support",

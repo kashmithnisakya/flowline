@@ -65,7 +65,7 @@ def:pub FlowCanvas(
     links: list[dict[str, any]] = [];
     for s in steps {
         pos = stepXY(s, live);
-        for nid in s.next_ids {
+        for (i, nid) in enumerate(s.next_ids) {
             if nid not in byId {
                 continue;
             }
@@ -73,6 +73,9 @@ def:pub FlowCanvas(
             tpos = stepXY(target, live);
             twoWay = s.id in target.next_ids;
             curve = wire(pos[0], pos[1], tpos[0], tpos[1], twoWay);
+            # next_labels comes from the same traversal as next_ids, so
+            # position i is the wording on this particular arrow.
+            said = s.next_labels[i] if i < len(s.next_labels) else "";
             links.append(
                 {
                     "key": s.id + ">" + nid,
@@ -82,7 +85,8 @@ def:pub FlowCanvas(
                     "arrow": curve["arrow"],
                     "mx": curve["mx"],
                     "my": curve["my"],
-                    "back": curve["back"]
+                    "back": curve["back"],
+                    "label": said
                 }
             );
         }
@@ -171,6 +175,23 @@ def:pub FlowCanvas(
                 </svg>
                 {for l in links {
                     <div key={"chip-" + l["key"]}>
+                        {if l["label"] and selectedEdge != l["key"] {
+                            <span
+                                key="lab"
+                                className={"pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm "
+                                    + (
+                                        "border-destructive/40 bg-background text-destructive"
+                                            if l["back"]
+                                            else "border-border bg-background text-muted-foreground"
+                                    )}
+                                style={{
+                                    "left": str(l["mx"]) + "px",
+                                    "top": str(l["my"]) + "px"
+                                }}
+                            >
+                                {l["label"]}
+                            </span>
+                        }}
                         {if selectedEdge == l["key"] {
                             <button
                                 key="del"
@@ -269,6 +290,15 @@ def:pub FlowCanvas(
                         >
                             {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
                         </div>
+                        {if s.owner {
+                            <div
+                                key="owner"
+                                className="mt-1 truncate pl-4 text-[11px] text-foreground/70"
+                                title={"Held by: " + s.owner}
+                            >
+                                {s.owner}
+                            </div>
+                        }}
                     </button>
                 }}
             </div>

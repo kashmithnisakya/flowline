@@ -245,12 +245,16 @@ walker ApplyTemplate {
         stamp = now_iso();
         made: list[WorkflowStep] = [];
         order = 1024.0;
-        for s in chosen["steps"] {
+        # Typed locals first: the template's nested values are `any`, which
+        # the checker will not subscript or test with `in`.
+        raw_steps: list[dict[str, any]] = chosen["steps"];
+        for s in raw_steps {
             kind = s["kind"] if s["kind"] in STEP_KINDS else "active";
             fresh = here ++> WorkflowStep(
                 name=s["name"],
                 kind=kind,
                 color=s["color"],
+                owner=str(s["owner"]) if "owner" in s else "",
                 x=s["x"],
                 y=s["y"],
                 sort_order=order,
@@ -261,10 +265,18 @@ walker ApplyTemplate {
             made.append(fresh);
             order = order + 1024.0;
         }
-        for pair in chosen["links"] {
+        # Labels ride in a parallel list so the older templates, which carry
+        # no wording at all, keep working untouched.
+        wording: list[str] = [];
+        if "link_labels" in chosen {
+            wording = chosen["link_labels"];
+        }
+        raw_links: list[list[int]] = chosen["links"];
+        for (i, pair) in enumerate(raw_links) {
             source = made[pair[0]];
             target = made[pair[1]];
-            source +>:FlowsTo():+> target;
+            said = wording[i] if i < len(wording) else "";
+            source +>:FlowsTo(label=said):+> target;
         }
         views: list[StepView] = [];
         for m in made {
@@ -304,6 +316,10 @@ walker SaveStep {
         name: str = "",
         kind: str = "",
         color: str = "",
+        # Who holds work while it sits on this step. Empty means "keep",
+        # matching every other field here, so a single space is how the
+        # inspector says "clear it".
+        owner: str = "",
         x: float = 0.0,
         y: float = 0.0,
         reports: list[StepView] = [];
@@ -333,6 +349,9 @@ walker SaveStep {
             if self.color {
                 target.color = self.color;
             }
+            if self.owner {
+                target.owner = self.owner.strip();
+            }
             target.updated_at = stamp;
             report step_view(target);
             disengage;
@@ -352,6 +371,7 @@ walker SaveStep {
             name=self.name.strip(),
             kind=kind,
             color=color,
+            owner=self.owner.strip(),
             x=self.x,
             y=self.y,
             sort_order=peak + 1024.0,
@@ -442,6 +462,10 @@ walker LinkTransition {
     writing a second edge."""
     has from_id: str = "",
         to_id: str = "",
+        # What has to be true to cross this arrow ("approved", "changes
+        # requested"). Optional: an unlabelled arrow still means "work may
+        # move this way", it just says less about why.
+        label: str = "",
         reports: list[dict[str, any]] = [];
 
     can link with Root entry {
@@ -463,11 +487,19 @@ walker LinkTransition {
             };
             disengage;
         }
-        if [edge source->:FlowsTo:->target] {
+        # Re-drawing an existing arrow is how a label gets edited, so a
+        # duplicate updates the wording rather than refusing outright.
+        existing = [edge source->:FlowsTo:->target];
+        if existing {
+            if self.label.strip() {
+                for e in existing {
+                    e.label = self.label.strip();
+                }
+            }
             report {"ok": True, "linked": True, "duplicate": True};
             disengage;
         }
-        source +>:FlowsTo():+> target;
+        source +>:FlowsTo(label=self.label.strip()):+> target;
         report {"ok": True, "linked": True, "duplicate": False};
     }
 }

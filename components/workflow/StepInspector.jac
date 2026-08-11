@@ -89,6 +89,28 @@ def:pub StepInspector(
                     <div
                         className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
+                        Who holds it here
+                    </div>
+                    <Input
+                        value={form["owner"] or ""}
+                        placeholder="domain expert, model, whoever raised it"
+                        onChange={lambda (e: any) { if onField {
+                            onField("owner", e.target.value);
+                        }}}
+                        onBlur={lambda { if onNameCommit { onNameCommit(); }}}
+                        onKeyDown={lambda (e: any) { if e.key == "Enter"
+                            and onNameCommit {
+                            onNameCommit();
+                        }}}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                        A role, not a person. A step that cannot say who holds it is a picture rather than a model.
+                    </p>
+                </div>
+                <div className="space-y-1.5">
+                    <div
+                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                    >
                         Kind
                     </div>
                     <Select

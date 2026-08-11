@@ -124,7 +124,7 @@ impl WorkflowPage.addStep -> None {
     selectedId = "";
     selectedEdge = "";
     confirmDelete = False;
-    form = {"name": "", "kind": "active", "color": "indigo"};
+    form = {"name": "", "kind": "active", "color": "indigo", "owner": ""};
 }
 
 impl WorkflowPage.commitName -> None {
@@ -154,6 +154,7 @@ impl WorkflowPage.commitName -> None {
                 name=name,
                 kind=form["kind"] or "active",
                 color=form["color"] or "",
+                owner=form["owner"] or "",
                 x=40.0,
                 y=ny
             );
@@ -162,7 +163,12 @@ impl WorkflowPage.commitName -> None {
             creatingStep = False;
             if made {
                 selectedId = made.id;
-                form = {"name": made.name, "kind": made.kind, "color": made.color};
+                form = {
+                    "name": made.name,
+                    "kind": made.kind,
+                    "color": made.color,
+                    "owner": made.owner
+                };
             }
         } except Exception as e {
             toast("Failed to add the step");
@@ -181,16 +187,21 @@ impl WorkflowPage.commitName -> None {
         for s in steps
         if s.id == selectedId
     ];
-    if current and current[0].name == name {
+    owner = (form["owner"] or "").strip();
+    if current and current[0].name == name and current[0].owner == owner {
         busyRef.current = False;
         return;
     }
     saving = True;
     try {
-        root spawn SaveStep(step_id=selectedId, name=name);
+        # Name and owner share the blur/Enter trigger, and SaveStep reads
+        # empty as "keep", so a lone space is how "clear the owner" is said.
+        root spawn SaveStep(
+            step_id=selectedId, name=name, owner=owner if owner else " "
+        );
         await reload(projectId);
     } except Exception as e {
-        toast("Failed to rename the step");
+        toast("Failed to update the step");
     }
     saving = False;
     busyRef.current = False;
@@ -310,7 +321,8 @@ impl WorkflowPage.selectStep(stepId: str) -> None {
         form = {
             "name": picked[0].name,
             "kind": picked[0].kind,
-            "color": picked[0].color
+            "color": picked[0].color,
+            "owner": picked[0].owner
         };
     }
 }
@@ -522,7 +534,12 @@ impl WorkflowPage.beginDrag(e: MouseEvent) -> None {
         selectedEdge = "";
         confirmDelete = False;
         creatingStep = False;
-        form = {"name": step.name, "kind": step.kind, "color": step.color};
+        form = {
+            "name": step.name,
+            "kind": step.kind,
+            "color": step.color,
+            "owner": step.owner
+        };
         return;
     }
     at = stepXY(step, liveRef.current or {});

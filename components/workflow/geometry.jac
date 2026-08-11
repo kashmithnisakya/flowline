@@ -28,7 +28,9 @@ def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
 }
 
 glob NODE_W: float = 176.0,
-     NODE_H: float = 64.0,
+     # Three lines: the name, the kind, and who holds work while it sits
+     # here. One glob, so hit-testing and the wire endpoints follow.
+     NODE_H: float = 82.0,
      EDGE_ZONE: float = 12.0,
      # Working room kept beyond the furthest step, so there is always
      # somewhere to drag to without the canvas jumping.
