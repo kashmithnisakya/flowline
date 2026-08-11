@@ -22,7 +22,7 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "How we actually work: raise an issue, solve it with a model, approve the plan if it is big, let the model build, review, and the person who raised it validates.",
+             "description": "How we actually work: raise an issue, solve it with a model, get the plan approved if it is big, let the model build, then the architect reviews and merges.",
              "steps": [
                  # Laid out as a loop rather than a line. Solving and Approve
                  # stack so the "rethink" return is a short hop; Validate drops
@@ -77,26 +77,12 @@ glob STATUSES: list[str] = [
                      "x": 1140.0,
                      "y": 200.0
                  },
-                 # Simplify is the optional detour at the end, mirroring
-                 # Approve at the start: a follow-up PR that changes no
-                 # behaviour and takes the redundancy back out. Not every
-                 # change needs one, which is exactly why Done exists as its
-                 # own state: it is the one place everything lands, whether or
-                 # not it took the detour.
-                 {
-                     "name": "Simplify",
-                     "kind": "handoff",
-                     "color": "amber",
-                     "owner": "a dedicated engineer",
-                     "x": 1480.0,
-                     "y": 430.0
-                 },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1820.0,
+                     "x": 1500.0,
                      "y": 200.0
                  }
              ],
@@ -110,8 +96,7 @@ glob STATUSES: list[str] = [
              # backwards. An arrow for that would imply the graph tracks a
              # thing it does not.
              "links": [
-                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [4, 6],
-                 [5, 6],
+                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5],
                  [2, 1], [4, 3]
              ],
              # Kept short: two of these sit on the same pair of steps, and a
@@ -122,9 +107,7 @@ glob STATUSES: list[str] = [
                  "small enough to just build",
                  "plan approved",
                  "PR ready and tested",
-                 "merged, needs cleanup",
-                 "merged and clean",
-                 "cleaned up",
+                 "approved, merged",
                  "rethink",
                  "changes requested"
              ]
