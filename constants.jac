@@ -67,20 +67,28 @@ glob STATUSES: list[str] = [
                      "x": 780.0,
                      "y": 200.0
                  },
+                 # Reading the code and merging it is one act by one person in
+                 # one sitting, so it is one step rather than two.
                  {
                      "name": "Review",
                      "kind": "handoff",
                      "color": "rose",
-                     "owner": "expert or area lead",
+                     "owner": "original architect",
                      "x": 1140.0,
                      "y": 200.0
                  },
+                 # Simplify is the optional detour at the end, mirroring
+                 # Approve at the start: a follow-up PR that changes no
+                 # behaviour and takes the redundancy back out. Not every
+                 # change needs one, which is exactly why Done exists as its
+                 # own state: it is the one place everything lands, whether or
+                 # not it took the detour.
                  {
-                     "name": "Validate",
+                     "name": "Simplify",
                      "kind": "handoff",
-                     "color": "indigo",
-                     "owner": "whoever raised it",
-                     "x": 940.0,
+                     "color": "amber",
+                     "owner": "a dedicated engineer",
+                     "x": 1480.0,
                      "y": 430.0
                  },
                  {
@@ -88,17 +96,23 @@ glob STATUSES: list[str] = [
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1280.0,
-                     "y": 430.0
+                     "x": 1820.0,
+                     "y": 200.0
                  }
              ],
-             # Forward first, then the three send-backs. A review that can
-             # only approve is a review nobody needs, so the return paths are
-             # part of the model rather than an omission: Approve returns the
-             # plan, Review and Validate return the work.
+             # Forward first, then the two send-backs. A review that can only
+             # approve is a review nobody needs, so those return paths are
+             # part of the model rather than an omission.
+             #
+             # There is deliberately NO return from Validate: work only
+             # reaches it once a reviewer has approved, and a fault found
+             # later is a new issue entering at Raised, not this one moving
+             # backwards. An arrow for that would imply the graph tracks a
+             # thing it does not.
              "links": [
-                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [5, 6],
-                 [2, 1], [4, 3], [5, 3]
+                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [4, 6],
+                 [5, 6],
+                 [2, 1], [4, 3]
              ],
              # Kept short: two of these sit on the same pair of steps, and a
              # long chip is what makes labels collide.
@@ -108,11 +122,11 @@ glob STATUSES: list[str] = [
                  "small enough to just build",
                  "plan approved",
                  "PR ready and tested",
-                 "approved, merged",
-                 "confirmed working",
+                 "merged, needs cleanup",
+                 "merged and clean",
+                 "cleaned up",
                  "rethink",
-                 "changes requested",
-                 "still broken"
+                 "changes requested"
              ]
          },
          {
