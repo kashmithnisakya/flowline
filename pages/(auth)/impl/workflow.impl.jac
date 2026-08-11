@@ -282,6 +282,35 @@ impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
     }
 }
 
+impl WorkflowPage.selectEdge(key: str, said: str) -> None {
+    # Seeding the draft from the edge itself is what makes the editor an
+    # edit rather than a retype, and it is why nothing has to clear the
+    # draft when the selection moves.
+    selectedEdge = key;
+    edgeDraft = said;
+}
+
+impl WorkflowPage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
+    # An empty `said` is a clear, not a no-op, which is why this goes
+    # through LabelTransition rather than re-drawing the arrow.
+    try {
+        result = root spawn LabelTransition(
+            from_id=fromId, to_id=toId, label=said
+        );
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            edgeDraft = payload["label"];
+            selectedEdge = "";
+            await reload(projectId);
+            toast("Label removed" if not payload["label"] else "Label saved");
+        } else {
+            toast("Could not update that label");
+        }
+    } except Exception as e {
+        toast("Could not update that label");
+    }
+}
+
 impl WorkflowPage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {

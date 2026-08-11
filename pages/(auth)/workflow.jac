@@ -25,6 +25,7 @@ import from ...walkers.workflow {
     MoveStep,
     DeleteStep,
     LinkTransition,
+    LabelTransition,
     UnlinkTransition,
     GetWorkflowMeta,
     RenameWorkflow,
@@ -81,6 +82,10 @@ def:pub WorkflowPage -> JsxPage {
         selectedId: str = "",
         connectFrom: str = "",
         selectedEdge: str = "",
+        # What the selected transition's label says while it is being typed.
+        # Re-seeded from the edge on every selection, so it never has to be
+        # cleared when the selection moves.
+        edgeDraft: str = "",
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
@@ -162,6 +167,8 @@ def:pub WorkflowPage -> JsxPage {
     async def deleteStep -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
+    def selectEdge(key: str, said: str) -> None;
+    async def commitEdgeLabel(fromId: str, toId: str, said: str) -> None;
     def selectStep(stepId: str) -> None;
     def armConnect -> None;
     def clearCanvas -> None;
@@ -489,7 +496,10 @@ def:pub WorkflowPage -> JsxPage {
                                 onZoomBy={zoomBy}
                                 onZoomFit={fitZoom}
                                 onSelect={selectStep}
-                                onSelectEdge={lambda (k: str) { selectedEdge = k; }}
+                                edgeDraft={edgeDraft}
+                                onSelectEdge={selectEdge}
+                                onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
+                                onSaveEdgeLabel={commitEdgeLabel}
                                 onDeleteEdge={deleteEdge}
                                 onCanvasClick={clearCanvas}
                                 onAddStep={addStep}
