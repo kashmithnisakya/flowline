@@ -28,6 +28,7 @@ import from ...walkers.tasks {
 }
 import from ...walkers.workflow { GetWorkflow }
 import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
+import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -205,10 +206,21 @@ def:pub BoardPage -> JsxPage {
     return
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="font-display text-2xl font-bold tracking-tight">
+                <h1 className="page-title">
                     Board
                 </h1>
-                {if not noWorkflow {
+                {if loading {
+                    <div
+                        key="tools-skel"
+                        className="flex flex-wrap items-center gap-2"
+                    >
+                        <Skeleton className="h-8 w-44"/>
+                        <Skeleton className="h-8 w-40"/>
+                        <Skeleton className="h-8 w-40"/>
+                        <Skeleton className="h-8 w-24"/>
+                        <Skeleton className="h-8 w-24"/>
+                    </div>
+                } elif not noWorkflow {
                     <div key="tools" className="flex items-center gap-2">
                         <FilterBar
                             projects={activeProjects}
@@ -230,7 +242,22 @@ def:pub BoardPage -> JsxPage {
                                 disabled={syncing}
                                 onClick={syncGithub}
                             >
-                                Sync GitHub
+                                {if syncing {
+                                    <svg
+                                        key="sp"
+                                        className="animate-spin"
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                    >
+                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                    </svg>
+                                }}
+                                {"Syncing…" if syncing else "Sync GitHub"}
                             </Button>
                         }}
                         <Button onClick={openCreate}>New task</Button>
@@ -238,41 +265,98 @@ def:pub BoardPage -> JsxPage {
                 }}
             </div>
             {if loading {
+                # Mirrors the loaded board: one row of column shells, each
+                # with a header (dot, label bar, count pill) and card blocks,
+                # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6"
+                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"
+                    style={{
+                        "gridTemplateColumns": "repeat(5, minmax(var(--board-col-min), 1fr))"
+                    }}
                 >
-                    <Skeleton key="s1" className="h-72 w-full"/>
-                    <Skeleton key="s2" className="h-72 w-full"/>
-                    <Skeleton key="s3" className="h-72 w-full"/>
+                    {for i in [0, 1, 2, 3, 4] {
+                        <div
+                            key={"sk" + str(i)}
+                            className="flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2"
+                        >
+                            <div className="flex items-center justify-between px-1 py-1">
+                                <div className="flex items-center gap-1.5">
+                                    <Skeleton className="size-2 rounded-full"/>
+                                    <Skeleton className="h-4 w-20"/>
+                                </div>
+                                <Skeleton className="h-5 w-6 rounded-full"/>
+                            </div>
+                            <Skeleton className="h-20 w-full"/>
+                            <Skeleton className="h-20 w-full"/>
+                            {if i % 2 == 0 {
+                                <Skeleton key="c3" className="h-20 w-full"/>
+                            }}
+                        </div>
+                    }}
                 </div>
             } elif noWorkflow {
                 <div
                     key="noworkflow"
-                    className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center"
+                    className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
                 >
-                    <h2 className="font-display text-lg font-semibold">
-                        Your board is the workflow you design
-                    </h2>
-                    <p className="max-w-md text-sm text-pretty text-muted-foreground">
-                        Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
-                    </p>
-                    <Button onClick={lambda { window.location.href = "/workflow"; }}>
-                        Design your workflow
-                    </Button>
+                    <KineticGrid className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"/>
+                    <div className="anim-fade-up relative z-10 flex flex-col items-center gap-3">
+                        <svg
+                            width={40}
+                            height={40}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-muted-foreground/70"
+                        >
+                            <circle cx={5} cy={12} r={2.5}/>
+                            <circle cx={19} cy={5} r={2.5}/>
+                            <circle cx={19} cy={19} r={2.5}/>
+                            <path d="m7.3 10.8 9.4-4.6"/>
+                            <path d="m7.3 13.2 9.4 4.6"/>
+                        </svg>
+                        <h2 className="font-display text-lg font-semibold">
+                            Your board is the workflow you design
+                        </h2>
+                        <p className="max-w-md text-sm text-pretty text-muted-foreground">
+                            Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
+                        </p>
+                        <Button onClick={lambda { window.location.href = "/workflow"; }}>
+                            Design your workflow
+                            <svg
+                                width={16}
+                                height={16}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M5 12h14"/>
+                                <path d="m12 5 7 7-7 7"/>
+                            </svg>
+                        </Button>
+                    </div>
                 </div>
             } else {
                 # ONE row, always: however many steps the workflow has, the
                 # columns divide the width between them. A workflow that wraps
                 # onto a second row stops reading as a pipeline, and a
-                # horizontal scrollbar hides the end of it.
+                # horizontal scrollbar hides the end of it. The one concession
+                # is below md, where columns keep a 16rem minimum and the row
+                # scroll-snaps horizontally instead of crushing every column.
                 <div
                     key="columns"
-                    className="grid items-start gap-3"
+                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"
                     style={{
                         "gridTemplateColumns": "repeat("
                             + str(len(colKeys))
-                            + ", minmax(0, 1fr))"
+                            + ", minmax(var(--board-col-min), 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {

@@ -1,6 +1,9 @@
 """Implementation for the SSO buttons."""
 
 impl SsoButtons.start(platform: str) -> None {
+    # Pending drives the spinner swap and disables both buttons; it stays
+    # set on the success path because the browser is about to navigate away.
+    pending = platform;
     # jac-scale requires client_callback on the initiate call (it 422s
     # without one), which jacSsoLogin does not send, so build the URL by
     # hand. The server only honours the value when it is a safe loopback;
@@ -21,6 +24,7 @@ impl SsoButtons.start(platform: str) -> None {
         configured = True;
     }
     if not configured {
+        pending = "";
         onFailure(
             platform.capitalize()
                 + " sign-in isn't configured yet. Add its "

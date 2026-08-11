@@ -27,7 +27,7 @@ def:pub LandingPage() -> JsxPage {
             <Features />
             <HowItWorks />
             <Faq />
-            <SiteFooter loggedIn={loggedIn} />
         </main>
+        <SiteFooter loggedIn={loggedIn} />
     </div>;
 }

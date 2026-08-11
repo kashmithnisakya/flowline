@@ -11,10 +11,29 @@ import from ..ui.card {
 }
 import from ..ui.badge { Badge }
 
+# Identity dot hues picked by name hash; whole literal strings so Tailwind
+# scans them.
+glob DOT_HUES: list[str] = [
+    "bg-chart-1",
+    "bg-chart-2",
+    "bg-chart-3",
+    "bg-chart-4",
+    "bg-chart-5"
+];
+
 # "jaseci-labs/standup" -> "standup"
 def repoName(full_name: str) -> str {
     parts = full_name.split("/");
     return parts[-1] if parts else full_name;
+}
+
+# Deterministic dot hue: sum of character codes into the hue table.
+def dotHueFor(name: any) -> str {
+    total = 0;
+    for i in range(len(name)) {
+        total = total + name.charCodeAt(i);
+    }
+    return DOT_HUES[total % 5];
 }
 
 def:pub ProjectCard(
@@ -23,10 +42,16 @@ def:pub ProjectCard(
     onEdit: Callable[[Project], None],
     onArchive: Callable[[str], None]
 ) -> JsxElement {
-    return <Card className="gap-3 py-5 transition-shadow hover:shadow-md">
+    # Archive is a two-step: the first click arms, the second fires.
+    has armed: bool = False;
+
+    return <Card className="card-hover gap-3 py-5 hover:ring-foreground/20">
         <CardHeader className="gap-1">
             <CardTitle className="flex items-center gap-2 text-base">
-                <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                <span
+                    className={"h-2 w-2 shrink-0 rounded-full "
+                        + dotHueFor(project.name)}
+                />
                 <span className="truncate">{project.name}</span>
             </CardTitle>
             <CardDescription className="min-h-5 text-sm">
@@ -54,12 +79,20 @@ def:pub ProjectCard(
                 Edit
             </Button>
             <Button
-                variant="ghost"
+                variant={"destructive" if armed else "ghost"}
                 size="sm"
-                className="text-destructive"
-                onClick={lambda { onArchive(jid(project)); }}
+                className={"" if armed else "text-destructive"}
+                title={"Click again to archive" if armed else "Archive"}
+                onClick={lambda {
+                    if armed {
+                        armed = False;
+                        onArchive(jid(project));
+                    } else {
+                        armed = True;
+                    }
+                }}
             >
-                Archive
+                {"Confirm?" if armed else "Archive"}
             </Button>
         </CardFooter>
     </Card>;

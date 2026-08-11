@@ -45,18 +45,23 @@ glob FEATURES: list[Feature] = [
 
 def:pub Features -> JsxElement {
     return
-        <section id="product" className="mx-auto max-w-[1180px] px-7 pt-24">
+        <section id="product" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
+            <span
+                className="text-xs font-semibold uppercase tracking-widest text-primary"
+            >
+                Product
+            </span>
             <h2
-                className="font-display max-w-xl text-[clamp(2rem,4vw,2.9rem)] font-bold leading-tight tracking-[-0.04em]"
+                className="font-display mt-3 max-w-xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >
                 Everything a standup does. None of the 9:45.
             </h2>
             <p className="mt-4 max-w-2xl text-base text-muted-foreground">
                 Four things replace the ritual, and unlike the meeting, the record is still there next month.
             </p>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="mt-10 grid gap-6 sm:grid-cols-2">
                 {for f in FEATURES {
-                    <Card key={f.n} className="h-full">
+                    <Card key={f.n} className="card-hover h-full py-0 hover:ring-foreground/20">
                         <CardContent className="flex h-full flex-col gap-3 p-7">
                             <div className="flex items-center justify-between">
                                 <span
@@ -65,7 +70,7 @@ def:pub Features -> JsxElement {
                                     {f.n}
                                 </span>
                                 <span
-                                    className="rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
+                                    className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
                                 >
                                     {f.tag}
                                 </span>

@@ -25,12 +25,12 @@
     --muted-foreground: #6B6459;
     --accent: #F1ECE3;
     --accent-foreground: #14120F;
-    --destructive: #E8552F;
-    --border: #EFE9DE;
+    --destructive: #C81E3C;         /* crimson — must not read as brand ember */
+    --border: #E6DDCC;              /* visible on both paper and muted surfaces */
     --input: #E2DACC;
     --ring: #E8552F;
     --success: #2C5545;             /* pine */
-    --warning: #E8A22F;             /* amber */
+    --warning: #B07C1F;             /* readable amber text on paper */
     --chart-1: #E8552F;
     --chart-2: #2C5545;
     --chart-3: #E8A22F;
@@ -45,6 +45,11 @@
     --sidebar-accent-foreground: #14120F;
     --sidebar-border: #EFE9DE;
     --sidebar-ring: #E8552F;
+    /* Elevation ladder — warm-tinted so shadows sit naturally on paper. */
+    --elev-xs: 0 1px 2px rgb(30 24 15 / 0.05);
+    --elev-sm: 0 1px 2px rgb(30 24 15 / 0.05), 0 2px 8px -2px rgb(30 24 15 / 0.07);
+    --elev-md: 0 2px 4px rgb(30 24 15 / 0.05), 0 10px 24px -8px rgb(30 24 15 / 0.13);
+    --elev-lg: 0 4px 10px rgb(30 24 15 / 0.07), 0 24px 48px -12px rgb(30 24 15 / 0.20);
 }
 
 .dark {
@@ -84,6 +89,10 @@
     --sidebar-accent-foreground: #E6EDEB;
     --sidebar-border: rgba(230, 237, 235, .12);
     --sidebar-ring: #2DD4BF;
+    --elev-xs: 0 1px 2px rgb(0 0 0 / 0.40);
+    --elev-sm: 0 1px 2px rgb(0 0 0 / 0.35), 0 2px 8px -2px rgb(0 0 0 / 0.35);
+    --elev-md: 0 2px 4px rgb(0 0 0 / 0.35), 0 10px 24px -8px rgb(0 0 0 / 0.50);
+    --elev-lg: 0 4px 12px rgb(0 0 0 / 0.45), 0 24px 48px -12px rgb(0 0 0 / 0.60);
 }
 
 @theme inline {
@@ -129,6 +138,15 @@
     --radius-2xl: calc(var(--radius) + 8px);
     --radius-3xl: calc(var(--radius) + 12px);
     --radius-4xl: calc(var(--radius) + 16px);
+    /* Themed shadow scale: every shadow-* utility resolves to the elevation
+       ladder above, so depth stays warm in light and inky in dark. */
+    --shadow-2xs: var(--elev-xs);
+    --shadow-xs: var(--elev-xs);
+    --shadow-sm: var(--elev-sm);
+    --shadow-md: var(--elev-md);
+    --shadow-lg: var(--elev-md);
+    --shadow-xl: var(--elev-lg);
+    --shadow-2xl: var(--elev-lg);
 }
 
 @layer base {
@@ -140,5 +158,175 @@
     }
     html {
         @apply font-sans;
+        scroll-behavior: smooth;
+    }
+    ::selection {
+        background: color-mix(in oklab, var(--primary) 24%, transparent);
+    }
+    /* Thin themed scrollbars everywhere native chrome shows one. */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+    }
+}
+
+@layer components {
+    /* ---- Depth for the locked jac-shadcn primitives (components/ui/ is
+       import-only; these data-slot hooks are the sanctioned restyling path). */
+    [data-slot="card"] {
+        box-shadow: var(--elev-sm);
+        transition: box-shadow .2s ease, transform .2s cubic-bezier(.16, 1, .3, 1);
+    }
+    .dark [data-slot="card"] {
+        /* faint top bevel so dark cards catch light at the edge */
+        box-shadow: var(--elev-sm), inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+    }
+    [data-slot="dialog-content"] {
+        box-shadow: var(--elev-lg);
+    }
+    [data-slot="dialog-overlay"] {
+        background: rgb(25 18 10 / 0.32) !important;
+        backdrop-filter: blur(6px) !important;
+    }
+    .dark [data-slot="dialog-overlay"] {
+        background: rgb(0 0 0 / 0.55) !important;
+    }
+    /* Dialogs breathe open instead of snapping (primitives ship duration-100). */
+    [data-slot="dialog-overlay"],
+    [data-slot="dialog-content"] {
+        animation-duration: .22s !important;
+        animation-timing-function: cubic-bezier(.16, 1, .3, 1) !important;
+    }
+    [data-slot="dropdown-menu-content"],
+    [data-slot="select-content"],
+    [data-slot="dropdown-menu-sub-content"] {
+        animation-duration: .16s !important;
+        animation-timing-function: cubic-bezier(.16, 1, .3, 1) !important;
+        box-shadow: var(--elev-md);
+    }
+    /* The primary button variant ships with no <button> hover (only [a]:hover);
+       give every solid primary control a real hover + press. */
+    [data-slot="button"][data-variant="default"]:not(:disabled):hover {
+        background-color: color-mix(in oklab, var(--primary) 86%, var(--foreground) 14%);
+    }
+    [data-slot="button"]:not(:disabled) {
+        cursor: pointer;
+    }
+    [data-slot="button"]:not(:disabled):active {
+        transform: scale(.97);
+    }
+    [data-slot="tabs-trigger"] {
+        cursor: pointer;
+    }
+
+    /* ---- Skeletons: shimmer sweep on a ground mixed from foreground so it
+       stays visible on paper (bg-muted is nearly invisible there). */
+    [data-slot="skeleton"] {
+        position: relative;
+        overflow: hidden;
+        background-color: color-mix(in oklab, var(--foreground) 8%, var(--background));
+        animation: none !important;
+    }
+    [data-slot="skeleton"]::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background-image: linear-gradient(
+            90deg,
+            transparent,
+            color-mix(in oklab, var(--foreground) 7%, transparent),
+            transparent
+        );
+        animation: shimmer 1.8s ease-in-out infinite;
+    }
+
+    /* ---- Motion foundation. Entrance-only, ease-out-expo family. */
+    .anim-fade-up {
+        animation: rise .5s cubic-bezier(.16, 1, .3, 1) both;
+    }
+    .anim-fade-in {
+        animation: appear .4s ease-out both;
+    }
+    .anim-scale-in {
+        animation: pop .3s cubic-bezier(.16, 1, .3, 1) both;
+    }
+    .anim-d1 { animation-delay: 60ms; }
+    .anim-d2 { animation-delay: 120ms; }
+    .anim-d3 { animation-delay: 180ms; }
+    .anim-d4 { animation-delay: 240ms; }
+    .anim-d5 { animation-delay: 300ms; }
+    .anim-d6 { animation-delay: 360ms; }
+    .anim-d7 { animation-delay: 420ms; }
+    .anim-d8 { animation-delay: 480ms; }
+
+    /* ---- Shared page furniture. */
+    .page-title {
+        @apply font-display text-2xl font-bold tracking-tight sm:text-3xl;
+    }
+    .page-subtitle {
+        @apply text-sm text-muted-foreground;
+    }
+    /* Card hover lift; pair with hover:ring-foreground/20 at the call site. */
+    .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--elev-md);
+    }
+
+    /* ---- Ambient backgrounds (landing, auth, setup). Token-driven so both
+       palettes stay correct; the KineticGrid canvas replaces .bg-dotgrid
+       wherever scripting is available. */
+    .bg-dotgrid {
+        background-image: radial-gradient(
+            color-mix(in oklab, var(--foreground) 11%, transparent) 1px,
+            transparent 1px
+        );
+        background-size: 26px 26px;
+    }
+    .bg-glow {
+        background-image: radial-gradient(
+            46rem 30rem at 50% -8rem,
+            color-mix(in oklab, var(--primary) 13%, transparent),
+            transparent 70%
+        );
+    }
+    .text-gradient-brand {
+        background-image: linear-gradient(115deg, var(--foreground) 55%, var(--primary));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+}
+
+@keyframes shimmer {
+    to { transform: translateX(100%); }
+}
+@keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes appear {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes pop {
+    from { opacity: 0; transform: scale(.96); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+    [data-slot="skeleton"]::after {
+        animation: none;
+    }
+    .anim-fade-up,
+    .anim-fade-in,
+    .anim-scale-in {
+        animation: none;
+    }
+    [data-slot="button"]:not(:disabled):active {
+        transform: none;
     }
 }

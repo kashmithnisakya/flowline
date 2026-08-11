@@ -4,6 +4,12 @@ The mini previews are rendered from WORKFLOW_TEMPLATES itself, the same
 data ApplyTemplate seeds from, so a preview can never drift from what
 actually gets created. Everything is editable after choosing; the choice is
 a starting point, not a commitment.
+
+Each thumbnail's viewBox is computed from that template's own step extents,
+so a sprawling flow scales down to fit instead of clipping its far corner.
+The curve math is a thumb-scale copy of geometry.wire(): facing borders
+along the dominant axis, a sideways shift for two-way pairs, and a small
+filled arrowhead, so the previews read like the real canvas.
 """
 
 import from ...constants { WORKFLOW_TEMPLATES }
@@ -14,35 +20,44 @@ import from ..ui.card { Card, CardContent }
 
 # Preview canvas: template px scaled down to a card-sized thumbnail.
 glob THUMB_SCALE: float = 0.2,
-     THUMB_PAD: float = 6.0;
+     THUMB_PAD: float = 8.0;
 
 
-def thumbX(raw: dict[str, any]) -> float {
-    return (raw["x"] + NODE_W / 2.0) * THUMB_SCALE + THUMB_PAD;
-}
-
-
-def thumbY(raw: dict[str, any]) -> float {
-    return (raw["y"] + NODE_H / 2.0) * THUMB_SCALE + THUMB_PAD;
-}
-
-
-# Render-ready thumbnail data, materialised through typed locals, the
-# checker cannot subscript the template's nested `any` values inside JSX.
-def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
+# The svg viewBox for one template, sized from its step extents. Explicit
+# loop rather than max(): max() over a list compiles to Math.max(array),
+# which is NaN.
+def thumbBox(t: dict[str, any]) -> str {
     raws: list[dict[str, any]] = t["steps"];
-    pairs: list[list[int]] = t["links"];
+    maxX = 0.0;
+    maxY = 0.0;
+    for s in raws {
+        if s["x"] > maxX {
+            maxX = s["x"];
+        }
+        if s["y"] > maxY {
+            maxY = s["y"];
+        }
+    }
+    w = (maxX + NODE_W) * THUMB_SCALE + THUMB_PAD * 2.0;
+    h = (maxY + NODE_H) * THUMB_SCALE + THUMB_PAD * 2.0;
+    return "0 0 " + str(w) + " " + str(h);
+}
+
+
+# Render-ready node rects, materialised through typed locals, the checker
+# cannot subscript the template's nested `any` values inside JSX.
+def thumbRects(t: dict[str, any]) -> list[dict[str, any]] {
+    raws: list[dict[str, any]] = t["steps"];
     out: list[dict[str, any]] = [];
-    for (i, pair) in enumerate(pairs) {
-        a = raws[pair[0]];
-        b = raws[pair[1]];
+    for (i, s) in enumerate(raws) {
         out.append(
             {
-                "key": "l" + str(i),
-                "x1": thumbX(a),
-                "y1": thumbY(a),
-                "x2": thumbX(b),
-                "y2": thumbY(b)
+                "key": "n" + str(i),
+                "x": s["x"] * THUMB_SCALE + THUMB_PAD,
+                "y": s["y"] * THUMB_SCALE + THUMB_PAD,
+                "w": NODE_W * THUMB_SCALE,
+                "h": NODE_H * THUMB_SCALE,
+                "tone": TEXT_FILL[colorKey(s["color"])]
             }
         );
     }
@@ -50,18 +65,138 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
 }
 
 
-def thumbDots(t: dict[str, any]) -> list[dict[str, any]] {
+# Curved, directed edges at thumbnail scale: same facing-border layout and
+# two-way sideways shift as geometry.wire(), with a small arrowhead.
+def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
     raws: list[dict[str, any]] = t["steps"];
+    pairs: list[list[int]] = t["links"];
+    nw = NODE_W * THUMB_SCALE;
+    nh = NODE_H * THUMB_SCALE;
+    seen: dict[str, bool] = {};
+    for pair in pairs {
+        seen[str(pair[0]) + ">" + str(pair[1])] = True;
+    }
     out: list[dict[str, any]] = [];
-    for (i, s) in enumerate(raws) {
-        out.append(
-            {
-                "key": "c" + str(i),
-                "cx": thumbX(s),
-                "cy": thumbY(s),
-                "tone": TEXT_FILL[colorKey(s["color"])]
+    for (i, pair) in enumerate(pairs) {
+        a = raws[pair[0]];
+        b = raws[pair[1]];
+        ax = a["x"] * THUMB_SCALE + THUMB_PAD;
+        ay = a["y"] * THUMB_SCALE + THUMB_PAD;
+        bx = b["x"] * THUMB_SCALE + THUMB_PAD;
+        by = b["y"] * THUMB_SCALE + THUMB_PAD;
+        dx = bx - ax;
+        dy = by - ay;
+        adx = dx if dx >= 0.0 else 0.0 - dx;
+        ady = dy if dy >= 0.0 else 0.0 - dy;
+        horizontal = adx >= ady;
+        twoWay = (str(pair[1]) + ">" + str(pair[0])) in seen;
+        # A name first assigned inside a branch is block-scoped in the
+        # compiled JS, so everything the branches write starts here.
+        sx = 0.0;
+        sy = 0.0;
+        ex = 0.0;
+        ey = 0.0;
+        h1x = 0.0;
+        h1y = 0.0;
+        h2x = 0.0;
+        h2y = 0.0;
+        a1x = 0.0;
+        a1y = 0.0;
+        a2x = 0.0;
+        a2y = 0.0;
+        dirn = 1.0;
+        shift = 0.0;
+        if horizontal {
+            dirn = 1.0 if dx >= 0.0 else -1.0;
+            if twoWay {
+                shift = -2.5 if dx >= 0.0 else 2.5;
             }
+            sx = ax + nw if dx >= 0.0 else ax;
+            sy = ay + nh / 2.0 + shift;
+            ex = bx if dx >= 0.0 else bx + nw;
+            ey = by + nh / 2.0 + shift;
+            span = ex - sx;
+            if span < 0.0 {
+                span = 0.0 - span;
+            }
+            bend = span * 0.45;
+            if bend < 7.0 {
+                bend = 7.0;
+            }
+            if bend > 24.0 {
+                bend = 24.0;
+            }
+            h1x = sx + bend * dirn;
+            h1y = sy;
+            h2x = ex - bend * dirn;
+            h2y = ey;
+            a1x = ex - 4.0 * dirn;
+            a1y = ey - 2.4;
+            a2x = ex - 4.0 * dirn;
+            a2y = ey + 2.4;
+        } else {
+            dirn = 1.0 if dy >= 0.0 else -1.0;
+            if twoWay {
+                shift = -2.5 if dy >= 0.0 else 2.5;
+            }
+            sy = ay + nh if dy >= 0.0 else ay;
+            sx = ax + nw / 2.0 + shift;
+            ey = by if dy >= 0.0 else by + nh;
+            ex = bx + nw / 2.0 + shift;
+            span = ey - sy;
+            if span < 0.0 {
+                span = 0.0 - span;
+            }
+            bend = span * 0.45;
+            if bend < 7.0 {
+                bend = 7.0;
+            }
+            if bend > 24.0 {
+                bend = 24.0;
+            }
+            h1x = sx;
+            h1y = sy + bend * dirn;
+            h2x = ex;
+            h2y = ey - bend * dirn;
+            a1x = ex - 2.4;
+            a1y = ey - 4.0 * dirn;
+            a2x = ex + 2.4;
+            a2y = ey - 4.0 * dirn;
+        }
+        d = (
+            "M "
+            + str(sx)
+            + " "
+            + str(sy)
+            + " C "
+            + str(h1x)
+            + " "
+            + str(h1y)
+            + ", "
+            + str(h2x)
+            + " "
+            + str(h2y)
+            + ", "
+            + str(ex)
+            + " "
+            + str(ey)
         );
+        arrow = (
+            "M "
+            + str(ex)
+            + " "
+            + str(ey)
+            + " L "
+            + str(a1x)
+            + " "
+            + str(a1y)
+            + " L "
+            + str(a2x)
+            + " "
+            + str(a2y)
+            + " Z"
+        );
+        out.append({"key": "l" + str(i), "d": d, "arrow": arrow});
     }
     return out;
 }
@@ -89,32 +224,58 @@ def:pub TemplatePicker(
                 }}
             >
                 {for t in WORKFLOW_TEMPLATES {
-                    <Card key={t["key"]} className="flex flex-col">
+                    <Card
+                        key={t["key"]}
+                        className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
+                            + (
+                                " opacity-60"
+                                    if applying != "" and applying != t["key"]
+                                    else ""
+                            )}
+                    >
                         <CardContent className="flex flex-1 flex-col gap-3 py-4">
                             <div
-                                className="flex items-center justify-center rounded-md bg-muted/40 py-2"
+                                className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2 transition-transform duration-200 group-hover:scale-[1.02]"
                             >
-                                <svg width={204} height={66}>
+                                <svg
+                                    viewBox={thumbBox(t)}
+                                    preserveAspectRatio="xMidYMid meet"
+                                    className="h-20 w-full"
+                                >
                                     {for l in thumbLinks(t) {
-                                        <line
+                                        <g
                                             key={l["key"]}
-                                            x1={l["x1"]}
-                                            y1={l["y1"]}
-                                            x2={l["x2"]}
-                                            y2={l["y2"]}
-                                            className="text-muted-foreground/50"
-                                            stroke="currentColor"
-                                            strokeWidth={1.5}
-                                        />
+                                            className="text-muted-foreground/60"
+                                        >
+                                            <path
+                                                d={l["d"]}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={1.25}
+                                                strokeLinecap="round"
+                                                vectorEffect="non-scaling-stroke"
+                                            />
+                                            <path
+                                                d={l["arrow"]}
+                                                fill="currentColor"
+                                                stroke="none"
+                                            />
+                                        </g>
                                     }}
-                                    {for d in thumbDots(t) {
-                                        <circle
-                                            key={d["key"]}
-                                            cx={d["cx"]}
-                                            cy={d["cy"]}
-                                            r={6}
-                                            className={d["tone"]}
+                                    {for n in thumbRects(t) {
+                                        <rect
+                                            key={n["key"]}
+                                            x={n["x"]}
+                                            y={n["y"]}
+                                            width={n["w"]}
+                                            height={n["h"]}
+                                            rx={3}
+                                            className={n["tone"]}
                                             fill="currentColor"
+                                            fillOpacity={0.18}
+                                            stroke="currentColor"
+                                            strokeWidth={1.25}
+                                            vectorEffect="non-scaling-stroke"
                                         />
                                     }}
                                 </svg>
@@ -132,6 +293,21 @@ def:pub TemplatePicker(
                                 disabled={bool(applying)}
                                 onClick={lambda { if onPick { onPick(t["key"]); }}}
                             >
+                                {if applying == t["key"] {
+                                    <svg
+                                        key="sp"
+                                        className="animate-spin"
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                    >
+                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                    </svg>
+                                }}
                                 {"Setting up…"
                                     if applying == t["key"]
                                     else "Use template"}
@@ -139,12 +315,20 @@ def:pub TemplatePicker(
                         </CardContent>
                     </Card>
                 }}
-                <Card key="scratch" className="flex flex-col">
+                <Card
+                    key="scratch"
+                    className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
+                        + (" opacity-60" if applying != "" else "")}
+                >
                     <CardContent className="flex flex-1 flex-col gap-3 py-4">
                         <div
-                            className="flex items-center justify-center rounded-md bg-muted/40 py-2"
+                            className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2 transition-transform duration-200 group-hover:scale-[1.02]"
                         >
-                            <svg width={204} height={66}>
+                            <svg
+                                viewBox="0 0 204 66"
+                                preserveAspectRatio="xMidYMid meet"
+                                className="h-20 w-full"
+                            >
                                 <rect
                                     x={72}
                                     y={10}

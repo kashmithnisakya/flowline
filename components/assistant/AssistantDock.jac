@@ -28,6 +28,7 @@ import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 import from ..ui.separator { Separator }
+import from ..common.Markdown { Markdown }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -128,7 +129,7 @@ def:pub AssistantDock -> JsxElement {
                 type="button"
                 aria-label="Open the assistant"
                 onClick={lambda { open = True; }}
-                className="fixed bottom-6 right-6 z-50 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105"
+                className="fixed bottom-6 right-6 z-50 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:scale-105 active:scale-95"
             >
                 <svg width={17} height={17} viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="currentColor" d={SPARKLE} />
@@ -137,12 +138,12 @@ def:pub AssistantDock -> JsxElement {
             </button>;
     }
 
-    return <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl">
+    return <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] min-h-72 w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
         <div className="flex items-center gap-2 border-b px-4 py-3">
             <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden="true" className="text-primary">
                 <path fill="currentColor" d={SPARKLE} />
             </svg>
-            <span className="font-display text-[15px] font-bold tracking-tight">Assistant</span>
+            <span className="font-display text-sm font-bold tracking-tight">Assistant</span>
             <div className="ml-auto flex items-center gap-1">
                 {if len(turns) > 0 {
                     <Button key="clear" variant="ghost" size="sm" onClick={lambda { turns = []; }}>
@@ -179,7 +180,7 @@ def:pub AssistantDock -> JsxElement {
             {for r in rows {
                 <div
                     key={"turn" + str(r["at"])}
-                    className={"flex " + ("justify-end" if r["role"] == "user" else "justify-start")}
+                    className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 " + ("justify-end" if r["role"] == "user" else "justify-start")}
                 >
                     {if r["role"] == "user" {
                         <div key="u" className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
@@ -221,19 +222,33 @@ def:pub AssistantDock -> JsxElement {
                         <div
                             key="text"
                             className={
-                                "max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed "
-                                + ("bg-destructive/10 text-destructive" if r["kind"] == "error" else "bg-secondary text-foreground")
+                                "max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed "
+                                + ("whitespace-pre-wrap bg-destructive/10 text-destructive" if r["kind"] == "error" else "bg-secondary text-foreground")
                             }
                         >
-                            {r["text"]}
+                            {if r["kind"] == "error" {
+                                <span key="plain">{r["text"]}</span>
+                            } else {
+                                <Markdown key="md" text={r["text"]} />
+                            }}
                         </div>
                     }}
                 </div>
             }}
             {if busy {
-                <div key="busy" className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                    Reading your workspace
+                <div key="busy" className="flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-200">
+                    <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2.5">
+                        <span className="sr-only">Reading your workspace</span>
+                        <span
+                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
+                            style={{"animationDelay": "-0.3s"}}
+                        />
+                        <span
+                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
+                            style={{"animationDelay": "-0.15s"}}
+                        />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                    </div>
                 </div>
             }}
         </div>
@@ -294,7 +309,7 @@ def:pub AssistantDock -> JsxElement {
                     </svg>
                 </Button>
             </div>
-            <p className="text-[11px] leading-tight text-muted-foreground">
+            <p className="text-xs leading-tight text-muted-foreground">
                 {"Answers come from your workspace only." if asking else "Suggestions only. Nothing changes until you press Apply."}
             </p>
         </div>
@@ -309,7 +324,7 @@ def NoteList(title: str, items: list[str]) -> JsxElement {
         return <span />;
     }
     return <div>
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {title}
         </div>
         <ul className="mt-1 space-y-1">
@@ -356,11 +371,11 @@ def ProposalCard(
         facts.append({"k": "Due", "v": proposal.due_date});
     }
 
-    return <div className="rounded-xl border bg-background p-3.5">
+    return <div className="rounded-xl border border-l-2 border-l-primary bg-background p-3.5">
         <div className="flex items-center gap-2">
             <Badge variant="secondary">{"Move task" if moving else "New task"}</Badge>
             {if proposal.confidence and proposal.confidence != "high" {
-                <span key="conf" className="text-[11px] text-muted-foreground">
+                <span key="conf" className="text-xs text-muted-foreground">
                     {proposal.confidence} confidence
                 </span>
             }}
@@ -389,7 +404,20 @@ def ProposalCard(
                 instead.
             </p>
         } elif state == "applied" {
-            <p key="done" className="mt-3 text-xs font-semibold text-primary">
+            <p key="done" className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-success animate-in fade-in">
+                <svg
+                    width={14}
+                    height={14}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <path d="M20 6 9 17l-5-5" />
+                </svg>
                 Applied to the board.
             </p>
         } elif state == "dismissed" {

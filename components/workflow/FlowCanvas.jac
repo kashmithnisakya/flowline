@@ -17,6 +17,7 @@ read the same render-time zoom and only one would count.
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
 import from .kinds { KIND_LABEL, DOT_FILL, CARD_TINT, colorKey }
+import from ..ui.button { Button }
 
 
 def:pub FlowCanvas(
@@ -34,12 +35,25 @@ def:pub FlowCanvas(
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None,
     onZoomBy: Callable[[float], None] = None,
-    onZoomFit: Callable[[], None] = None
+    onZoomFit: Callable[[], None] = None,
+    onAddStep: Callable[[], None] = None
 ) -> JsxElement {
     byId: dict[str, StepView] = {};
     for s in steps {
         byId[s.id] = s;
     }
+
+    # Is a drag or wire gesture in flight? `live` only carries entries while
+    # a card is being dragged, and connectFrom is set for the whole wire
+    # gesture. Checked via `in` per step because len() on a dict compiles to
+    # a JS .length read that is always undefined.
+    dragging = False;
+    for s in steps {
+        if s.id in live {
+            dragging = True;
+        }
+    }
+    settled = (not dragging) and (not bool(connectFrom));
 
     size = canvasSize(steps, live);
 
@@ -79,9 +93,11 @@ def:pub FlowCanvas(
     # The grid is an editing affordance: it says the cards can be dragged and
     # gives them something to line up against. The read-only view has nothing
     # to align, so there it is only texture behind the diagram.
-    boxStyle: dict[str, str] = {"height": "min(74vh, 44rem)"};
+    # Height fills whatever the viewport leaves under the header, title row
+    # and legend (~15rem of chrome), with a floor for short windows.
+    boxStyle: dict[str, str] = {"height": "max(26rem, calc(100dvh - 15rem))"};
     if showGrid {
-        boxStyle["backgroundImage"] = "radial-gradient(var(--color-muted-foreground) 1px, transparent 1px)";
+        boxStyle["backgroundImage"] = "radial-gradient(color-mix(in oklab, var(--color-muted-foreground) 20%, transparent) 1px, transparent 1px)";
         boxStyle["backgroundSize"] = str(gridPitch) + "px " + str(gridPitch) + "px";
         boxStyle["backgroundPosition"] = "8px 8px";
     }
@@ -95,7 +111,12 @@ def:pub FlowCanvas(
         >
             <div
                 ref={canvasRef}
-                className="absolute inset-0 origin-top-left"
+                className={"absolute inset-0 origin-top-left"
+                    + (
+                        " transition-transform duration-200 ease-out"
+                            if settled
+                            else ""
+                    )}
                 style={{"transform": "scale(" + str(zoom) + ")"}}
             >
                 <svg
@@ -107,16 +128,19 @@ def:pub FlowCanvas(
                     {for l in links {
                         <g
                             key={l["key"]}
-                            className={"text-primary"
-                                if selectedEdge == l["key"]
-                                else "text-muted-foreground/60"}
+                            className={(
+                                "text-primary"
+                                    if selectedEdge == l["key"]
+                                    else "text-muted-foreground/60 hover:text-foreground/70"
+                            ) + " transition-colors duration-150"}
                         >
                             <path
                                 d={l["d"]}
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth={2}
+                                strokeWidth={2.5 if selectedEdge == l["key"] else 2.0}
                                 strokeLinecap="round"
+                                className="transition-[stroke-width] duration-150"
                             />
                             <path d={l["arrow"]} fill="currentColor" stroke="none"/>
                             <path
@@ -142,7 +166,7 @@ def:pub FlowCanvas(
                                 key="del"
                                 type="button"
                                 title="Remove this transition"
-                                className="absolute z-20 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-xs text-muted-foreground shadow-sm hover:text-destructive"
+                                className="absolute z-20 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:text-destructive animate-in fade-in zoom-in-75 duration-150"
                                 style={{
                                     "left": str(l["mx"] - 10.0) + "px",
                                     "top": str(l["my"] - 10.0) + "px"
@@ -154,7 +178,19 @@ def:pub FlowCanvas(
                                     }
                                 }}
                             >
-                                ✕
+                                <svg
+                                    width={11}
+                                    height={11}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M18 6 6 18"/>
+                                    <path d="m6 6 12 12"/>
+                                </svg>
                             </button>
                         }}
                     </div>
@@ -163,10 +199,15 @@ def:pub FlowCanvas(
                     <button
                         key={s.id}
                         type="button"
-                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm transition-shadow hover:shadow-md "
+                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm hover:shadow-md "
+                            + (
+                                "transition-[left,top,box-shadow,border-color] duration-200 ease-out "
+                                    if settled
+                                    else "transition-[box-shadow,border-color] duration-150 "
+                            )
                             + CARD_TINT[colorKey(s.color)]
                             + (
-                                " border-primary ring-2 ring-primary/40"
+                                " border-primary shadow-md ring-2 ring-primary/40"
                                     if selectedId == s.id
                                     else ""
                             )
@@ -200,11 +241,11 @@ def:pub FlowCanvas(
                             />
                             <span className="truncate" title={s.name}>{s.name}</span>
                             <span
-                                className={"ml-auto shrink-0 rounded-full px-1.5 text-[11px] font-medium tabular-nums "
+                                className={"ml-auto shrink-0 rounded-full px-1.5 text-xs font-medium tabular-nums "
                                     + (
                                         "bg-foreground/10"
                                             if s.task_count > 0
-                                            else "text-muted-foreground"
+                                            else "bg-foreground/5 text-muted-foreground"
                                     )}
                                 title={str(s.task_count)
                                     + (" task" if s.task_count == 1 else " tasks")
@@ -227,12 +268,53 @@ def:pub FlowCanvas(
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                 >
                     <div
-                        className="rounded-lg border border-dashed bg-card/80 p-8 text-center"
+                        className="flex max-w-sm flex-col items-center gap-1 rounded-xl border border-dashed bg-card/80 px-8 py-10 text-center"
                     >
+                        <svg
+                            className="mb-2 text-muted-foreground"
+                            width={28}
+                            height={28}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <rect width={8} height={8} x={3} y={3} rx={2}/>
+                            <path d="M7 11v4a2 2 0 0 0 2 2h4"/>
+                            <rect width={8} height={8} x={13} y={13} rx={2}/>
+                        </svg>
                         <p className="text-sm font-medium">A blank canvas.</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                             Add a step, then drag from its border to another step to draw how work flows.
                         </p>
+                        {if onAddStep {
+                            <Button
+                                key="cta"
+                                size="sm"
+                                className="pointer-events-auto mt-3"
+                                onClick={lambda (e: MouseEvent) {
+                                    e.stopPropagation();
+                                    onAddStep();
+                                }}
+                            >
+                                <svg
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M5 12h14"/>
+                                    <path d="M12 5v14"/>
+                                </svg>
+                                Add your first step
+                            </Button>
+                        }}
                     </div>
                 </div>
             }}
@@ -246,7 +328,18 @@ def:pub FlowCanvas(
                     className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={lambda { if onZoomBy { onZoomBy(-0.1); }}}
                 >
-                    −
+                    <svg
+                        width={14}
+                        height={14}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="M5 12h14"/>
+                    </svg>
                 </button>
                 <button
                     type="button"
@@ -262,7 +355,19 @@ def:pub FlowCanvas(
                     className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={lambda { if onZoomBy { onZoomBy(0.1); }}}
                 >
-                    +
+                    <svg
+                        width={14}
+                        height={14}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="M5 12h14"/>
+                        <path d="M12 5v14"/>
+                    </svg>
                 </button>
             </div>
         </div>;

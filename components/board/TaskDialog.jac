@@ -87,8 +87,12 @@ def:pub TaskDialog(
     # one. Purely local: the page never needs to know about the picker.
     # Notes open rendered, not raw: the markdown is the point of writing
     # them. The Edit button flips to the textarea and back.
+    # pendingAction remembers which button started the shared `saving`
+    # flight, so only that button shows the spinner. Only read while
+    # saving is true, so a stale value from a previous open is harmless.
     has repoChoice: str = "",
-        notesEditing: bool = False;
+        notesEditing: bool = False,
+        pendingAction: str = "";
 
     hasNotes = bool(form["notes"] and form["notes"].strip());
 
@@ -131,11 +135,11 @@ def:pub TaskDialog(
 
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[calc(100dvh-6rem)] p-6 sm:max-w-3xl">
+            <DialogContent className="grid max-h-[calc(100dvh-6rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-6 sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>{"Edit task" if editing else "New task"}</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-4 py-2">
+                <div className="grid gap-4 overflow-y-auto py-2">
                     <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
                         <div className={WIDE}>
                             <Label>Title</Label>
@@ -150,34 +154,41 @@ def:pub TaskDialog(
                         <div className={WIDE}>
                             <Label>Assignees</Label>
                             <DropdownMenu>
-                                <DropdownMenuTrigger asChild={False}>
+                                <DropdownMenuTrigger
+                                    asChild={False}
+                                    className="flex h-8 w-full cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-input bg-card py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                                >
                                     <span
-                                        className="flex h-8 w-full cursor-pointer items-center justify-between rounded-lg border bg-card px-2.5 text-sm hover:bg-accent"
+                                        className={"truncate"
+                                            + (
+                                                ""
+                                                    if len(assignees) > 0
+                                                    else " text-muted-foreground"
+                                            )}
                                     >
-                                        <span
-                                            className={"truncate"
-                                                + (
-                                                    ""
-                                                        if len(assignees) > 0
-                                                        else " text-muted-foreground"
-                                                )}
-                                        >
-                                            {", ".join(
-                                                [
-                                                    m.name
-                                                    for m in members
-                                                    if m.id in assignees
-                                                ]
-                                            )
-                                                if len(assignees) > 0
-                                                else "Pick assignees"}
-                                        </span>
-                                        <span
-                                            className="ml-2 shrink-0 text-muted-foreground"
-                                        >
-                                            ⌄
-                                        </span>
+                                        {", ".join(
+                                            [
+                                                m.name
+                                                for m in members
+                                                if m.id in assignees
+                                            ]
+                                        )
+                                            if len(assignees) > 0
+                                            else "Pick assignees"}
                                     </span>
+                                    <svg
+                                        width={16}
+                                        height={16}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="pointer-events-none shrink-0 text-muted-foreground"
+                                    >
+                                        <path d="m6 9 6 6 6-6"/>
+                                    </svg>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-64">
                                     {if len(inProject) > 0 {
@@ -357,10 +368,28 @@ def:pub TaskDialog(
                                     variant="outline"
                                     disabled={saving or not chosenRepo}
                                     onClick={lambda { if onCreateIssue and chosenRepo {
+                                        pendingAction = "issue";
                                         onCreateIssue(chosenRepo);
                                     }}}
                                 >
-                                    Create GitHub issue
+                                    {if saving and pendingAction == "issue" {
+                                        <svg
+                                            key="sp"
+                                            className="animate-spin"
+                                            width={14}
+                                            height={14}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                        >
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                        </svg>
+                                    }}
+                                    {"Opening issue…"
+                                        if saving and pendingAction == "issue"
+                                        else "Create GitHub issue"}
                                 </Button>
                             </div>
                             <p className="text-xs text-muted-foreground">
@@ -466,15 +495,35 @@ def:pub TaskDialog(
                         }  }
                     </div>
                 </div>
-                <DialogFooter className="-mx-6 -mb-6 gap-2 px-6 sm:justify-between">
+                <DialogFooter className="-mx-6 -mb-6 gap-2 border-t px-6 pt-4 pb-4 sm:justify-between">
                     {if editing {
                         <Button
                             key="del"
                             variant="destructive"
-                            onClick={onDelete}
+                            onClick={lambda {
+                                pendingAction = "delete";
+                                onDelete();
+                            }}
                             disabled={saving}
                         >
-                            Delete
+                            {if saving and pendingAction == "delete" {
+                                <svg
+                                    key="sp"
+                                    className="animate-spin"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                >
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                </svg>
+                            }}
+                            {"Deleting…"
+                                if saving and pendingAction == "delete"
+                                else "Delete"}
                         </Button>
                     } else {
                         <span key="spacer"/>
@@ -487,10 +536,30 @@ def:pub TaskDialog(
                             Cancel
                         </Button>
                         <Button
-                            onClick={onSave}
+                            onClick={lambda {
+                                pendingAction = "save";
+                                onSave();
+                            }}
                             disabled={saving or not form["title"].strip()}
                         >
-                            Save
+                            {if saving and pendingAction == "save" {
+                                <svg
+                                    key="sp"
+                                    className="animate-spin"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                >
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                </svg>
+                            }}
+                            {"Saving…"
+                                if saving and pendingAction == "save"
+                                else "Save"}
                         </Button>
                     </div>
                 </DialogFooter>
