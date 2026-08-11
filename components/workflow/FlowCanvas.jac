@@ -93,15 +93,18 @@ def:pub FlowCanvas(
                 dy = tpos[1] - pos[1];
                 spanX = dx if dx >= 0.0 else 0.0 - dx;
                 spanY = dy if dy >= 0.0 else 0.0 - dy;
-                nudge = 15.0 if isReturn else -15.0;
+                # Mirror the rule wire() uses to part the two curves, which
+                # keys on the DIRECTION OF TRAVEL, so a label always lands on
+                # the same side as its own arrow. Keying on "is this a
+                # send-back" instead only agrees by luck: for a horizontal
+                # pair the two rules coincide, for a vertical pair they invert
+                # and every label ends up on the wrong line.
                 if spanX >= spanY {
-                    ly = ly + nudge;
+                    # Parted vertically, and a chip is only ~18px tall.
+                    ly = ly + (-18.0 if dx >= 0.0 else 18.0);
                 } else {
-                    # Side by side needs more room than stacked, since a chip
-                    # is ~18px tall but 60-90px wide. Enough to clear the
-                    # neighbour and no more: pushed further, a label stops
-                    # reading as belonging to its arrow.
-                    lx = lx + nudge * 3.0;
+                    # Parted horizontally, where a chip can run 60-90px wide.
+                    lx = lx + (-48.0 if dy >= 0.0 else 48.0);
                 }
             }
             links.append(
