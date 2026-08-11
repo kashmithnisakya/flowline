@@ -22,7 +22,7 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "How we actually work: an issue is raised, someone takes it and solves it with a model, the plan is approved if it is big, the model builds, the architect reviews and merges, and anything needing a follow-up PR waits until that lands too.",
+             "description": "Solve it with a model, build, review. Approve and Follow-up are optional.",
              "steps": [
                  {
                      "name": "Raised",
