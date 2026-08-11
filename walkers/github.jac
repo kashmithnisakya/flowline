@@ -16,14 +16,14 @@ issue somebody explicitly asks for.
 """
 
 import from models {
-    Project, Member, Repo, Task, TaskView, GithubConnection,
+    Project, Member, Repo, Task, TaskView, WorkflowStep, GithubConnection,
     GithubConnectionView, GhRepoRow, GhIssueRow, GhPrRow,
     HasRepo, AssignedTo, ForProject,
     resolve, on_attached, owned
 }
 import from walkers.util { now_iso, minutes_since }
 import from walkers.log { record_task_event }
-import from walkers.tasks { find_task }
+import from walkers.tasks { find_task, status_for_step }
 import from walkers.ghutil {
     missing_config, install_url, new_state, installation_token,
     forget_installation, valid_full_name, gh_request, exchange_code,
@@ -529,12 +529,15 @@ walker ImportIssues {
     """Turn chosen issues into tasks, once each.
 
     `(gh_repo, gh_issue_number)` is the identity: an issue already on the
-    board is skipped rather than duplicated. A closed issue lands in Done,
-    everything else in the chosen column."""
+    board is skipped rather than duplicated. A closed issue lands on the
+    org's done step, everything else on the chosen step. `step_id` names a
+    workflow step and wins over `status`; the legacy status list only
+    applies to an org with no workflow."""
     has repo_id: str = "",
         numbers: list[int] = [],
         project_id: str = "",
         status: str = "Backlog",
+        step_id: str = "",
         reports: list[dict[str, any]] = [];
 
     can pull with Root entry {
@@ -549,7 +552,27 @@ walker ImportIssues {
             report not_connected();
             disengage;
         }
+        # Step wins over status: tasks store step_id AND the mapped legacy
+        # status, so everything keyed on what a status MEANS keeps working.
         col = self.status if self.status in STATUSES else "Backlog";
+        step = "";
+        if self.step_id {
+            mapped = status_for_step(here, self.step_id);
+            if mapped {
+                col = mapped;
+                step = self.step_id;
+            }
+        }
+        # Closed issues always land on the done step (first by sort order),
+        # or plain "Done" for an org that has no workflow yet.
+        done_step = "";
+        done_sort = 0.0;
+        for s in [here-->[?:WorkflowStep, kind == "done"]] {
+            if not done_step or s.sort_order < done_sort {
+                done_step = jid(s);
+                done_sort = s.sort_order;
+            }
+        }
         # An explicit project wins; otherwise inherit the repo's own project,
         # which is structurally owned already (root -> Project -> HasRepo).
         repo_node = resolve(self.repo_id);
@@ -603,12 +626,14 @@ walker ImportIssues {
             }
             issue_state = str(item.get("state") or "open");
             landing = "Done" if issue_state == "closed" else col;
+            landing_step = done_step if issue_state == "closed" else step;
             body = str(item.get("body") or "");
             stamp = now_iso();
             peak = peak + 1024.0;
             fresh = here ++> Task(
                 title=str(item.get("title") or ("Issue #" + str(number))),
                 category="", priority="Medium", status=landing,
+                step_id=landing_step,
                 notes=body[:2000], issue_link=str(item.get("html_url") or ""),
                 created_at=stamp, updated_at=stamp, sort_order=peak,
                 gh_repo=full_name, gh_issue_number=number,

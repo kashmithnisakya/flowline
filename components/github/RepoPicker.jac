@@ -17,6 +17,7 @@ import from ..ui.label { Label }
 import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
+import from ..ui.skeleton { Skeleton }
 
 def:pub RepoPicker(
     open: bool,
@@ -48,6 +49,21 @@ def:pub RepoPicker(
                         }}
                     />
                     <Button variant="outline" onClick={onSearch} disabled={loading}>
+                        {if loading {
+                            <svg
+                                key="sp"
+                                className="animate-spin"
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                            </svg>
+                        }}
                         {"Asking…" if loading else "Search"}
                     </Button>
                 </div>
@@ -67,14 +83,38 @@ def:pub RepoPicker(
 
             <div className="max-h-80 space-y-2 overflow-y-auto">
                 {if loading {
-                    <p key="loading" className="py-8 text-center text-sm text-muted-foreground">
-                        Asking GitHub…
-                    </p>
+                    <div key="loading" className="space-y-2">
+                        {for i in [0, 1, 2] {
+                            <div
+                                key={"sk-" + str(i)}
+                                className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
+                            >
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <Skeleton className="h-4 w-40 max-w-full" />
+                                    <Skeleton className="h-3 w-56 max-w-full" />
+                                </div>
+                                <Skeleton className="h-7 w-16 shrink-0 rounded-lg" />
+                            </div>
+                        }}
+                    </div>
                 } else {
                     <div key="list" className="space-y-2">
                         {if len(rows) == 0 {
                             <div key="empty" className="space-y-2 py-8 text-center text-sm text-muted-foreground">
-                                <p>Nothing here to attach.</p>
+                                <svg
+                                    className="mx-auto text-muted-foreground/50"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                                </svg>
+                                <p className="font-medium text-foreground">Nothing here to attach.</p>
                                 <p className="text-xs">
                                     Only repositories granted to the installation show up.
                                     Grant more from your
@@ -111,9 +151,23 @@ def:pub RepoPicker(
                                     </p>
                                 </div>
                                 {if r.attached {
-                                    <span key="on" className="shrink-0 text-xs text-muted-foreground">
+                                    <Badge
+                                        key="on"
+                                        variant="secondary"
+                                        className="shrink-0 font-normal text-muted-foreground"
+                                    >
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M20 6 9 17l-5-5" />
+                                        </svg>
                                         Attached
-                                    </span>
+                                    </Badge>
                                 } else {
                                     <Button
                                         key="add"
@@ -123,6 +177,21 @@ def:pub RepoPicker(
                                         onClick={lambda { onAttach(r.full_name); }}
                                         disabled={bool(attaching)}
                                     >
+                                        {if attaching == r.full_name {
+                                            <svg
+                                                key="sp"
+                                                className="animate-spin"
+                                                width={14}
+                                                height={14}
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                            >
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                            </svg>
+                                        }}
                                         {"Attaching…" if attaching == r.full_name else "Attach"}
                                     </Button>
                                 }}

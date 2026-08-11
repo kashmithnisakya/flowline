@@ -53,8 +53,14 @@ def:pub StepInspector(
         return isBackEdge(byId[fromId].x, byId[fromId].y, byId[toId].x, byId[toId].y);
     }
 
+    # Back-edges (loops) get a warning-tinted row plus a loop glyph, matching
+    # what the canvas draws for the same transition.
     def rowClass(back: bool) -> str {
-        return "flex items-center justify-between rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs";
+        base = "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs ";
+        if back {
+            return base + "border-warning/40 bg-warning/10";
+        }
+        return base + "bg-muted/40";
     }
 
     return
@@ -62,7 +68,7 @@ def:pub StepInspector(
             <CardContent className="space-y-4 py-4">
                 <div className="space-y-1.5">
                     <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
                         Step name
                     </div>
@@ -81,7 +87,7 @@ def:pub StepInspector(
                 </div>
                 <div className="space-y-1.5">
                     <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
                         Kind
                     </div>
@@ -108,7 +114,7 @@ def:pub StepInspector(
                 </div>
                 <div className="space-y-1.5">
                     <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
                         Color
                     </div>
@@ -132,7 +138,7 @@ def:pub StepInspector(
                 </div>
                 <div className="space-y-1.5 border-t pt-3">
                     <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
                         Goes to
                     </div>
@@ -147,16 +153,49 @@ def:pub StepInspector(
                                     key={nid}
                                     className={rowClass(isBack(step.id, nid))}
                                 >
-                                    <span>{rowLabel(nid)}</span>
+                                    <span className="flex min-w-0 items-center gap-1.5">
+                                        {if isBack(step.id, nid) {
+                                            <svg
+                                                key="loop"
+                                                className="shrink-0 text-warning"
+                                                width={12}
+                                                height={12}
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path d="m17 2 4 4-4 4"/>
+                                                <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                                                <path d="m7 22-4-4 4-4"/>
+                                                <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                                            </svg>
+                                        }}
+                                        <span className="truncate">{rowLabel(nid)}</span>
+                                    </span>
                                     <button
                                         type="button"
                                         title="Remove this transition"
-                                        className="text-muted-foreground hover:text-destructive"
+                                        className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
                                         onClick={lambda { if onUnlink {
                                             onUnlink(step.id, nid);
                                         }}}
                                     >
-                                        ✕
+                                        <svg
+                                            width={12}
+                                            height={12}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M18 6 6 18"/>
+                                            <path d="m6 6 12 12"/>
+                                        </svg>
                                     </button>
                                 </div>
                             }}
@@ -165,7 +204,7 @@ def:pub StepInspector(
                 </div>
                 <div className="space-y-1.5">
                     <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
                         Comes from
                     </div>
@@ -180,16 +219,49 @@ def:pub StepInspector(
                                     key={pid}
                                     className={rowClass(isBack(pid, step.id))}
                                 >
-                                    <span>{rowLabel(pid)}</span>
+                                    <span className="flex min-w-0 items-center gap-1.5">
+                                        {if isBack(pid, step.id) {
+                                            <svg
+                                                key="loop"
+                                                className="shrink-0 text-warning"
+                                                width={12}
+                                                height={12}
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path d="m17 2 4 4-4 4"/>
+                                                <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                                                <path d="m7 22-4-4 4-4"/>
+                                                <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                                            </svg>
+                                        }}
+                                        <span className="truncate">{rowLabel(pid)}</span>
+                                    </span>
                                     <button
                                         type="button"
                                         title="Remove this transition"
-                                        className="text-muted-foreground hover:text-destructive"
+                                        className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
                                         onClick={lambda { if onUnlink {
                                             onUnlink(pid, step.id);
                                         }}}
                                     >
-                                        ✕
+                                        <svg
+                                            width={12}
+                                            height={12}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M18 6 6 18"/>
+                                            <path d="m6 6 12 12"/>
+                                        </svg>
                                     </button>
                                 </div>
                             }}
@@ -215,7 +287,20 @@ def:pub StepInspector(
                             size="sm"
                             onClick={lambda { if onConnect { onConnect(); }}}
                         >
-                            Connect →
+                            Connect
+                            <svg
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M5 12h14"/>
+                                <path d="m12 5 7 7-7 7"/>
+                            </svg>
                         </Button>
                     } }
                     <Button
@@ -227,6 +312,21 @@ def:pub StepInspector(
                         disabled={saving}
                         onClick={lambda { if onDelete { onDelete(); }}}
                     >
+                        {if saving and confirmingDelete {
+                            <svg
+                                key="sp"
+                                className="animate-spin"
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                        }}
                         {"Really delete?" if confirmingDelete else "Delete step"}
                     </Button>
                 </div>

@@ -39,6 +39,13 @@ def:pub MemberDialog(
     onOpenChange: Callable[[bool], None],
     onSave: Callable[[], None]
 ) -> JsxElement {
+    # Filter BEFORE the loop: a wrapper span around a conditional chip stays
+    # in the flex row as an empty item and doubles the gap.
+    unselectedTags = [
+        t
+        for t in allTags
+        if t not in memberTags
+    ];
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-xl">
@@ -51,7 +58,7 @@ def:pub MemberDialog(
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid gap-1.5">
+                    <div className="grid gap-2">
                         <Label>Name</Label>
                         <Input
                             placeholder="Full name"
@@ -61,14 +68,14 @@ def:pub MemberDialog(
                             ); }}
                         />
                     </div>
-                    <div className="grid gap-1.5">
+                    <div className="grid gap-2">
                         <Label>Roles</Label>
                         <div className="flex flex-wrap items-center gap-1.5">
                             {for r in roles {
                                 <Badge
                                     key={r}
                                     variant="secondary"
-                                    className="cursor-pointer"
+                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
                                     title="Click to remove"
                                     onClick={lambda { onRemoveRole(r); }}
                                 >
@@ -92,33 +99,30 @@ def:pub MemberDialog(
                             />
                         </div>
                     </div>
-                    <div className="grid gap-1.5">
+                    <div className="grid gap-2">
                         <Label>Tags</Label>
                         <div className="flex flex-wrap items-center gap-1.5">
                             {for t in memberTags {
                                 <Badge
                                     key={t}
                                     variant="default"
-                                    className="cursor-pointer"
+                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
                                     title="Click to remove"
                                     onClick={lambda { onToggleTag(t); }}
                                 >
                                     {t + " ✕"}
                                 </Badge>
                             }}
-                            {for t in allTags {
-                                <span key={"s-" + t}>
-                                    {if t not in memberTags {
-                                        <Badge
-                                            key="chip"
-                                            variant="outline"
-                                            className="cursor-pointer"
-                                            onClick={lambda { onToggleTag(t); }}
-                                        >
-                                            {t}
-                                        </Badge>
-                                    }}
-                                </span>
+                            {for t in unselectedTags {
+                                <Badge
+                                    key={"s-" + t}
+                                    variant="outline"
+                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-accent hover:text-accent-foreground"
+                                    title="Click to add"
+                                    onClick={lambda { onToggleTag(t); }}
+                                >
+                                    {t}
+                                </Badge>
                             }}
                             <Input
                                 placeholder={"Add a tag and press Enter"
@@ -137,7 +141,7 @@ def:pub MemberDialog(
                             />
                         </div>
                     </div>
-                    <div className="grid gap-1.5">
+                    <div className="grid gap-2">
                         <Label>Projects</Label>
                         {if len(projects) > 0 {
                             <div key="projects" className="flex flex-wrap gap-1.5">
@@ -147,7 +151,12 @@ def:pub MemberDialog(
                                         variant={"default"
                                             if jid(p) in selectedProjectIds
                                             else "outline"}
-                                        className="cursor-pointer"
+                                        className={"cursor-pointer "
+                                            + (
+                                                ""
+                                                    if jid(p) in selectedProjectIds
+                                                    else "hover:bg-accent hover:text-accent-foreground"
+                                            )}
                                         onClick={lambda { onToggleProject(jid(p)); }}
                                     >
                                         {p.name}
@@ -160,8 +169,8 @@ def:pub MemberDialog(
                             </p>
                         } }
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="grid gap-1.5">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
                             <Label>Email</Label>
                             <Input
                                 type="email"
@@ -172,7 +181,7 @@ def:pub MemberDialog(
                                 ); }}
                             />
                         </div>
-                        <div className="grid gap-1.5">
+                        <div className="grid gap-2">
                             <Label>GitHub username</Label>
                             <Input
                                 placeholder="Optional"
@@ -192,7 +201,24 @@ def:pub MemberDialog(
                         onClick={onSave}
                         disabled={saving or not form["name"].strip()}
                     >
-                        {"Save changes" if editing else "Add member"}
+                        {if saving {
+                            <svg
+                                key="sp"
+                                className="animate-spin"
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                        }}
+                        {"Saving…"
+                            if saving
+                            else ("Save changes" if editing else "Add member")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

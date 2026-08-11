@@ -57,7 +57,7 @@ def:pub ProjectDialog(
                                 <Badge
                                     key={r.id}
                                     variant="secondary"
-                                    className="cursor-pointer font-normal"
+                                    className="cursor-pointer font-normal animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
                                     title="Click to remove"
                                     onClick={lambda { if onRemoveRepo { onRemoveRepo(r.id); } }}
                                 >
@@ -78,7 +78,22 @@ def:pub ProjectDialog(
                     Cancel
                 </Button>
                 <Button onClick={onSave} disabled={saving or not name.strip()}>
-                    Save
+                    {if saving {
+                        <svg
+                            key="sp"
+                            className="animate-spin"
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                        >
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                        </svg>
+                    }}
+                    {"Saving…" if saving else "Save"}
                 </Button>
             </DialogFooter>
         </DialogContent>

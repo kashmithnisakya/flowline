@@ -63,9 +63,25 @@ impl GithubSection.loadWorkspace -> None {
     try {
         rResult = root spawn ListRepos();
         pResult = root spawn ListProjects();
+        sResult = root spawn GetWorkflow();
         fetched = rResult.reports[0] if rResult.reports else [];
         repos = fetched;
         projects = pResult.reports[0] if pResult.reports else [];
+        # The "as" picker offers the org's own workflow steps; imports land on
+        # the start step by default (where new work lands). An org with no
+        # workflow keeps the legacy status list instead.
+        stepRows: list[StepView] = sResult.reports[0] if sResult.reports else [];
+        steps = stepRows;
+        if not importStep and len(stepRows) > 0 {
+            landing = stepRows[0].id;
+            for s in stepRows {
+                if s.kind == "start" {
+                    landing = s.id;
+                    break;
+                }
+            }
+            importStep = landing;
+        }
         # Land on something readable rather than an empty picker. An explicit
         # choice already made is left alone.
         if not repoId and fetched {
@@ -266,7 +282,7 @@ impl GithubSection.importSelected -> None {
     try {
         result = root spawn ImportIssues(
             repo_id=repoId, numbers=selected, project_id=project,
-            status=importStatus
+            status=importStatus, step_id=importStep
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {

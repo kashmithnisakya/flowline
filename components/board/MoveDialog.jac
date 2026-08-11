@@ -47,12 +47,61 @@ def:pub MoveDialog(
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>
-                        {"Review handoff" if isReview else ("Moved to " + status)}
-                    </DialogTitle>
-                    <DialogDescription>
-                        "{taskTitle}" landed in {status}. All of this is optional.
-                    </DialogDescription>
+                    <div className="flex items-start gap-3">
+                        <div
+                            className={"flex size-9 shrink-0 items-center justify-center rounded-lg "
+                                + (
+                                    # A handoff waits on someone; a stop needs
+                                    # attention. Same tokens as the step kinds.
+                                    "bg-warning/15 text-warning"
+                                        if isReview
+                                        else "bg-destructive/15 text-destructive"
+                                )}
+                        >
+                            {if isReview {
+                                <svg
+                                    key="handoff"
+                                    width={16}
+                                    height={16}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M5 12h14"/>
+                                    <path d="m12 5 7 7-7 7"/>
+                                </svg>
+                            } else {
+                                <svg
+                                    key="stop"
+                                    width={16}
+                                    height={16}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
+                                    <path d="M12 9v4"/>
+                                    <path d="M12 17h.01"/>
+                                </svg>
+                            } }
+                        </div>
+                        <div className="grid gap-1.5 text-left">
+                            <DialogTitle>
+                                {"Review handoff"
+                                    if isReview
+                                    else ("Moved to " + status)}
+                            </DialogTitle>
+                            <DialogDescription>
+                                "{taskTitle}" landed in {status}. All of this is optional.
+                            </DialogDescription>
+                        </div>
+                    </div>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     {if isReview {
@@ -122,7 +171,24 @@ def:pub MoveDialog(
                     <Button variant="outline" onClick={lambda { onOpenChange(False); }}>
                         Skip
                     </Button>
-                    <Button onClick={onSave} disabled={saving}>Save</Button>
+                    <Button onClick={onSave} disabled={saving}>
+                        {if saving {
+                            <svg
+                                key="sp"
+                                className="animate-spin"
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                        }}
+                        {"Saving…" if saving else "Save"}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>;
