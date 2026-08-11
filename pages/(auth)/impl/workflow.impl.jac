@@ -431,10 +431,10 @@ impl WorkflowPage.fitZoom -> None {
     byH = boxH / spanH;
     best = byW if byW < byH else byH;
     # The viewer fills the box: a diagram drawn small should read large on a
-    # large screen, within reason (1.5x, past that cards look inflated, not
+    # large screen, within reason (1.25x, past that cards look inflated, not
     # close). The editor stays at 1:1 so drawing coordinates match what the
     # author placed.
-    cap = 1.0 if editing else 1.5;
+    cap = 1.0 if editing else 1.25;
     if best > cap {
         best = cap;
     }
