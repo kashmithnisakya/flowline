@@ -56,7 +56,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from "sonner" { toast }
-import from "react" { useEffect }
+import from "react" { useEffect, useLayoutEffect }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -122,7 +122,12 @@ def:pub WorkflowPage -> JsxPage {
     # measured size until then), a template or a new step widening the graph,
     # and entering edit mode, where the floating editor covers the right
     # third of the canvas.
-    useEffect(lambda { fitZoom(); }, [len(steps), editing]);
+    # Layout effect, not a plain effect: it runs after layout but BEFORE the
+    # browser paints, so the first visible frame is already fitted and
+    # centered. A plain effect fires post-paint and the canvas's transform
+    # transition animates the correction - the diagram visibly "flies" from
+    # the top-left corner on every visit to this tab.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing]);
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
