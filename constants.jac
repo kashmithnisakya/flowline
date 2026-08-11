@@ -22,7 +22,7 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "How we actually work: raise an issue, solve it with a model, get the plan approved if it is big, let the model build, then the architect reviews and merges.",
+             "description": "How we actually work: solve the issue with a model, get the plan approved if it is big, let the model build, the architect reviews and merges (Done 1), then a follow-up PR removes the redundancy (Done 2).",
              "steps": [
                  # Laid out as a loop rather than a line. Solving and Approve
                  # stack so the "rethink" return is a short hop; Validate drops
@@ -35,20 +35,15 @@ glob STATUSES: list[str] = [
                  # attached, instead of every new issue pretending to be
                  # underway. Six colours exist for seven steps, so Approve and
                  # Validate share one: both are a named person signing off.
-                 {
-                     "name": "Raised",
-                     "kind": "start",
-                     "color": "slate",
-                     "owner": "nobody yet",
-                     "x": 40.0,
-                     "y": 200.0
-                 },
+                 # No intake step: GitHub is already the backlog, so work
+                 # appears here once somebody is assigned to it and not
+                 # before. The board is about work that is owned.
                  {
                      "name": "Solving",
-                     "kind": "active",
+                     "kind": "start",
                      "color": "sky",
                      "owner": "person + model",
-                     "x": 360.0,
+                     "x": 40.0,
                      "y": 200.0
                  },
                  {
@@ -56,7 +51,7 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "domain expert",
-                     "x": 360.0,
+                     "x": 40.0,
                      "y": 20.0
                  },
                  {
@@ -64,7 +59,7 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "model + PR owner",
-                     "x": 780.0,
+                     "x": 460.0,
                      "y": 200.0
                  },
                  # Reading the code and merging it is one act by one person in
@@ -74,7 +69,21 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "original architect",
-                     "x": 1140.0,
+                     "x": 820.0,
+                     "y": 200.0
+                 },
+                 # The two endings. Merged is Done 1: the change is live, and
+                 # a dedicated engineer still owes it a follow-up PR that
+                 # removes the redundancy a model leaves behind. Done is Done
+                 # 2: shipped AND clean. Keeping them apart is the only way
+                 # the second one stays visible, because it is the one that
+                 # gets skipped when everyone is busy.
+                 {
+                     "name": "Merged",
+                     "kind": "handoff",
+                     "color": "slate",
+                     "owner": "a dedicated engineer",
+                     "x": 1180.0,
                      "y": 200.0
                  },
                  {
@@ -82,7 +91,7 @@ glob STATUSES: list[str] = [
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1500.0,
+                     "x": 1540.0,
                      "y": 200.0
                  }
              ],
@@ -96,18 +105,18 @@ glob STATUSES: list[str] = [
              # backwards. An arrow for that would imply the graph tracks a
              # thing it does not.
              "links": [
-                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5],
-                 [2, 1], [4, 3]
+                 [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
+                 [1, 0], [3, 2]
              ],
              # Kept short: two of these sit on the same pair of steps, and a
              # long chip is what makes labels collide.
              "link_labels": [
-                 "someone takes it",
                  "needs design",
                  "small enough to just build",
                  "plan approved",
                  "PR ready and tested",
                  "approved, merged",
+                 "cleaned up",
                  "rethink",
                  "changes requested"
              ]
