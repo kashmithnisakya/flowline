@@ -65,7 +65,7 @@ def:pub FlowCanvas(
     links: list[dict[str, any]] = [];
     for s in steps {
         pos = stepXY(s, live);
-        for nid in s.next_ids {
+        for (i, nid) in enumerate(s.next_ids) {
             if nid not in byId {
                 continue;
             }
@@ -73,6 +73,26 @@ def:pub FlowCanvas(
             tpos = stepXY(target, live);
             twoWay = s.id in target.next_ids;
             curve = wire(pos[0], pos[1], tpos[0], tpos[1], twoWay);
+            said = s.next_labels[i] if i < len(s.next_labels) else "";
+            # A send-back is an arrow to an EARLIER step, not one that happens
+            # to point left: curve["back"] is geometry, this is the workflow.
+            isReturn = target.sort_order < s.sort_order;
+            lx = curve["mx"];
+            ly = curve["my"];
+            if twoWay {
+                dx = tpos[0] - pos[0];
+                dy = tpos[1] - pos[1];
+                spanX = dx if dx >= 0.0 else 0.0 - dx;
+                spanY = dy if dy >= 0.0 else 0.0 - dy;
+                # A→B and B→A share a midpoint, so part the chips the same way
+                # wire() parts the curves: by direction of travel, or each
+                # label lands on the other one's arrow.
+                if spanX >= spanY {
+                    ly = ly + (-18.0 if dx >= 0.0 else 18.0);
+                } else {
+                    lx = lx + (-48.0 if dy >= 0.0 else 48.0);
+                }
+            }
             links.append(
                 {
                     "key": s.id + ">" + nid,
@@ -82,7 +102,10 @@ def:pub FlowCanvas(
                     "arrow": curve["arrow"],
                     "mx": curve["mx"],
                     "my": curve["my"],
-                    "back": curve["back"]
+                    "lx": lx,
+                    "ly": ly,
+                    "back": isReturn,
+                    "label": said
                 }
             );
         }
@@ -171,6 +194,23 @@ def:pub FlowCanvas(
                 </svg>
                 {for l in links {
                     <div key={"chip-" + l["key"]}>
+                        {if l["label"] and selectedEdge != l["key"] {
+                            <span
+                                key="lab"
+                                className={"pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm "
+                                    + (
+                                        "border-destructive/40 bg-background text-destructive"
+                                            if l["back"]
+                                            else "border-border bg-background text-muted-foreground"
+                                    )}
+                                style={{
+                                    "left": str(l["lx"]) + "px",
+                                    "top": str(l["ly"]) + "px"
+                                }}
+                            >
+                                {l["label"]}
+                            </span>
+                        }}
                         {if selectedEdge == l["key"] {
                             <button
                                 key="del"
@@ -269,6 +309,15 @@ def:pub FlowCanvas(
                         >
                             {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
                         </div>
+                        {if s.owner {
+                            <div
+                                key="owner"
+                                className="mt-1 truncate pl-4 text-[11px] text-foreground/70"
+                                title={"Held by: " + s.owner}
+                            >
+                                {s.owner}
+                            </div>
+                        }}
                     </button>
                 }}
             </div>
