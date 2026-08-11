@@ -18,6 +18,7 @@ import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
 import from .kinds { KIND_LABEL, DOT_FILL, CARD_TINT, colorKey }
 import from ..ui.button { Button }
+import from ..ui.input { Input }
 
 
 def:pub FlowCanvas(
@@ -26,6 +27,7 @@ def:pub FlowCanvas(
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
+    edgeDraft: str = "",
     zoom: float = 1.0,
     panX: float = 0.0,
     panY: float = 0.0,
@@ -34,7 +36,9 @@ def:pub FlowCanvas(
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
-    onSelectEdge: Callable[[str], None] = None,
+    onSelectEdge: Callable[[str, str], None] = None,
+    onEdgeDraft: Callable[[str], None] = None,
+    onSaveEdgeLabel: Callable[[str, str, str], None] = None,
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None,
     onZoomBy: Callable[[float], None] = None,
@@ -111,6 +115,32 @@ def:pub FlowCanvas(
         }
     }
 
+    # The selected transition, so its label editor can be drawn in screen
+    # space OUTSIDE the zoom transform. An input placed inside the transform
+    # scales with the drawing and is unusable at anything but 100%.
+    # Tracked with a bool because len() on a dict compiles to an undefined
+    # .length read.
+    activeEdge: dict[str, any] = {};
+    activeFound = False;
+    for l in links {
+        if l["key"] == selectedEdge {
+            activeEdge = l;
+            activeFound = True;
+        }
+    }
+    # Seeded outside the branch: a name first assigned inside an `if` is
+    # block-scoped in the compiled JS and unreachable after it.
+    edgeFromName = "";
+    edgeToName = "";
+    edgeSaid = "";
+    if activeFound {
+        # Both ends are on the canvas by construction, links are only built
+        # when byId holds each end.
+        edgeFromName = byId[activeEdge["from"]].name;
+        edgeToName = byId[activeEdge["to"]].name;
+        edgeSaid = activeEdge["label"];
+    }
+
     connecting = bool(connectFrom);
     # The grid scales with the drawing, so zooming reads as moving away from
     # the board rather than the cards changing size against a fixed mesh.
@@ -185,7 +215,7 @@ def:pub FlowCanvas(
                                 onClick={lambda (e: MouseEvent) {
                                     e.stopPropagation();
                                     if onSelectEdge {
-                                        onSelectEdge(l["key"]);
+                                        onSelectEdge(l["key"], l["label"]);
                                     }
                                 }}
                             />
@@ -212,36 +242,14 @@ def:pub FlowCanvas(
                             </span>
                         }}
                         {if selectedEdge == l["key"] {
-                            <button
-                                key="del"
-                                type="button"
-                                title="Remove this transition"
-                                className="absolute z-20 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:text-destructive animate-in fade-in zoom-in-75 duration-150"
+                            <span
+                                key="dot"
+                                className="pointer-events-none absolute z-10 block h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
                                 style={{
-                                    "left": str(l["mx"] - 10.0) + "px",
-                                    "top": str(l["my"] - 10.0) + "px"
+                                    "left": str(l["mx"]) + "px",
+                                    "top": str(l["my"]) + "px"
                                 }}
-                                onClick={lambda (e: MouseEvent) {
-                                    e.stopPropagation();
-                                    if onDeleteEdge {
-                                        onDeleteEdge(l["from"], l["to"]);
-                                    }
-                                }}
-                            >
-                                <svg
-                                    width={11}
-                                    height={11}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="M18 6 6 18"/>
-                                    <path d="m6 6 12 12"/>
-                                </svg>
-                            </button>
+                            />
                         }}
                     </div>
                 }}
@@ -374,6 +382,85 @@ def:pub FlowCanvas(
                                 Add your first step
                             </Button>
                         }}
+                    </div>
+                </div>
+            }}
+            {if activeFound {
+                <div
+                    key="edgeeditor"
+                    className="absolute z-40 w-64 -translate-x-1/2 rounded-lg border bg-background/95 p-2.5 shadow-lg backdrop-blur animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                        "left": str(activeEdge["mx"] * zoom + panX) + "px",
+                        "top": str(activeEdge["my"] * zoom + panY + 14.0) + "px"
+                    }}
+                    onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                    onMouseDown={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                >
+                    <div
+                        className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                    >
+                        <span className="truncate">{edgeFromName}</span>
+                        <span aria-hidden="true">→</span>
+                        <span className="truncate">{edgeToName}</span>
+                    </div>
+                    <Input
+                        autoFocus={True}
+                        value={edgeDraft}
+                        placeholder="what has to be true to cross"
+                        className="h-8 text-xs"
+                        onChange={lambda (e: any) { if onEdgeDraft {
+                            onEdgeDraft(e.target.value);
+                        }}}
+                        onKeyDown={lambda (e: any) { if e.key == "Enter"
+                            and onSaveEdgeLabel {
+                            onSaveEdgeLabel(
+                                activeEdge["from"], activeEdge["to"], edgeDraft
+                            );
+                        }}}
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-1">
+                        <Button
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            onClick={lambda { if onSaveEdgeLabel {
+                                onSaveEdgeLabel(
+                                    activeEdge["from"], activeEdge["to"], edgeDraft
+                                );
+                            }}}
+                        >
+                            Save
+                        </Button>
+                        <div className="flex items-center gap-1">
+                            {if edgeSaid {
+                                <Button
+                                    key="clear"
+                                    size="sm"
+                                    variant="ghost"
+                                    title="Take the wording off this arrow, keep the arrow"
+                                    className="h-7 px-2 text-xs text-muted-foreground"
+                                    onClick={lambda { if onSaveEdgeLabel {
+                                        onSaveEdgeLabel(
+                                            activeEdge["from"], activeEdge["to"], ""
+                                        );
+                                    }}}
+                                >
+                                    Clear
+                                </Button>
+                            }}
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Remove this transition"
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                onClick={lambda { if onDeleteEdge {
+                                    onDeleteEdge(
+                                        activeEdge["from"], activeEdge["to"]
+                                    );
+                                }}}
+                            >
+                                Delete
+                            </Button>
+                        </div>
                     </div>
                 </div>
             }}
