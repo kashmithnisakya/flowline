@@ -29,6 +29,7 @@ def:pub FlowCanvas(
     zoom: float = 1.0,
     panX: float = 0.0,
     panY: float = 0.0,
+    animate: bool = True,
     showGrid: bool = True,
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
@@ -120,7 +121,7 @@ def:pub FlowCanvas(
                 className={"absolute inset-0 origin-top-left"
                     + (
                         " transition-transform duration-200 ease-out"
-                            if settled
+                            if settled and animate
                             else ""
                     )}
                 style={{

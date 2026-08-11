@@ -406,6 +406,11 @@ impl WorkflowPage.fitZoom -> None {
     zoomRef.current = clampZoom(best);
     zoom = clampZoom(best);
     recenterPan();
+    # Arm transitions on the NEXT frame, so this fit's own transform change
+    # can never animate: the first thing the user sees is the final position.
+    if not placed and len(steps) > 0 {
+        window.requestAnimationFrame(lambda { placed = True; });
+    }
 }
 
 impl WorkflowPage.recenterPan -> None {

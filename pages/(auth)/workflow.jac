@@ -102,6 +102,11 @@ def:pub WorkflowPage -> JsxPage {
         # keeps working untouched.
         panX: float = 0.0,
         panY: float = 0.0,
+        # Transitions stay off until one frame AFTER the first fit. fitZoom's
+        # clientWidth read forces a style recalc at the unfitted transform, so
+        # with transitions live the browser animates the correction even when
+        # both commits land before first paint - the corner-to-center flight.
+        placed: bool = False,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -478,6 +483,7 @@ def:pub WorkflowPage -> JsxPage {
                                 zoom={zoom}
                                 panX={panX}
                                 panY={panY}
+                                animate={placed}
                                 canvasRef={canvasRef}
                                 viewportRef={viewportRef}
                                 onZoomBy={zoomBy}
@@ -663,6 +669,7 @@ def:pub WorkflowPage -> JsxPage {
                         zoom={zoom}
                         panX={panX}
                         panY={panY}
+                        animate={placed}
                         showGrid={False}
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
