@@ -22,24 +22,32 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "How we actually work: solve the issue with a model, get the plan approved if it is big, let the model build, the architect reviews and merges (Done 1), then a follow-up PR removes the redundancy (Done 2).",
+             "description": "How we actually work: an issue is raised, someone takes it and solves it with a model, the plan is approved if it is big, the model builds, the architect reviews and merges, and anything needing a follow-up PR waits until that lands too.",
              "steps": [
-                 # No intake step: GitHub is the backlog, so work lands here
-                 # once someone is assigned to it.
                  {
-                     "name": "Solving",
+                     "name": "Raised",
                      "kind": "start",
-                     "color": "sky",
-                     "owner": "person + model",
+                     "color": "slate",
+                     "owner": "nobody yet",
                      "x": 40.0,
                      "y": 200.0
                  },
+                 {
+                     "name": "Solving",
+                     "kind": "active",
+                     "color": "sky",
+                     "owner": "person + model",
+                     "x": 360.0,
+                     "y": 200.0
+                 },
+                 # Approve is the optional detour at the start, Follow-up the
+                 # one at the end. Most work takes neither.
                  {
                      "name": "Approve",
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "domain expert",
-                     "x": 40.0,
+                     "x": 360.0,
                      "y": 20.0
                  },
                  {
@@ -47,7 +55,7 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "model + PR owner",
-                     "x": 460.0,
+                     "x": 720.0,
                      "y": 200.0
                  },
                  {
@@ -55,44 +63,47 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "original architect",
-                     "x": 820.0,
+                     "x": 1040.0,
                      "y": 200.0
                  },
-                 # Merged is Done 1, Done is Done 2: a change is live before it
-                 # is clean, and separating them is what keeps the follow-up
-                 # visible.
+                 # Merged but not finished: the change is live and another PR
+                 # is still owed before the job is really complete. Work waits
+                 # here until that one lands, then both reach Done together.
                  {
-                     "name": "Merged",
+                     "name": "Follow-up",
                      "kind": "handoff",
-                     "color": "slate",
-                     "owner": "a dedicated engineer",
-                     "x": 1180.0,
-                     "y": 200.0
+                     "color": "amber",
+                     "owner": "follow-up PR owner",
+                     "x": 1320.0,
+                     "y": 370.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1180.0,
-                     "y": 430.0
+                     "x": 1570.0,
+                     "y": 200.0
                  }
              ],
              # Forward first, then the two send-backs: a review that can only
              # approve is a review nobody needs.
              "links": [
-                 [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
-                 [1, 0], [3, 2]
+                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [4, 6],
+                 [5, 6],
+                 [2, 1], [4, 3]
              ],
              # Kept short: two of these share a pair of steps, and long chips
              # collide.
              "link_labels": [
+                 "someone takes it",
                  "needs design",
                  "small enough to just build",
                  "plan approved",
                  "PR ready and tested",
-                 "approved, merged",
-                 "cleaned up",
+                 "merged, more to do",
+                 "merged, complete",
+                 "follow-up merged",
                  "rethink",
                  "changes requested"
              ]
