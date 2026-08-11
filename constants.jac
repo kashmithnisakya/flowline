@@ -24,20 +24,26 @@ glob STATUSES: list[str] = [
              "name": "Jaseci flow",
              "description": "How we actually work: plan an issue with a model, approve it if it is big, let the model build, review, and the person who raised it validates.",
              "steps": [
+                 # Laid out as a loop rather than a line. Plan and Approve
+                 # stack on the left so the "rethink the plan" return is a
+                 # short hop; Validate drops to a second row so "still broken"
+                 # travels back to Build underneath Review rather than through
+                 # it. The vertical gaps are wide enough that two labels on the
+                 # same pair of steps never overlap.
                  {
                      "name": "Plan",
                      "kind": "start",
                      "color": "sky",
                      "owner": "person + model",
                      "x": 40.0,
-                     "y": 140.0
+                     "y": 200.0
                  },
                  {
                      "name": "Approve",
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "domain expert",
-                     "x": 340.0,
+                     "x": 40.0,
                      "y": 20.0
                  },
                  {
@@ -45,35 +51,32 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "model + PR owner",
-                     "x": 640.0,
-                     "y": 140.0
+                     "x": 500.0,
+                     "y": 200.0
                  },
                  {
                      "name": "Review",
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "expert or area lead",
-                     "x": 940.0,
-                     "y": 140.0
+                     "x": 900.0,
+                     "y": 200.0
                  },
-                 # Validate and Done sit a row lower so the "still broken"
-                 # return to Build travels beneath Review instead of straight
-                 # through it.
                  {
                      "name": "Validate",
                      "kind": "handoff",
                      "color": "slate",
                      "owner": "whoever raised it",
-                     "x": 1180.0,
-                     "y": 320.0
+                     "x": 700.0,
+                     "y": 430.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1480.0,
-                     "y": 320.0
+                     "x": 1040.0,
+                     "y": 430.0
                  }
              ],
              # Forward first, then the three send-backs. A review that can
@@ -84,14 +87,16 @@ glob STATUSES: list[str] = [
                  [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
                  [1, 0], [3, 2], [4, 2]
              ],
+             # Kept short: two of these sit on the same pair of steps, and a
+             # long chip is what makes labels collide.
              "link_labels": [
-                 "needs a design call",
+                 "needs design",
                  "small enough to just build",
                  "plan approved",
                  "PR ready and tested",
                  "approved, merged",
                  "confirmed working",
-                 "rethink the plan",
+                 "rethink",
                  "changes requested",
                  "still broken"
              ]

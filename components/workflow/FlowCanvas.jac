@@ -76,6 +76,32 @@ def:pub FlowCanvas(
             # next_labels comes from the same traversal as next_ids, so
             # position i is the wording on this particular arrow.
             said = s.next_labels[i] if i < len(s.next_labels) else "";
+            # A→B and B→A share a midpoint, and wire() only parts the curves
+            # by 10px, which is thinner than a label chip. Push the two chips
+            # off the line in opposite directions, across whichever axis the
+            # pair does NOT travel along, so they can never collide.
+            # A send-back is an arrow to an EARLIER step, which is a question
+            # about the workflow's order, not about which way the curve
+            # happens to point on the canvas. curve["back"] only means "travels
+            # up or left", so a forward arrow drawn upwards would wrongly read
+            # as rework.
+            isReturn = target.sort_order < s.sort_order;
+            lx = curve["mx"];
+            ly = curve["my"];
+            if twoWay {
+                dx = tpos[0] - pos[0];
+                dy = tpos[1] - pos[1];
+                spanX = dx if dx >= 0.0 else 0.0 - dx;
+                spanY = dy if dy >= 0.0 else 0.0 - dy;
+                nudge = 15.0 if isReturn else -15.0;
+                if spanX >= spanY {
+                    ly = ly + nudge;
+                } else {
+                    # Side by side needs far more room than stacked: a chip is
+                    # only ~18px tall but can run over 100px wide.
+                    lx = lx + nudge * 5.0;
+                }
+            }
             links.append(
                 {
                     "key": s.id + ">" + nid,
@@ -85,7 +111,9 @@ def:pub FlowCanvas(
                     "arrow": curve["arrow"],
                     "mx": curve["mx"],
                     "my": curve["my"],
-                    "back": curve["back"],
+                    "lx": lx,
+                    "ly": ly,
+                    "back": isReturn,
                     "label": said
                 }
             );
@@ -185,8 +213,8 @@ def:pub FlowCanvas(
                                             else "border-border bg-background text-muted-foreground"
                                     )}
                                 style={{
-                                    "left": str(l["mx"]) + "px",
-                                    "top": str(l["my"]) + "px"
+                                    "left": str(l["lx"]) + "px",
+                                    "top": str(l["ly"]) + "px"
                                 }}
                             >
                                 {l["label"]}
