@@ -27,6 +27,9 @@ def:pub FlowCanvas(
     connectFrom: str = "",
     selectedEdge: str = "",
     zoom: float = 1.0,
+    panX: float = 0.0,
+    panY: float = 0.0,
+    animate: bool = True,
     showGrid: bool = True,
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
@@ -99,7 +102,11 @@ def:pub FlowCanvas(
     if showGrid {
         boxStyle["backgroundImage"] = "radial-gradient(color-mix(in oklab, var(--color-muted-foreground) 20%, transparent) 1px, transparent 1px)";
         boxStyle["backgroundSize"] = str(gridPitch) + "px " + str(gridPitch) + "px";
-        boxStyle["backgroundPosition"] = "8px 8px";
+        # The mesh tracks the centering offset so a dragged card lines up
+        # against the same dots wherever the diagram is panned to.
+        boxStyle["backgroundPosition"] = (
+            str(panX % gridPitch) + "px " + str(panY % gridPitch) + "px"
+        );
     }
 
     return
@@ -114,10 +121,13 @@ def:pub FlowCanvas(
                 className={"absolute inset-0 origin-top-left"
                     + (
                         " transition-transform duration-200 ease-out"
-                            if settled
+                            if settled and animate
                             else ""
                     )}
-                style={{"transform": "scale(" + str(zoom) + ")"}}
+                style={{
+                    "transform": "translate(" + str(panX) + "px, "
+                        + str(panY) + "px) scale(" + str(zoom) + ")"
+                }}
             >
                 <svg
                     width={size[0]}

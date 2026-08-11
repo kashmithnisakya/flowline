@@ -353,6 +353,39 @@ impl WorkflowPage.setField(key: str, value: str) -> None {
     }
 }
 
+# The diagram's true bounding box in canvas px: [minX, minY, maxX, maxY].
+# Fitting against this rather than canvasSize matters: canvasSize measures
+# from the canvas ORIGIN and adds the drag margin, so a diagram that starts
+# away from the corner would be fitted against a phantom larger box and end
+# up smaller than the canvas allows.
+def contentBounds(
+    steps: list[StepView], live: dict[str, list[float]]
+) -> list[float] {
+    minX = 0.0;
+    minY = 0.0;
+    maxX = 0.0;
+    maxY = 0.0;
+    first = True;
+    for s in steps {
+        pos = stepXY(s, live);
+        if first or pos[0] < minX {
+            minX = pos[0];
+        }
+        if first or pos[1] < minY {
+            minY = pos[1];
+        }
+        if first or pos[0] + NODE_W > maxX {
+            maxX = pos[0] + NODE_W;
+        }
+        if first or pos[1] + NODE_H > maxY {
+            maxY = pos[1] + NODE_H;
+        }
+        first = False;
+    }
+    return [minX, minY, maxX, maxY];
+}
+
+
 # Far enough out to see a sprawling flow, far enough in to read a card.
 def clampZoom(v: float) -> float {
     if v < 0.3 {
@@ -369,6 +402,7 @@ impl WorkflowPage.zoomBy(delta: float) -> None {
     z = clampZoom(current + delta);
     zoomRef.current = z;
     zoom = z;
+    recenterPan();
 }
 
 impl WorkflowPage.fitZoom -> None {
@@ -378,29 +412,76 @@ impl WorkflowPage.fitZoom -> None {
         zoom = 1.0;
         return;
     }
-    size = canvasSize(steps, live);
+    bounds = contentBounds(steps, live);
+    spanW = bounds[2] - bounds[0];
+    spanH = bounds[3] - bounds[1];
     # The editor floats over the canvas, so the space it covers is not space
     # a card can use: fit into what is actually visible.
     # Reserved for the whole of edit mode, not per selection: re-fitting
     # every time a card is clicked would make the zoom jump under the cursor.
     panel = 336.0 if editing else 0.0;
-    boxW = float(view.clientWidth) - 32.0 - panel;
-    boxH = float(view.clientHeight) - 32.0;
-    if size[0] <= 0.0 or size[1] <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
+    boxW = float(view.clientWidth) - 48.0 - panel;
+    boxH = float(view.clientHeight) - 48.0;
+    if spanW <= 0.0 or spanH <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
         zoomRef.current = 1.0;
         zoom = 1.0;
         return;
     }
-    byW = boxW / size[0];
-    byH = boxH / size[1];
+    byW = boxW / spanW;
+    byH = boxH / spanH;
     best = byW if byW < byH else byH;
-    # Never zoom PAST 1:1 just to fill the box: a three-step workflow blown
-    # up to 180% looks broken, it does not look close.
-    if best > 1.0 {
-        best = 1.0;
+    # The viewer fills the box: a diagram drawn small should read large on a
+    # large screen, within reason (1.25x, past that cards look inflated, not
+    # close). The editor stays at 1:1 so drawing coordinates match what the
+    # author placed.
+    cap = 1.0 if editing else 1.25;
+    if best > cap {
+        best = cap;
     }
     zoomRef.current = clampZoom(best);
     zoom = clampZoom(best);
+    recenterPan();
+    # Arm transitions on the NEXT frame, so this fit's own transform change
+    # can never animate: the first thing the user sees is the final position.
+    if not placed and len(steps) > 0 {
+        window.requestAnimationFrame(lambda { placed = True; });
+    }
+}
+
+impl WorkflowPage.recenterPan -> None {
+    # Center the diagram's bounding box in the visible part of the viewport.
+    # Screen-px offsets applied before the scale, so pointerXY (which reads
+    # the translated surface's own rect) needs no changes.
+    view: any = viewportRef.current;
+    if not view or len(steps) == 0 {
+        panX = 0.0;
+        panY = 0.0;
+        return;
+    }
+    z = float(zoomRef.current) if zoomRef.current else 1.0;
+    bounds = contentBounds(steps, live);
+    minX = bounds[0];
+    minY = bounds[1];
+    maxX = bounds[2];
+    maxY = bounds[3];
+    panel = 336.0 if editing else 0.0;
+    availW = float(view.clientWidth) - panel;
+    availH = float(view.clientHeight);
+    # Clamp the content's visible EDGE, not the raw offset: the offset
+    # legitimately goes negative to compensate for content whose stored
+    # coordinates start away from the origin. Only a diagram larger than the
+    # box pins to the top-left padding instead of centering its overflow out
+    # of reach - there is no scrolling to recover it.
+    edgeX = (availW - (maxX - minX) * z) / 2.0;
+    edgeY = (availH - (maxY - minY) * z) / 2.0;
+    if edgeX < 16.0 {
+        edgeX = 16.0;
+    }
+    if edgeY < 16.0 {
+        edgeY = 16.0;
+    }
+    panX = edgeX - minX * z;
+    panY = edgeY - minY * z;
 }
 
 impl WorkflowPage.pointerXY(e: MouseEvent) -> list[float] {

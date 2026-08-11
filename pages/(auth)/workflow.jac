@@ -33,7 +33,9 @@ import from ...walkers.workflow {
 import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
-import from ...components.workflow.geometry { hitStep, stepXY, canvasSize }
+import from ...components.workflow.geometry {
+    hitStep, stepXY, canvasSize, NODE_W, NODE_H
+}
 import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -54,7 +56,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from "sonner" { toast }
-import from "react" { useEffect }
+import from "react" { useEffect, useLayoutEffect }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -95,6 +97,16 @@ def:pub WorkflowPage -> JsxPage {
         peekLoading: bool = False,
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
+        # Screen-px offset that centers the diagram in the viewport. Applied
+        # before the scale on the canvas surface, so pointerXY's rect math
+        # keeps working untouched.
+        panX: float = 0.0,
+        panY: float = 0.0,
+        # Transitions stay off until one frame AFTER the first fit. fitZoom's
+        # clientWidth read forces a style recalc at the unfitted transform, so
+        # with transitions live the browser animates the correction even when
+        # both commits land before first paint - the corner-to-center flight.
+        placed: bool = False,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -115,7 +127,25 @@ def:pub WorkflowPage -> JsxPage {
     # measured size until then), a template or a new step widening the graph,
     # and entering edit mode, where the floating editor covers the right
     # third of the canvas.
-    useEffect(lambda { fitZoom(); }, [len(steps), editing]);
+    # Layout effect, not a plain effect: it runs after layout but BEFORE the
+    # browser paints, so the first visible frame is already fitted and
+    # centered. A plain effect fires post-paint and the canvas's transform
+    # transition animates the correction - the diagram visibly "flies" from
+    # the top-left corner on every visit to this tab.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing]);
+
+    # Refit when the window itself changes size: the canvas tracks the
+    # viewport height, so a resize moves the centering target.
+    useEffect(
+        lambda {
+            onResize = lambda { fitZoom(); };
+            window.addEventListener("resize", onResize);
+            return lambda {
+                window.removeEventListener("resize", onResize);
+            };
+        },
+        []
+    );
 
     async def boot -> None;
     async def reload(pid: str) -> None;
@@ -138,6 +168,7 @@ def:pub WorkflowPage -> JsxPage {
     def setField(key: str, value: str) -> None;
     def zoomBy(delta: float) -> None;
     def fitZoom -> None;
+    def recenterPan -> None;
     def pointerXY(e: MouseEvent) -> list[float];
     def beginDrag(e: MouseEvent) -> None;
     def moveDrag(e: MouseEvent) -> None;
@@ -450,6 +481,9 @@ def:pub WorkflowPage -> JsxPage {
                                 connectFrom={connectFrom}
                                 selectedEdge={selectedEdge}
                                 zoom={zoom}
+                                panX={panX}
+                                panY={panY}
+                                animate={placed}
                                 canvasRef={canvasRef}
                                 viewportRef={viewportRef}
                                 onZoomBy={zoomBy}
@@ -633,6 +667,9 @@ def:pub WorkflowPage -> JsxPage {
                     <FlowCanvas
                         steps={steps}
                         zoom={zoom}
+                        panX={panX}
+                        panY={panY}
+                        animate={placed}
                         showGrid={False}
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
