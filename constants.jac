@@ -22,20 +22,33 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "How we actually work: plan an issue with a model, approve it if it is big, let the model build, review, and the person who raised it validates.",
+             "description": "How we actually work: raise an issue, solve it with a model, approve the plan if it is big, let the model build, review, and the person who raised it validates.",
              "steps": [
-                 # Laid out as a loop rather than a line. Plan and Approve
-                 # stack on the left so the "rethink the plan" return is a
-                 # short hop; Validate drops to a second row so "still broken"
-                 # travels back to Build underneath Review rather than through
-                 # it. The vertical gaps are wide enough that two labels on the
-                 # same pair of steps never overlap.
+                 # Laid out as a loop rather than a line. Solving and Approve
+                 # stack so the "rethink" return is a short hop; Validate drops
+                 # to a second row so "still broken" travels back to Build
+                 # underneath Review rather than through it.
+                 #
+                 # Raised is intake and nothing else: work lands here and
+                 # nobody is doing anything to it yet. Keeping it separate is
+                 # what makes the move into Solving a real event with a person
+                 # attached, instead of every new issue pretending to be
+                 # underway. Six colours exist for seven steps, so Approve and
+                 # Validate share one: both are a named person signing off.
                  {
-                     "name": "Plan",
+                     "name": "Raised",
                      "kind": "start",
+                     "color": "slate",
+                     "owner": "nobody yet",
+                     "x": 40.0,
+                     "y": 200.0
+                 },
+                 {
+                     "name": "Solving",
+                     "kind": "active",
                      "color": "sky",
                      "owner": "person + model",
-                     "x": 40.0,
+                     "x": 360.0,
                      "y": 200.0
                  },
                  {
@@ -43,7 +56,7 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "domain expert",
-                     "x": 40.0,
+                     "x": 360.0,
                      "y": 20.0
                  },
                  {
@@ -51,7 +64,7 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "model + PR owner",
-                     "x": 500.0,
+                     "x": 780.0,
                      "y": 200.0
                  },
                  {
@@ -59,15 +72,15 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "expert or area lead",
-                     "x": 900.0,
+                     "x": 1140.0,
                      "y": 200.0
                  },
                  {
                      "name": "Validate",
                      "kind": "handoff",
-                     "color": "slate",
+                     "color": "indigo",
                      "owner": "whoever raised it",
-                     "x": 700.0,
+                     "x": 940.0,
                      "y": 430.0
                  },
                  {
@@ -75,7 +88,7 @@ glob STATUSES: list[str] = [
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1040.0,
+                     "x": 1280.0,
                      "y": 430.0
                  }
              ],
@@ -84,12 +97,13 @@ glob STATUSES: list[str] = [
              # part of the model rather than an omission: Approve returns the
              # plan, Review and Validate return the work.
              "links": [
-                 [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
-                 [1, 0], [3, 2], [4, 2]
+                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [5, 6],
+                 [2, 1], [4, 3], [5, 3]
              ],
              # Kept short: two of these sit on the same pair of steps, and a
              # long chip is what makes labels collide.
              "link_labels": [
+                 "someone takes it",
                  "needs design",
                  "small enough to just build",
                  "plan approved",

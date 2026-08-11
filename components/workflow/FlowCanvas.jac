@@ -97,9 +97,11 @@ def:pub FlowCanvas(
                 if spanX >= spanY {
                     ly = ly + nudge;
                 } else {
-                    # Side by side needs far more room than stacked: a chip is
-                    # only ~18px tall but can run over 100px wide.
-                    lx = lx + nudge * 5.0;
+                    # Side by side needs more room than stacked, since a chip
+                    # is ~18px tall but 60-90px wide. Enough to clear the
+                    # neighbour and no more: pushed further, a label stops
+                    # reading as belonging to its arrow.
+                    lx = lx + nudge * 3.0;
                 }
             }
             links.append(
