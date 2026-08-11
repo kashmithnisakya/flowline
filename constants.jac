@@ -24,20 +24,8 @@ glob STATUSES: list[str] = [
              "name": "Jaseci flow",
              "description": "How we actually work: solve the issue with a model, get the plan approved if it is big, let the model build, the architect reviews and merges (Done 1), then a follow-up PR removes the redundancy (Done 2).",
              "steps": [
-                 # Laid out as a loop rather than a line. Solving and Approve
-                 # stack so the "rethink" return is a short hop; Validate drops
-                 # to a second row so "still broken" travels back to Build
-                 # underneath Review rather than through it.
-                 #
-                 # Raised is intake and nothing else: work lands here and
-                 # nobody is doing anything to it yet. Keeping it separate is
-                 # what makes the move into Solving a real event with a person
-                 # attached, instead of every new issue pretending to be
-                 # underway. Six colours exist for seven steps, so Approve and
-                 # Validate share one: both are a named person signing off.
-                 # No intake step: GitHub is already the backlog, so work
-                 # appears here once somebody is assigned to it and not
-                 # before. The board is about work that is owned.
+                 # No intake step: GitHub is the backlog, so work lands here
+                 # once someone is assigned to it.
                  {
                      "name": "Solving",
                      "kind": "start",
@@ -62,8 +50,6 @@ glob STATUSES: list[str] = [
                      "x": 460.0,
                      "y": 200.0
                  },
-                 # Reading the code and merging it is one act by one person in
-                 # one sitting, so it is one step rather than two.
                  {
                      "name": "Review",
                      "kind": "handoff",
@@ -72,12 +58,9 @@ glob STATUSES: list[str] = [
                      "x": 820.0,
                      "y": 200.0
                  },
-                 # The two endings. Merged is Done 1: the change is live, and
-                 # a dedicated engineer still owes it a follow-up PR that
-                 # removes the redundancy a model leaves behind. Done is Done
-                 # 2: shipped AND clean. Keeping them apart is the only way
-                 # the second one stays visible, because it is the one that
-                 # gets skipped when everyone is busy.
+                 # Merged is Done 1, Done is Done 2: a change is live before it
+                 # is clean, and separating them is what keeps the follow-up
+                 # visible.
                  {
                      "name": "Merged",
                      "kind": "handoff",
@@ -91,25 +74,18 @@ glob STATUSES: list[str] = [
                      "kind": "done",
                      "color": "emerald",
                      "owner": "",
-                     "x": 1540.0,
-                     "y": 200.0
+                     "x": 1180.0,
+                     "y": 430.0
                  }
              ],
-             # Forward first, then the two send-backs. A review that can only
-             # approve is a review nobody needs, so those return paths are
-             # part of the model rather than an omission.
-             #
-             # There is deliberately NO return from Validate: work only
-             # reaches it once a reviewer has approved, and a fault found
-             # later is a new issue entering at Raised, not this one moving
-             # backwards. An arrow for that would imply the graph tracks a
-             # thing it does not.
+             # Forward first, then the two send-backs: a review that can only
+             # approve is a review nobody needs.
              "links": [
                  [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
                  [1, 0], [3, 2]
              ],
-             # Kept short: two of these sit on the same pair of steps, and a
-             # long chip is what makes labels collide.
+             # Kept short: two of these share a pair of steps, and long chips
+             # collide.
              "link_labels": [
                  "needs design",
                  "small enough to just build",

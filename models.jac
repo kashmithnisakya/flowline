@@ -239,10 +239,7 @@ node WorkflowStep {
     has name: str,
         kind: str = "active",
         color: str = "",
-        # Who is responsible while work sits here, as a ROLE rather than a
-        # name ("domain expert", "model", "whoever raised it"). A step that
-        # cannot say who holds it is a picture, not a model; this is the field
-        # that makes the canvas readable by someone who was not in the room.
+        # A ROLE, not a person: "domain expert", "model", "whoever raised it".
         owner: str = "",
         x: float = 0.0,
         y: float = 0.0,
@@ -275,9 +272,7 @@ edge LeadsTo: Milestone --> Milestone {}
 # draw their own flow. Only self-loops are refused, at link time.
 #
 # `label` is what has to be true to cross ("approved", "changes requested").
-# Without it an arrow only means "you may drag this way", which is why the
-# graph read as shapes rather than as a process. Empty on every transition
-# drawn before labels existed, so this is additive.
+# Empty on transitions drawn before labels existed, so this is additive.
 edge FlowsTo: WorkflowStep --> WorkflowStep {
     has label: str = "";
 }
@@ -370,9 +365,7 @@ obj StepView {
         owner: str = "",
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Aligned index-for-index with next_ids: both are built from the same
-        # FlowsTo traversal, so next_labels[i] is the label on the arrow to
-        # next_ids[i].
+        # Index-aligned with next_ids: same FlowsTo traversal builds both.
         next_labels: list[str] = [],
         # How much work is sitting here, counted per request in GetWorkflow
         # because it depends on the project filter the caller asked for.
@@ -490,8 +483,7 @@ def step_view(s: WorkflowStep) -> StepView {
     for n in [s->:FlowsTo:->] {
         next_ids.append(jid(n));
     }
-    # Same traversal, so the edge at position i is the one reaching
-    # next_ids[i]. `[edge ...]` is how an edge's own fields are read.
+    # `[edge ...]` is how an edge's own fields are read.
     next_labels: list[str] = [];
     for e in [edge s->:FlowsTo:->] {
         next_labels.append(e.label);

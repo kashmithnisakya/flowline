@@ -73,18 +73,9 @@ def:pub FlowCanvas(
             tpos = stepXY(target, live);
             twoWay = s.id in target.next_ids;
             curve = wire(pos[0], pos[1], tpos[0], tpos[1], twoWay);
-            # next_labels comes from the same traversal as next_ids, so
-            # position i is the wording on this particular arrow.
             said = s.next_labels[i] if i < len(s.next_labels) else "";
-            # A→B and B→A share a midpoint, and wire() only parts the curves
-            # by 10px, which is thinner than a label chip. Push the two chips
-            # off the line in opposite directions, across whichever axis the
-            # pair does NOT travel along, so they can never collide.
-            # A send-back is an arrow to an EARLIER step, which is a question
-            # about the workflow's order, not about which way the curve
-            # happens to point on the canvas. curve["back"] only means "travels
-            # up or left", so a forward arrow drawn upwards would wrongly read
-            # as rework.
+            # A send-back is an arrow to an EARLIER step, not one that happens
+            # to point left: curve["back"] is geometry, this is the workflow.
             isReturn = target.sort_order < s.sort_order;
             lx = curve["mx"];
             ly = curve["my"];
@@ -93,17 +84,12 @@ def:pub FlowCanvas(
                 dy = tpos[1] - pos[1];
                 spanX = dx if dx >= 0.0 else 0.0 - dx;
                 spanY = dy if dy >= 0.0 else 0.0 - dy;
-                # Mirror the rule wire() uses to part the two curves, which
-                # keys on the DIRECTION OF TRAVEL, so a label always lands on
-                # the same side as its own arrow. Keying on "is this a
-                # send-back" instead only agrees by luck: for a horizontal
-                # pair the two rules coincide, for a vertical pair they invert
-                # and every label ends up on the wrong line.
+                # A→B and B→A share a midpoint, so part the chips the same way
+                # wire() parts the curves: by direction of travel, or each
+                # label lands on the other one's arrow.
                 if spanX >= spanY {
-                    # Parted vertically, and a chip is only ~18px tall.
                     ly = ly + (-18.0 if dx >= 0.0 else 18.0);
                 } else {
-                    # Parted horizontally, where a chip can run 60-90px wide.
                     lx = lx + (-48.0 if dy >= 0.0 else 48.0);
                 }
             }

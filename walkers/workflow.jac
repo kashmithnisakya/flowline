@@ -245,8 +245,7 @@ walker ApplyTemplate {
         stamp = now_iso();
         made: list[WorkflowStep] = [];
         order = 1024.0;
-        # Typed locals first: the template's nested values are `any`, which
-        # the checker will not subscript or test with `in`.
+        # Typed locals first: the checker will not subscript a nested `any`.
         raw_steps: list[dict[str, any]] = chosen["steps"];
         for s in raw_steps {
             kind = s["kind"] if s["kind"] in STEP_KINDS else "active";
@@ -265,8 +264,7 @@ walker ApplyTemplate {
             made.append(fresh);
             order = order + 1024.0;
         }
-        # Labels ride in a parallel list so the older templates, which carry
-        # no wording at all, keep working untouched.
+        # Parallel list, so templates without wording keep working.
         wording: list[str] = [];
         if "link_labels" in chosen {
             wording = chosen["link_labels"];
@@ -316,9 +314,7 @@ walker SaveStep {
         name: str = "",
         kind: str = "",
         color: str = "",
-        # Who holds work while it sits on this step. Empty means "keep",
-        # matching every other field here, so a single space is how the
-        # inspector says "clear it".
+        # Empty means "keep", like every field here; a space clears it.
         owner: str = "",
         x: float = 0.0,
         y: float = 0.0,
@@ -462,9 +458,7 @@ walker LinkTransition {
     writing a second edge."""
     has from_id: str = "",
         to_id: str = "",
-        # What has to be true to cross this arrow ("approved", "changes
-        # requested"). Optional: an unlabelled arrow still means "work may
-        # move this way", it just says less about why.
+        # What has to be true to cross. Optional.
         label: str = "",
         reports: list[dict[str, any]] = [];
 
@@ -487,8 +481,7 @@ walker LinkTransition {
             };
             disengage;
         }
-        # Re-drawing an existing arrow is how a label gets edited, so a
-        # duplicate updates the wording rather than refusing outright.
+        # Re-drawing an arrow is how its label gets edited.
         existing = [edge source->:FlowsTo:->target];
         if existing {
             if self.label.strip() {

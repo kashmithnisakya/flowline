@@ -194,8 +194,7 @@ impl WorkflowPage.commitName -> None {
     }
     saving = True;
     try {
-        # Name and owner share the blur/Enter trigger, and SaveStep reads
-        # empty as "keep", so a lone space is how "clear the owner" is said.
+        # SaveStep reads empty as "keep", so a lone space clears the owner.
         root spawn SaveStep(
             step_id=selectedId, name=name, owner=owner if owner else " "
         );
