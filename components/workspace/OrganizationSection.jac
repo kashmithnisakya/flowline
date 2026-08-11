@@ -37,7 +37,18 @@ def:pub OrganizationSection() -> JsxElement {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
             {if loading {
-                <Skeleton key="sk" className="h-24 w-full" />
+                <div key="sk" className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Skeleton className="h-4 w-36"/>
+                        <Skeleton className="h-9 w-full"/>
+                    </div>
+                    <div className="grid gap-2">
+                        <Skeleton className="h-4 w-24"/>
+                        <Skeleton className="h-9 w-full"/>
+                        <Skeleton className="h-3 w-56 max-w-full"/>
+                    </div>
+                    <Skeleton className="h-9 w-32"/>
+                </div>
             } else {
                 <div key="fields" className="grid gap-4">
                     <div className="grid gap-2">
@@ -64,7 +75,22 @@ def:pub OrganizationSection() -> JsxElement {
                             onClick={save}
                             disabled={saving or not orgName.strip() or not fullName.strip()}
                         >
-                            Save changes
+                            {if saving {
+                                <svg
+                                    key="sp"
+                                    className="animate-spin"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                >
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                </svg>
+                            }}
+                            {"Saving…" if saving else "Save changes"}
                         </Button>
                     </div>
                 </div>

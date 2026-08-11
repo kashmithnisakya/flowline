@@ -20,6 +20,84 @@ glob STATUSES: list[str] = [
      },
      WORKFLOW_TEMPLATES: list[dict[str, any]] = [
          {
+             "key": "jaseci",
+             "name": "Jaseci flow",
+             "description": "How we actually work: solve the issue with a model, get the plan approved if it is big, let the model build, the architect reviews and merges (Done 1), then a follow-up PR removes the redundancy (Done 2).",
+             "steps": [
+                 # No intake step: GitHub is the backlog, so work lands here
+                 # once someone is assigned to it.
+                 {
+                     "name": "Solving",
+                     "kind": "start",
+                     "color": "sky",
+                     "owner": "person + model",
+                     "x": 40.0,
+                     "y": 200.0
+                 },
+                 {
+                     "name": "Approve",
+                     "kind": "handoff",
+                     "color": "indigo",
+                     "owner": "domain expert",
+                     "x": 40.0,
+                     "y": 20.0
+                 },
+                 {
+                     "name": "Build",
+                     "kind": "active",
+                     "color": "amber",
+                     "owner": "model + PR owner",
+                     "x": 460.0,
+                     "y": 200.0
+                 },
+                 {
+                     "name": "Review",
+                     "kind": "handoff",
+                     "color": "rose",
+                     "owner": "original architect",
+                     "x": 820.0,
+                     "y": 200.0
+                 },
+                 # Merged is Done 1, Done is Done 2: a change is live before it
+                 # is clean, and separating them is what keeps the follow-up
+                 # visible.
+                 {
+                     "name": "Merged",
+                     "kind": "handoff",
+                     "color": "slate",
+                     "owner": "a dedicated engineer",
+                     "x": 1180.0,
+                     "y": 200.0
+                 },
+                 {
+                     "name": "Done",
+                     "kind": "done",
+                     "color": "emerald",
+                     "owner": "",
+                     "x": 1180.0,
+                     "y": 430.0
+                 }
+             ],
+             # Forward first, then the two send-backs: a review that can only
+             # approve is a review nobody needs.
+             "links": [
+                 [0, 1], [0, 2], [1, 2], [2, 3], [3, 4], [4, 5],
+                 [1, 0], [3, 2]
+             ],
+             # Kept short: two of these share a pair of steps, and long chips
+             # collide.
+             "link_labels": [
+                 "needs design",
+                 "small enough to just build",
+                 "plan approved",
+                 "PR ready and tested",
+                 "approved, merged",
+                 "cleaned up",
+                 "rethink",
+                 "changes requested"
+             ]
+         },
+         {
              "key": "kanban",
              "name": "Classic Kanban",
              "description": "The straight line you know: To do, In progress, Done.",
@@ -97,56 +175,6 @@ glob STATUSES: list[str] = [
                  }
              ],
              "links": [[0, 1], [1, 2], [2, 5], [2, 3], [3, 1], [1, 4], [4, 1]]
-         },
-         {
-             "key": "jaseci",
-             "name": "Jaseci flow",
-             "description": "Architect, build with a design review running alongside, then arch review, merge and deslop.",
-             "steps": [
-                 {
-                     "name": "Architecting",
-                     "kind": "start",
-                     "color": "sky",
-                     "x": 40.0,
-                     "y": 180.0
-                 },
-                 {
-                     "name": "DOMX review",
-                     "kind": "handoff",
-                     "color": "indigo",
-                     "x": 300.0,
-                     "y": 320.0
-                 },
-                 {
-                     "name": "Driving",
-                     "kind": "active",
-                     "color": "amber",
-                     "x": 300.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Arch review",
-                     "kind": "handoff",
-                     "color": "rose",
-                     "x": 560.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Merged, needs deslop",
-                     "kind": "active",
-                     "color": "slate",
-                     "x": 820.0,
-                     "y": 140.0
-                 },
-                 {
-                     "name": "Done",
-                     "kind": "done",
-                     "color": "emerald",
-                     "x": 1080.0,
-                     "y": 260.0
-                 }
-             ],
-             "links": [[0, 2], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]
          },
          {
              "key": "support",

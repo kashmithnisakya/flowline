@@ -33,7 +33,9 @@ import from ...walkers.workflow {
 import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
-import from ...components.workflow.geometry { hitStep, stepXY, canvasSize }
+import from ...components.workflow.geometry {
+    hitStep, stepXY, canvasSize, NODE_W, NODE_H
+}
 import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -54,7 +56,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from "sonner" { toast }
-import from "react" { useEffect }
+import from "react" { useEffect, useLayoutEffect }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -95,6 +97,16 @@ def:pub WorkflowPage -> JsxPage {
         peekLoading: bool = False,
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
+        # Screen-px offset that centers the diagram in the viewport. Applied
+        # before the scale on the canvas surface, so pointerXY's rect math
+        # keeps working untouched.
+        panX: float = 0.0,
+        panY: float = 0.0,
+        # Transitions stay off until one frame AFTER the first fit. fitZoom's
+        # clientWidth read forces a style recalc at the unfitted transform, so
+        # with transitions live the browser animates the correction even when
+        # both commits land before first paint - the corner-to-center flight.
+        placed: bool = False,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -115,7 +127,25 @@ def:pub WorkflowPage -> JsxPage {
     # measured size until then), a template or a new step widening the graph,
     # and entering edit mode, where the floating editor covers the right
     # third of the canvas.
-    useEffect(lambda { fitZoom(); }, [len(steps), editing]);
+    # Layout effect, not a plain effect: it runs after layout but BEFORE the
+    # browser paints, so the first visible frame is already fitted and
+    # centered. A plain effect fires post-paint and the canvas's transform
+    # transition animates the correction - the diagram visibly "flies" from
+    # the top-left corner on every visit to this tab.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing]);
+
+    # Refit when the window itself changes size: the canvas tracks the
+    # viewport height, so a resize moves the centering target.
+    useEffect(
+        lambda {
+            onResize = lambda { fitZoom(); };
+            window.addEventListener("resize", onResize);
+            return lambda {
+                window.removeEventListener("resize", onResize);
+            };
+        },
+        []
+    );
 
     async def boot -> None;
     async def reload(pid: str) -> None;
@@ -138,6 +168,7 @@ def:pub WorkflowPage -> JsxPage {
     def setField(key: str, value: str) -> None;
     def zoomBy(delta: float) -> None;
     def fitZoom -> None;
+    def recenterPan -> None;
     def pointerXY(e: MouseEvent) -> list[float];
     def beginDrag(e: MouseEvent) -> None;
     def moveDrag(e: MouseEvent) -> None;
@@ -302,18 +333,32 @@ def:pub WorkflowPage -> JsxPage {
         <div className="flex w-full flex-col gap-6">
             {if loading or showPicker {
                 <div key="head" className="flex flex-col gap-2">
-                    <h1 className="font-display text-3xl font-semibold tracking-tight">
+                    <h1 className="page-title">
                         Workflow
                     </h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="page-subtitle">
                         The steps work moves through in your organization, drawn your way, branches and loops included.
                     </p>
                 </div>
             }}
             {if loading {
-                <div key="sk" className="space-y-4">
-                    <Skeleton key="s1" className="h-44 w-full"/>
-                    <Skeleton key="s2" className="h-52 w-full"/>
+                <div key="sk" className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Skeleton className="h-8 w-40"/>
+                        <div className="flex-1"/>
+                        <Skeleton className="h-8 w-44 rounded-lg"/>
+                        <Skeleton className="h-8 w-32 rounded-lg"/>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <Skeleton className="h-4 w-16 rounded-full"/>
+                        <Skeleton className="h-4 w-16 rounded-full"/>
+                        <Skeleton className="h-4 w-16 rounded-full"/>
+                        <Skeleton className="h-4 w-16 rounded-full"/>
+                        <Skeleton className="h-4 w-16 rounded-full"/>
+                    </div>
+                    <div style={{"height": "min(74vh, 44rem)"}}>
+                        <Skeleton className="h-full w-full rounded-lg"/>
+                    </div>
                 </div>
             } elif showPicker {
                 <TemplatePicker
@@ -328,7 +373,7 @@ def:pub WorkflowPage -> JsxPage {
                         {if renaming {
                             <Input
                                 key="rename"
-                                className="w-64"
+                                className="h-auto w-80 max-w-full px-2 py-0 font-display text-2xl font-bold tracking-tight sm:text-3xl md:text-3xl"
                                 value={nameDraft}
                                 autoFocus={True}
                                 onChange={lambda (e: any) { nameDraft = e.target.value; }}
@@ -340,7 +385,7 @@ def:pub WorkflowPage -> JsxPage {
                         } else {
                             <h1
                                 key="name"
-                                className="font-display text-2xl font-semibold tracking-tight"
+                                className="page-title"
                             >
                                 {wfName}
                             </h1>
@@ -359,15 +404,31 @@ def:pub WorkflowPage -> JsxPage {
                         {if len(issues) > 0 {
                             <span
                                 key="issues"
-                                className="rounded-full border border-warning/50 bg-warning/15 px-3 py-1 text-xs font-medium"
+                                className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                {"⚠ "
-                                    + issues[0]
-                                    + (
-                                        " (+" + str(len(issues) - 1) + ")"
-                                            if len(issues) > 1
-                                            else ""
-                                    )}
+                                <svg
+                                    className="mt-0.5 shrink-0"
+                                    width={13}
+                                    height={13}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
+                                    <path d="M12 9v4"/>
+                                    <path d="M12 17h.01"/>
+                                </svg>
+                                <span className="tabular-nums">
+                                    {issues[0]
+                                        + (
+                                            " (+" + str(len(issues) - 1) + ")"
+                                                if len(issues) > 1
+                                                else ""
+                                        )}
+                                </span>
                             </span>
                         }}
                         <Button
@@ -376,7 +437,20 @@ def:pub WorkflowPage -> JsxPage {
                             onClick={addStep}
                             disabled={saving or creatingStep}
                         >
-                            + Add step
+                            <svg
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M5 12h14"/>
+                                <path d="M12 5v14"/>
+                            </svg>
+                            Add step
                         </Button>
                         <Button
                             key="doneediting"
@@ -393,31 +467,6 @@ def:pub WorkflowPage -> JsxPage {
                             Done editing
                         </Button>
                     </div>
-                    {if connectFrom {
-                        <div
-                            key="connecting"
-                            className="flex items-center justify-between gap-4 rounded-lg border border-dashed bg-muted p-3"
-                        >
-                            <p className="text-sm text-pretty">
-                                <span className="font-medium">
-                                    {"Drawing a transition out of "
-                                        + connectTitle
-                                        + "."}
-                                </span>
-                                <span className="text-muted-foreground">
-                                    {" Click the step it flows into, backwards is fine,"
-                                        + " loops are the point."}
-                                </span>
-                            </p>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={lambda { connectFrom = ""; }}
-                            >
-                                Cancel
-                            </Button>
-                        </div>
-                    }}
                     <div className="relative">
                         <div
                             onMouseDown={beginDrag}
@@ -432,6 +481,9 @@ def:pub WorkflowPage -> JsxPage {
                                 connectFrom={connectFrom}
                                 selectedEdge={selectedEdge}
                                 zoom={zoom}
+                                panX={panX}
+                                panY={panY}
+                                animate={placed}
                                 canvasRef={canvasRef}
                                 viewportRef={viewportRef}
                                 onZoomBy={zoomBy}
@@ -440,18 +492,48 @@ def:pub WorkflowPage -> JsxPage {
                                 onSelectEdge={lambda (k: str) { selectedEdge = k; }}
                                 onDeleteEdge={deleteEdge}
                                 onCanvasClick={clearCanvas}
+                                onAddStep={addStep}
                             />
                         </div>
+                        {if connectFrom {
+                            <div
+                                key="connecting"
+                                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3"
+                            >
+                                <div
+                                    className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-dashed bg-background/95 px-4 py-2 shadow-md backdrop-blur animate-in fade-in slide-in-from-top-2 duration-200"
+                                >
+                                    <p className="text-sm text-pretty">
+                                        <span className="font-medium">
+                                            {"Drawing a transition out of "
+                                                + connectTitle
+                                                + "."}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            {" Click the step it flows into, backwards is fine,"
+                                                + " loops are the point."}
+                                        </span>
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={lambda { connectFrom = ""; }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        }}
                         <div
                             className="pointer-events-none absolute inset-y-0 right-0 flex w-[21rem] max-w-[calc(100%-1rem)] flex-col gap-4 overflow-y-auto p-4"
                         >
                             {if creatingStep {
                                 <div
                                     key="create"
-                                    className="pointer-events-auto flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg"
+                                    className="pointer-events-auto flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
                                 >
                                     <div
-                                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
                                     >
                                         New step
                                     </div>
@@ -490,7 +572,7 @@ def:pub WorkflowPage -> JsxPage {
                                 </div>
                             } elif len(picked) > 0 {
                                 <StepInspector
-                                    className="pointer-events-auto shadow-lg"
+                                    className="pointer-events-auto shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
                                     key={picked[0].id}
                                     step={picked[0]}
                                     steps={steps}
@@ -513,12 +595,12 @@ def:pub WorkflowPage -> JsxPage {
                 <div key="viewer" className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-center gap-3">
                         <h1
-                            className="font-display text-2xl font-semibold tracking-tight"
+                            className="page-title"
                         >
                             {wfName}
                         </h1>
                         <span
-                            className="rounded-full border px-3 py-1 text-xs text-muted-foreground"
+                            className="rounded-full border px-3 py-1 text-xs tabular-nums text-muted-foreground"
                         >
                             {str(len(steps))
                                 + " steps · "
@@ -531,9 +613,24 @@ def:pub WorkflowPage -> JsxPage {
                         {if len(issues) > 0 {
                             <span
                                 key="issues"
-                                className="rounded-full border border-warning/50 bg-warning/15 px-3 py-1 text-xs font-medium"
+                                className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                {"⚠ " + issues[0]}
+                                <svg
+                                    className="mt-0.5 shrink-0"
+                                    width={13}
+                                    height={13}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
+                                    <path d="M12 9v4"/>
+                                    <path d="M12 17h.01"/>
+                                </svg>
+                                <span>{issues[0]}</span>
                             </span>
                         }}
                         <Select value={projectId} onValueChange={selectProject}>
@@ -570,6 +667,9 @@ def:pub WorkflowPage -> JsxPage {
                     <FlowCanvas
                         steps={steps}
                         zoom={zoom}
+                        panX={panX}
+                        panY={panY}
+                        animate={placed}
                         showGrid={False}
                         viewportRef={viewportRef}
                         onZoomBy={zoomBy}
@@ -597,12 +697,38 @@ def:pub WorkflowPage -> JsxPage {
                     </DialogHeader>
                     <div className="max-h-[60vh] overflow-y-auto">
                         {if peekLoading {
-                            <p
-                                key="loading"
-                                className="py-6 text-center text-sm text-muted-foreground"
-                            >
-                                Loading…
-                            </p>
+                            <div key="loading" className="flex flex-col gap-2">
+                                <div
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                        + CARD_BAR[peekColor]}
+                                >
+                                    <Skeleton className="h-4 w-3/5"/>
+                                    <div className="flex items-center gap-1.5">
+                                        <Skeleton className="h-5 w-20 rounded-full"/>
+                                        <Skeleton className="h-5 w-14 rounded-full"/>
+                                    </div>
+                                </div>
+                                <div
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                        + CARD_BAR[peekColor]}
+                                >
+                                    <Skeleton className="h-4 w-2/5"/>
+                                    <div className="flex items-center gap-1.5">
+                                        <Skeleton className="h-5 w-16 rounded-full"/>
+                                        <Skeleton className="h-5 w-12 rounded-full"/>
+                                    </div>
+                                </div>
+                                <div
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                        + CARD_BAR[peekColor]}
+                                >
+                                    <Skeleton className="h-4 w-1/2"/>
+                                    <div className="flex items-center gap-1.5">
+                                        <Skeleton className="h-5 w-24 rounded-full"/>
+                                        <Skeleton className="h-5 w-14 rounded-full"/>
+                                    </div>
+                                </div>
+                            </div>
                         } elif len(peekTasks) == 0 {
                             <p
                                 key="empty"

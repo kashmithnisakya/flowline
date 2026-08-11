@@ -2,6 +2,11 @@
 
 Draggable via native HTML5 DnD (custom MIME type so foreign drags are
 ignored), with arrow-button click-to-move as the no-drag/touch fallback.
+
+The chevron move row: on fine pointers it floats over the card's bottom
+corner and only appears on hover/focus (pointer-events off while hidden so
+clicks fall through to the card), keeping idle cards short; on touch, where
+hover does not exist, it keeps its in-flow spot at reduced opacity.
 """
 
 import from ...models { TaskView }
@@ -54,6 +59,10 @@ def:pub TaskCard(
     doneKey: str = "",
     onMarkDone: Callable[[str], None] = None
 ) -> JsxElement {
+    # While the native drag ghost travels, the source card dims so the board
+    # shows where the card came from.
+    has isDragging: bool = False;
+
     # The column does not forward a mark-done callback yet, so fall back to
     # the arrow path. Both land in the page's moveTo, undo toast included.
     def markDone(taskId: str) {
@@ -66,6 +75,14 @@ def:pub TaskCard(
     priorityVariant = "destructive"
         if task.priority == "High"
         else ("secondary" if task.priority == "Medium" else "outline");
+    # Overdue = due before today and not already done. `status` is the mapped
+    # legacy status, so "Done" covers the done column in both board modes.
+    d = new(Date);
+    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    todayIso = shifted.toISOString()[:10];
+    overdue = len(task.due_date) >= 10
+        and task.due_date < todayIso
+        and task.status != "Done";
 
     return
         <Card
@@ -76,7 +93,9 @@ def:pub TaskCard(
                     dt.setData("text/x-standup-task", task.id);
                     dt.effectAllowed = "move";
                 }
+                isDragging = True;
             }}
+            onDragEnd={lambda { isDragging = False; }}
             onClick={lambda { onOpen(task); }}
             role="button"
             tabIndex={0}
@@ -85,7 +104,8 @@ def:pub TaskCard(
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group cursor-grab gap-0 py-0 transition-shadow hover:shadow-md active:cursor-grabbing "
+            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing "
+                + ("opacity-50 " if isDragging else "")
                 + (
                     # The COLUMN carries the step's colour; a card only
                     # wears a bar of it. Tinting both made the board shout,
@@ -96,7 +116,12 @@ def:pub TaskCard(
                 )}
         >
             <CardContent className="space-y-2 p-3">
-                <div className="text-sm font-medium leading-snug">{task.title}</div>
+                <div
+                    className="line-clamp-2 text-sm font-medium leading-snug"
+                    title={task.title}
+                >
+                    {task.title}
+                </div>
                 <div className="flex flex-wrap items-center gap-1">
                     {if task.project_name {
                         <Badge key="project" variant="secondary">
@@ -120,13 +145,38 @@ def:pub TaskCard(
                         <span className="truncate">
                             {", ".join(task.assignee_names)}
                         </span>
-                        <span className="shrink-0">{prettyDay(task.due_date)}</span>
+                        <span
+                            className={"flex shrink-0 items-center gap-1"
+                                + (
+                                    " font-medium text-destructive"
+                                        if overdue
+                                        else ""
+                                )}
+                        >
+                            {if overdue {
+                                <svg
+                                    key="clock"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <circle cx={12} cy={12} r={10}/>
+                                    <path d="M12 6v6l4 2"/>
+                                </svg>
+                            }}
+                            {prettyDay(task.due_date)}
+                        </span>
                     </div>
                 }}
                 {if task.status == "Blocked" and task.notes {
                     <div
                         key="blocked"
-                        className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+                        className="line-clamp-3 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
                     >
                         <Markdown text={task.notes}/>
                     </div>
@@ -135,7 +185,7 @@ def:pub TaskCard(
                     <GitHubChip key="github" task={task} onMarkDone={markDone}/>
                 }}
                 <div
-                    className="flex items-center justify-end gap-1 opacity-50 transition-opacity group-hover:opacity-100"
+                    className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card/95 pointer-fine:p-0.5 pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:backdrop-blur-sm"
                 >
                     <Button
                         variant="ghost"
@@ -148,7 +198,18 @@ def:pub TaskCard(
                             onArrowMove(task, prevKey);
                         }}
                     >
-                        ←
+                        <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m15 18-6-6 6-6"/>
+                        </svg>
                     </Button>
                     <Button
                         variant="ghost"
@@ -161,7 +222,18 @@ def:pub TaskCard(
                             onArrowMove(task, nextKey);
                         }}
                     >
-                        →
+                        <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m9 18 6-6-6-6"/>
+                        </svg>
                     </Button>
                 </div>
             </CardContent>

@@ -59,6 +59,8 @@ def:pub DatePicker(
     month = viewMonth if viewMonth >= 0 else int(anchor[5:7]) - 1;
     total = daysIn(year, month);
     offset = firstOffset(year, month);
+    prevTotal = daysIn(year - 1, 11) if month == 0 else daysIn(year, month - 1);
+    todayStr = todayIso();
 
     return <DropdownMenu
         open={pickerOpen}
@@ -71,21 +73,27 @@ def:pub DatePicker(
             }
         }}
     >
-        <DropdownMenuTrigger asChild={False}>
-            <span
-                className={
-                    "inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-accent"
-                    + (" " + className if className else "")
-                }
-            >
-                {prettyLabel(value) if value else "Pick a date"}
-            </span>
+        <DropdownMenuTrigger
+            asChild={False}
+            className={
+                "inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                + (" " + className if className else "")
+            }
+        >
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                <path d="M8 2v4"/>
+                <path d="M16 2v4"/>
+                <rect width={18} height={18} x={3} y={4} rx={2}/>
+                <path d="M3 10h18"/>
+            </svg>
+            {prettyLabel(value) if value else "Pick a date"}
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-64 p-3">
             <div className="mb-2 flex items-center justify-between">
                 <Button
                     variant="ghost"
                     size="icon-xs"
+                    aria-label="Previous month"
                     onClick={lambda (e: MouseEvent) {
                         e.preventDefault();
                         if month == 0 {
@@ -97,12 +105,15 @@ def:pub DatePicker(
                         }
                     }}
                 >
-                    ←
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m15 18-6-6 6-6"/>
+                    </svg>
                 </Button>
-                <span className="text-sm font-semibold">{MONTHS[month]} {year}</span>
+                <span className="text-sm font-semibold tabular-nums">{MONTHS[month]} {year}</span>
                 <Button
                     variant="ghost"
                     size="icon-xs"
+                    aria-label="Next month"
                     onClick={lambda (e: MouseEvent) {
                         e.preventDefault();
                         if month == 11 {
@@ -114,26 +125,34 @@ def:pub DatePicker(
                         }
                     }}
                 >
-                    →
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m9 18 6-6-6-6"/>
+                    </svg>
                 </Button>
             </div>
             <div className="grid grid-cols-7 gap-0.5 text-center">
                 {for w in WEEKDAYS {
-                    <span key={w} className="py-1 text-[11px] font-medium text-muted-foreground">{w}</span>
+                    <span key={w} className="py-1 text-xs font-medium text-muted-foreground">{w}</span>
                 }}
                 {for i in range(offset) {
-                    <span key={"pad" + str(i)} />
+                    <span key={"pad" + str(i)} className="py-1 text-sm tabular-nums text-muted-foreground/40">
+                        {prevTotal - offset + 1 + i}
+                    </span>
                 }}
                 {for d in range(1, total + 1) {
                     <button
                         key={"d" + str(d)}
                         type="button"
                         className={
-                            "rounded-md py-1 text-sm transition-colors "
+                            "rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] "
                             + (
                                 "bg-primary font-semibold text-primary-foreground"
                                 if isoOf(year, month, d) == value
-                                else "hover:bg-accent"
+                                else (
+                                    "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
+                                    if isoOf(year, month, d) == todayStr
+                                    else "hover:bg-accent"
+                                )
                             )
                         }
                         onClick={lambda {

@@ -8,10 +8,16 @@ impl DailyLogPage.loadWeek -> None {
     weekReqRef.current = seq;
     monday = mondayOf(selectedDate);
     sunday = shiftDay(monday, 6);
+    # A cold week (a Monday other than the one on screen) re-enters the
+    # skeleton; day hops inside the loaded week stay an instant local filter.
+    if monday != loadedMonday {
+        loading = True;
+    }
     try {
         result = root spawn ListLogEntries(from_date=monday, to_date=sunday);
         if weekReqRef.current == seq {
             entries = result.reports[0] if result.reports else [];
+            loadedMonday = monday;
         }
     } except Exception as e {
         toast("Failed to load log entries");

@@ -52,11 +52,13 @@ impl SetupPage.createProject -> None {
     if not captured {
         return;
     }
+    saveError = "";
     busy = True;
     try {
         root spawn SaveProject(name=captured);
         step = 3;
     } except Exception as e {
+        saveError = "Could not create the project. Try again.";
         step = 2;
     }
     busy = False;
@@ -69,6 +71,7 @@ impl SetupPage.addPerson -> None {
     if not captured {
         return;
     }
+    saveError = "";
     busy = True;
     try {
         result = root spawn SaveMember(
@@ -81,14 +84,16 @@ impl SetupPage.addPerson -> None {
         mName = "";
         mRole = "";
     } except Exception as e {
-        mName = mName;
+        saveError = "Could not add that person. Try again.";
     }
     busy = False;
 }
 
 impl SetupPage.finish -> None {
     # A name still sitting in the inputs counts; navigating away must not
-    # silently discard a typed member.
+    # silently discard a typed member. `finishing` stays True through the
+    # hard navigation so the button keeps its spinner until the page swaps.
+    finishing = True;
     if mName.strip() {
         await addPerson();
     }

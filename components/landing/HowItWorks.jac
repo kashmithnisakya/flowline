@@ -29,7 +29,7 @@ glob STEPS: list[Step] = [
 
 def:pub HowItWorks -> JsxElement {
     return
-        <section id="how" className="mx-auto max-w-[1180px] px-7 pt-24">
+        <section id="how" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
             <span
                 className="text-xs font-semibold uppercase tracking-widest text-primary"
             >
@@ -40,13 +40,20 @@ def:pub HowItWorks -> JsxElement {
             >
                 Three steps, then it is just how the team works.
             </h2>
-            <div className="mt-10 grid gap-8 sm:grid-cols-3">
+            <div className="mt-10 grid gap-8 md:grid-cols-3">
                 {for s in STEPS {
-                    <div key={s.n} className="space-y-3">
+                    <div key={s.n} className="relative space-y-3">
+                        {if s.n != "3" {
+                            <div
+                                key="line"
+                                aria-hidden="true"
+                                className="absolute -right-8 left-12 top-5 hidden h-px bg-border md:block"
+                            ></div>
+                        }}
                         <div
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-xs ring-1 ring-foreground/15"
                         >
-                            <span className="font-display text-base font-bold">
+                            <span className="font-display text-base font-bold text-primary">
                                 {s.n}
                             </span>
                         </div>

@@ -3,6 +3,8 @@
 impl OverviewPage.loadAll -> None {
     monday = mondayOf(localIso(new(Date)));
     sunday = shiftDay(monday, 6);
+    loading = True;
+    failed = False;
     try {
         tResult = root spawn ListTasks();
         mResult = root spawn ListMembers();
@@ -14,6 +16,7 @@ impl OverviewPage.loadAll -> None {
         entries = lResult.reports[0] if lResult.reports else [];
     } except Exception as e {
         toast("Failed to load the overview");
+        failed = True;
     }
     loading = False;
 }

@@ -66,17 +66,25 @@ glob FAQS: list[QA] = [
 
 def:pub Faq -> JsxElement {
     return
-        <section id="faq" className="mx-auto max-w-[840px] px-7 pt-24">
+        <section id="faq" className="mx-auto max-w-[840px] scroll-mt-24 px-7 pt-24">
+            <span
+                className="text-xs font-semibold uppercase tracking-widest text-primary"
+            >
+                FAQ
+            </span>
             <h2
-                className="font-display text-[clamp(1.8rem,4vw,2.4rem)] font-bold leading-tight tracking-[-0.035em]"
+                className="font-display mt-3 text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >
                 Questions worth asking first
             </h2>
-            <div className="mt-8 divide-y divide-border border-y border-border">
+            <div className="mt-8 divide-y divide-foreground/10 border-y border-foreground/10">
                 {for f in FAQS {
-                    <details key={f.q} className="group py-5">
+                    <details
+                        key={f.q}
+                        className="group py-5 [interpolate-size:allow-keywords] [&::details-content]:h-0 [&::details-content]:overflow-clip [&::details-content]:opacity-0 [&::details-content]:transition-[height,opacity,content-visibility] [&::details-content]:duration-300 [&::details-content]:ease-out [&::details-content]:[transition-behavior:allow-discrete] [&[open]::details-content]:h-auto [&[open]::details-content]:opacity-100"
+                    >
                         <summary
-                            className="flex cursor-pointer list-none items-center justify-between gap-6 text-left"
+                            className="flex cursor-pointer list-none items-center justify-between gap-6 text-left transition-colors hover:text-primary"
                         >
                             <span
                                 className="font-display text-base font-bold tracking-tight"
@@ -85,7 +93,7 @@ def:pub Faq -> JsxElement {
                             </span>
                             <span
                                 aria-hidden="true"
-                                className="shrink-0 text-lg text-primary transition-transform group-open:rotate-45"
+                                className="shrink-0 text-lg text-primary transition-transform duration-200 group-open:rotate-45"
                             >
                                 +
                             </span>

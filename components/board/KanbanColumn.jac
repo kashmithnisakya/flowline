@@ -8,7 +8,7 @@ exists yet) and carries its own label and accent colour.
 import from ...models { TaskView }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
-import from ..workflow.kinds { DOT_VAR, COLUMN_TINT, colorKey }
+import from ..workflow.kinds { DOT_VAR, COLUMN_TINT, RING_TINT, COUNT_TINT, colorKey }
 
 # Accent per step kind, so a column reads the same on the board as its step
 # does on the workflow canvas.
@@ -43,9 +43,9 @@ def:pub KanbanColumn(
 
     return
         <div
-            className={"flex w-full min-w-0 flex-col gap-2 rounded-xl border p-2 "
+            className={"flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border p-2 transition-shadow duration-150 "
                 + (COLUMN_TINT[colorKey(color)] if color else "bg-muted/30")
-                + (" ring-2 ring-ring" if dragOver else "")}
+                + ((" " + RING_TINT[colorKey(color)]) if dragOver else "")}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();
                 dt = e.dataTransfer;
@@ -90,7 +90,12 @@ def:pub KanbanColumn(
                     />
                     <span className="truncate" title={label}>{label}</span>
                 </span>
-                <Badge variant="secondary">{len(tasks)}</Badge>
+                <Badge
+                    variant="secondary"
+                    className={"tabular-nums " + COUNT_TINT[colorKey(color)]}
+                >
+                    {len(tasks)}
+                </Badge>
             </div>
             {for t in tasks {
                 <TaskCard
@@ -109,7 +114,7 @@ def:pub KanbanColumn(
             {if len(tasks) == 0 {
                 <div
                     key="empty"
-                    className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground"
+                    className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground"
                 >
                     Drop a task here
                 </div>
@@ -118,7 +123,7 @@ def:pub KanbanColumn(
                 <button
                     key="older"
                     type="button"
-                    className="rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={lambda { if onToggleOlder { onToggleOlder(); }}}
                 >
                     {("Show " + str(extraCount) + " completed earlier")

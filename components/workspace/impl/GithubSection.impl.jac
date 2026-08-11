@@ -17,6 +17,21 @@ impl GithubSection.boot -> None {
     installation = params.get("installation_id") or "";
     state = params.get("state") or "";
     code = params.get("code") or "";
+    # Deep links restore the triage view before any data loads: the repo,
+    # the tab, and a committed search all round-trip through the URL.
+    wantRepo = params.get("repo") or "";
+    wantTab = params.get("tab") or "";
+    wantQuery = params.get("q") or "";
+    if wantRepo {
+        repoId = wantRepo;
+    }
+    if wantTab in ["issues", "pulls"] {
+        tab = wantTab;
+    }
+    if wantQuery {
+        searchQuery = wantQuery;
+        searchDraft = wantQuery;
+    }
     if installation and state {
         installId = 0;
         try {
@@ -63,9 +78,25 @@ impl GithubSection.loadWorkspace -> None {
     try {
         rResult = root spawn ListRepos();
         pResult = root spawn ListProjects();
+        sResult = root spawn GetWorkflow();
         fetched = rResult.reports[0] if rResult.reports else [];
         repos = fetched;
         projects = pResult.reports[0] if pResult.reports else [];
+        # The "as" picker offers the org's own workflow steps; imports land on
+        # the start step by default (where new work lands). An org with no
+        # workflow keeps the legacy status list instead.
+        stepRows: list[StepView] = sResult.reports[0] if sResult.reports else [];
+        steps = stepRows;
+        if not importStep and len(stepRows) > 0 {
+            landing = stepRows[0].id;
+            for s in stepRows {
+                if s.kind == "start" {
+                    landing = s.id;
+                    break;
+                }
+            }
+            importStep = landing;
+        }
         # Land on something readable rather than an empty picker. An explicit
         # choice already made is left alone.
         if not repoId and fetched {
@@ -181,10 +212,18 @@ impl GithubSection.loadIssues(reset: bool) -> None {
     if reset {
         base = [];
     }
+    q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListRepoIssues(
-            repo_id=repoId, state=issueState, page=wanted
+        result = (
+            root spawn SearchRepoItems(
+                repo_id=repoId, kind="issues", query=q,
+                state=issueState, page=wanted
+            )
+        ) if q else (
+            root spawn ListRepoIssues(
+                repo_id=repoId, state=issueState, page=wanted
+            )
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
@@ -219,10 +258,18 @@ impl GithubSection.loadPulls(reset: bool) -> None {
     if reset {
         base = [];
     }
+    q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListRepoPulls(
-            repo_id=repoId, state=prState, page=wanted
+        result = (
+            root spawn SearchRepoItems(
+                repo_id=repoId, kind="pulls", query=q,
+                state=prState, page=wanted
+            )
+        ) if q else (
+            root spawn ListRepoPulls(
+                repo_id=repoId, state=prState, page=wanted
+            )
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
@@ -256,6 +303,18 @@ impl GithubSection.selectRepo(value: str) -> None {
     prPage = 1;
 }
 
+impl GithubSection.runSearch -> None {
+    # Only commit the query; the dependent effect owns the fetch. Calling a
+    # loader here would read the pre-commit searchQuery snapshot and search
+    # for the previous term.
+    searchQuery = searchDraft.strip();
+}
+
+impl GithubSection.clearSearch -> None {
+    searchDraft = "";
+    searchQuery = "";
+}
+
 impl GithubSection.importSelected -> None {
     if importing or not selected {
         return;
@@ -266,7 +325,7 @@ impl GithubSection.importSelected -> None {
     try {
         result = root spawn ImportIssues(
             repo_id=repoId, numbers=selected, project_id=project,
-            status=importStatus
+            status=importStatus, step_id=importStep
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {

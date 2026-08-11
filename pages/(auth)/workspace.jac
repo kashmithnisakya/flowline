@@ -1,10 +1,10 @@
 """standup - Workspace (/workspace): everything you configure, in one place.
 
-Five tabs, all of them CRUD over settings rather than daily work: the
-organization's own name, the projects work is scoped to, the people on the
-roster, and the GitHub connection.
-Projects and GitHub used to be their own routes; they are sections here now,
-which is what keeps the nav to the five things you actually do each day.
+Three tabs, all of them CRUD over settings rather than daily work: the
+organization's own name, the projects work is scoped to, and the people on
+the roster. GitHub graduated back to its own /github route (browsing and
+importing issues is daily work); old ?tab=github links and in-flight App
+install round trips redirect there with their query string intact.
 
 The page is a thin shell: each tab is a self-contained section component
 that loads and saves its own data, so switching tabs costs nothing and no
@@ -18,7 +18,6 @@ import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
-import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
@@ -34,8 +33,7 @@ glob BLANK_MEMBER: dict[str, str] = {
      TABS: list[list[str]] = [
          ["organization", "Organization"],
          ["projects", "Projects"],
-         ["people", "People"],
-         ["github", "GitHub"]
+         ["people", "People"]
      ];
 
 def:pub WorkspacePage -> JsxPage {
@@ -51,28 +49,29 @@ def:pub WorkspacePage -> JsxPage {
         mProjects: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
-        # The header owns each tab's primary action, but Projects and GitHub
-        # keep their own state. Bumping a counter is how the header reaches
-        # in without the page having to own their dialogs too.
+        # The header owns each tab's primary action, but Projects keeps its
+        # own state. Bumping a counter is how the header reaches in without
+        # the page having to own its dialogs too.
         projectsNonce: int = 0,
-        githubNonce: int = 0,
         saving: bool = False;
 
     async can with entry {
-        # Deep links land on the right tab: /workspace?tab=github is where the
-        # GitHub App's install round trip comes back to, and the old
-        # /projects route redirects here with ?tab=projects.
+        # Deep links land on the right tab; the old /projects route redirects
+        # here with ?tab=projects. GitHub lives at /github now, so github tab
+        # links and App-install round trips forward there, query intact.
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
         wanted = params.get("tab") or "";
+        if wanted == "github" or params.get("installation_id") {
+            w.location.replace("/github" + str(w.location.search));
+            return;
+        }
         known: list[str] = [];
         for entry in TABS {
             known.append(entry[0]);
         }
         if wanted in known {
             tab = wanted;
-        } elif params.get("installation_id") {
-            tab = "github";
         }
         loadAll();
     }
@@ -112,37 +111,60 @@ def:pub WorkspacePage -> JsxPage {
     }
 
     # The header carries one primary action at a time, swapping with the tab.
-    # The nav is a vertical rail: Tabs lays out as a row when orientation is
-    # vertical, and the line variant moves the active indicator to the rail
-    # edge rather than underlining a horizontal strip.
+    # The action slot keeps a fixed height so the h1 row never shifts when a
+    # tab without an action (Organization) is selected. The nav is a vertical
+    # rail at sm+ (line variant puts the indicator on the rail edge); below sm
+    # it collapses to a horizontal segmented strip driven by the same state.
     return
         <div className="flex w-full flex-col gap-8">
-            <div className="flex items-start justify-between gap-6">
-                <h1 className="font-display text-3xl font-semibold tracking-tight">
+            <div className="flex items-center justify-between gap-6">
+                <h1 className="page-title">
                     Workspace
                 </h1>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex h-9 shrink-0 items-center justify-end gap-2">
                     {if tab == "projects" {
                         <Button
                             key="np"
+                            className="animate-in fade-in zoom-in-95 duration-200"
                             onClick={lambda { projectsNonce = projectsNonce + 1; }}
                         >
                             New project
                         </Button>
                     } elif tab == "people" {
-                        <Button key="am" onClick={openCreate}>Add member</Button>
-                    } elif tab == "github" {
                         <Button
-                            key="br"
-                            onClick={lambda { githubNonce = githubNonce + 1; }}
+                            key="am"
+                            className="animate-in fade-in zoom-in-95 duration-200"
+                            onClick={openCreate}
                         >
-                            Browse GitHub repos
+                            Add member
                         </Button>
                     }  }
                 </div>
             </div>
-            <Tabs value={tab} onValueChange={selectTab} orientation="vertical">
-                <div className="w-44 shrink-0">
+            <Tabs
+                value={tab}
+                onValueChange={selectTab}
+                orientation="vertical"
+                className="flex-col gap-6 sm:flex-row sm:gap-8"
+            >
+                <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border/70 bg-muted p-0.5 sm:hidden">
+                    {for entry in TABS {
+                        <button
+                            key={"m-" + entry[0]}
+                            type="button"
+                            className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium "
+                                + (
+                                    "bg-background text-foreground shadow-sm"
+                                        if tab == entry[0]
+                                        else "text-muted-foreground transition-colors hover:text-foreground"
+                                )}
+                            onClick={lambda { selectTab(entry[0]); }}
+                        >
+                            {entry[1]}
+                        </button>
+                    }}
+                </div>
+                <div className="hidden w-44 shrink-0 sm:block">
                     <TabsList variant="line">
                         {for entry in TABS {
                             <TabsTrigger key={entry[0]} value={entry[0]}>
@@ -151,21 +173,53 @@ def:pub WorkspacePage -> JsxPage {
                         }}
                     </TabsList>
                 </div>
-                <TabsContent value="organization">
+                <TabsContent
+                    value="organization"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
                     <div className="max-w-2xl">
                         <OrganizationSection/>
                     </div>
                 </TabsContent>
-                <TabsContent value="projects">
+                <TabsContent
+                    value="projects"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
                     <ProjectsSection openNonce={projectsNonce}/>
                 </TabsContent>
-                <TabsContent value="people" className="flex flex-col gap-4">
+                <TabsContent
+                    value="people"
+                    className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
                     <p className="text-sm text-muted-foreground">
-                        {str(len(active))
-                            + " on the roster. They are records, not accounts."}
+                        <span className="tabular-nums">{str(len(active))}</span>
+                        {" on the roster. They are records, not accounts."}
                     </p>
                     {if loading {
-                        <Skeleton key="sk" className="h-48 w-full"/>
+                        <div
+                            key="sk"
+                            className="flex flex-col gap-4 rounded-xl border bg-card p-6"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Skeleton className="h-4 w-24"/>
+                                <Skeleton className="h-4 w-16"/>
+                                <Skeleton className="ml-auto h-4 w-14"/>
+                            </div>
+                            {for i in [0, 1, 2, 3] {
+                                <div
+                                    key={"r" + str(i)}
+                                    className="flex items-center gap-3"
+                                >
+                                    <Skeleton className="h-9 w-9 shrink-0 rounded-full"/>
+                                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                        <Skeleton className="h-4 w-36 max-w-full"/>
+                                        <Skeleton className="h-3 w-24"/>
+                                    </div>
+                                    <Skeleton className="hidden h-5 w-16 rounded-full sm:block"/>
+                                    <Skeleton className="hidden h-5 w-20 rounded-full sm:block"/>
+                                </div>
+                            }}
+                        </div>
                     } else {
                         <MemberTable
                             key="table"
@@ -175,11 +229,9 @@ def:pub WorkspacePage -> JsxPage {
                             onArchive={archiveMember}
                             onAssign={assignTo}
                             onUnassign={unassignFrom}
+                            onCreate={openCreate}
                         />
                     } }
-                </TabsContent>
-                <TabsContent value="github">
-                    <GithubSection openNonce={githubNonce}/>
                 </TabsContent>
             </Tabs>
             <MemberDialog

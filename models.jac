@@ -239,6 +239,8 @@ node WorkflowStep {
     has name: str,
         kind: str = "active",
         color: str = "",
+        # A ROLE, not a person: "domain expert", "model", "whoever raised it".
+        owner: str = "",
         x: float = 0.0,
         y: float = 0.0,
         sort_order: float = 0.0,
@@ -268,7 +270,12 @@ edge LeadsTo: Milestone --> Milestone {}
 # A workflow transition. Unlike LeadsTo, cycles are ALLOWED by design: a
 # review step looping back to development is the whole point of letting orgs
 # draw their own flow. Only self-loops are refused, at link time.
-edge FlowsTo: WorkflowStep --> WorkflowStep {}
+#
+# `label` is what has to be true to cross ("approved", "changes requested").
+# Empty on transitions drawn before labels existed, so this is additive.
+edge FlowsTo: WorkflowStep --> WorkflowStep {
+    has label: str = "";
+}
 
 obj TaskView {
     has id: str,
@@ -355,8 +362,11 @@ obj StepView {
         x: float,
         y: float,
         sort_order: float,
+        owner: str = "",
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
+        # Index-aligned with next_ids: same FlowsTo traversal builds both.
+        next_labels: list[str] = [],
         # How much work is sitting here, counted per request in GetWorkflow
         # because it depends on the project filter the caller asked for.
         task_count: int = 0;
@@ -473,16 +483,23 @@ def step_view(s: WorkflowStep) -> StepView {
     for n in [s->:FlowsTo:->] {
         next_ids.append(jid(n));
     }
+    # `[edge ...]` is how an edge's own fields are read.
+    next_labels: list[str] = [];
+    for e in [edge s->:FlowsTo:->] {
+        next_labels.append(e.label);
+    }
     return StepView(
         id=jid(s),
         name=s.name,
         kind=s.kind,
         color=s.color,
+        owner=s.owner,
         x=s.x,
         y=s.y,
         sort_order=s.sort_order,
         prev_ids=prev_ids,
-        next_ids=next_ids
+        next_ids=next_ids,
+        next_labels=next_labels
     );
 }
 

@@ -69,6 +69,7 @@ import from walkers.github {
     ListGithubRepos,
     ListRepoIssues,
     ListRepoPulls,
+    SearchRepoItems,
     ImportIssues,
     CreateIssueFromTask,
     SyncGithub

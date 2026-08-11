@@ -15,8 +15,40 @@ import from ..ui.card { Card, CardContent }
 import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
+import from ..ui.skeleton { Skeleton }
 import from ..ui.table {
     Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+}
+
+# Relative "3d ago" label from an ISO stamp. Empty in, empty out; anything
+# older than a month falls back to the plain date. No date libs, just an
+# explicit if-chain over truncated divisions.
+def timeAgo(iso: str) -> str {
+    if not iso {
+        return "";
+    }
+    then = new(Date, iso);
+    now = new(Date);
+    ms = now.getTime() - then.getTime();
+    if ms < 0 {
+        ms = 0;
+    }
+    mins = int(ms / 60000);
+    if mins < 1 {
+        return "just now";
+    }
+    if mins < 60 {
+        return str(mins) + "m ago";
+    }
+    hours = int(mins / 60);
+    if hours < 24 {
+        return str(hours) + "h ago";
+    }
+    days = int(hours / 24);
+    if days < 31 {
+        return str(days) + "d ago";
+    }
+    return iso[:10];
 }
 
 # Tint per state. Merged and draft have no palette token of their own, so they
@@ -40,13 +72,14 @@ def:pub PrTable(
     loadingMore: bool,
     hasMore: bool,
     state: str,
+    query: str,
     onState: Callable[[str], None],
     onLoadMore: Callable[[], None]
 ) -> JsxElement {
     return <Card>
         <CardContent className="space-y-3 pt-4">
             <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm tabular-nums text-muted-foreground">
                     {
                         str(len(rows))
                         + (" pull request" if len(rows) == 1 else " pull requests")
@@ -67,15 +100,59 @@ def:pub PrTable(
             </div>
 
             {if loading {
-                <p key="loading" className="py-10 text-center text-sm text-muted-foreground">
-                    Asking GitHub…
-                </p>
+                <div key="loading" className="space-y-1 py-2">
+                    {for i in [0, 1, 2, 3, 4] {
+                        <div key={"sk-" + str(i)} className="flex items-center gap-3 px-2 py-2.5">
+                            <Skeleton className="h-4 w-10 shrink-0" />
+                            <Skeleton className="h-4 w-full max-w-80" />
+                            <Skeleton className="ml-auto hidden h-4 w-16 shrink-0 sm:block" />
+                            <Skeleton className="h-5 w-14 shrink-0 rounded-full" />
+                            <Skeleton className="hidden h-4 w-12 shrink-0 md:block" />
+                        </div>
+                    }}
+                </div>
             } else {
                 <div key="rows" className="space-y-3">
                     {if len(rows) == 0 {
-                        <p key="empty" className="py-10 text-center text-sm text-muted-foreground">
-                            No pull requests in this repo for that state.
-                        </p>
+                        <div key="empty" className="py-10 text-center">
+                            <svg
+                                className="mx-auto text-muted-foreground/50"
+                                width={28}
+                                height={28}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <circle cx={18} cy={18} r={3} />
+                                <circle cx={6} cy={6} r={3} />
+                                <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                                <path d="M6 9v12" />
+                            </svg>
+                            <p className="mt-3 text-sm font-medium">
+                                {"No matches" if query else "Nothing to show"}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {
+                                    "No pull requests match \"" + query + "\" for that state."
+                                        if query
+                                        else "No pull requests in this repo for that state."
+                                }
+                            </p>
+                            {if state != "all" {
+                                <Button
+                                    key="allstates"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-3"
+                                    onClick={lambda { onState("all"); }}
+                                >
+                                    Show all states
+                                </Button>
+                            }}
+                        </div>
                     } else {
                         <Table key="table">
                             <TableHeader>
@@ -117,7 +194,7 @@ def:pub PrTable(
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">
-                                            {("@" + r.author) if r.author else "·"}
+                                            {("@" + r.author) if r.author else "—"}
                                         </TableCell>
                                         <TableCell>
                                             <Badge
@@ -127,8 +204,11 @@ def:pub PrTable(
                                                 {r.state}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                            {r.updated_at[:10]}
+                                        <TableCell
+                                            className="text-xs tabular-nums text-muted-foreground"
+                                            title={r.updated_at[:16].replace("T", " ")}
+                                        >
+                                            {timeAgo(r.updated_at) if r.updated_at else "—"}
                                         </TableCell>
                                     </TableRow>
                                 }}
@@ -143,6 +223,21 @@ def:pub PrTable(
                                 onClick={onLoadMore}
                                 disabled={loadingMore}
                             >
+                                {if loadingMore {
+                                    <svg
+                                        key="sp"
+                                        className="animate-spin"
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                    >
+                                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                    </svg>
+                                }}
                                 {"Loading…" if loadingMore else "Load more"}
                             </Button>
                         </div>

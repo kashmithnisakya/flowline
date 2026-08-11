@@ -7,12 +7,16 @@ replayed it would only ever produce an error toast.
 """
 
 import from ...models {
-    Project, RepoView, GithubConnectionView, GhRepoRow, GhIssueRow, GhPrRow
+    Project, RepoView, StepView, GithubConnectionView, GhRepoRow, GhIssueRow,
+    GhPrRow
 }
 import from ...walkers.github {
     GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,
-    ListGithubRepos, ListRepoIssues, ListRepoPulls, ImportIssues
+    ListGithubRepos, ListRepoIssues, ListRepoPulls, SearchRepoItems,
+    ImportIssues
 }
+import from ...components.ui.input { Input }
+import from ...walkers.workflow { GetWorkflow }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListRepos, AddRepo }
 import from ...components.github.ConnectCard { ConnectCard }
@@ -37,6 +41,37 @@ def shortStamp(iso: str) -> str {
     return iso[:16].replace("T", " ");
 }
 
+# Relative "3d ago" label from an ISO stamp. Empty in, empty out; anything
+# older than a month falls back to the plain date. No date libs, just an
+# explicit if-chain over truncated divisions.
+def timeAgo(iso: str) -> str {
+    if not iso {
+        return "";
+    }
+    then = new(Date, iso);
+    now = new(Date);
+    ms = now.getTime() - then.getTime();
+    if ms < 0 {
+        ms = 0;
+    }
+    mins = int(ms / 60000);
+    if mins < 1 {
+        return "just now";
+    }
+    if mins < 60 {
+        return str(mins) + "m ago";
+    }
+    hours = int(mins / 60);
+    if hours < 24 {
+        return str(hours) + "h ago";
+    }
+    days = int(hours / 24);
+    if days < 31 {
+        return str(days) + "d ago";
+    }
+    return iso[:10];
+}
+
 def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     has conn: GithubConnectionView | None = None,
         configGaps: list[str] = [],
@@ -47,6 +82,11 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         projects: list[Project] = [],
         repoId: str = "",
         tab: str = "issues",
+        # The committed search: set on an explicit action only (GitHub's
+        # search API allows ~30 requests a minute, so never per keystroke).
+        # The draft is what sits in the input box.
+        searchQuery: str = "",
+        searchDraft: str = "",
         pickerOpen: bool = False,
         pickerQuery: str = "",
         pickerRows: list[GhRepoRow] = [],
@@ -62,6 +102,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         selected: list[int] = [],
         importProject: str = "none",
         importStatus: str = "Backlog",
+        steps: list[StepView] = [],
+        importStep: str = "",
         importing: bool = False,
         pulls: list[GhPrRow] = [],
         prState: str = "open",
@@ -77,15 +119,32 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
 
 
-    # The repo, the tab and the state filters all address the same two reads,
-    # so one dependent effect covers every way of changing what is shown.
-    async can with (repoId, tab, issueState, prState) entry {
+    # The repo, the tab, the state filters and the committed search all
+    # address the same two reads, so one dependent effect covers every way
+    # of changing what is shown. Search runs through here too: runSearch
+    # only commits the query, which sidesteps the stale-snapshot trap of
+    # calling a loader right after setting state.
+    async can with (repoId, tab, issueState, prState, searchQuery) entry {
         if repoId {
             if tab == "issues" {
                 loadIssues(True);
             } else {
                 loadPulls(True);
             }
+        }
+    }
+
+    # The address bar mirrors what is on screen, so a triage view can be
+    # bookmarked or shared and survives a refresh.
+    can with (repoId, tab, searchQuery) entry {
+        w: any = window;
+        if str(w.location.pathname) == "/github" and repoId {
+            qs = "?repo=" + repoId + "&tab=" + tab;
+            if searchQuery {
+                qs = qs + "&q=" + encodeURIComponent(searchQuery);
+            }
+            blank: dict[str, any] = {};
+            w.history.replaceState(blank, "", "/github" + qs);
         }
     }
 
@@ -102,6 +161,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def importSelected -> None;
     def toggleIssue(number: int) -> None;
     def selectRepo(value: str) -> None;
+    def runSearch -> None;
+    def clearSearch -> None;
 
     # The page header owns this tab's primary action and signals it by bumping
     # a counter. Switching tabs UNMOUNTS this panel, so the effect re-runs on
@@ -126,6 +187,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     avatar = "";
     connectedAt = "";
     lastSync = "";
+    connectedAgo = "";
+    lastSyncAgo = "";
     if conn {
         connected = conn.connected;
         invalid = conn.status == "invalid";
@@ -133,19 +196,35 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         avatar = conn.account_avatar;
         connectedAt = shortStamp(conn.connected_at);
         lastSync = shortStamp(conn.last_sync_at);
+        connectedAgo = timeAgo(conn.connected_at);
+        lastSyncAgo = timeAgo(conn.last_sync_at);
+    }
+    exactStamps = connectedAt;
+    if lastSync {
+        exactStamps = exactStamps + " · last sync " + lastSync;
     }
 
     return <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-            Read issues and pull requests, and import issues onto the board.
-        </p>
-
         {if invalid {
             <ReconnectBanner key="banner" busy={starting} onReconnect={startInstall} />
         }}
 
         {if loading {
-            <Skeleton key="sk" className="h-48 w-full" />
+            <div key="sk" className="space-y-6">
+                <div className="flex items-center gap-4 rounded-xl border bg-card p-4">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-56 max-w-full" />
+                    </div>
+                    <Skeleton className="h-7 w-24 rounded-lg" />
+                </div>
+                <div className="flex items-center gap-2">
+                    <Skeleton className="h-8 w-64 rounded-lg" />
+                    <Skeleton className="ml-auto h-8 w-44 rounded-lg" />
+                </div>
+                <Skeleton className="h-64 w-full rounded-xl" />
+            </div>
         } else {
             <div key="body" className="space-y-6">
                 {if not connected {
@@ -157,7 +236,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                     />
                 } else {
                     <div key="work" className="space-y-6">
-                        <Card>
+                        <Card className="py-0">
                             <CardContent className="flex flex-wrap items-center gap-4 py-4">
                                 {if avatar {
                                     <img
@@ -169,18 +248,26 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 }}
                                 <div className="min-w-0">
                                     <div className="font-medium">{"@" + login}</div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {"Connected " + connectedAt if connectedAt else "Connected"}
-                                        {" · last sync " + lastSync if lastSync else " · not synced yet"}
+                                    <p
+                                        className="text-xs tabular-nums text-muted-foreground"
+                                        title={exactStamps}
+                                    >
+                                        {"Connected " + connectedAgo if connectedAgo else "Connected"}
+                                        {" · last sync " + lastSyncAgo if lastSyncAgo else " · not synced yet"}
                                     </p>
                                 </div>
                                 <div className="ml-auto flex items-center gap-3">
-                                    {if confirmDisconnect {
-                                        <span key="warn" className="max-w-72 text-xs text-muted-foreground">
-                                            Imported tasks and links stay. Standup just stops
-                                            talking to GitHub.
-                                        </span>
-                                    }}
+                                    <span
+                                        key="warn"
+                                        aria-hidden={not confirmDisconnect}
+                                        title="Imported tasks and links stay. Standup just stops talking to GitHub."
+                                        className={
+                                            "overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-all duration-300 ease-out "
+                                            + ("max-w-56 opacity-100" if confirmDisconnect else "max-w-0 opacity-0")
+                                        }
+                                    >
+                                        Imported tasks and links stay.
+                                    </span>
                                     <Button
                                         variant={"destructive" if confirmDisconnect else "outline"}
                                         size="sm"
@@ -199,35 +286,133 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {for r in repos {
-                                        <SelectItem key={r.id} value={r.id}>{r.full_name}</SelectItem>
+                                        <SelectItem key={r.id} value={r.id}>
+                                            {r.full_name}
+                                        </SelectItem>
                                     }}
                                 </SelectContent>
                             </Select>
-                            <div className="ml-auto inline-flex gap-1 rounded-lg border p-1">
-                                <Button
-                                    variant={"secondary" if tab == "issues" else "ghost"}
-                                    size="sm"
+                            {for r in [
+                                x
+                                for x in repos
+                                if x.id == repoId and x.project_name
+                            ] {
+                                <span
+                                    key={"proj-" + r.id}
+                                    className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground lg:inline-flex"
+                                    title={"Imports land in " + r.project_name + " unless you pick another project"}
+                                >
+                                    <svg
+                                        width={12}
+                                        height={12}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                    >
+                                        <path d="M5 12h14"/>
+                                        <path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                    {r.project_name}
+                                </span>
+                            }}
+                            <div className="relative min-w-56 flex-1 sm:max-w-xs">
+                                <svg
+                                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <circle cx={11} cy={11} r={8}/>
+                                    <path d="m21 21-4.3-4.3"/>
+                                </svg>
+                                <Input
+                                    value={searchDraft}
+                                    placeholder={
+                                        "Search issues, Enter to run"
+                                            if tab == "issues"
+                                            else "Search pull requests, Enter to run"
+                                    }
+                                    className="pl-8 pr-8"
+                                    onChange={lambda (e: ChangeEvent) { searchDraft = e.target.value; }}
+                                    onKeyDown={lambda (e: any) { if e.key == "Enter" { runSearch(); }}}
+                                />
+                                {if searchQuery or searchDraft {
+                                    <button
+                                        key="clear"
+                                        type="button"
+                                        aria-label="Clear search"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                        onClick={clearSearch}
+                                    >
+                                        <svg
+                                            width={12}
+                                            height={12}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                        >
+                                            <path d="M18 6 6 18"/>
+                                            <path d="m6 6 12 12"/>
+                                        </svg>
+                                    </button>
+                                }}
+                            </div>
+                            <div className="ml-auto inline-flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted p-0.5">
+                                <button
+                                    type="button"
+                                    className={
+                                        "rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        if tab == "issues"
+                                        else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                    }
                                     onClick={lambda { tab = "issues"; }}
                                 >
                                     Issues
-                                </Button>
-                                <Button
-                                    variant={"secondary" if tab == "pulls" else "ghost"}
-                                    size="sm"
+                                </button>
+                                <button
+                                    type="button"
+                                    className={
+                                        "rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        if tab == "pulls"
+                                        else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                    }
                                     onClick={lambda { tab = "pulls"; }}
                                 >
                                     Pull requests
-                                </Button>
+                                </button>
                             </div>
                         </div>
 
                         {if not repoId {
                             <Card key="norepo">
-                                <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                                <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+                                    <svg
+                                        className="text-muted-foreground/50"
+                                        width={28}
+                                        height={28}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                                    </svg>
+                                    <p className="mt-1 text-sm font-medium">No repo attached yet</p>
                                     <p className="text-sm text-muted-foreground">
                                         Attach a repo to read its issues and pull requests.
                                     </p>
-                                    <Button size="sm" onClick={openPicker}>
+                                    <Button size="sm" className="mt-2" onClick={openPicker}>
                                         Attach a repo
                                     </Button>
                                 </CardContent>
@@ -246,11 +431,15 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         projects={[p for p in projects if p.active]}
                                         projectId={importProject}
                                         status={importStatus}
+                                        steps={steps}
+                                        stepId={importStep}
+                                        query={searchQuery}
                                         importing={importing}
                                         onState={lambda (v: str) { issueState = v; }}
                                         onToggle={toggleIssue}
                                         onProject={lambda (v: str) { importProject = v; }}
                                         onStatus={lambda (v: str) { importStatus = v; }}
+                                        onStep={lambda (v: str) { importStep = v; }}
                                         onImport={importSelected}
                                         onLoadMore={lambda { loadIssues(False); }}
                                     />
@@ -262,6 +451,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         loadingMore={prMore}
                                         hasMore={prHasMore}
                                         state={prState}
+                                        query={searchQuery}
                                         onState={lambda (v: str) { prState = v; }}
                                         onLoadMore={lambda { loadPulls(False); }}
                                     />
