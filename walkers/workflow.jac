@@ -498,6 +498,44 @@ walker LinkTransition {
 }
 
 
+walker LabelTransition {
+    """Set or clear what has to be true to cross an existing transition.
+
+    Separate from LinkTransition because an empty label means the opposite
+    in each. There it means "leave it alone", so re-drawing an arrow does
+    not wipe what it already says; here it means clear, which is the only
+    way to take the wording off an arrow without deleting the arrow."""
+    has from_id: str = "",
+        to_id: str = "",
+        label: str = "",
+        reports: list[dict[str, any]] = [];
+
+    can relabel with Root entry {
+        source = resolve(self.from_id);
+        target = resolve(self.to_id);
+        if not isinstance(source, WorkflowStep) or not owned(here, source) {
+            report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        if not isinstance(target, WorkflowStep) or not owned(here, target) {
+            report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        said = self.label.strip();
+        found = False;
+        for e in [edge source->:FlowsTo:->target] {
+            e.label = said;
+            found = True;
+        }
+        if not found {
+            report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        report {"ok": True, "label": said};
+    }
+}
+
+
 walker UnlinkTransition {
     has from_id: str = "",
         to_id: str = "",

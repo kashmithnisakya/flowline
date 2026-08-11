@@ -56,6 +56,7 @@ import from walkers.workflow {
     MoveStep,
     DeleteStep,
     LinkTransition,
+    LabelTransition,
     UnlinkTransition,
     GetWorkflowMeta,
     RenameWorkflow,
