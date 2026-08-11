@@ -12,8 +12,10 @@ import from ...models {
 }
 import from ...walkers.github {
     GithubStatus, StartGithubInstall, CompleteGithubInstall, DisconnectGithub,
-    ListGithubRepos, ListRepoIssues, ListRepoPulls, ImportIssues
+    ListGithubRepos, ListRepoIssues, ListRepoPulls, SearchRepoItems,
+    ImportIssues
 }
+import from ...components.ui.input { Input }
 import from ...walkers.workflow { GetWorkflow }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListRepos, AddRepo }
@@ -80,6 +82,11 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         projects: list[Project] = [],
         repoId: str = "",
         tab: str = "issues",
+        # The committed search: set on an explicit action only (GitHub's
+        # search API allows ~30 requests a minute, so never per keystroke).
+        # The draft is what sits in the input box.
+        searchQuery: str = "",
+        searchDraft: str = "",
         pickerOpen: bool = False,
         pickerQuery: str = "",
         pickerRows: list[GhRepoRow] = [],
@@ -112,15 +119,32 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
 
 
-    # The repo, the tab and the state filters all address the same two reads,
-    # so one dependent effect covers every way of changing what is shown.
-    async can with (repoId, tab, issueState, prState) entry {
+    # The repo, the tab, the state filters and the committed search all
+    # address the same two reads, so one dependent effect covers every way
+    # of changing what is shown. Search runs through here too: runSearch
+    # only commits the query, which sidesteps the stale-snapshot trap of
+    # calling a loader right after setting state.
+    async can with (repoId, tab, issueState, prState, searchQuery) entry {
         if repoId {
             if tab == "issues" {
                 loadIssues(True);
             } else {
                 loadPulls(True);
             }
+        }
+    }
+
+    # The address bar mirrors what is on screen, so a triage view can be
+    # bookmarked or shared and survives a refresh.
+    can with (repoId, tab, searchQuery) entry {
+        w: any = window;
+        if str(w.location.pathname) == "/github" and repoId {
+            qs = "?repo=" + repoId + "&tab=" + tab;
+            if searchQuery {
+                qs = qs + "&q=" + encodeURIComponent(searchQuery);
+            }
+            blank: dict[str, any] = {};
+            w.history.replaceState(blank, "", "/github" + qs);
         }
     }
 
@@ -137,6 +161,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def importSelected -> None;
     def toggleIssue(number: int) -> None;
     def selectRepo(value: str) -> None;
+    def runSearch -> None;
+    def clearSearch -> None;
 
     # The page header owns this tab's primary action and signals it by bumping
     # a counter. Switching tabs UNMOUNTS this panel, so the effect re-runs on
@@ -179,10 +205,6 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     }
 
     return <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-            Read issues and pull requests, and import issues onto the board.
-        </p>
-
         {if invalid {
             <ReconnectBanner key="banner" busy={starting} onReconnect={startInstall} />
         }}
@@ -264,10 +286,62 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {for r in repos {
-                                        <SelectItem key={r.id} value={r.id}>{r.full_name}</SelectItem>
+                                        <SelectItem key={r.id} value={r.id}>
+                                            {r.full_name
+                                                + (" · " + r.project_name if r.project_name else "")}
+                                        </SelectItem>
                                     }}
                                 </SelectContent>
                             </Select>
+                            <div className="relative min-w-56 flex-1 sm:max-w-xs">
+                                <svg
+                                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <circle cx={11} cy={11} r={8}/>
+                                    <path d="m21 21-4.3-4.3"/>
+                                </svg>
+                                <Input
+                                    value={searchDraft}
+                                    placeholder={
+                                        "Search issues, Enter to run"
+                                            if tab == "issues"
+                                            else "Search pull requests, Enter to run"
+                                    }
+                                    className="pl-8 pr-8"
+                                    onChange={lambda (e: ChangeEvent) { searchDraft = e.target.value; }}
+                                    onKeyDown={lambda (e: any) { if e.key == "Enter" { runSearch(); }}}
+                                />
+                                {if searchQuery or searchDraft {
+                                    <button
+                                        key="clear"
+                                        type="button"
+                                        aria-label="Clear search"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                        onClick={clearSearch}
+                                    >
+                                        <svg
+                                            width={12}
+                                            height={12}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                        >
+                                            <path d="M18 6 6 18"/>
+                                            <path d="m6 6 12 12"/>
+                                        </svg>
+                                    </button>
+                                }}
+                            </div>
                             <div className="ml-auto inline-flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted p-0.5">
                                 <button
                                     type="button"
@@ -335,6 +409,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         status={importStatus}
                                         steps={steps}
                                         stepId={importStep}
+                                        query={searchQuery}
                                         importing={importing}
                                         onState={lambda (v: str) { issueState = v; }}
                                         onToggle={toggleIssue}
@@ -352,6 +427,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         loadingMore={prMore}
                                         hasMore={prHasMore}
                                         state={prState}
+                                        query={searchQuery}
                                         onState={lambda (v: str) { prState = v; }}
                                         onLoadMore={lambda { loadPulls(False); }}
                                     />

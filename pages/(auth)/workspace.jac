@@ -1,10 +1,10 @@
 """standup - Workspace (/workspace): everything you configure, in one place.
 
-Five tabs, all of them CRUD over settings rather than daily work: the
-organization's own name, the projects work is scoped to, the people on the
-roster, and the GitHub connection.
-Projects and GitHub used to be their own routes; they are sections here now,
-which is what keeps the nav to the five things you actually do each day.
+Three tabs, all of them CRUD over settings rather than daily work: the
+organization's own name, the projects work is scoped to, and the people on
+the roster. GitHub graduated back to its own /github route (browsing and
+importing issues is daily work); old ?tab=github links and in-flight App
+install round trips redirect there with their query string intact.
 
 The page is a thin shell: each tab is a self-contained section component
 that loads and saves its own data, so switching tabs costs nothing and no
@@ -18,7 +18,6 @@ import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
-import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
@@ -34,8 +33,7 @@ glob BLANK_MEMBER: dict[str, str] = {
      TABS: list[list[str]] = [
          ["organization", "Organization"],
          ["projects", "Projects"],
-         ["people", "People"],
-         ["github", "GitHub"]
+         ["people", "People"]
      ];
 
 def:pub WorkspacePage -> JsxPage {
@@ -51,28 +49,29 @@ def:pub WorkspacePage -> JsxPage {
         mProjects: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
-        # The header owns each tab's primary action, but Projects and GitHub
-        # keep their own state. Bumping a counter is how the header reaches
-        # in without the page having to own their dialogs too.
+        # The header owns each tab's primary action, but Projects keeps its
+        # own state. Bumping a counter is how the header reaches in without
+        # the page having to own its dialogs too.
         projectsNonce: int = 0,
-        githubNonce: int = 0,
         saving: bool = False;
 
     async can with entry {
-        # Deep links land on the right tab: /workspace?tab=github is where the
-        # GitHub App's install round trip comes back to, and the old
-        # /projects route redirects here with ?tab=projects.
+        # Deep links land on the right tab; the old /projects route redirects
+        # here with ?tab=projects. GitHub lives at /github now, so github tab
+        # links and App-install round trips forward there, query intact.
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
         wanted = params.get("tab") or "";
+        if wanted == "github" or params.get("installation_id") {
+            w.location.replace("/github" + str(w.location.search));
+            return;
+        }
         known: list[str] = [];
         for entry in TABS {
             known.append(entry[0]);
         }
         if wanted in known {
             tab = wanted;
-        } elif params.get("installation_id") {
-            tab = "github";
         }
         loadAll();
     }
@@ -138,14 +137,6 @@ def:pub WorkspacePage -> JsxPage {
                             onClick={openCreate}
                         >
                             Add member
-                        </Button>
-                    } elif tab == "github" {
-                        <Button
-                            key="br"
-                            className="animate-in fade-in zoom-in-95 duration-200"
-                            onClick={lambda { githubNonce = githubNonce + 1; }}
-                        >
-                            Browse GitHub repos
                         </Button>
                     }  }
                 </div>
@@ -241,12 +232,6 @@ def:pub WorkspacePage -> JsxPage {
                             onCreate={openCreate}
                         />
                     } }
-                </TabsContent>
-                <TabsContent
-                    value="github"
-                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
-                >
-                    <GithubSection openNonce={githubNonce}/>
                 </TabsContent>
             </Tabs>
             <MemberDialog

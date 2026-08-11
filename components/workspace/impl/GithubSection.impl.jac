@@ -17,6 +17,21 @@ impl GithubSection.boot -> None {
     installation = params.get("installation_id") or "";
     state = params.get("state") or "";
     code = params.get("code") or "";
+    # Deep links restore the triage view before any data loads: the repo,
+    # the tab, and a committed search all round-trip through the URL.
+    wantRepo = params.get("repo") or "";
+    wantTab = params.get("tab") or "";
+    wantQuery = params.get("q") or "";
+    if wantRepo {
+        repoId = wantRepo;
+    }
+    if wantTab in ["issues", "pulls"] {
+        tab = wantTab;
+    }
+    if wantQuery {
+        searchQuery = wantQuery;
+        searchDraft = wantQuery;
+    }
     if installation and state {
         installId = 0;
         try {
@@ -197,10 +212,18 @@ impl GithubSection.loadIssues(reset: bool) -> None {
     if reset {
         base = [];
     }
+    q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListRepoIssues(
-            repo_id=repoId, state=issueState, page=wanted
+        result = (
+            root spawn SearchRepoItems(
+                repo_id=repoId, kind="issues", query=q,
+                state=issueState, page=wanted
+            )
+        ) if q else (
+            root spawn ListRepoIssues(
+                repo_id=repoId, state=issueState, page=wanted
+            )
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
@@ -235,10 +258,18 @@ impl GithubSection.loadPulls(reset: bool) -> None {
     if reset {
         base = [];
     }
+    q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListRepoPulls(
-            repo_id=repoId, state=prState, page=wanted
+        result = (
+            root spawn SearchRepoItems(
+                repo_id=repoId, kind="pulls", query=q,
+                state=prState, page=wanted
+            )
+        ) if q else (
+            root spawn ListRepoPulls(
+                repo_id=repoId, state=prState, page=wanted
+            )
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
@@ -270,6 +301,18 @@ impl GithubSection.selectRepo(value: str) -> None {
     selected = [];
     issuePage = 1;
     prPage = 1;
+}
+
+impl GithubSection.runSearch -> None {
+    # Only commit the query; the dependent effect owns the fetch. Calling a
+    # loader here would read the pre-commit searchQuery snapshot and search
+    # for the previous term.
+    searchQuery = searchDraft.strip();
+}
+
+impl GithubSection.clearSearch -> None {
+    searchDraft = "";
+    searchQuery = "";
 }
 
 impl GithubSection.importSelected -> None {

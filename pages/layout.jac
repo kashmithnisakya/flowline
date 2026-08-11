@@ -11,7 +11,7 @@ fit a phone row.
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from ..lib.session { fetchOrgName }
-import from ..lib.theme { getThemePref, applyTheme, watchTheme }
+import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
 # Note: the wrapper lives in toaster.jac, not sonner.jac, a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
@@ -27,22 +27,29 @@ import from ..components.assistant.AssistantDock { AssistantDock }
 
 glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"];
 
+# Settings is not in the text row: it collapses to the gear icon on the
+# right, next to the theme toggle.
 glob NAV_ITEMS: list[dict[str, str]] = [
          {"to": "/workflow", "label": "Workflow"},
          {"to": "/board", "label": "Board"},
          {"to": "/overview", "label": "Overview"},
          {"to": "/log", "label": "Log"},
-         {"to": "/workspace", "label": "Workspace"},
-         {"to": "/settings", "label": "Settings"}
+         {"to": "/github", "label": "GitHub"},
+         {"to": "/workspace", "label": "Workspace"}
      ];
 
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
-        orgName: str = "";
+        orgName: str = "",
+        # Mirrors the html.dark class for the toggle icon. Read after
+        # applyTheme so "system" resolves to what is actually showing.
+        themeDark: bool = False;
 
     async can with entry {
         applyTheme(getThemePref());
         watchTheme();
+        doc: any = document;
+        themeDark = bool(doc.documentElement.classList.contains("dark"));
         isIn = jacIsLoggedIn();
         loggedIn = isIn;
         if isIn {
@@ -52,6 +59,7 @@ def:pub Shell -> JsxLayout {
 
     async def loadOrg -> None;
     def logout -> None;
+    def toggleTheme -> None;
 
     location = useLocation();
     chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
@@ -97,16 +105,93 @@ def:pub Shell -> JsxLayout {
                                 </Link>
                             }}
                         </div>
-                        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+                        <div className="ml-auto flex items-center gap-1 sm:gap-2">
                             {if orgName {
                                 <span
                                     key="org"
-                                    className="hidden items-center rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex"
+                                    className="mr-1 hidden items-center rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex"
                                 >
                                     {orgName}
                                 </span>
                             }}
-                            <Button variant="outline" size="sm" onClick={logout}>
+                            <button
+                                type="button"
+                                aria-label={"Switch to light mode" if themeDark else "Switch to dark mode"}
+                                title={"Switch to light mode" if themeDark else "Switch to dark mode"}
+                                className="rounded-full p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
+                                onClick={toggleTheme}
+                            >
+                                {if themeDark {
+                                    <svg
+                                        key="sun"
+                                        width={16}
+                                        height={16}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <circle cx={12} cy={12} r={4}/>
+                                        <path d="M12 2v2"/>
+                                        <path d="M12 20v2"/>
+                                        <path d="m4.93 4.93 1.41 1.41"/>
+                                        <path d="m17.66 17.66 1.41 1.41"/>
+                                        <path d="M2 12h2"/>
+                                        <path d="M20 12h2"/>
+                                        <path d="m6.34 17.66-1.41 1.41"/>
+                                        <path d="m19.07 4.93-1.41 1.41"/>
+                                    </svg>
+                                } else {
+                                    <svg
+                                        key="moon"
+                                        width={16}
+                                        height={16}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                                    </svg>
+                                }}
+                            </button>
+                            <Link
+                                to="/settings"
+                                aria-label="Settings"
+                                title="Settings"
+                                className={
+                                    "hidden rounded-full p-2 transition-colors duration-200 md:inline-flex "
+                                    + (
+                                        "bg-primary/10 text-primary"
+                                            if location.pathname == "/settings"
+                                            else "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    )
+                                }
+                            >
+                                <svg
+                                    width={16}
+                                    height={16}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                                    <circle cx={12} cy={12} r={3}/>
+                                </svg>
+                            </Link>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="ml-1"
+                                onClick={logout}
+                            >
                                 Log out
                             </Button>
                             <div className="md:hidden">
@@ -143,6 +228,9 @@ def:pub Shell -> JsxLayout {
                                                 </Link>
                                             </DropdownMenuItem>
                                         }}
+                                        <DropdownMenuItem asChild={True}>
+                                            <Link to="/settings">Settings</Link>
+                                        </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
