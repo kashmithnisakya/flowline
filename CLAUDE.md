@@ -123,7 +123,11 @@ File-based routing with route groups:
   components from `components/{workflow,board,log,roster,projects,auth,landing}/`.
 - Form-heavy dialogs take a `dict` plus one `onField(key, value)` callback
   rather than a dozen props.
-- **`components/ui/`** is jac-shadcn — import only, never edit.
+- **`components/ui/`** is jac-shadcn — import only, never edit. When a
+  registry component ships broken, keep the fixed copy under a name
+  `jac install --shadcn <name>` cannot write to, or the next install
+  silently restores the bug: `toaster.jac` (not `sonner.jac`) and
+  `tickbox.jac` (not `checkbox.jac`).
 - **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper).
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
   the generator, not the SVGs. Reference brand assets as **`/static/...`**, not

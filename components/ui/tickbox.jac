@@ -1,3 +1,17 @@
+"""jac-shadcn's Checkbox, owned here under a name the installer cannot write.
+
+Deliberately NOT checkbox.jac. A published jac-shadcn ships this component
+with a trailing `# noqa` after the Indicator's closing tag, which is inside
+the JSX tree, so it is not a comment at all: it lowers to a text node and
+every checkbox prints "# noqa" onto the page. Production showed it beside
+each issue number as "# noqa#8079".
+
+`jac install --shadcn checkbox` writes components/ui/checkbox.jac, so a
+fixed copy under that name is overwritten by the next install or by any
+build that reinstalls the registry. Under this name it cannot be. Same
+reasoning as toaster.jac, which exists so sonner.jac cannot clobber it.
+"""
+
 import from "radix-ui" { Checkbox as CheckboxPrimitive }
 import from ...lib.utils { cn }
 import from "@hugeicons/react" { HugeiconsIcon }
