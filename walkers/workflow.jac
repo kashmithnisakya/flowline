@@ -10,6 +10,7 @@ import from models {
     WorkflowStep,
     WorkflowMeta,
     Task,
+    Role,
     StepView,
     TaskView,
     FlowsTo,
@@ -80,7 +81,10 @@ walker GetWorkflowMeta {
 
     can read with Root entry {
         existing = [here-->[?:WorkflowMeta]];
-        report {"name": existing[0].name if existing else "Workflow"};
+        report {
+            "name": existing[0].name if existing else "Workflow",
+            "template_key": existing[0].template_key if existing else ""
+        };
     }
 }
 
@@ -275,6 +279,29 @@ walker ApplyTemplate {
             target = made[pair[1]];
             said = wording[i] if i < len(wording) else "";
             source +>:FlowsTo(label=said):+> target;
+        }
+        # Remember which template this was. Scratch workflows never come
+        # through here and keep the default "".
+        meta = get_meta(here);
+        meta.template_key = self.template_key;
+        # Seed the template's roles as Role nodes, editable org data from
+        # here on. Get-or-create by name, so a role the org already made
+        # keeps whatever it says.
+        if "roles" in chosen {
+            raw_roles: list[dict[str, str]] = chosen["roles"];
+            r_order = 1024.0;
+            for rr in raw_roles {
+                if not [here-->[?:Role, name == rr["name"]]] {
+                    fresh_role = here ++> Role(
+                        name=rr["name"],
+                        blurb=rr["blurb"] if "blurb" in rr else "",
+                        color=rr["color"] if "color" in rr else "",
+                        sort_order=r_order
+                    );
+                    on_attached(here, fresh_role);
+                }
+                r_order = r_order + 1024.0;
+            }
         }
         views: list[StepView] = [];
         for m in made {

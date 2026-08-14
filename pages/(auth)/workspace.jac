@@ -12,12 +12,13 @@ section can break another.
 """
 
 import from ...models { Project, MemberView }
-import from ...walkers.roster { ListMembers, SaveMember, ArchiveMember }
+import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
 import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
+import from ...components.workspace.RolesSection { RolesSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
@@ -33,7 +34,8 @@ glob BLANK_MEMBER: dict[str, str] = {
      TABS: list[list[str]] = [
          ["organization", "Organization"],
          ["projects", "Projects"],
-         ["people", "People"]
+         ["people", "People"],
+         ["roles", "Roles"]
      ];
 
 def:pub WorkspacePage -> JsxPage {
@@ -47,6 +49,10 @@ def:pub WorkspacePage -> JsxPage {
         mRoles: list[str] = [],
         mTags: list[str] = [],
         mProjects: list[str] = [],
+        # The org's managed roles (Role nodes). Non-empty flips the member
+        # dialog's role input to toggle chips; empty falls back to the
+        # free-text chips.
+        roleOptions: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
         # The header owns each tab's primary action, but Projects keeps its
@@ -84,6 +90,7 @@ def:pub WorkspacePage -> JsxPage {
     def setField(key: str, value: str) -> None;
     def addRole -> None;
     def addTag -> None;
+    def toggleRoleOption(role: str) -> None;
     def removeRole(role: str) -> None;
     def toggleTag(tag: str) -> None;
     def toggleProject(projectId: str) -> None;
@@ -233,12 +240,19 @@ def:pub WorkspacePage -> JsxPage {
                         />
                     } }
                 </TabsContent>
+                <TabsContent
+                    value="roles"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
+                    <RolesSection onChanged={loadAll}/>
+                </TabsContent>
             </Tabs>
             <MemberDialog
                 open={dialogOpen}
                 editing={bool(editingId)}
                 form={form}
                 roles={mRoles}
+                roleOptions={roleOptions}
                 memberTags={mTags}
                 allTags={allTags}
                 projects={activeProjects}
@@ -247,6 +261,7 @@ def:pub WorkspacePage -> JsxPage {
                 onField={setField}
                 onAddRole={addRole}
                 onAddTag={addTag}
+                onToggleRole={toggleRoleOption}
                 onRemoveRole={removeRole}
                 onToggleTag={toggleTag}
                 onToggleProject={toggleProject}

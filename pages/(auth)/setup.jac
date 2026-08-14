@@ -42,7 +42,6 @@ def:pub SetupPage -> JsxPage {
         fullName: str = "",
         projectName: str = "",
         mName: str = "",
-        mRole: str = "",
         added: list[MemberView] = [],
         saveError: str = "",
         busy: bool = False,
@@ -289,7 +288,7 @@ def:pub SetupPage -> JsxPage {
                                 Add your people
                             </CardTitle>
                             <CardDescription>
-                                Team members are roster records (no accounts). You can add more any time on the Workspace tab.
+                                Names only for now: you will pick a workflow next, and assign roles on the Workspace tab. Members are roster records (no accounts).
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
@@ -299,11 +298,6 @@ def:pub SetupPage -> JsxPage {
                                     value={mName}
                                     onChange={lambda (e: ChangeEvent) { mName = e.target.value; }}
                                     autoFocus={True}
-                                />
-                                <Input
-                                    placeholder="Role (optional)"
-                                    value={mRole}
-                                    onChange={lambda (e: ChangeEvent) { mRole = e.target.value; }}
                                 />
                                 <Button
                                     variant="outline"

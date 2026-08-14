@@ -14,11 +14,27 @@ impl WorkflowPage.boot -> None {
     stored = localStorage.getItem("standup_project") or "";
     picked = stored or "all";
     projectId = picked;
+    # The viewer projection survives reloads the same way the project
+    # filter does. Anything but the exact "lanes" token means flow.
+    storedView = localStorage.getItem("standup_wf_view") or "";
+    if storedView == "lanes" {
+        wfView = "lanes";
+    }
     try {
         result = root spawn ListProjects();
         projects = result.reports[0] if result.reports else [];
     } except Exception as e {
         projects = [];
+    }
+    # Roles and roster feed the who-does-what strip; the diagram loads
+    # fine without them, so failure here stays quiet.
+    try {
+        roleResult = root spawn ListRoles();
+        roleRows = roleResult.reports[0] if roleResult.reports else [];
+        memResult = root spawn ListMembers();
+        roleMembers = memResult.reports[0] if memResult.reports else [];
+    } except Exception as e {
+        roleRows = [];
     }
     await reload(picked);
 }
@@ -70,6 +86,22 @@ impl WorkflowPage.loadMeta -> None {
     } except Exception as e {
         wfName = wfName;
     }
+}
+
+impl WorkflowPage.switchView(v: str) -> None {
+    chosen = "lanes" if v == "lanes" else "flow";
+    wfView = chosen;
+    localStorage.setItem("standup_wf_view", chosen);
+}
+
+impl WorkflowPage.lanePlan -> dict[str, any] {
+    # The Lane view projection, recomputed on demand so the fit math and
+    # the render can never disagree. Editing always measures the freeform
+    # drawing, so the plan is empty there.
+    if wfView != "lanes" or editing or len(steps) == 0 {
+        return {"positions": {}, "lanes": []};
+    }
+    return laneLayout(steps, roleRows, roleMembers);
 }
 
 impl WorkflowPage.pickTemplate(key: str) -> None {
@@ -215,6 +247,11 @@ impl WorkflowPage.commitField(key: str, value: str) -> None {
             root spawn SaveStep(step_id=selectedId, kind=value);
         } elif key == "color" {
             root spawn SaveStep(step_id=selectedId, color=value);
+        } elif key == "owner" {
+            # SaveStep reads empty as "keep", so a lone space clears.
+            root spawn SaveStep(
+                step_id=selectedId, owner=value if value.strip() else " "
+            );
         }
         await reload(projectId);
     } except Exception as e {
@@ -386,9 +423,9 @@ impl WorkflowPage.setField(key: str, value: str) -> None {
     updated = {** form};
     updated[key] = value;
     form = updated;
-    # Kind and color are pick-once fields: commit immediately. The name
-    # keeps typing local and commits on blur or Enter instead.
-    if key == "kind" or key == "color" {
+    # Kind, color and owner are pick-once fields: commit immediately. The
+    # name keeps typing local and commits on blur or Enter instead.
+    if key == "kind" or key == "color" or key == "owner" {
         commitField(key, value);
     }
 }
@@ -452,7 +489,27 @@ impl WorkflowPage.fitZoom -> None {
         zoom = 1.0;
         return;
     }
-    bounds = contentBounds(steps, live);
+    plan = lanePlan();
+    laneBands: list[dict[str, any]] = plan["lanes"];
+    laneFit = len(laneBands) > 0;
+    lanePose: dict[str, list[float]] = plan["positions"];
+    bounds = contentBounds(steps, lanePose if laneFit else live);
+    if laneFit {
+        # The label gutter and the last lane's padding are part of the
+        # drawing: include them, or the fit centers the labels off-screen.
+        bounds[0] = 0.0;
+        bounds[1] = 0.0;
+        deepest = 0.0;
+        for b in laneBands {
+            bandEdge = float(b["y"]) + float(b["h"]);
+            if bandEdge > deepest {
+                deepest = bandEdge;
+            }
+        }
+        if deepest > bounds[3] {
+            bounds[3] = deepest;
+        }
+    }
     spanW = bounds[2] - bounds[0];
     spanH = bounds[3] - bounds[1];
     # The editor floats over the canvas, so the space it covers is not space
@@ -499,7 +556,25 @@ impl WorkflowPage.recenterPan -> None {
         return;
     }
     z = float(zoomRef.current) if zoomRef.current else 1.0;
-    bounds = contentBounds(steps, live);
+    plan = lanePlan();
+    laneBands: list[dict[str, any]] = plan["lanes"];
+    laneFit = len(laneBands) > 0;
+    lanePose: dict[str, list[float]] = plan["positions"];
+    bounds = contentBounds(steps, lanePose if laneFit else live);
+    if laneFit {
+        bounds[0] = 0.0;
+        bounds[1] = 0.0;
+        deepest = 0.0;
+        for b in laneBands {
+            bandEdge = float(b["y"]) + float(b["h"]);
+            if bandEdge > deepest {
+                deepest = bandEdge;
+            }
+        }
+        if deepest > bounds[3] {
+            bounds[3] = deepest;
+        }
+    }
     minX = bounds[0];
     minY = bounds[1];
     maxX = bounds[2];

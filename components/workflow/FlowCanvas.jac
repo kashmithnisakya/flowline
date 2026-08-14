@@ -33,6 +33,11 @@ def:pub FlowCanvas(
     panY: float = 0.0,
     animate: bool = True,
     showGrid: bool = True,
+    # Lane view: horizontal role bands drawn behind the steps, computed by
+    # components/workflow/lanes.jac. Non-empty flips the canvas into lane
+    # mode, which also hides each card's owner line, the lane already says
+    # it. {key, label, sub, color, y, h} per band, canvas px.
+    lanes: list[dict[str, any]] = [],
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
@@ -63,6 +68,26 @@ def:pub FlowCanvas(
     settled = (not dragging) and (not bool(connectFrom));
 
     size = canvasSize(steps, live);
+
+    laneMode = len(lanes) > 0;
+    # Materialized ahead of the JSX so the alternating tint and the top
+    # border can key off the index without enumerate() in the tree.
+    laneRects: list[dict[str, str]] = [];
+    for (i, ln) in enumerate(lanes) {
+        laneRects.append(
+            {
+                "key": "lane-" + str(ln["key"]),
+                "cls": "absolute left-0"
+                    + (" bg-foreground/[0.045]" if i % 2 == 1 else "")
+                    + ("" if i == 0 else " border-t border-border/60"),
+                "top": str(ln["y"]) + "px",
+                "h": str(ln["h"]) + "px",
+                "label": str(ln["label"]),
+                "sub": str(ln["sub"]),
+                "dot": DOT_FILL[colorKey(str(ln["color"]))]
+            }
+        );
+    }
 
     # Flatten the transitions once so the SVG is one pass. Both ends must be
     # on this canvas to draw.
@@ -182,6 +207,38 @@ def:pub FlowCanvas(
                         + str(panY) + "px) scale(" + str(zoom) + ")"
                 }}
             >
+                {for lr in laneRects {
+                    <div
+                        key={lr["key"]}
+                        className={lr["cls"]}
+                        style={{
+                            "top": lr["top"],
+                            "height": lr["h"],
+                            "width": str(size[0]) + "px"
+                        }}
+                    >
+                        <div className="absolute left-3 top-1/2 w-44 -translate-y-1/2 pr-3">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                <span
+                                    className={"h-2 w-2 shrink-0 rounded-full "
+                                        + lr["dot"]}
+                                />
+                                <span className="truncate" title={lr["label"]}>
+                                    {lr["label"]}
+                                </span>
+                            </div>
+                            {if lr["sub"] {
+                                <div
+                                    key="sub"
+                                    className="mt-0.5 truncate pl-3.5 text-[10px] text-muted-foreground"
+                                    title={lr["sub"]}
+                                >
+                                    {lr["sub"]}
+                                </div>
+                            }}
+                        </div>
+                    </div>
+                }}
                 <svg
                     width={size[0]}
                     height={size[1]}
@@ -317,7 +374,7 @@ def:pub FlowCanvas(
                         >
                             {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
                         </div>
-                        {if s.owner {
+                        {if s.owner and not laneMode {
                             <div
                                 key="owner"
                                 className="mt-1 truncate pl-4 text-[11px] text-foreground/70"

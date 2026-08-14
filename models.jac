@@ -229,6 +229,18 @@ node GithubConnection {
         pending_at: str = "";
 }
 
+# An org-level role definition, seeded by ApplyTemplate from the chosen
+# template and fully editable on the Workspace Roles tab. Members hold role
+# NAMES (Member.roles) and workflow steps name their owner role by string,
+# so the rename/delete walkers propagate through both rather than anything
+# holding a jid to this node.
+node Role {
+    has name: str,
+        blurb: str = "",
+        color: str = "",
+        sort_order: float = 0.0;
+}
+
 # One step of the org's workflow: a named column-to-be with a semantic
 # `kind` behind the user's label. The kind, not the name, is what the rest
 # of the app will key behavior on ("done" is terminal, "blocked" raises
@@ -252,7 +264,12 @@ node WorkflowStep {
 # flat off the root; this carries only what the graph itself cannot — the
 # display name.
 node WorkflowMeta {
-    has name: str = "Workflow";
+    has name: str = "Workflow",
+        # Which template seeded this workflow; "" means drawn from scratch
+        # (or seeded before this field existed). The Roles tab keys on it: a
+        # template with a `roles` list brings fixed roles, "" means
+        # free-text roles.
+        template_key: str = "";
 }
 
 edge HasRepo: Project --> Repo {}
@@ -353,6 +370,25 @@ obj MilestoneView {
         prev_ids: list[str] = [],
         next_ids: list[str] = [];
 }
+
+obj RoleView {
+    has id: str,
+        name: str,
+        blurb: str,
+        color: str,
+        sort_order: float;
+}
+
+def role_view(r: Role) -> RoleView {
+    return RoleView(
+        id=jid(r),
+        name=r.name,
+        blurb=r.blurb,
+        color=r.color,
+        sort_order=r.sort_order
+    );
+}
+
 
 obj StepView {
     has id: str,
