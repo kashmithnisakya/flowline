@@ -6,6 +6,16 @@ impl WorkspacePage.loadAll -> None {
         pResult = root spawn ListProjects();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
+        # The member dialog offers the org's managed roles as toggle
+        # chips; an org with none (predates roles, or scratch and never
+        # added any) falls back to the free-text input.
+        rResult = root spawn ListRoles();
+        roleRows = rResult.reports[0] if rResult.reports else [];
+        opts: list[str] = [];
+        for r in roleRows {
+            opts.append(r.name);
+        }
+        roleOptions = opts;
     } except Exception as e {
         toast("Failed to load the workspace");
     }
@@ -36,6 +46,18 @@ impl WorkspacePage.addTag -> None {
     }
     mTags = mTags + [draft];
     setField("tagDraft", "");
+}
+
+impl WorkspacePage.toggleRoleOption(role: str) -> None {
+    if role in mRoles {
+        mRoles = [
+            r
+            for r in mRoles
+            if r != role
+        ];
+    } else {
+        mRoles = mRoles + [role];
+    }
 }
 
 impl WorkspacePage.removeRole(role: str) -> None {

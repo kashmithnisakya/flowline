@@ -1,9 +1,16 @@
 """Create/edit dialog for a roster member.
 
-v2.3: members carry multiple roles (free-text chips), multiple tags
-(picked from the workspace vocabulary) and multiple project assignments
-(toggle chips). The page owns all state; `form` carries name, email,
-github and the in-progress role draft.
+v2.3: members carry multiple roles, multiple tags (picked from the
+workspace vocabulary) and multiple project assignments (toggle chips).
+The page owns all state; `form` carries name, email, github and the
+in-progress role draft.
+
+Roles follow the workflow: when `roleOptions` is non-empty (the applied
+template defines fixed roles) they render as toggle chips and the
+free-text input disappears; empty means a scratch workflow and the
+type-and-enter chips stay. Roles a member already holds that are not in
+the options remain visible and removable, so old vocabulary never gets
+stranded.
 """
 
 import from ...models { Project }
@@ -37,7 +44,9 @@ def:pub MemberDialog(
     onToggleTag: Callable[[str], None],
     onToggleProject: Callable[[str], None],
     onOpenChange: Callable[[bool], None],
-    onSave: Callable[[], None]
+    onSave: Callable[[], None],
+    roleOptions: list[str] = [],
+    onToggleRole: Callable[[str], None] = None
 ) -> JsxElement {
     # Filter BEFORE the loop: a wrapper span around a conditional chip stays
     # in the flex row as an empty item and doubles the gap.
@@ -45,6 +54,13 @@ def:pub MemberDialog(
         t
         for t in allTags
         if t not in memberTags
+    ];
+    # Held roles the workflow does not define (free-text from before a
+    # template was applied). Shown as removable chips beside the options.
+    extraRoles = [
+        r
+        for r in roles
+        if r not in roleOptions
     ];
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,34 +86,77 @@ def:pub MemberDialog(
                     </div>
                     <div className="grid gap-2">
                         <Label>Roles</Label>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {for r in roles {
-                                <Badge
-                                    key={r}
-                                    variant="secondary"
-                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
-                                    title="Click to remove"
-                                    onClick={lambda { onRemoveRole(r); }}
-                                >
-                                    {r} ✕
-                                </Badge>
-                            }}
-                            <Input
-                                placeholder={"Add a role and press Enter"
-                                    if len(roles) == 0
-                                    else "Another role…"}
-                                className="h-8 w-56"
-                                value={form["roleDraft"]}
-                                onChange={lambda (e: ChangeEvent) { onField(
-                                    "roleDraft", e.target.value
-                                ); }}
-                                onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                    == "Enter" {
-                                    e.preventDefault();
-                                    onAddRole();
-                                }}}
-                            />
-                        </div>
+                        {if len(roleOptions) > 0 {
+                            <div
+                                key="fixed"
+                                className="flex flex-wrap items-center gap-1.5"
+                            >
+                                {for opt in roleOptions {
+                                    <Badge
+                                        key={opt}
+                                        variant={"default"
+                                            if opt in roles
+                                            else "outline"}
+                                        className={"cursor-pointer "
+                                            + (
+                                                ""
+                                                    if opt in roles
+                                                    else "hover:bg-accent hover:text-accent-foreground"
+                                            )}
+                                        onClick={lambda { if onToggleRole {
+                                            onToggleRole(opt);
+                                        }}}
+                                    >
+                                        {opt}
+                                    </Badge>
+                                }}
+                                {for extra in extraRoles {
+                                    <Badge
+                                        key={"x-" + extra}
+                                        variant="secondary"
+                                        className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                        title="Not one of this workflow's roles. Click to remove"
+                                        onClick={lambda { if onToggleRole {
+                                            onToggleRole(extra);
+                                        }}}
+                                    >
+                                        {extra + " ✕"}
+                                    </Badge>
+                                }}
+                            </div>
+                        } else {
+                            <div
+                                key="free"
+                                className="flex flex-wrap items-center gap-1.5"
+                            >
+                                {for r in roles {
+                                    <Badge
+                                        key={r}
+                                        variant="secondary"
+                                        className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                        title="Click to remove"
+                                        onClick={lambda { onRemoveRole(r); }}
+                                    >
+                                        {r} ✕
+                                    </Badge>
+                                }}
+                                <Input
+                                    placeholder={"Add a role and press Enter"
+                                        if len(roles) == 0
+                                        else "Another role…"}
+                                    className="h-8 w-56"
+                                    value={form["roleDraft"]}
+                                    onChange={lambda (e: ChangeEvent) { onField(
+                                        "roleDraft", e.target.value
+                                    ); }}
+                                    onKeyDown={lambda (e: KeyboardEvent) { if e.key
+                                        == "Enter" {
+                                        e.preventDefault();
+                                        onAddRole();
+                                    }}}
+                                />
+                            </div>
+                        } }
                     </div>
                     <div className="grid gap-2">
                         <Label>Tags</Label>

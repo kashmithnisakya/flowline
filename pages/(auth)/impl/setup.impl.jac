@@ -66,23 +66,21 @@ impl SetupPage.createProject -> None {
 
 
 impl SetupPage.addPerson -> None {
+    # Names only: roles are assigned on the Workspace tab once a workflow
+    # exists to define them, so the wizard never invents role vocabulary.
     captured = mName.strip();
-    capturedRole = mRole.strip();
     if not captured {
         return;
     }
     saveError = "";
     busy = True;
     try {
-        result = root spawn SaveMember(
-            name=captured, roles=[capturedRole] if capturedRole else []
-        );
+        result = root spawn SaveMember(name=captured);
         fresh = result.reports[0] if result.reports else None;
         if fresh {
             added = added + [fresh];
         }
         mName = "";
-        mRole = "";
     } except Exception as e {
         saveError = "Could not add that person. Try again.";
     }

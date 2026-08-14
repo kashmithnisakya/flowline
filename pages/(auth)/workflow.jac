@@ -15,9 +15,10 @@ placed among JSX children is not a comment at all, it renders as visible
 text, so notes like this one stay in the docstring.
 """
 
-import from ...models { Project, StepView, TaskView }
+import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS }
 import from ...walkers.projects { ListProjects }
+import from ...walkers.roster { ListMembers, ListRoles }
 import from ...walkers.workflow {
     GetWorkflow,
     ApplyTemplate,
@@ -69,6 +70,10 @@ glob BLANK_STEP: dict[str, str] = {
 def:pub WorkflowPage -> JsxPage {
     has steps: list[StepView] = [],
         projects: list[Project] = [],
+        # The org's roles and roster, for the who-does-what strip the
+        # viewer shows under the kind legend.
+        roleRows: list[RoleView] = [],
+        roleMembers: list[MemberView] = [],
         # Shared with the board through one localStorage key, so the project
         # you are looking at follows you between the two tabs.
         projectId: str = "all",
@@ -206,6 +211,17 @@ def:pub WorkflowPage -> JsxPage {
         for p in projects
         if p.active
     ];
+    # Who holds each role, for the strip under the kind legend.
+    roleHolders: dict[str, str] = {};
+    for rr in roleRows {
+        held: list[str] = [];
+        for rm in roleMembers {
+            if rm.active and rr.name in rm.roles {
+                held.append(rm.name);
+            }
+        }
+        roleHolders[rr.name] = ", ".join(held);
+    }
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -674,6 +690,36 @@ def:pub WorkflowPage -> JsxPage {
                             </span>
                         }}
                     </div>
+                    {if len(roleRows) > 0 {
+                        <div
+                            key="rolestrip"
+                            className="flex flex-wrap items-center gap-2"
+                        >
+                            {for rr in roleRows {
+                                <span
+                                    key={rr.id}
+                                    className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                                >
+                                    <span
+                                        className={"h-2 w-2 shrink-0 rounded-full "
+                                            + DOT_FILL[colorKey(rr.color or "slate")]}
+                                    />
+                                    <span className="font-medium">{rr.name}</span>
+                                    <span className="text-muted-foreground">
+                                        {roleHolders[rr.name]
+                                            if roleHolders[rr.name]
+                                            else "no one yet"}
+                                    </span>
+                                </span>
+                            }}
+                            <a
+                                href="/workspace?tab=roles"
+                                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                            >
+                                Manage roles
+                            </a>
+                        </div>
+                    }}
                     <FlowCanvas
                         steps={steps}
                         zoom={zoom}

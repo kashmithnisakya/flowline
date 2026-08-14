@@ -30,6 +30,10 @@ import from walkers.projects {
 import from walkers.roster {
     ListMembers,
     SaveMember,
+    SetMemberRoles,
+    ListRoles,
+    SaveRole,
+    DeleteRole,
     ArchiveMember,
     ListRepos,
     AddRepo,

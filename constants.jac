@@ -18,211 +18,120 @@ glob STATUSES: list[str] = [
          "blocked": "rose",
          "done": "emerald"
      },
+     # The one prebuilt flow. The picker offers exactly this or a blank
+     # canvas; the removed Kanban/Software/Support entries only ever seeded
+     # steps, so workspaces created from them keep working untouched.
      WORKFLOW_TEMPLATES: list[dict[str, any]] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "Solve it with a model, build, review. Approve and Follow-up are optional.",
+             "description": "Specify, triage, design, build, review, de-slop. Four roles, loops included.",
+             # The four Jaseci roles. ApplyTemplate seeds these as Role
+             # nodes (editable org data from then on); colors match the
+             # step each role owns so the Roles tab echoes the canvas.
+             "roles": [
+                 {
+                     "name": "Product Engineer",
+                     "blurb": "Triages, reviews, merges, closes.",
+                     "color": "indigo"
+                 },
+                 {
+                     "name": "Builder",
+                     "blurb": "Implements. Many PRs, fast.",
+                     "color": "amber"
+                 },
+                 {
+                     "name": "Architect",
+                     "blurb": "Designs the approach for big changes.",
+                     "color": "slate"
+                 },
+                 {
+                     "name": "De-slop Engineer",
+                     "blurb": "Small fixes and flagged rewrites.",
+                     "color": "rose"
+                 }
+             ],
+             # Triage is `start`, not `handoff`: triaged-but-unstarted work
+             # must report Backlog, not Review. Two start steps is fine; the
+             # no-step fallback lands on the first of the kind (Specify).
              "steps": [
                  {
-                     "name": "Raised",
+                     "name": "Specify",
                      "kind": "start",
-                     "color": "slate",
-                     "owner": "nobody yet",
-                     "x": 40.0,
-                     "y": 200.0
-                 },
-                 {
-                     "name": "Solving",
-                     "kind": "active",
                      "color": "sky",
-                     "owner": "person + model",
-                     "x": 360.0,
-                     "y": 200.0
+                     "owner": "anyone",
+                     "x": 60.0,
+                     "y": 40.0
                  },
-                 # Approve is the optional detour at the start, Follow-up the
-                 # one at the end. Most work takes neither.
                  {
-                     "name": "Approve",
+                     "name": "Triage",
+                     "kind": "start",
+                     "color": "indigo",
+                     "owner": "Product Engineer",
+                     "x": 60.0,
+                     "y": 260.0
+                 },
+                 {
+                     "name": "Design",
+                     "kind": "active",
+                     "color": "slate",
+                     "owner": "Architect",
+                     "x": 400.0,
+                     "y": 430.0
+                 },
+                 {
+                     "name": "Implement",
+                     "kind": "active",
+                     "color": "amber",
+                     "owner": "Builder",
+                     "x": 740.0,
+                     "y": 560.0
+                 },
+                 {
+                     "name": "Review & merge",
                      "kind": "handoff",
                      "color": "indigo",
-                     "owner": "domain expert",
-                     "x": 360.0,
-                     "y": 20.0
+                     "owner": "Product Engineer",
+                     "x": 860.0,
+                     "y": 260.0
                  },
                  {
-                     "name": "Build",
+                     "name": "Refactor",
                      "kind": "active",
-                     "color": "amber",
-                     "owner": "model + PR owner",
-                     "x": 720.0,
-                     "y": 200.0
-                 },
-                 {
-                     "name": "Review",
-                     "kind": "handoff",
                      "color": "rose",
-                     "owner": "original architect",
-                     "x": 1040.0,
-                     "y": 200.0
-                 },
-                 # Merged but not finished: the change is live and another PR
-                 # is still owed before the job is really complete. Work waits
-                 # here until that one lands, then both reach Done together.
-                 {
-                     "name": "Follow-up",
-                     "kind": "handoff",
-                     "color": "amber",
-                     "owner": "follow-up PR owner",
-                     "x": 1320.0,
-                     "y": 370.0
+                     "owner": "De-slop Engineer",
+                     "x": 1210.0,
+                     "y": 560.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
-                     "owner": "",
-                     "x": 1570.0,
-                     "y": 200.0
+                     "owner": "Product Engineer",
+                     "x": 1330.0,
+                     "y": 260.0
                  }
              ],
-             # Forward first, then the two send-backs: a review that can only
+             # Forward first, then the send-back: review that can only
              # approve is a review nobody needs.
              "links": [
-                 [0, 1], [1, 2], [1, 3], [2, 3], [3, 4], [4, 5], [4, 6],
-                 [5, 6],
-                 [2, 1], [4, 3]
+                 [0, 1], [1, 0], [1, 2], [1, 3], [2, 3], [3, 4], [4, 6],
+                 [4, 3], [4, 5], [5, 6]
              ],
              # Kept short: two of these share a pair of steps, and long chips
              # collide.
              "link_labels": [
-                 "someone takes it",
+                 "to PE first",
+                 "PE too",
                  "needs design",
-                 "small enough to just build",
-                 "plan approved",
-                 "PR ready and tested",
-                 "merged, more to do",
-                 "merged, complete",
-                 "follow-up merged",
-                 "rethink",
-                 "changes requested"
+                 "small, straight to build",
+                 "approach agreed",
+                 "ready and tested",
+                 "merged, clean",
+                 "big changes, back to builder",
+                 "brittle, small changes",
+                 "rewritten, merged"
              ]
-         },
-         {
-             "key": "kanban",
-             "name": "Classic Kanban",
-             "description": "The straight line you know: To do, In progress, Done.",
-             "steps": [
-                 {
-                     "name": "To do",
-                     "kind": "start",
-                     "color": "sky",
-                     "x": 40.0,
-                     "y": 60.0
-                 },
-                 {
-                     "name": "In progress",
-                     "kind": "active",
-                     "color": "indigo",
-                     "x": 300.0,
-                     "y": 60.0
-                 },
-                 {
-                     "name": "Done",
-                     "kind": "done",
-                     "color": "emerald",
-                     "x": 560.0,
-                     "y": 60.0
-                 }
-             ],
-             "links": [[0, 1], [1, 2]]
-         },
-         {
-             "key": "software",
-             "name": "Software flow",
-             "description": "Review loops back to development. Mirrors the classic six statuses.",
-             "steps": [
-                 {
-                     "name": "Backlog",
-                     "kind": "start",
-                     "color": "sky",
-                     "x": 40.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "In progress",
-                     "kind": "active",
-                     "color": "indigo",
-                     "x": 300.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Review",
-                     "kind": "handoff",
-                     "color": "amber",
-                     "x": 560.0,
-                     "y": 40.0
-                 },
-                 {
-                     "name": "Changes requested",
-                     "kind": "active",
-                     "color": "rose",
-                     "x": 560.0,
-                     "y": 220.0
-                 },
-                 {
-                     "name": "Blocked",
-                     "kind": "blocked",
-                     "color": "slate",
-                     "x": 300.0,
-                     "y": 220.0
-                 },
-                 {
-                     "name": "Done",
-                     "kind": "done",
-                     "color": "emerald",
-                     "x": 820.0,
-                     "y": 120.0
-                 }
-             ],
-             "links": [[0, 1], [1, 2], [2, 5], [2, 3], [3, 1], [1, 4], [4, 1]]
-         },
-         {
-             "key": "support",
-             "name": "Support flow",
-             "description": "Triage, work, wait on the customer, resolve. Waiting loops back.",
-             "steps": [
-                 {"name": "New", "kind": "start", "color": "sky", "x": 40.0, "y": 60.0},
-                 {
-                     "name": "Triage",
-                     "kind": "active",
-                     "color": "indigo",
-                     "x": 300.0,
-                     "y": 60.0
-                 },
-                 {
-                     "name": "In progress",
-                     "kind": "active",
-                     "color": "amber",
-                     "x": 560.0,
-                     "y": 60.0
-                 },
-                 {
-                     "name": "Waiting on customer",
-                     "kind": "handoff",
-                     "color": "rose",
-                     "x": 560.0,
-                     "y": 240.0
-                 },
-                 {
-                     "name": "Resolved",
-                     "kind": "done",
-                     "color": "emerald",
-                     "x": 820.0,
-                     "y": 140.0
-                 }
-             ],
-             "links": [[0, 1], [1, 2], [2, 3], [3, 2], [2, 4]]
          }
      ],
      KIND_STATUS: dict[str, str] = {

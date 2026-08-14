@@ -20,6 +20,16 @@ impl WorkflowPage.boot -> None {
     } except Exception as e {
         projects = [];
     }
+    # Roles and roster feed the who-does-what strip; the diagram loads
+    # fine without them, so failure here stays quiet.
+    try {
+        roleResult = root spawn ListRoles();
+        roleRows = roleResult.reports[0] if roleResult.reports else [];
+        memResult = root spawn ListMembers();
+        roleMembers = memResult.reports[0] if memResult.reports else [];
+    } except Exception as e {
+        roleRows = [];
+    }
     await reload(picked);
 }
 
