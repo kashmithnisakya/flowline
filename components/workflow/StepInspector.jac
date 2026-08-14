@@ -1,8 +1,13 @@
 """Editor panel for the step selected on the workflow canvas.
 
-No save button on purpose: the name commits on blur or Enter, kind and
-color commit on pick, SaveStep's empty-means-keep semantics make each a
-safe partial update. Connections are removable rows in both directions.
+No save button on purpose: the name commits on blur or Enter, kind, color
+and owner commit on pick, SaveStep's empty-means-keep semantics make each
+a safe partial update. Connections are removable rows in both directions.
+
+The owner is a dropdown over the org's managed roles rather than free
+text: roles are data now, and typing them here is how two spellings of the
+same role used to be born. "Anyone" stays a first-class choice, and a
+legacy free-text owner is kept as a pickable option until it is changed.
 """
 
 import from ...models { StepView }
@@ -26,6 +31,7 @@ def:pub StepInspector(
     className: str = "",
     steps: list[StepView] = [],
     form: dict[str, str] = {},
+    roleOptions: list[str] = [],
     connecting: bool = False,
     saving: bool = False,
     confirmingDelete: bool = False,
@@ -39,6 +45,22 @@ def:pub StepInspector(
     byId: dict[str, StepView] = {};
     for s in steps {
         byId[s.id] = s;
+    }
+
+    # The pickable owners: the org's roles, plus whatever legacy free-text
+    # value this step already carries so it stays visible until changed.
+    # "Anyone" and "No one yet" are fixed choices rendered above these.
+    ownerChoices: list[str] = [];
+    for r in roleOptions {
+        ownerChoices.append(r);
+    }
+    currentOwner = (form["owner"] or "").strip();
+    if (
+        currentOwner
+        and currentOwner != "anyone"
+        and currentOwner not in ownerChoices
+    ) {
+        ownerChoices.append(currentOwner);
     }
 
     def rowLabel(sid: str) -> str {
@@ -91,20 +113,25 @@ def:pub StepInspector(
                     >
                         Who holds it here
                     </div>
-                    <Input
-                        value={form["owner"] or ""}
-                        placeholder="domain expert, model, whoever raised it"
-                        onChange={lambda (e: any) { if onField {
-                            onField("owner", e.target.value);
+                    <Select
+                        value={form["owner"] or "__none"}
+                        onValueChange={lambda (v: str) { if onField {
+                            onField("owner", "" if v == "__none" else v);
                         }}}
-                        onBlur={lambda { if onNameCommit { onNameCommit(); }}}
-                        onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onNameCommit {
-                            onNameCommit();
-                        }}}
-                    />
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Pick a role"/>
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                            <SelectItem value="__none">No one yet</SelectItem>
+                            <SelectItem value="anyone">Anyone</SelectItem>
+                            {for r in ownerChoices {
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
                     <p className="text-[11px] text-muted-foreground">
-                        A role, not a person. A step that cannot say who holds it is a picture rather than a model.
+                        A role, not a person. The list is managed on the Workspace's Roles tab.
                     </p>
                 </div>
                 <div className="space-y-1.5">

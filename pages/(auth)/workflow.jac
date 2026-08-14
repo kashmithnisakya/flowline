@@ -33,6 +33,7 @@ import from ...walkers.workflow {
     ListStepTasks
 }
 import from ...components.workflow.FlowCanvas { FlowCanvas }
+import from ...components.workflow.lanes { laneLayout }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
 import from ...components.workflow.geometry {
@@ -71,9 +72,13 @@ def:pub WorkflowPage -> JsxPage {
     has steps: list[StepView] = [],
         projects: list[Project] = [],
         # The org's roles and roster, for the who-does-what strip the
-        # viewer shows under the kind legend.
+        # viewer shows under the kind legend and the Lane view's labels.
         roleRows: list[RoleView] = [],
         roleMembers: list[MemberView] = [],
+        # Viewer projection: "flow" renders the hand-drawn positions,
+        # "lanes" a computed swimlane layout (lane = owner role, column =
+        # flow depth). Persisted per browser; editing always uses flow.
+        wfView: str = "flow",
         # Shared with the board through one localStorage key, so the project
         # you are looking at follows you between the two tabs.
         projectId: str = "all",
@@ -141,8 +146,10 @@ def:pub WorkflowPage -> JsxPage {
     # browser paints, so the first visible frame is already fitted and
     # centered. A plain effect fires post-paint and the canvas's transform
     # transition animates the correction - the diagram visibly "flies" from
-    # the top-left corner on every visit to this tab.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing]);
+    # the top-left corner on every visit to this tab. wfView is a dep so a
+    # view flip refits AFTER the state lands, never against the stale value
+    # a same-tick read would see.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView]);
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
@@ -162,6 +169,8 @@ def:pub WorkflowPage -> JsxPage {
     async def selectProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
     async def loadMeta -> None;
+    def switchView(v: str) -> None;
+    def lanePlan -> dict[str, any];
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
     def startRename -> None;
@@ -222,6 +231,20 @@ def:pub WorkflowPage -> JsxPage {
         }
         roleHolders[rr.name] = ", ".join(held);
     }
+    # The inspector's owner dropdown offers exactly the managed roles.
+    ownerOptions: list[str] = [];
+    for rr in roleRows {
+        ownerOptions.append(rr.name);
+    }
+    # The Lane view projection: computed fresh per render, empty in flow
+    # mode so the viewer's FlowCanvas call can pass these unconditionally.
+    laneMode = wfView == "lanes";
+    plan: dict[str, any] = {"positions": {}, "lanes": []};
+    if laneMode and not editing {
+        plan = laneLayout(steps, roleRows, roleMembers);
+    }
+    lanePose: dict[str, list[float]] = plan["positions"];
+    laneBands: list[dict[str, any]] = plan["lanes"];
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -603,6 +626,7 @@ def:pub WorkflowPage -> JsxPage {
                                     step={picked[0]}
                                     steps={steps}
                                     form={form}
+                                    roleOptions={ownerOptions}
                                     connecting={bool(connectFrom)}
                                     saving={saving}
                                     confirmingDelete={confirmDelete}
@@ -659,6 +683,34 @@ def:pub WorkflowPage -> JsxPage {
                                 <span>{issues[0]}</span>
                             </span>
                         }}
+                        <div
+                            className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted p-0.5"
+                        >
+                            <button
+                                type="button"
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if not laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
+                                onClick={lambda { switchView("flow"); }}
+                            >
+                                Flow
+                            </button>
+                            <button
+                                type="button"
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
+                                onClick={lambda { switchView("lanes"); }}
+                            >
+                                Lanes
+                            </button>
+                        </div>
                         <Select value={projectId} onValueChange={selectProject}>
                             <SelectTrigger className="w-44">
                                 <SelectValue placeholder="All projects"/>
@@ -672,7 +724,13 @@ def:pub WorkflowPage -> JsxPage {
                                 }}
                             </SelectContent>
                         </Select>
-                        <Button key="edit" onClick={lambda { editing = True; }}>
+                        <Button
+                            key="edit"
+                            onClick={lambda {
+                                switchView("flow");
+                                editing = True;
+                            }}
+                        >
                             Edit workflow
                         </Button>
                     </div>
@@ -690,7 +748,7 @@ def:pub WorkflowPage -> JsxPage {
                             </span>
                         }}
                     </div>
-                    {if len(roleRows) > 0 {
+                    {if len(roleRows) > 0 and not laneMode {
                         <div
                             key="rolestrip"
                             className="flex flex-wrap items-center gap-2"
@@ -722,6 +780,8 @@ def:pub WorkflowPage -> JsxPage {
                     }}
                     <FlowCanvas
                         steps={steps}
+                        live={lanePose}
+                        lanes={laneBands}
                         zoom={zoom}
                         panX={panX}
                         panY={panY}
