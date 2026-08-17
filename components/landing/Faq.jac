@@ -63,19 +63,19 @@ glob FAQS: list[QA] = [
 
 def:pub Faq -> JsxElement {
     return
-        <section id="faq" className="mx-auto max-w-[840px] scroll-mt-24 px-7 pt-24">
+        <section id="faq" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
             <span
                 className="text-xs font-semibold uppercase tracking-widest text-primary"
             >
                 FAQ
             </span>
             <h2
-                className="font-display mt-3 text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
+                className="font-display mt-3 max-w-2xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >
                 Questions worth asking first
             </h2>
             <div
-                className="mt-8 divide-y divide-foreground/10 border-y border-foreground/10"
+                className="mt-8 max-w-[840px] divide-y divide-foreground/10 border-y border-foreground/10"
             >
                 {for f in FAQS {
                     <details
