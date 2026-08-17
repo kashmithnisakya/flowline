@@ -9,21 +9,22 @@ import from ...components.ui.button { Button }
 def:pub GithubPage -> JsxPage {
     has browseNonce: int = 0;
 
-    return <div className="flex w-full flex-col gap-8">
-        <div className="flex items-center justify-between gap-6">
-            <div>
-                <h1 className="page-title">GitHub</h1>
-                <p className="page-subtitle mt-1">
-                    Read issues and pull requests, and import issues onto the board.
-                </p>
+    return
+        <div className="flex w-full flex-col gap-8">
+            <div className="flex items-center justify-between gap-6">
+                <div>
+                    <h1 className="page-title">GitHub</h1>
+                    <p className="page-subtitle mt-1">
+                        Read issues and pull requests, and import issues onto the board.
+                    </p>
+                </div>
+                <Button
+                    className="shrink-0"
+                    onClick={lambda { browseNonce = browseNonce + 1; }}
+                >
+                    Browse GitHub repos
+                </Button>
             </div>
-            <Button
-                className="shrink-0"
-                onClick={lambda { browseNonce = browseNonce + 1; }}
-            >
-                Browse GitHub repos
-            </Button>
-        </div>
-        <GithubSection openNonce={browseNonce}/>
-    </div>;
+            <GithubSection openNonce={browseNonce}/>
+        </div>;
 }

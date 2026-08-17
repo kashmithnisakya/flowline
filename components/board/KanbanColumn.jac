@@ -41,9 +41,9 @@ def:pub KanbanColumn(
 
     return
         <div
-            className={"flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border p-2 transition-shadow duration-150 "
-                + (COLUMN_TINT[colorKey(color)] if color else "bg-muted/30")
-                + ((" " + RING_TINT[colorKey(color)]) if dragOver else "")}
+            className={"flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border p-2 transition-shadow duration-150 " + (
+                COLUMN_TINT[colorKey(color)] if color else "bg-muted/30"
+            ) + ((" " + RING_TINT[colorKey(color)]) if dragOver else "")}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();
                 dt = e.dataTransfer;

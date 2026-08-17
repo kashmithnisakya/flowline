@@ -11,21 +11,22 @@ import from ...components.landing.HowItWorks { HowItWorks }
 import from ...components.landing.Faq { Faq }
 import from ...components.landing.SiteFooter { SiteFooter }
 
-def:pub LandingPage() -> JsxPage {
+def:pub LandingPage -> JsxPage {
     has loggedIn: bool = False;
 
     can with entry {
         loggedIn = jacIsLoggedIn();
     }
 
-    return <div className="bg-background">
-        <SiteNav loggedIn={loggedIn} />
-        <main>
-            <Hero loggedIn={loggedIn} />
-            <Features />
-            <HowItWorks />
-            <Faq />
-        </main>
-        <SiteFooter loggedIn={loggedIn} />
-    </div>;
+    return
+        <div className="bg-background">
+            <SiteNav loggedIn={loggedIn}/>
+            <main>
+                <Hero loggedIn={loggedIn}/>
+                <Features/>
+                <HowItWorks/>
+                <Faq/>
+            </main>
+            <SiteFooter loggedIn={loggedIn}/>
+        </div>;
 }

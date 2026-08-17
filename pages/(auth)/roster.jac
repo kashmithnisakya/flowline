@@ -5,7 +5,7 @@ the old callback URL, whose install round trip is carried across.
 
 import from ...components.ui.skeleton { Skeleton }
 
-def:pub RosterPage() -> JsxPage {
+def:pub RosterPage -> JsxPage {
     can with entry {
         w: any = window;
         search = str(w.location.search);
@@ -13,5 +13,5 @@ def:pub RosterPage() -> JsxPage {
         w.location.replace("/workspace" + tail);
     }
 
-    return <Skeleton className="h-48 w-full" />;
+    return <Skeleton className="h-48 w-full"/>;
 }

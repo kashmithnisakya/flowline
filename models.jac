@@ -340,11 +340,7 @@ obj RoleView {
 
 def role_view(r: Role) -> RoleView {
     return RoleView(
-        id=jid(r),
-        name=r.name,
-        blurb=r.blurb,
-        color=r.color,
-        sort_order=r.sort_order
+        id=jid(r), name=r.name, blurb=r.blurb, color=r.color, sort_order=r.sort_order
     );
 }
 

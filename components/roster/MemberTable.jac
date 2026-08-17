@@ -15,12 +15,12 @@ import from ..ui.select {
 
 # Avatar hue pairs picked by name hash; whole literal strings so Tailwind scans them.
 glob AVATAR_HUES: list[str] = [
-    "bg-chart-1/15 text-chart-1",
-    "bg-chart-2/15 text-chart-2",
-    "bg-chart-3/15 text-chart-3",
-    "bg-chart-4/15 text-chart-4",
-    "bg-chart-5/15 text-chart-5"
-];
+         "bg-chart-1/15 text-chart-1",
+         "bg-chart-2/15 text-chart-2",
+         "bg-chart-3/15 text-chart-3",
+         "bg-chart-4/15 text-chart-4",
+         "bg-chart-5/15 text-chart-5"
+     ];
 
 # "Ishara Perera" -> "IP" for the avatar circle.
 def initialsOf(name: str) -> str {
@@ -79,8 +79,7 @@ def:pub MemberTable(
                     </svg>
                     <p className="text-sm font-semibold">No members yet</p>
                     <p className="text-sm text-muted-foreground">
-                        Members are roster records, not accounts. Add your team
-                        to assign work and sign log entries.
+                        Members are roster records, not accounts. Add your team to assign work and sign log entries.
                     </p>
                     {if onCreate {
                         <Button
@@ -129,8 +128,9 @@ def:pub MemberTable(
                                 <TableCell>
                                     <div className="flex items-center gap-3">
                                         <span
-                                            className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold "
-                                                + hueFor(m.name)}
+                                            className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold " + hueFor(
+                                                m.name
+                                            )}
                                         >
                                             {initialsOf(m.name)}
                                         </span>
@@ -272,14 +272,12 @@ def:pub MemberTable(
                                         title={"Click again to archive"
                                             if armedId == m.id
                                             else "Archive"}
-                                        onClick={lambda {
-                                            if armedId == m.id {
-                                                armedId = "";
-                                                onArchive(m.id);
-                                            } else {
-                                                armedId = m.id;
-                                            }
-                                        }}
+                                        onClick={lambda { if armedId == m.id {
+                                            armedId = "";
+                                            onArchive(m.id);
+                                        } else {
+                                            armedId = m.id;
+                                        } }}
                                     >
                                         {"Confirm?" if armedId == m.id else "Archive"}
                                     </Button>

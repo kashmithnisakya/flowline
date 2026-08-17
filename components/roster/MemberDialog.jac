@@ -88,12 +88,11 @@ def:pub MemberDialog(
                                         variant={"default"
                                             if opt in roles
                                             else "outline"}
-                                        className={"cursor-pointer "
-                                            + (
-                                                ""
-                                                    if opt in roles
-                                                    else "hover:bg-accent hover:text-accent-foreground"
-                                            )}
+                                        className={"cursor-pointer " + (
+                                            ""
+                                                if opt in roles
+                                                else "hover:bg-accent hover:text-accent-foreground"
+                                        )}
                                         onClick={lambda { if onToggleRole {
                                             onToggleRole(opt);
                                         }}}
@@ -140,8 +139,7 @@ def:pub MemberDialog(
                                     onChange={lambda (e: ChangeEvent) { onField(
                                         "roleDraft", e.target.value
                                     ); }}
-                                    onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                        == "Enter" {
+                                    onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
                                         e.preventDefault();
                                         onAddRole();
                                     }}}
@@ -183,8 +181,7 @@ def:pub MemberDialog(
                                 onChange={lambda (e: ChangeEvent) { onField(
                                     "tagDraft", e.target.value
                                 ); }}
-                                onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                    == "Enter" {
+                                onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
                                     e.preventDefault();
                                     onAddTag();
                                 }}}
@@ -201,12 +198,11 @@ def:pub MemberDialog(
                                         variant={"default"
                                             if jid(p) in selectedProjectIds
                                             else "outline"}
-                                        className={"cursor-pointer "
-                                            + (
-                                                ""
-                                                    if jid(p) in selectedProjectIds
-                                                    else "hover:bg-accent hover:text-accent-foreground"
-                                            )}
+                                        className={"cursor-pointer " + (
+                                            ""
+                                                if jid(p) in selectedProjectIds
+                                                else "hover:bg-accent hover:text-accent-foreground"
+                                        )}
                                         onClick={lambda { onToggleProject(jid(p)); }}
                                     >
                                         {p.name}

@@ -17,14 +17,20 @@ import from "sonner" { toast }
 import from "react" { useEffect }
 
 glob QUICK_ASKS: list[dict[str, str]] = [
-    {"label": "Today's standup", "kind": "note", "value": "today"},
-    {"label": "This week", "kind": "note", "value": "this week"},
-    {"label": "What's blocked?", "kind": "ask", "value": "What is blocked right now, and why?"},
-    {"label": "Needs chasing", "kind": "ask",
-     "value": "What is overdue, stale, or has been waiting in review too long?"}
-];
-
-glob SPARKLE: str = "M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9L12 2.5zM18.5 15l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4z";
+         {"label": "Today's standup", "kind": "note", "value": "today"},
+         {"label": "This week", "kind": "note", "value": "this week"},
+         {
+             "label": "What's blocked?",
+             "kind": "ask",
+             "value": "What is blocked right now, and why?"
+         },
+         {
+             "label": "Needs chasing",
+             "kind": "ask",
+             "value": "What is overdue, stale, or has been waiting in review too long?"
+         }
+     ],
+     SPARKLE: str = "M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9L12 2.5zM18.5 15l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4z";
 
 
 # An ISO day `back` days before today, in the browser's own timezone.
@@ -74,12 +80,15 @@ def:pub AssistantDock -> JsxElement {
     # Pin the transcript to the newest turn. Without this a long standup note
     # or a proposal lands below the fold and its Apply button is unreachable
     # until the user scrolls, which reads as a dead button.
-    useEffect(lambda {
-        el = logRef.current;
-        if el {
-            el.scrollTop = el.scrollHeight;
-        }
-    }, [turns, busy, open]);
+    useEffect(
+        lambda {
+            el = logRef.current;
+            if el {
+                el.scrollTop = el.scrollHeight;
+            }
+        },
+        [turns, busy, open]
+    );
 
     async def send -> None;
     async def quick(kind: str, value: str) -> None;
@@ -95,7 +104,7 @@ def:pub AssistantDock -> JsxElement {
     rows: list[dict] = [];
     at = 0;
     for t in turns {
-        rows.append({**t, "at": at});
+        rows.append({** t, "at": at});
         at = at + 1;
     }
 
@@ -116,188 +125,266 @@ def:pub AssistantDock -> JsxElement {
                 className="fixed bottom-6 right-6 z-50 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:scale-105 active:scale-95"
             >
                 <svg width={17} height={17} viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="currentColor" d={SPARKLE} />
+                    <path fill="currentColor" d={SPARKLE}/>
                 </svg>
                 Assistant
             </button>;
     }
 
-    return <div className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] min-h-72 w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
-        <div className="flex items-center gap-2 border-b px-4 py-3">
-            <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden="true" className="text-primary">
-                <path fill="currentColor" d={SPARKLE} />
-            </svg>
-            <span className="font-display text-sm font-bold tracking-tight">Assistant</span>
-            <div className="ml-auto flex items-center gap-1">
-                {if len(turns) > 0 {
-                    <Button key="clear" variant="ghost" size="sm" onClick={lambda { turns = []; }}>
-                        Clear
-                    </Button>
-                }}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Close the assistant"
-                    onClick={lambda { open = False; }}
+    return
+        <div
+            className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] min-h-72 w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200"
+        >
+            <div className="flex items-center gap-2 border-b px-4 py-3">
+                <svg
+                    width={16}
+                    height={16}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="text-primary"
                 >
-                    <svg width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            d="M6 6l12 12M18 6L6 18"
-                        />
-                    </svg>
-                </Button>
-            </div>
-        </div>
-
-        <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {if len(rows) == 0 {
-                <p key="empty" className="py-2 text-sm leading-relaxed text-muted-foreground">
-                    I read your board, projects, people and log, then answer from that. I never
-                    write anything myself: a task change comes back as a suggestion you confirm.
-                    Start with one of the buttons below, or just ask.
-                </p>
-            }}
-            {for r in rows {
-                <div
-                    key={"turn" + str(r["at"])}
-                    className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 " + ("justify-end" if r["role"] == "user" else "justify-start")}
-                >
-                    {if r["role"] == "user" {
-                        <div key="u" className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
-                            {r["text"]}
-                        </div>
-                    } elif r["kind"] == "note" {
-                        <div key="note" className="w-full rounded-xl border bg-background p-3.5">
-                            <div className="flex items-start gap-2">
-                                <p className="flex-1 text-sm font-medium leading-snug">
-                                    {r["note"].headline}
-                                </p>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={lambda { copyNote(r["at"]); }}
-                                >
-                                    Copy
-                                </Button>
-                            </div>
-                            <Separator className="my-3" />
-                            <div className="space-y-3">
-                                <NoteList title="Shipped" items={r["note"].shipped} />
-                                <NoteList title="In flight" items={r["note"].in_flight} />
-                                <NoteList title="Blocked" items={r["note"].blocked} />
-                                <NoteList title="Needs attention" items={r["note"].needs_attention} />
-                            </div>
-                        </div>
-                    } elif r["kind"] == "proposal" {
-                        <div key="prop" className="w-full">
-                            <ProposalCard
-                                proposal={r["proposal"]}
-                                state={r["state"]}
-                                busy={busy}
-                                onApply={lambda { applyProposal(r["at"]); }}
-                                onDismiss={lambda { setTurnState(r["at"], "dismissed"); }}
-                            />
-                        </div>
-                    } else {
-                        <div
-                            key="text"
-                            className={
-                                "max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed "
-                                + ("whitespace-pre-wrap bg-destructive/10 text-destructive" if r["kind"] == "error" else "bg-secondary text-foreground")
-                            }
+                    <path fill="currentColor" d={SPARKLE}/>
+                </svg>
+                <span className="font-display text-sm font-bold tracking-tight">
+                    Assistant
+                </span>
+                <div className="ml-auto flex items-center gap-1">
+                    {if len(turns) > 0 {
+                        <Button
+                            key="clear"
+                            variant="ghost"
+                            size="sm"
+                            onClick={lambda { turns = []; }}
                         >
-                            {if r["kind"] == "error" {
-                                <span key="plain">{r["text"]}</span>
-                            } else {
-                                <Markdown key="md" text={r["text"]} />
-                            }}
-                        </div>
+                            Clear
+                        </Button>
                     }}
-                </div>
-            }}
-            {if busy {
-                <div key="busy" className="flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-200">
-                    <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2.5">
-                        <span className="sr-only">Reading your workspace</span>
-                        <span
-                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
-                            style={{"animationDelay": "-0.3s"}}
-                        />
-                        <span
-                            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
-                            style={{"animationDelay": "-0.15s"}}
-                        />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
-                    </div>
-                </div>
-            }}
-        </div>
-
-        <div className="space-y-2.5 border-t px-4 py-3">
-            <div className="flex flex-wrap gap-1.5">
-                {for q in QUICK_ASKS {
-                    <button
-                        key={q["label"]}
-                        type="button"
-                        disabled={busy}
-                        onClick={lambda { quick(q["kind"], q["value"]); }}
-                        className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                    >
-                        {q["label"]}
-                    </button>
-                }}
-            </div>
-            <div className="flex items-center gap-2">
-                <div className="flex shrink-0 rounded-lg bg-muted p-0.5">
-                    <button type="button" className={modeClass(asking)} onClick={lambda { mode = "ask"; }}>
-                        Ask
-                    </button>
-                    <button type="button" className={modeClass(not asking)} onClick={lambda { mode = "do"; }}>
-                        Do
-                    </button>
-                </div>
-                <Input
-                    value={draft}
-                    placeholder={"Ask about your workspace" if asking else "Describe the task to add or move"}
-                    disabled={busy}
-                    onChange={lambda (e: any) { draft = e.target.value; }}
-                    onKeyDown={lambda (e: any) {
-                        if e.key == "Enter" {
-                            send();
-                        }
-                    }}
-                />
-                {if canListen {
                     <Button
-                        key="mic"
-                        variant={"default" if listening else "outline"}
+                        variant="ghost"
                         size="icon"
-                        aria-label={"Stop dictating" if listening else "Dictate"}
-                        onClick={toggleMic}
+                        aria-label="Close the assistant"
+                        onClick={lambda { open = False; }}
                     >
-                        <svg width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
+                        <svg
+                            width={15}
+                            height={15}
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
                             <path
-                                fill="currentColor"
-                                d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                d="M6 6l12 12M18 6L6 18"
                             />
                         </svg>
                     </Button>
-                }}
-                <Button size="icon" aria-label="Send" disabled={busy} onClick={send}>
-                    <svg width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
-                        <path fill="currentColor" d="M3 20.5l18-8.5L3 3.5V10l12 2-12 2v6.5z" />
-                    </svg>
-                </Button>
+                </div>
             </div>
-            <p className="text-xs leading-tight text-muted-foreground">
-                {"Answers come from your workspace only." if asking else "Suggestions only. Nothing changes until you press Apply."}
-            </p>
-        </div>
-    </div>;
+            <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+                {if len(rows) == 0 {
+                    <p
+                        key="empty"
+                        className="py-2 text-sm leading-relaxed text-muted-foreground"
+                    >
+                        I read your board, projects, people and log, then answer from that. I never write anything myself: a task change comes back as a suggestion you confirm. Start with one of the buttons below, or just ask.
+                    </p>
+                }}
+                {for r in rows {
+                    <div
+                        key={"turn" + str(r["at"])}
+                        className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 " + (
+                            "justify-end" if r["role"] == "user" else "justify-start"
+                        )}
+                    >
+                        {if r["role"] == "user" {
+                            <div
+                                key="u"
+                                className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground"
+                            >
+                                {r["text"]}
+                            </div>
+                        } elif r["kind"] == "note" {
+                            <div
+                                key="note"
+                                className="w-full rounded-xl border bg-background p-3.5"
+                            >
+                                <div className="flex items-start gap-2">
+                                    <p
+                                        className="flex-1 text-sm font-medium leading-snug"
+                                    >
+                                        {r["note"].headline}
+                                    </p>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={lambda { copyNote(r["at"]); }}
+                                    >
+                                        Copy
+                                    </Button>
+                                </div>
+                                <Separator className="my-3"/>
+                                <div className="space-y-3">
+                                    <NoteList
+                                        title="Shipped"
+                                        items={r["note"].shipped}
+                                    />
+                                    <NoteList
+                                        title="In flight"
+                                        items={r["note"].in_flight}
+                                    />
+                                    <NoteList
+                                        title="Blocked"
+                                        items={r["note"].blocked}
+                                    />
+                                    <NoteList
+                                        title="Needs attention"
+                                        items={r["note"].needs_attention}
+                                    />
+                                </div>
+                            </div>
+                        } elif r["kind"] == "proposal" {
+                            <div key="prop" className="w-full">
+                                <ProposalCard
+                                    proposal={r["proposal"]}
+                                    state={r["state"]}
+                                    busy={busy}
+                                    onApply={lambda { applyProposal(r["at"]); }}
+                                    onDismiss={lambda { setTurnState(
+                                        r["at"], "dismissed"
+                                    ); }}
+                                />
+                            </div>
+                        } else {
+                            <div
+                                key="text"
+                                className={"max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed " + (
+                                    "whitespace-pre-wrap bg-destructive/10 text-destructive"
+                                        if r["kind"] == "error"
+                                        else "bg-secondary text-foreground"
+                                )}
+                            >
+                                {if r["kind"] == "error" {
+                                    <span key="plain">{r["text"]}</span>
+                                } else {
+                                    <Markdown key="md" text={r["text"]}/>
+                                } }
+                            </div>
+                        }   }
+                    </div>
+                }}
+                {if busy {
+                    <div
+                        key="busy"
+                        className="flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-200"
+                    >
+                        <div
+                            className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2.5"
+                        >
+                            <span className="sr-only">Reading your workspace</span>
+                            <span
+                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
+                                style={{"animationDelay": "-0.3s"}}
+                            />
+                            <span
+                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
+                                style={{"animationDelay": "-0.15s"}}
+                            />
+                            <span
+                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
+                            />
+                        </div>
+                    </div>
+                }}
+            </div>
+            <div className="space-y-2.5 border-t px-4 py-3">
+                <div className="flex flex-wrap gap-1.5">
+                    {for q in QUICK_ASKS {
+                        <button
+                            key={q["label"]}
+                            type="button"
+                            disabled={busy}
+                            onClick={lambda { quick(q["kind"], q["value"]); }}
+                            className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                        >
+                            {q["label"]}
+                        </button>
+                    }}
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 rounded-lg bg-muted p-0.5">
+                        <button
+                            type="button"
+                            className={modeClass(asking)}
+                            onClick={lambda { mode = "ask"; }}
+                        >
+                            Ask
+                        </button>
+                        <button
+                            type="button"
+                            className={modeClass(not asking)}
+                            onClick={lambda { mode = "do"; }}
+                        >
+                            Do
+                        </button>
+                    </div>
+                    <Input
+                        value={draft}
+                        placeholder={"Ask about your workspace"
+                            if asking
+                            else "Describe the task to add or move"}
+                        disabled={busy}
+                        onChange={lambda (e: any) { draft = e.target.value; }}
+                        onKeyDown={lambda (e: any) { if e.key == "Enter" { send(); }}}
+                    />
+                    {if canListen {
+                        <Button
+                            key="mic"
+                            variant={"default" if listening else "outline"}
+                            size="icon"
+                            aria-label={"Stop dictating" if listening else "Dictate"}
+                            onClick={toggleMic}
+                        >
+                            <svg
+                                width={15}
+                                height={15}
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    fill="currentColor"
+                                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"
+                                />
+                            </svg>
+                        </Button>
+                    }}
+                    <Button
+                        size="icon"
+                        aria-label="Send"
+                        disabled={busy}
+                        onClick={send}
+                    >
+                        <svg
+                            width={15}
+                            height={15}
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path
+                                fill="currentColor"
+                                d="M3 20.5l18-8.5L3 3.5V10l12 2-12 2v6.5z"
+                            />
+                        </svg>
+                    </Button>
+                </div>
+                <p className="text-xs leading-tight text-muted-foreground">
+                    {"Answers come from your workspace only."
+                        if asking
+                        else "Suggestions only. Nothing changes until you press Apply."}
+                </p>
+            </div>
+        </div>;
 }
 
 
@@ -305,21 +392,26 @@ def:pub AssistantDock -> JsxElement {
 # empty, so a quiet day produces a short note rather than four bare headings.
 def NoteList(title: str, items: list[str]) -> JsxElement {
     if not items or len(items) == 0 {
-        return <span />;
+        return <span/>;
     }
-    return <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {title}
-        </div>
-        <ul className="mt-1 space-y-1">
-            {for it in items {
-                <li key={it} className="flex gap-2 text-sm leading-snug">
-                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
-                    <span>{it}</span>
-                </li>
-            }}
-        </ul>
-    </div>;
+    return
+        <div>
+            <div
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+                {title}
+            </div>
+            <ul className="mt-1 space-y-1">
+                {for it in items {
+                    <li key={it} className="flex gap-2 text-sm leading-snug">
+                        <span
+                            className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground"
+                        />
+                        <span>{it}</span>
+                    </li>
+                }}
+            </ul>
+        </div>;
 }
 
 
@@ -355,64 +447,86 @@ def ProposalCard(
         facts.append({"k": "Due", "v": proposal.due_date});
     }
 
-    return <div className="rounded-xl border border-l-2 border-l-primary bg-background p-3.5">
-        <div className="flex items-center gap-2">
-            <Badge variant="secondary">{"Move task" if moving else "New task"}</Badge>
-            {if proposal.confidence and proposal.confidence != "high" {
-                <span key="conf" className="text-xs text-muted-foreground">
-                    {proposal.confidence} confidence
-                </span>
-            }}
-        </div>
-        {if usable {
-            <p key="title" className="mt-2 text-sm font-medium leading-snug">{proposal.title}</p>
-        }}
-        {if len(facts) > 0 {
-            <dl key="facts" className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                {for f in facts {
-                    <div key={f["k"]} className="contents">
-                        <dt className="text-xs text-muted-foreground">{f["k"]}</dt>
-                        <dd className="text-xs font-medium">{f["v"]}</dd>
-                    </div>
+    return
+        <div
+            className="rounded-xl border border-l-2 border-l-primary bg-background p-3.5"
+        >
+            <div className="flex items-center gap-2">
+                <Badge variant="secondary">
+                    {"Move task" if moving else "New task"}
+                </Badge>
+                {if proposal.confidence and proposal.confidence != "high" {
+                    <span key="conf" className="text-xs text-muted-foreground">
+                        {proposal.confidence} confidence
+                    </span>
                 }}
-            </dl>
-        }}
-        {if proposal.note {
-            <p key="note" className="mt-2 text-xs leading-snug text-muted-foreground">
-                {proposal.note}
-            </p>
-        }}
-        {if not usable {
-            <p key="nope" className="mt-2 text-sm text-muted-foreground">
-                That does not look like a board change. Switch to Ask and I will answer it
-                instead.
-            </p>
-        } elif state == "applied" {
-            <p key="done" className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-success animate-in fade-in">
-                <svg
-                    width={14}
-                    height={14}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                >
-                    <path d="M20 6 9 17l-5-5" />
-                </svg>
-                Applied to the board.
-            </p>
-        } elif state == "dismissed" {
-            <p key="gone" className="mt-3 text-xs text-muted-foreground">Dismissed.</p>
-        } else {
-            <div key="acts" className="mt-3 flex gap-2">
-                <Button size="sm" disabled={busy} onClick={onApply}>Apply</Button>
-                <Button size="sm" variant="ghost" disabled={busy} onClick={onDismiss}>
-                    Dismiss
-                </Button>
             </div>
-        }}
-    </div>;
+            {if usable {
+                <p key="title" className="mt-2 text-sm font-medium leading-snug">
+                    {proposal.title}
+                </p>
+            }}
+            {if len(facts) > 0 {
+                <dl
+                    key="facts"
+                    className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1"
+                >
+                    {for f in facts {
+                        <div key={f["k"]} className="contents">
+                            <dt className="text-xs text-muted-foreground">{f["k"]}</dt>
+                            <dd className="text-xs font-medium">{f["v"]}</dd>
+                        </div>
+                    }}
+                </dl>
+            }}
+            {if proposal.note {
+                <p
+                    key="note"
+                    className="mt-2 text-xs leading-snug text-muted-foreground"
+                >
+                    {proposal.note}
+                </p>
+            }}
+            {if not usable {
+                <p key="nope" className="mt-2 text-sm text-muted-foreground">
+                    That does not look like a board change. Switch to Ask and I will answer it instead.
+                </p>
+            } elif state == "applied" {
+                <p
+                    key="done"
+                    className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-success animate-in fade-in"
+                >
+                    <svg
+                        width={14}
+                        height={14}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                    Applied to the board.
+                </p>
+            } elif state == "dismissed" {
+                <p key="gone" className="mt-3 text-xs text-muted-foreground">
+                    Dismissed.
+                </p>
+            } else {
+                <div key="acts" className="mt-3 flex gap-2">
+                    <Button size="sm" disabled={busy} onClick={onApply}>Apply</Button>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={onDismiss}
+                    >
+                        Dismiss
+                    </Button>
+                </div>
+            }   }
+        </div>;
 }

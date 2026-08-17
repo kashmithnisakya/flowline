@@ -115,9 +115,7 @@ def:pub WorkspacePage -> JsxPage {
     return
         <div className="flex w-full flex-col gap-8">
             <div className="flex items-center justify-between gap-6">
-                <h1 className="page-title">
-                    Workspace
-                </h1>
+                <h1 className="page-title">Workspace</h1>
                 <div className="flex h-9 shrink-0 items-center justify-end gap-2">
                     {if tab == "projects" {
                         <Button
@@ -135,7 +133,7 @@ def:pub WorkspacePage -> JsxPage {
                         >
                             Add member
                         </Button>
-                    }  }
+                    } }
                 </div>
             </div>
             <Tabs
@@ -144,17 +142,18 @@ def:pub WorkspacePage -> JsxPage {
                 orientation="vertical"
                 className="flex-col gap-6 sm:flex-row sm:gap-8"
             >
-                <div className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border/70 bg-muted p-0.5 sm:hidden">
+                <div
+                    className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border/70 bg-muted p-0.5 sm:hidden"
+                >
                     {for entry in TABS {
                         <button
                             key={"m-" + entry[0]}
                             type="button"
-                            className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium "
-                                + (
-                                    "bg-background text-foreground shadow-sm"
-                                        if tab == entry[0]
-                                        else "text-muted-foreground transition-colors hover:text-foreground"
-                                )}
+                            className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium " + (
+                                "bg-background text-foreground shadow-sm"
+                                    if tab == entry[0]
+                                    else "text-muted-foreground transition-colors hover:text-foreground"
+                            )}
                             onClick={lambda { selectTab(entry[0]); }}
                         >
                             {entry[1]}
@@ -207,13 +206,21 @@ def:pub WorkspacePage -> JsxPage {
                                     key={"r" + str(i)}
                                     className="flex items-center gap-3"
                                 >
-                                    <Skeleton className="h-9 w-9 shrink-0 rounded-full"/>
-                                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                    <Skeleton
+                                        className="h-9 w-9 shrink-0 rounded-full"
+                                    />
+                                    <div
+                                        className="flex min-w-0 flex-1 flex-col gap-1.5"
+                                    >
                                         <Skeleton className="h-4 w-36 max-w-full"/>
                                         <Skeleton className="h-3 w-24"/>
                                     </div>
-                                    <Skeleton className="hidden h-5 w-16 rounded-full sm:block"/>
-                                    <Skeleton className="hidden h-5 w-20 rounded-full sm:block"/>
+                                    <Skeleton
+                                        className="hidden h-5 w-16 rounded-full sm:block"
+                                    />
+                                    <Skeleton
+                                        className="hidden h-5 w-20 rounded-full sm:block"
+                                    />
                                 </div>
                             }}
                         </div>

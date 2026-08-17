@@ -14,15 +14,14 @@ import jwt;
 # place; the definition itself is Python-free and lives in models.jac.
 import from models { valid_full_name }
 
-glob GITHUB_API: str = "https://api.github.com";
-glob GITHUB_WEB: str = "https://github.com";
+glob GITHUB_API: str = "https://api.github.com",
+     GITHUB_WEB: str = "https://github.com",
+     TOKEN_CACHE: dict[str, dict[str, any]] = {};
+
 
 # Installation tokens live ~1h. Cache them in process memory rather than on
 # the connection node: a short-lived credential written to Mongo is still a
 # credential at rest, and re-minting after a restart costs one request.
-glob TOKEN_CACHE: dict[str, dict[str, any]] = {};
-
-
 # ------------------------------------------------------------------- config
 
 def app_id -> str {
@@ -110,9 +109,7 @@ def app_jwt -> str {
         return "";
     }
     now = int(time.time());
-    payload: dict[str, any] = {
-        "iat": now - 60, "exp": now + 540, "iss": app_id()
-    };
+    payload: dict[str, any] = {"iat": now - 60, "exp": now + 540, "iss": app_id()};
     try {
         return jwt.encode(payload, key, algorithm="RS256") as str;
     } except Exception {
@@ -199,8 +196,11 @@ def safe_error(status: int, body: any) -> dict[str, any] {
 # One GitHub REST call, normalized to {"ok", "status", "data"}. Callers
 # never see a raw response, an exception, or the token.
 def gh_request(
-    token: str, method: str, path: str,
-    params: dict[str, any] | None = None, payload: dict[str, any] | None = None
+    token: str,
+    method: str,
+    path: str,
+    params: dict[str, any] | None = None,
+    payload: dict[str, any] | None = None
 ) -> dict[str, any] {
     query: dict[str, any] = {};
     body_out: dict[str, any] = {};
@@ -212,7 +212,9 @@ def gh_request(
     }
     if not token {
         return {
-            "ok": False, "status": 0, "error": "not_connected",
+            "ok": False,
+            "status": 0,
+            "error": "not_connected",
             "message": "GitHub is not connected."
         };
     }
@@ -233,7 +235,9 @@ def gh_request(
         }
     } except Exception {
         return {
-            "ok": False, "status": 0, "error": "network",
+            "ok": False,
+            "status": 0,
+            "error": "network",
             "message": "Could not reach GitHub."
         };
     }
@@ -250,7 +254,9 @@ def gh_request(
         remaining = str(resp.headers.get("X-RateLimit-Remaining") or "");
         if remaining == "0" {
             return {
-                "ok": False, "status": 403, "error": "rate_limited",
+                "ok": False,
+                "status": 403,
+                "error": "rate_limited",
                 "message": "GitHub rate limit reached. Try again shortly."
             };
         }
@@ -276,9 +282,7 @@ def exchange_code(code: str) -> str {
         resp = requests.post(
             GITHUB_WEB + "/login/oauth/access_token",
             headers={"Accept": "application/json"},
-            data={
-                "client_id": pair[0], "client_secret": pair[1], "code": code
-            },
+            data={"client_id": pair[0], "client_secret": pair[1], "code": code},
             timeout=10
         );
     } except Exception {

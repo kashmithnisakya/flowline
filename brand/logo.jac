@@ -9,21 +9,23 @@ import from PIL { Image, ImageDraw }
 
 # --- brand palette (see PLAN.md; mirrors styles/global.css) -----------------
 
-glob INK: str = "#14120F";
-glob PAPER: str = "#F6F2EB";
-glob EMBER: str = "#E8552F";
+glob INK: str = "#14120F",
+     PAPER: str = "#F6F2EB",
+     EMBER: str = "#E8552F",
+     OUT_DIR: str = "assets/brand",
+     BARS: list[tuple[float, float, float]] = [
+         (12.0, 34.0, 12.0),
+         (24.5, 27.0, 19.0),
+         (37.0, 20.0, 26.0)
+     ],
+     BAR_W: float = 7.0,
+     BAR_R: float = 3.5,
+     TILE: float = 56.0,
+     TILE_R: float = 16.0,
+     DOT_R: float = 4.5;
 
-glob OUT_DIR: str = "assets/brand";
 
 # Bar geometry on the 56x56 tile: (x, y, height).
-glob BARS: list[tuple[float, float, float]] = [(12.0, 34.0, 12.0), (24.5, 27.0, 19.0), (37.0, 20.0, 26.0)];
-glob BAR_W: float = 7.0;
-glob BAR_R: float = 3.5;
-glob TILE: float = 56.0;
-glob TILE_R: float = 16.0;
-glob DOT_R: float = 4.5;
-
-
 # The three ascending bars; the tallest carries the accent colour.
 def _bars(bar_fill: str, accent: str) -> str {
     out = "";
@@ -41,9 +43,9 @@ def _bars(bar_fill: str, accent: str) -> str {
 
 # Square app icon: rounded tile, bars, and the status dot.
 def mark(size: int = 64, tile: str = "", bar_fill: str = "", accent: str = "") -> str {
-    tile_fill = tile if tile else INK;
-    bars_fill = bar_fill if bar_fill else PAPER;
-    dot = accent if accent else EMBER;
+    tile_fill = tile or INK;
+    bars_fill = bar_fill or PAPER;
+    dot = accent or EMBER;
     (last_x, last_y, last_h) = BARS[-1];
     cx = last_x + BAR_W / 2;
     return (
@@ -88,7 +90,7 @@ def wordmark(width: int = 240, dark: bool = False) -> str {
 }
 
 
-def _write(name: str, body: str) -> None {
+def _write(name: str, body: str) {
     path = os.path.join(OUT_DIR, name);
     with open(path, "w") as fh {
         fh.write(body);
@@ -110,9 +112,7 @@ def _draw_mark(size: int) -> Image.Image {
         (x, y, h) = bar;
         fill = EMBER if i == len(BARS) - 1 else PAPER;
         draw.rounded_rectangle(
-            [x * s, y * s, (x + BAR_W) * s, (y + h) * s],
-            radius=BAR_R * s,
-            fill=fill,
+            [x * s, y * s, (x + BAR_W) * s, (y + h) * s], radius=BAR_R * s, fill=fill,
         );
     }
     (last_x, last_y, last_h) = BARS[-1];

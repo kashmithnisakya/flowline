@@ -108,7 +108,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                                 <path d="M4 12h16"/>
                                 <path d="M4 18h16"/>
                             </svg>
-                        }}
+                        } }
                     </Button>
                 </div>
             </nav>

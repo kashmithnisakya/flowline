@@ -117,8 +117,16 @@ glob STATUSES: list[str] = [
              # Forward first, then the send-back: review that can only
              # approve is a review nobody needs.
              "links": [
-                 [0, 1], [1, 0], [1, 2], [1, 3], [2, 3], [3, 4], [4, 6],
-                 [4, 3], [4, 5], [5, 6]
+                 [0, 1],
+                 [1, 0],
+                 [1, 2],
+                 [1, 3],
+                 [2, 3],
+                 [3, 4],
+                 [4, 6],
+                 [4, 3],
+                 [4, 5],
+                 [5, 6]
              ],
              # Kept short: two of these share a pair of steps, and long chips
              # collide.

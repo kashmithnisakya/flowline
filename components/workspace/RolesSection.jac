@@ -5,7 +5,11 @@ SetMemberRoles, which touches only the role list. Any number of roles per person
 
 import from ...models { MemberView, RoleView }
 import from ...walkers.roster {
-    ListMembers, SetMemberRoles, ListRoles, SaveRole, DeleteRole
+    ListMembers,
+    SetMemberRoles,
+    ListRoles,
+    SaveRole,
+    DeleteRole
 }
 import from ..workflow.kinds { DOT_FILL, colorKey }
 import from ..ui.card { Card, CardContent }
@@ -54,21 +58,14 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
     for r in roles {
         managed.append(r.name);
         cards.append(
-            {
-                "name": r.name,
-                "blurb": r.blurb,
-                "color": r.color,
-                "managed": "y"
-            }
+            {"name": r.name, "blurb": r.blurb, "color": r.color, "managed": "y"}
         );
     }
     for m in active {
         for held in m.roles {
             if held not in managed {
                 managed.append(held);
-                cards.append(
-                    {"name": held, "blurb": "", "color": "", "managed": ""}
-                );
+                cards.append({"name": held, "blurb": "", "color": "", "managed": ""});
             }
         }
     }
@@ -119,14 +116,18 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                 <Card key={card["name"]}>
                                     <CardContent className="flex flex-col gap-3 py-4">
                                         {if editingRole == card["name"] {
-                                            <div key="edit" className="flex flex-col gap-2">
+                                            <div
+                                                key="edit"
+                                                className="flex flex-col gap-2"
+                                            >
                                                 <Input
                                                     className="h-8"
                                                     value={editName}
                                                     autoFocus={True}
                                                     onChange={lambda (e: ChangeEvent) { editName = e.target.value; }}
-                                                    onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                                        == "Enter" {
+                                                    onKeyDown={lambda (
+                                                        e: KeyboardEvent
+                                                    ) { if e.key == "Enter" {
                                                         e.preventDefault();
                                                         saveEdit();
                                                     }}}
@@ -136,8 +137,9 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                     placeholder="What this role does (optional)"
                                                     value={editBlurb}
                                                     onChange={lambda (e: ChangeEvent) { editBlurb = e.target.value; }}
-                                                    onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                                        == "Enter" {
+                                                    onKeyDown={lambda (
+                                                        e: KeyboardEvent
+                                                    ) { if e.key == "Enter" {
                                                         e.preventDefault();
                                                         saveEdit();
                                                     }}}
@@ -147,7 +149,7 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                         size="sm"
                                                         onClick={saveEdit}
                                                         disabled={saving
-                                                            or not editName.strip()}
+                                                        or not editName.strip()}
                                                     >
                                                         Save
                                                     </Button>
@@ -161,15 +163,23 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                 </div>
                                             </div>
                                         } else {
-                                            <div key="head" className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
+                                            <div
+                                                key="head"
+                                                className="flex flex-col gap-1"
+                                            >
+                                                <div
+                                                    className="flex items-center gap-2"
+                                                >
                                                     <span
-                                                        className={"h-2.5 w-2.5 shrink-0 rounded-full "
-                                                            + DOT_FILL[colorKey(
+                                                        className={"h-2.5 w-2.5 shrink-0 rounded-full " + DOT_FILL[
+                                                            colorKey(
                                                                 card["color"] or "slate"
-                                                            )]}
+                                                            )
+                                                        ]}
                                                     />
-                                                    <span className="text-sm font-semibold">
+                                                    <span
+                                                        className="text-sm font-semibold"
+                                                    >
                                                         {card["name"]}
                                                     </span>
                                                     <div className="flex-1"/>
@@ -178,8 +188,7 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                         size="sm"
                                                         className="h-7 px-2 text-xs text-muted-foreground"
                                                         onClick={lambda { startEdit(
-                                                            card["name"],
-                                                            card["blurb"]
+                                                            card["name"], card["blurb"]
                                                         ); }}
                                                     >
                                                         Edit
@@ -233,19 +242,20 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                 }}
                                             </div>
                                         } }
-                                        <div className="flex flex-wrap items-center gap-1.5">
+                                        <div
+                                            className="flex flex-wrap items-center gap-1.5"
+                                        >
                                             {for m in active {
                                                 <Badge
                                                     key={m.id}
                                                     variant={"default"
                                                         if card["name"] in m.roles
                                                         else "outline"}
-                                                    className={"cursor-pointer "
-                                                        + (
-                                                            ""
-                                                                if card["name"] in m.roles
-                                                                else "hover:bg-accent hover:text-accent-foreground"
-                                                        )}
+                                                    className={"cursor-pointer " + (
+                                                        ""
+                                                            if card["name"] in m.roles
+                                                            else "hover:bg-accent hover:text-accent-foreground"
+                                                    )}
                                                     onClick={lambda { toggleRole(
                                                         m.id, card["name"]
                                                     ); }}
@@ -266,15 +276,14 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                 </Card>
                             }}
                         </div>
-                    }}
+                    } }
                     <div className="flex items-center gap-2">
                         <Input
                             className="h-8 w-56"
                             placeholder="New role"
                             value={newRole}
                             onChange={lambda (e: ChangeEvent) { newRole = e.target.value; }}
-                            onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                == "Enter" {
+                            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
                                 e.preventDefault();
                                 addRole();
                             }}}
@@ -294,6 +303,6 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                         </p>
                     }}
                 </div>
-            }}
+            } }
         </div>;
 }

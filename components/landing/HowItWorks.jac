@@ -10,20 +10,17 @@ glob STEPS: list[Step] = [
          Step(
              n="1",
              title="Create your workspace",
-             body="Sign up with your work email and name your organization. The account "
-                 + "you create is the organization. There is nothing else to set up."
+             body="Sign up with your work email and name your organization. The account " + "you create is the organization. There is nothing else to set up."
          ),
          Step(
              n="2",
              title="Add projects and people",
-             body="Name your first project, add your teammates, and put them on the "
-                 + "projects they work on. Teammates do not need their own accounts."
+             body="Name your first project, add your teammates, and put them on the " + "projects they work on. Teammates do not need their own accounts."
          ),
          Step(
              n="3",
              title="Work the board, log the day",
-             body="Move cards as work progresses and record one line per person per "
-                 + "day. The week view is the summary you used to hold a meeting for."
+             body="Move cards as work progresses and record one line per person per " + "day. The week view is the summary you used to hold a meeting for."
          )
      ];
 
@@ -53,7 +50,9 @@ def:pub HowItWorks -> JsxElement {
                         <div
                             className="flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-xs ring-1 ring-foreground/15"
                         >
-                            <span className="font-display text-base font-bold text-primary">
+                            <span
+                                className="font-display text-base font-bold text-primary"
+                            >
                                 {s.n}
                             </span>
                         </div>

@@ -10,12 +10,14 @@ import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
 import from ..ui.select {
-    Select, SelectTrigger, SelectValue, SelectContent, SelectItem
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
 }
 import from ..ui.skeleton { Skeleton }
-import from ..ui.table {
-    Table, TableHeader, TableBody, TableRow, TableHead, TableCell
-}
+import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 import from ..common.glyphs { Spinner }
 
 # Relative "3d ago" label from an ISO stamp. Empty in, empty out; anything
@@ -74,162 +76,178 @@ def:pub PrTable(
     onState: Callable[[str], None],
     onLoadMore: Callable[[], None]
 ) -> JsxElement {
-    return <Card>
-        <CardContent className="space-y-3 pt-4">
-            <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm tabular-nums text-muted-foreground">
-                    {
-                        str(len(rows))
-                        + (" pull request" if len(rows) == 1 else " pull requests")
-                    }
+    return
+        <Card>
+            <CardContent className="space-y-3 pt-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm tabular-nums text-muted-foreground">
+                        {str(len(rows)) + (
+                            " pull request" if len(rows) == 1 else " pull requests"
+                        )}
+                    </div>
+                    <div className="ml-auto">
+                        <Select value={state} onValueChange={onState}>
+                            <SelectTrigger className="h-8 w-32">
+                                <SelectValue placeholder="State"/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {for s in PR_STATES {
+                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                }}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
-                <div className="ml-auto">
-                    <Select value={state} onValueChange={onState}>
-                        <SelectTrigger className="h-8 w-32">
-                            <SelectValue placeholder="State" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {for s in PR_STATES {
-                                <SelectItem key={s} value={s}>{s}</SelectItem>
-                            }}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            {if loading {
-                <div key="loading" className="space-y-1 py-2">
-                    {for i in [0, 1, 2, 3, 4] {
-                        <div key={"sk-" + str(i)} className="flex items-center gap-3 px-2 py-2.5">
-                            <Skeleton className="h-4 w-10 shrink-0" />
-                            <Skeleton className="h-4 w-full max-w-80" />
-                            <Skeleton className="ml-auto hidden h-4 w-16 shrink-0 sm:block" />
-                            <Skeleton className="h-5 w-14 shrink-0 rounded-full" />
-                            <Skeleton className="hidden h-4 w-12 shrink-0 md:block" />
-                        </div>
-                    }}
-                </div>
-            } else {
-                <div key="rows" className="space-y-3">
-                    {if len(rows) == 0 {
-                        <div key="empty" className="py-10 text-center">
-                            <svg
-                                className="mx-auto text-muted-foreground/50"
-                                width={28}
-                                height={28}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                {if loading {
+                    <div key="loading" className="space-y-1 py-2">
+                        {for i in [0, 1, 2, 3, 4] {
+                            <div
+                                key={"sk-" + str(i)}
+                                className="flex items-center gap-3 px-2 py-2.5"
                             >
-                                <circle cx={18} cy={18} r={3} />
-                                <circle cx={6} cy={6} r={3} />
-                                <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-                                <path d="M6 9v12" />
-                            </svg>
-                            <p className="mt-3 text-sm font-medium">
-                                {"No matches" if query else "Nothing to show"}
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                {
-                                    "No pull requests match \"" + query + "\" for that state."
-                                        if query
-                                        else "No pull requests in this repo for that state."
-                                }
-                            </p>
-                            {if state != "all" {
-                                <Button
-                                    key="allstates"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="mt-3"
-                                    onClick={lambda { onState("all"); }}
+                                <Skeleton className="h-4 w-10 shrink-0"/>
+                                <Skeleton className="h-4 w-full max-w-80"/>
+                                <Skeleton
+                                    className="ml-auto hidden h-4 w-16 shrink-0 sm:block"
+                                />
+                                <Skeleton className="h-5 w-14 shrink-0 rounded-full"/>
+                                <Skeleton
+                                    className="hidden h-4 w-12 shrink-0 md:block"
+                                />
+                            </div>
+                        }}
+                    </div>
+                } else {
+                    <div key="rows" className="space-y-3">
+                        {if len(rows) == 0 {
+                            <div key="empty" className="py-10 text-center">
+                                <svg
+                                    className="mx-auto text-muted-foreground/50"
+                                    width={28}
+                                    height={28}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
                                 >
-                                    Show all states
-                                </Button>
-                            }}
-                        </div>
-                    } else {
-                        <Table key="table">
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>#</TableHead>
-                                    <TableHead>Title</TableHead>
-                                    <TableHead>Author</TableHead>
-                                    <TableHead>State</TableHead>
-                                    <TableHead>Updated</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {for r in rows {
-                                    <TableRow key={str(r.number)}>
-                                        <TableCell className="text-muted-foreground">
-                                            {"#" + str(r.number)}
-                                        </TableCell>
-                                        <TableCell className="max-w-96">
-                                            <div className="flex items-center gap-2">
-                                                <a
-                                                    href={r.html_url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="truncate font-medium underline-offset-2 hover:underline"
-                                                    title={r.title}
-                                                >
-                                                    {r.title}
-                                                </a>
-                                                {if r.linked_task_id {
-                                                    <Badge
-                                                        key="linked"
-                                                        variant="outline"
-                                                        className="shrink-0 font-normal"
-                                                        title="A task on the board points at this PR"
-                                                    >
-                                                        linked
-                                                    </Badge>
-                                                }}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {("@" + r.author) if r.author else "—"}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant="outline"
-                                                className={"font-normal " + stateClass(r.state)}
-                                            >
-                                                {r.state}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell
-                                            className="text-xs tabular-nums text-muted-foreground"
-                                            title={r.updated_at[:16].replace("T", " ")}
-                                        >
-                                            {timeAgo(r.updated_at) if r.updated_at else "—"}
-                                        </TableCell>
+                                    <circle cx={18} cy={18} r={3}/>
+                                    <circle cx={6} cy={6} r={3}/>
+                                    <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
+                                    <path d="M6 9v12"/>
+                                </svg>
+                                <p className="mt-3 text-sm font-medium">
+                                    {"No matches" if query else "Nothing to show"}
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {"No pull requests match \"" + query + "\" for that state."
+                                        if query
+                                        else "No pull requests in this repo for that state."}
+                                </p>
+                                {if state != "all" {
+                                    <Button
+                                        key="allstates"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="mt-3"
+                                        onClick={lambda { onState("all"); }}
+                                    >
+                                        Show all states
+                                    </Button>
+                                }}
+                            </div>
+                        } else {
+                            <Table key="table">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>#</TableHead>
+                                        <TableHead>Title</TableHead>
+                                        <TableHead>Author</TableHead>
+                                        <TableHead>State</TableHead>
+                                        <TableHead>Updated</TableHead>
                                     </TableRow>
-                                }}
-                            </TableBody>
-                        </Table>
-                    }}
-                    {if hasMore {
-                        <div key="more" className="flex justify-center">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={onLoadMore}
-                                disabled={loadingMore}
-                            >
-                                {if loadingMore {
-                                    <Spinner key="sp"/>
-                                }}
-                                {"Loading…" if loadingMore else "Load more"}
-                            </Button>
-                        </div>
-                    }}
-                </div>
-            }}
-        </CardContent>
-    </Card>;
+                                </TableHeader>
+                                <TableBody>
+                                    {for r in rows {
+                                        <TableRow key={str(r.number)}>
+                                            <TableCell
+                                                className="text-muted-foreground"
+                                            >
+                                                {"#" + str(r.number)}
+                                            </TableCell>
+                                            <TableCell className="max-w-96">
+                                                <div
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <a
+                                                        href={r.html_url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="truncate font-medium underline-offset-2 hover:underline"
+                                                        title={r.title}
+                                                    >
+                                                        {r.title}
+                                                    </a>
+                                                    {if r.linked_task_id {
+                                                        <Badge
+                                                            key="linked"
+                                                            variant="outline"
+                                                            className="shrink-0 font-normal"
+                                                            title="A task on the board points at this PR"
+                                                        >
+                                                            linked
+                                                        </Badge>
+                                                    }}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell
+                                                className="text-muted-foreground"
+                                            >
+                                                {("@" + r.author) if r.author else "—"}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={"font-normal " + stateClass(
+                                                        r.state
+                                                    )}
+                                                >
+                                                    {r.state}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell
+                                                className="text-xs tabular-nums text-muted-foreground"
+                                                title={r.updated_at[:16].replace(
+                                                    "T", " "
+                                                )}
+                                            >
+                                                {timeAgo(r.updated_at)
+                                                    if r.updated_at
+                                                    else "—"}
+                                            </TableCell>
+                                        </TableRow>
+                                    }}
+                                </TableBody>
+                            </Table>
+                        } }
+                        {if hasMore {
+                            <div key="more" className="flex justify-center">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onLoadMore}
+                                    disabled={loadingMore}
+                                >
+                                    {if loadingMore {
+                                        <Spinner key="sp"/>
+                                    }}
+                                    {"Loading…" if loadingMore else "Load more"}
+                                </Button>
+                            </div>
+                        }}
+                    </div>
+                } }
+            </CardContent>
+        </Card>;
 }

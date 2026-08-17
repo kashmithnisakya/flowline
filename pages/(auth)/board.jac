@@ -170,9 +170,9 @@ def:pub BoardPage -> JsxPage {
         t
         for t in tasks
         if (fProject == "all" or t.project_id == fProject)
-            and (fAssignee == "All" or fAssignee in t.assignee_ids)
-            and (fCategory == "All" or t.category == fCategory)
-            and (not hideDone or t.status != "Done")
+        and (fAssignee == "All" or fAssignee in t.assignee_ids)
+        and (fCategory == "All" or t.category == fCategory)
+        and (not hideDone or t.status != "Done")
     ];
     weekAgoDate = new(Date);
     weekAgoDate.setDate(weekAgoDate.getDate() - 7);
@@ -200,14 +200,9 @@ def:pub BoardPage -> JsxPage {
     return
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="page-title">
-                    Board
-                </h1>
+                <h1 className="page-title">Board</h1>
                 {if loading {
-                    <div
-                        key="tools-skel"
-                        className="flex flex-wrap items-center gap-2"
-                    >
+                    <div key="tools-skel" className="flex flex-wrap items-center gap-2">
                         <Skeleton className="h-8 w-44"/>
                         <Skeleton className="h-8 w-40"/>
                         <Skeleton className="h-8 w-40"/>
@@ -244,7 +239,7 @@ def:pub BoardPage -> JsxPage {
                         }}
                         <Button onClick={openCreate}>New task</Button>
                     </div>
-                }}
+                } }
             </div>
             {if loading {
                 # Mirrors the loaded board: one row of column shells, each
@@ -262,7 +257,9 @@ def:pub BoardPage -> JsxPage {
                             key={"sk" + str(i)}
                             className="flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2"
                         >
-                            <div className="flex items-center justify-between px-1 py-1">
+                            <div
+                                className="flex items-center justify-between px-1 py-1"
+                            >
                                 <div className="flex items-center gap-1.5">
                                     <Skeleton className="size-2 rounded-full"/>
                                     <Skeleton className="h-4 w-20"/>
@@ -282,8 +279,12 @@ def:pub BoardPage -> JsxPage {
                     key="noworkflow"
                     className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
                 >
-                    <KineticGrid className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"/>
-                    <div className="anim-fade-up relative z-10 flex flex-col items-center gap-3">
+                    <KineticGrid
+                        className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
+                    />
+                    <div
+                        className="anim-fade-up relative z-10 flex flex-col items-center gap-3"
+                    >
                         <svg
                             width={40}
                             height={40}
@@ -304,10 +305,14 @@ def:pub BoardPage -> JsxPage {
                         <h2 className="font-display text-lg font-semibold">
                             Your board is the workflow you design
                         </h2>
-                        <p className="max-w-md text-sm text-pretty text-muted-foreground">
+                        <p
+                            className="max-w-md text-sm text-pretty text-muted-foreground"
+                        >
                             Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
                         </p>
-                        <Button onClick={lambda { window.location.href = "/workflow"; }}>
+                        <Button
+                            onClick={lambda { window.location.href = "/workflow"; }}
+                        >
                             Design your workflow
                             <svg
                                 width={16}
@@ -333,9 +338,7 @@ def:pub BoardPage -> JsxPage {
                     key="columns"
                     className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"
                     style={{
-                        "gridTemplateColumns": "repeat("
-                            + str(len(colKeys))
-                            + ", minmax(var(--board-col-min), 1fr))"
+                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(var(--board-col-min), 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {

@@ -44,12 +44,14 @@ sem answer_question = """Answer the user's question about their standup workspac
 the snapshot. Prefer concrete names, counts and dates over generalities. If the snapshot does
 not contain the answer, say that plainly instead of guessing. Two or three sentences unless the
 question demands a list.""";
+
 sem answer_question.question = "The user's question, in their own words.";
 sem answer_question.workspace = "The current workspace: tasks, people, projects and recent activity.";
 
 sem write_standup = """Write the standup note a team lead would post. Ground every line in the
 snapshot: name the people and tasks. Say nothing about work that is not present. Leave a list
 empty rather than padding it.""";
+
 sem write_standup.workspace = "The current workspace: tasks, people, projects and recent activity.";
 sem write_standup.period = "The period the note covers, e.g. 'today' or 'this week'.";
 
@@ -63,6 +65,7 @@ sem StandupNote.needs_attention = "Anything a lead should chase: overdue, stale,
 sem propose_action = """Turn the user's request into ONE proposed change to the board. Do not
 invent a project or person that is absent from the snapshot: leave the field empty instead. This
 is only a proposal, a human confirms it before anything is written.""";
+
 sem propose_action.instruction = "What the user asked for, in their own words.";
 sem propose_action.workspace = "The current workspace, for resolving names of people and projects.";
 
@@ -83,7 +86,7 @@ sem ProposedAction.confidence = "high, medium or low: how sure you are this is w
 
 def _range(from_date: str, to_date: str) -> tuple {
     today = now_iso()[:10];
-    return (from_date if from_date else today, to_date if to_date else today);
+    return (from_date or today, to_date or today);
 }
 
 walker AskAssistant {
