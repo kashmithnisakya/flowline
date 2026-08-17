@@ -99,6 +99,14 @@ id regardless of owner — resolution is not authorization.** Every jid-addresse
 mutation must call `owned(holder, target)` (or go through the `find_task` /
 `find_log_entry` lookup bases) before touching anything.
 
+**An uncaught walker exception is returned to the browser with its Python
+traceback** (the runtime sets `include_traceback` unconditionally, no config
+switch). Anything that can fail outside our control (the LLM, GitHub) is
+caught inside the walker, logged server-side with the operator hint, and
+reported as an empty or `{"ok": False, ...}` result; the client shows a plain
+"not available right now". See `_llm_failed` in `walkers/assistant.jac` and
+`gh_request` in `walkers/ghutil.jac`.
+
 Watch the container variable inside abilities: in a `Task`/`LogDay` entry
 ability `here` is the *task or day*, not the root, so ownership checks use the
 holder reached via `[here<--]`. Getting this wrong silently drops assignee and

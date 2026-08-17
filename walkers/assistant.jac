@@ -6,6 +6,7 @@ writes: propose_action returns a suggestion the UI applies via normal walkers.""
 import from constants { STATUSES, PRIORITIES }
 import from walkers.insights { Snapshot, build_snapshot }
 import from walkers.util { now_iso }
+import logging;
 
 # ------------------------------------------------------------------ LLM shapes
 
@@ -89,6 +90,20 @@ def _range(from_date: str, to_date: str) -> tuple {
     return (from_date or today, to_date or today);
 }
 
+# The model call is the one part of the assistant outside the app's control
+# (key, credits, network). Log the cause for the operator here; the client only
+# ever gets an empty report, so nothing about .env or billing reaches a browser.
+def _llm_failed(what: str, e: Exception) {
+    logging.getLogger("standup.assistant").error(
+        "assistant %s failed: %s: %s. Check OPENAI_API_KEY and LLM_MODEL in .env "
+        "and the model account's credits, then restart the server.",
+        what,
+        type(e).__name__,
+        e
+    );
+}
+
+
 walker AskAssistant {
     has question: str = "",
         from_date: str = "",
@@ -101,7 +116,11 @@ walker AskAssistant {
         }
         (start, end) = _range(self.from_date, self.to_date);
         snapshot = build_snapshot(here, start, end);
-        report answer_question(self.question.strip(), snapshot);
+        try {
+            report answer_question(self.question.strip(), snapshot);
+        } except Exception as e {
+            _llm_failed("answer", e);
+        }
     }
 }
 
@@ -114,7 +133,11 @@ walker WriteStandup {
     can compose with Root entry {
         (start, end) = _range(self.from_date, self.to_date);
         snapshot = build_snapshot(here, start, end);
-        report write_standup(snapshot, self.period);
+        try {
+            report write_standup(snapshot, self.period);
+        } except Exception as e {
+            _llm_failed("standup note", e);
+        }
     }
 }
 
@@ -134,7 +157,12 @@ walker ProposeAction {
         }
         (start, end) = _range(self.from_date, self.to_date);
         snapshot = build_snapshot(here, start, end);
-        proposal = propose_action(self.instruction.strip(), snapshot);
+        try {
+            proposal = propose_action(self.instruction.strip(), snapshot);
+        } except Exception as e {
+            _llm_failed("proposal", e);
+            disengage;
+        }
         # Never let a hallucinated column or priority reach the board.
         if proposal.status and proposal.status not in STATUSES {
             proposal.status = "";
