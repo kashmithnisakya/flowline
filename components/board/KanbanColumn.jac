@@ -6,7 +6,7 @@ jid, or the legacy status when no workflow exists) with its own label and colour
 import from ...models { TaskView }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
-import from ..workflow.kinds { DOT_VAR, COLUMN_TINT, RING_TINT, COUNT_TINT, colorKey }
+import from ..workflow.kinds { DOT_VAR, LANE_BAR, RING_TINT, COUNT_TINT, colorKey }
 
 # Accent per step kind, so a column reads the same on the board as its step
 # does on the workflow canvas.
@@ -41,9 +41,17 @@ def:pub KanbanColumn(
 
     return
         <div
-            className={"flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border p-2 transition-shadow duration-150 " + (
-                COLUMN_TINT[colorKey(color)] if color else "bg-muted/30"
-            ) + ((" " + RING_TINT[colorKey(color)]) if dragOver else "")}
+            # Neutral ground; the step colour lives in the top rule, the dot
+            # and the count, and floods the panel only while a drop is live.
+            className={"relative flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 overflow-hidden rounded-xl border bg-muted/30 p-2 transition-[box-shadow,background-color] duration-150" + (
+                (
+                    (" " + RING_TINT[colorKey(color)])
+                        if color
+                        else " bg-accent ring-2 ring-foreground/20"
+                )
+                    if dragOver
+                    else ""
+            )}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();
                 dt = e.dataTransfer;
@@ -72,6 +80,15 @@ def:pub KanbanColumn(
                 }
             }}
         >
+            {if color {
+                <span
+                    key="bar"
+                    aria-hidden="true"
+                    className={"pointer-events-none absolute inset-x-3 top-0 h-[3px] rounded-b-full " + LANE_BAR[
+                        colorKey(color)
+                    ]}
+                />
+            }}
             <div className="flex items-center justify-between px-1 py-1">
                 <span
                     className="flex min-w-0 items-center gap-1.5 text-sm font-semibold"
@@ -90,7 +107,12 @@ def:pub KanbanColumn(
                 </span>
                 <Badge
                     variant="secondary"
-                    className={"tabular-nums " + COUNT_TINT[colorKey(color)]}
+                    className={"tabular-nums " + (
+                        COUNT_TINT[colorKey(color)] if color else ""
+                    )}
+                    aria-label={str(len(tasks)) + (
+                        " task" if len(tasks) == 1 else " tasks"
+                    )}
                 >
                     {len(tasks)}
                 </Badge>

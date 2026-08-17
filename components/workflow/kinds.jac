@@ -17,84 +17,86 @@ glob KIND_LABEL: dict[str, str] = {
          "done": "finished - terminal"
      },
      COLOR_KEYS: list[str] = ["sky", "indigo", "amber", "rose", "emerald", "slate"],
+     # Every table keys the same six tokens (--step-X, -ink, -wash in
+     # styles/global.css), so light and dark are the token's business and
+     # no table needs a dark: variant.
      DOT_FILL: dict[str, str] = {
-         "sky": "bg-sky-500",
-         "indigo": "bg-indigo-500",
-         "amber": "bg-amber-500",
-         "rose": "bg-rose-500",
-         "emerald": "bg-emerald-500",
-         "slate": "bg-slate-500"
+         "sky": "bg-step-sky",
+         "indigo": "bg-step-indigo",
+         "amber": "bg-step-amber",
+         "rose": "bg-step-rose",
+         "emerald": "bg-step-emerald",
+         "slate": "bg-step-slate"
      },
      TEXT_FILL: dict[str, str] = {
-         "sky": "text-sky-500",
-         "indigo": "text-indigo-500",
-         "amber": "text-amber-500",
-         "rose": "text-rose-500",
-         "emerald": "text-emerald-500",
-         "slate": "text-slate-500"
+         "sky": "text-step-sky-ink",
+         "indigo": "text-step-indigo-ink",
+         "amber": "text-step-amber-ink",
+         "rose": "text-step-rose-ink",
+         "emerald": "text-step-emerald-ink",
+         "slate": "text-step-slate-ink"
      },
-     # The step's own colour as a card tint: coloured border plus pale opaque fill.
-     # Opaque matters - a translucent wash lets the canvas dot grid show through.
-     # Dark fills sit at 950 so the saturated hue reads as an accent, not a slab,
-     # against the muted pine theme (and matches COLUMN_TINT's volume).
+     # The step's own colour as a canvas card: coloured border plus an opaque
+     # pale fill (a translucent wash would let the canvas dot grid through).
      CARD_TINT: dict[str, str] = {
-         "sky": "border-sky-500/60 bg-sky-50 dark:bg-sky-950",
-         "indigo": "border-indigo-500/60 bg-indigo-50 dark:bg-indigo-950",
-         "amber": "border-amber-500/60 bg-amber-50 dark:bg-amber-950",
-         "rose": "border-rose-500/60 bg-rose-50 dark:bg-rose-950",
-         "emerald": "border-emerald-500/60 bg-emerald-50 dark:bg-emerald-950",
-         "slate": "border-slate-500/60 bg-slate-100 dark:bg-slate-900"
+         "sky": "border-step-sky/60 bg-step-sky-wash",
+         "indigo": "border-step-indigo/60 bg-step-indigo-wash",
+         "amber": "border-step-amber/60 bg-step-amber-wash",
+         "rose": "border-step-rose/60 bg-step-rose-wash",
+         "emerald": "border-step-emerald/60 bg-step-emerald-wash",
+         "slate": "border-step-slate/60 bg-step-slate-wash"
      };
 
 # The same colour as a raw CSS value, for the board column dots.
 glob DOT_VAR: dict[str, str] = {
-         "sky": "var(--color-sky-500)",
-         "indigo": "var(--color-indigo-500)",
-         "amber": "var(--color-amber-500)",
-         "rose": "var(--color-rose-500)",
-         "emerald": "var(--color-emerald-500)",
-         "slate": "var(--color-slate-500)"
+         "sky": "var(--step-sky)",
+         "indigo": "var(--step-indigo)",
+         "amber": "var(--step-amber)",
+         "rose": "var(--step-rose)",
+         "emerald": "var(--step-emerald)",
+         "slate": "var(--step-slate)"
      };
 
 glob CARD_BAR: dict[str, str] = {
-         "sky": "border-l-4 border-l-sky-500",
-         "indigo": "border-l-4 border-l-indigo-500",
-         "amber": "border-l-4 border-l-amber-500",
-         "rose": "border-l-4 border-l-rose-500",
-         "emerald": "border-l-4 border-l-emerald-500",
-         "slate": "border-l-4 border-l-slate-500"
+         "sky": "border-l-4 border-l-step-sky",
+         "indigo": "border-l-4 border-l-step-indigo",
+         "amber": "border-l-4 border-l-step-amber",
+         "rose": "border-l-4 border-l-step-rose",
+         "emerald": "border-l-4 border-l-step-emerald",
+         "slate": "border-l-4 border-l-step-slate"
      };
 
-# The step's colour as a COLUMN panel: a soft fill inside a coloured border.
-# Light fills are translucent washes so six tinted panels sit quietly on the
-# warm paper ground instead of six cool pastel slabs.
-glob COLUMN_TINT: dict[str, str] = {
-         "sky": "border-sky-400/60 bg-sky-50/70 dark:border-sky-500/40 dark:bg-sky-950/40",
-         "indigo": "border-indigo-400/60 bg-indigo-50/70 dark:border-indigo-500/40 dark:bg-indigo-950/40",
-         "amber": "border-amber-400/60 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-950/40",
-         "rose": "border-rose-400/60 bg-rose-50/70 dark:border-rose-500/40 dark:bg-rose-950/40",
-         "emerald": "border-emerald-400/60 bg-emerald-50/70 dark:border-emerald-500/40 dark:bg-emerald-950/40",
-         "slate": "border-slate-400/60 bg-slate-100/70 dark:border-slate-500/40 dark:bg-slate-900/60"
+# The step's colour on a board lane: a solid rule at the top of the panel
+# (and the header dot and count). The lane ground itself stays neutral so the
+# cards, not the panel, are the brightest thing in it.
+glob LANE_BAR: dict[str, str] = {
+         "sky": "bg-step-sky",
+         "indigo": "bg-step-indigo",
+         "amber": "bg-step-amber",
+         "rose": "bg-step-rose",
+         "emerald": "bg-step-emerald",
+         "slate": "bg-step-slate"
      };
 
-# Drag-over highlight in the column's own voice (board drop targets).
+# Drag-over highlight in the column's own voice: the full tint comes back
+# only while a card can be dropped here.
 glob RING_TINT: dict[str, str] = {
-         "sky": "ring-2 ring-sky-400/60",
-         "indigo": "ring-2 ring-indigo-400/60",
-         "amber": "ring-2 ring-amber-400/60",
-         "rose": "ring-2 ring-rose-400/60",
-         "emerald": "ring-2 ring-emerald-400/60",
-         "slate": "ring-2 ring-slate-400/60"
+         "sky": "ring-2 ring-step-sky/60 bg-step-sky/10",
+         "indigo": "ring-2 ring-step-indigo/60 bg-step-indigo/10",
+         "amber": "ring-2 ring-step-amber/60 bg-step-amber/10",
+         "rose": "ring-2 ring-step-rose/60 bg-step-rose/10",
+         "emerald": "ring-2 ring-step-emerald/60 bg-step-emerald/10",
+         "slate": "ring-2 ring-step-slate/60 bg-step-slate/10"
      };
 
 # Count-badge tint for column headers: the step colour at chip volume.
 glob COUNT_TINT: dict[str, str] = {
-         "sky": "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-300",
-         "indigo": "border-transparent bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
-         "amber": "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300",
-         "rose": "border-transparent bg-rose-500/15 text-rose-700 dark:text-rose-300",
-         "emerald": "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-         "slate": "border-transparent bg-slate-500/15 text-slate-700 dark:text-slate-300"
+         "sky": "border-transparent bg-step-sky/15 text-step-sky-ink",
+         "indigo": "border-transparent bg-step-indigo/15 text-step-indigo-ink",
+         "amber": "border-transparent bg-step-amber/15 text-step-amber-ink",
+         "rose": "border-transparent bg-step-rose/15 text-step-rose-ink",
+         "emerald": "border-transparent bg-step-emerald/15 text-step-emerald-ink",
+         "slate": "border-transparent bg-step-slate/15 text-step-slate-ink"
      };
 
 
