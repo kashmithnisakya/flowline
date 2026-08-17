@@ -8,9 +8,10 @@ forward only when it points at a LATER step in that order, the same
 definition FlowCanvas uses for send-backs. Ignoring the send-backs is what
 makes the layout terminate on loops.
 
-Lanes appear in order of first appearance along the flow, which puts the
-"anyone" lane first on the seeded template, with an Unowned lane last when
-any step has no owner. A lane carries who holds the role and how much sits
+Role lanes appear in the org's role order (the Roles tab's order), so
+reordering roles reorders lanes; owners that are not managed roles
+("anyone") come first by first appearance, and an Unowned lane comes last
+when any step has no owner. A lane carries who holds the role and how much sits
 on it (steps, tasks), so the labels double as the who-is-loaded answer.
 
 Wires are routed as elbows rather than the freeform canvas's curves: out of
@@ -80,22 +81,34 @@ def:pub laneLayout(
         holdersOf[r.name] = ", ".join(held);
     }
 
-    # Lane order: first appearance along the flow; Unowned last.
-    laneKeys: list[str] = [];
+    # Lane order: role lanes follow the org's role order (the same order
+    # the Roles tab and the strip use), so the picture agrees with the
+    # list and reordering roles reorders lanes. Owners that are not
+    # managed roles ("anyone", or a legacy free-text owner) come first in
+    # order of first appearance: that is where work enters before it
+    # belongs to any role. Unowned last.
+    seenOwners: list[str] = [];
     hasUnowned = False;
     for s in steps {
         said = s.owner.strip() if s.owner else "";
         if said {
-            if said not in laneKeys {
-                laneKeys.append(said);
+            if said not in seenOwners {
+                seenOwners.append(said);
             }
         } else {
             hasUnowned = True;
         }
     }
     allKeys: list[str] = [];
-    for k in laneKeys {
-        allKeys.append(k);
+    for k in seenOwners {
+        if k not in roleNames {
+            allKeys.append(k);
+        }
+    }
+    for rn in roleNames {
+        if rn in seenOwners {
+            allKeys.append(rn);
+        }
     }
     if hasUnowned {
         allKeys.append("__unowned");
