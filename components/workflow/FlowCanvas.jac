@@ -16,6 +16,7 @@ read the same render-time zoom and only one would count.
 
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
+import from .lanes { LANE_NODE_H, laneWires }
 import from .kinds { KIND_LABEL, DOT_FILL, CARD_TINT, colorKey }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
@@ -35,9 +36,13 @@ def:pub FlowCanvas(
     showGrid: bool = True,
     # Lane view: horizontal role bands drawn behind the steps, computed by
     # components/workflow/lanes.jac. Non-empty flips the canvas into lane
-    # mode, which also hides each card's owner line, the lane already says
-    # it. {key, label, sub, color, y, h} per band, canvas px.
+    # mode: elbow-routed wires, compact cards without the owner line (the
+    # lane already says it), dashed send-backs, and lane labels that carry
+    # holders and totals. {key, label, sub, warn, totals, manage, color, y,
+    # h} per band, canvas px. `laneOf` maps step id to lane key so hovering
+    # a lane can fade everything outside it.
     lanes: list[dict[str, any]] = [],
+    laneOf: dict[str, str] = {},
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
@@ -50,6 +55,10 @@ def:pub FlowCanvas(
     onZoomFit: Callable[[], None] = None,
     onAddStep: Callable[[], None] = None
 ) -> JsxElement {
+    # Lane view only: the lane under the pointer. Cards and wires outside it
+    # fade, so one role's touchpoints read without a click.
+    has hoverLane: str = "";
+
     byId: dict[str, StepView] = {};
     for s in steps {
         byId[s.id] = s;
@@ -70,29 +79,55 @@ def:pub FlowCanvas(
     size = canvasSize(steps, live);
 
     laneMode = len(lanes) > 0;
+    cardH = LANE_NODE_H if laneMode else NODE_H;
     # Materialized ahead of the JSX so the alternating tint and the top
     # border can key off the index without enumerate() in the tree.
     laneRects: list[dict[str, str]] = [];
     for (i, ln) in enumerate(lanes) {
+        lk = str(ln["key"]);
         laneRects.append(
             {
-                "key": "lane-" + str(ln["key"]),
-                "cls": "absolute left-0"
-                    + (" bg-foreground/[0.045]" if i % 2 == 1 else "")
+                "key": "lane-" + lk,
+                "lane": lk,
+                "cls": "absolute left-0 transition-colors duration-150"
+                    + (
+                        " bg-primary/10"
+                            if hoverLane == lk
+                            else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
+                    )
                     + ("" if i == 0 else " border-t border-border/60"),
                 "top": str(ln["y"]) + "px",
                 "h": str(ln["h"]) + "px",
                 "label": str(ln["label"]),
                 "sub": str(ln["sub"]),
+                "subCls": "mt-0.5 truncate pl-3.5 text-[10px] "
+                    + ("text-warning" if ln["warn"] else "text-muted-foreground"),
+                "totals": str(ln["totals"]),
+                "manage": "y" if ln["manage"] else "",
                 "dot": DOT_FILL[colorKey(str(ln["color"]))]
             }
         );
     }
+    # Fade rule for hover-focus: a card is dim when a lane is hovered and
+    # the card is not in it; a wire is dim when neither end is.
+    def dimStep(sid: str) -> bool {
+        if not hoverLane {
+            return False;
+        }
+        return (laneOf[sid] if sid in laneOf else "") != hoverLane;
+    }
 
     # Flatten the transitions once so the SVG is one pass. Both ends must be
-    # on this canvas to draw.
+    # on this canvas to draw. Lane mode gets elbows from lanes.jac; the
+    # freeform canvas keeps its curves.
     links: list[dict[str, any]] = [];
+    if laneMode {
+        links = laneWires(steps, live);
+    }
     for s in steps {
+        if laneMode {
+            break;
+        }
         pos = stepXY(s, live);
         for (i, nid) in enumerate(s.next_ids) {
             if nid not in byId {
@@ -134,7 +169,8 @@ def:pub FlowCanvas(
                     "lx": lx,
                     "ly": ly,
                     "back": isReturn,
-                    "label": said
+                    "label": said,
+                    "side": 0
                 }
             );
         }
@@ -216,26 +252,63 @@ def:pub FlowCanvas(
                             "height": lr["h"],
                             "width": str(size[0]) + "px"
                         }}
+                        onMouseEnter={lambda { hoverLane = lr["lane"]; }}
+                        onMouseLeave={lambda { hoverLane = ""; }}
                     >
-                        <div className="absolute left-3 top-1/2 w-44 -translate-y-1/2 pr-3">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold">
-                                <span
-                                    className={"h-2 w-2 shrink-0 rounded-full "
-                                        + lr["dot"]}
-                                />
-                                <span className="truncate" title={lr["label"]}>
-                                    {lr["label"]}
-                                </span>
-                            </div>
+                        <div
+                            className="pointer-events-auto absolute left-3 top-1/2 w-[9.5rem] -translate-y-1/2 pr-2"
+                            onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                        >
+                            {if lr["manage"] {
+                                <a
+                                    key="name-link"
+                                    href="/workspace?tab=roles"
+                                    title="Manage roles on the Workspace"
+                                    className="group/lane flex items-center gap-1.5 text-xs font-semibold text-foreground no-underline"
+                                >
+                                    <span
+                                        className={"h-2 w-2 shrink-0 rounded-full "
+                                            + lr["dot"]}
+                                    />
+                                    <span
+                                        className="truncate underline-offset-2 group-hover/lane:underline"
+                                    >
+                                        {lr["label"]}
+                                    </span>
+                                    <span
+                                        className="ml-auto hidden shrink-0 text-[10px] font-normal text-muted-foreground group-hover/lane:inline"
+                                    >
+                                        ↗
+                                    </span>
+                                </a>
+                            } else {
+                                <div
+                                    key="name"
+                                    className="flex items-center gap-1.5 text-xs font-semibold"
+                                >
+                                    <span
+                                        className={"h-2 w-2 shrink-0 rounded-full "
+                                            + lr["dot"]}
+                                    />
+                                    <span className="truncate" title={lr["label"]}>
+                                        {lr["label"]}
+                                    </span>
+                                </div>
+                            } }
                             {if lr["sub"] {
                                 <div
                                     key="sub"
-                                    className="mt-0.5 truncate pl-3.5 text-[10px] text-muted-foreground"
+                                    className={lr["subCls"]}
                                     title={lr["sub"]}
                                 >
                                     {lr["sub"]}
                                 </div>
                             }}
+                            <div
+                                className="mt-0.5 truncate pl-3.5 text-[10px] tabular-nums text-muted-foreground/80"
+                            >
+                                {lr["totals"]}
+                            </div>
                         </div>
                     </div>
                 }}
@@ -251,8 +324,20 @@ def:pub FlowCanvas(
                             className={(
                                 "text-primary"
                                     if selectedEdge == l["key"]
-                                    else "text-muted-foreground/60 hover:text-foreground/70"
-                            ) + " transition-colors duration-150"}
+                                    else (
+                                        "text-destructive/70"
+                                            if laneMode and l["back"]
+                                            else "text-muted-foreground/60 hover:text-foreground/70"
+                                    )
+                            )
+                                + " transition-[color,opacity] duration-150"
+                                + (
+                                    " opacity-20"
+                                        if laneMode
+                                            and dimStep(l["from"])
+                                            and dimStep(l["to"])
+                                        else ""
+                                )}
                         >
                             <path
                                 d={l["d"]}
@@ -260,6 +345,8 @@ def:pub FlowCanvas(
                                 stroke="currentColor"
                                 strokeWidth={2.5 if selectedEdge == l["key"] else 2.0}
                                 strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeDasharray={"6 5" if laneMode and l["back"] else ""}
                                 className="transition-[stroke-width] duration-150"
                             />
                             <path d={l["arrow"]} fill="currentColor" stroke="none"/>
@@ -284,14 +371,34 @@ def:pub FlowCanvas(
                         {if l["label"] and selectedEdge != l["key"] {
                             <span
                                 key="lab"
-                                className={"pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm "
+                                className={"pointer-events-none absolute z-10 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 "
+                                    + (
+                                        "-translate-x-full"
+                                            if l["side"] == -1
+                                            else ("" if l["side"] == 1 else "-translate-x-1/2")
+                                    )
+                                    + " "
                                     + (
                                         "border-destructive/40 bg-background text-destructive"
                                             if l["back"]
                                             else "border-border bg-background text-muted-foreground"
+                                    )
+                                    + (
+                                        " opacity-20"
+                                            if laneMode
+                                                and dimStep(l["from"])
+                                                and dimStep(l["to"])
+                                            else ""
                                     )}
                                 style={{
-                                    "left": str(l["lx"]) + "px",
+                                    "left": str(
+                                        l["lx"]
+                                            + (
+                                                -8.0
+                                                    if l["side"] == -1
+                                                    else (8.0 if l["side"] == 1 else 0.0)
+                                            )
+                                    ) + "px",
                                     "top": str(l["ly"]) + "px"
                                 }}
                             >
@@ -335,12 +442,13 @@ def:pub FlowCanvas(
                                 " cursor-pointer ring-1 ring-primary/60"
                                     if connecting and s.id != connectFrom
                                     else ""
-                            )}
+                            )
+                            + (" opacity-30" if laneMode and dimStep(s.id) else "")}
                         style={{
                             "left": str(stepXY(s, live)[0]) + "px",
                             "top": str(stepXY(s, live)[1]) + "px",
                             "width": str(NODE_W) + "px",
-                            "height": str(NODE_H) + "px"
+                            "height": str(cardH) + "px"
                         }}
                         onClick={lambda (e: MouseEvent) {
                             e.stopPropagation();
