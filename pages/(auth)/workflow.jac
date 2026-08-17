@@ -532,7 +532,8 @@ def:pub WorkflowPage -> JsxPage {
                                             {"Drawing a transition out of " + connectTitle + "."}
                                         </span>
                                         <span className="text-muted-foreground">
-                                            {" Click the step it flows into, backwards is fine," + " loops are the point."}
+                                            {" Click the step it flows into, backwards is fine,"
+                                            " loops are the point."}
                                         </span>
                                     </p>
                                     <Button

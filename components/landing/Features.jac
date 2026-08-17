@@ -13,25 +13,32 @@ glob FEATURES: list[Feature] = [
          Feature(
              n="01",
              title="A workflow you design",
-             body="Name the steps your team actually uses and connect them however " + "work moves, loops included. The board is those steps, with " + "drag-and-drop between them and filters by project and assignee.",
+             body="Name the steps your team actually uses and connect them however "
+             "work moves, loops included. The board is those steps, with "
+             "drag-and-drop between them and filters by project and assignee.",
              tag="Workflow"
          ),
          Feature(
              n="02",
              title="A written daily log",
-             body="One row per person per weekday: what they worked on, the project, " + "status, notes and links to the issue or PR. It becomes the archive " + "nobody has to remember.",
+             body="One row per person per weekday: what they worked on, the project, "
+             "status, notes and links to the issue or PR. It becomes the archive "
+             "nobody has to remember.",
              tag="Daily Log"
          ),
          Feature(
              n="03",
              title="Projects and people you control",
-             body="Create, rename and archive projects; add teammates and assign them " + "to as many projects as you need. Archiving keeps the history and " + "frees the open work.",
+             body="Create, rename and archive projects; add teammates and assign them "
+             "to as many projects as you need. Archiving keeps the history and "
+             "frees the open work.",
              tag="Admin"
          ),
          Feature(
              n="04",
              title="A workspace that is yours",
-             body="Your account is your organization. Everything you create lives on " + "your own private graph. Another account cannot read or touch it.",
+             body="Your account is your organization. Everything you create lives on "
+             "your own private graph. Another account cannot read or touch it.",
              tag="Private"
          )
      ];
