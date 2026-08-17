@@ -81,7 +81,10 @@ def:pub BoardPage -> JsxPage {
         moveStatus: str = "",
         moveKind: str = "handoff",
         mForm: dict[str, str] = BLANK_MOVE,
-        saving: bool = False;
+        saving: bool = False,
+        # A /board?task=<id> deep link (the overview's attention list) opens
+        # that card once the first load has landed.
+        pendingTaskId: str = "";
 
     async can with entry {
         movesRef.current = 0;
@@ -89,8 +92,31 @@ def:pub BoardPage -> JsxPage {
         if stored {
             fProject = stored;
         }
+        w: any = window;
+        params: any = new(w.URLSearchParams, w.location.search);
+        wanted = params.get("task") or "";
+        if wanted {
+            pendingTaskId = str(wanted);
+            # Consume it so a reload or the poll does not reopen the card.
+            w.history.replaceState(None, "", w.location.pathname);
+        }
         boot();
     }
+
+    # Runs from the render that has the loaded tasks and steps, so openEdit
+    # sees fresh state (reading `tasks` right after `await loadAll()` in boot
+    # would see the pre-load snapshot).
+    useEffect(
+        lambda { if pendingTaskId and not loading {
+            for t in tasks {
+                if t.id == pendingTaskId {
+                    openEdit(t);
+                }
+            }
+            pendingTaskId = "";
+        }},
+        [pendingTaskId, loading, len(tasks)]
+    );
 
     # Live-ish board: refetch on tab focus plus a 60s poll. One manual
     # useEffect so the listener/interval handles are visible to the cleanup

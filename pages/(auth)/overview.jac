@@ -22,7 +22,8 @@ import from ...components.ui.skeleton { Skeleton }
 import from "@jac/runtime" { Link }
 import from "sonner" { toast }
 import from ...components.common.glyphs { WarnIcon }
-import from ...components.common.Avatar { Avatar }
+import from ...components.common.Avatar { Avatar, AvatarStack }
+import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
@@ -68,6 +69,13 @@ def fmtDay(iso: str) -> str {
 }
 
 
+# An entry's member_name is every assignee, comma-joined, so a plain
+# equality misses shared tasks.
+def logged(e: LogEntry, name: str) -> bool {
+    return name in e.member_name.split(", ");
+}
+
+
 def pct(part: int, whole: int) -> str {
     if whole == 0 {
         return "0%";
@@ -88,6 +96,8 @@ def:pub OverviewPage -> JsxPage {
         members: list[MemberView] = [],
         projects: list[Project] = [],
         entries: list[LogEntry] = [],
+        # The three weeks before this one, for deltas and sparklines.
+        pastEntries: list[LogEntry] = [],
         loading: bool = True,
         failed: bool = False;
 
@@ -119,6 +129,64 @@ def:pub OverviewPage -> JsxPage {
         for t in tasks
         if t.status == "Done" and t.updated_at[:10] >= monday
     ];
+    lastMonday = shiftDay(monday, -7);
+    doneLastWeek = [
+        t
+        for t in tasks
+        if t.status == "Done"
+        and t.updated_at[:10] >= lastMonday
+        and t.updated_at[:10] < monday
+    ];
+    entriesLastWeek = [
+        e
+        for e in pastEntries
+        if e.date >= lastMonday
+    ];
+    today = todayIso();
+    overdueTasks = [
+        t
+        for t in tasks
+        if dueTone(t.due_date, t.status, today) == "overdue"
+    ];
+    blockedTasks = [
+        t
+        for t in tasks
+        if t.status == "Blocked"
+    ];
+    # Weekly counts for the last four weeks, oldest first. A Done task only
+    # remembers its last update, the same approximation doneWeek makes.
+    doneSpark: list[int] = [];
+    entrySpark: list[int] = [];
+    for wi in range(4) {
+        wStart = shiftDay(monday, -7 * (3 - wi));
+        wEnd = shiftDay(wStart, 7);
+        doneSpark.append(
+            len(
+                [
+                    t
+                    for t in tasks
+                    if t.status == "Done"
+                    and t.updated_at[:10] >= wStart
+                    and t.updated_at[:10] < wEnd
+                ]
+            )
+        );
+        entrySpark.append(
+            len(
+                [
+                    e
+                    for e in (pastEntries + entries)
+                    if e.date >= wStart and e.date < wEnd
+                ]
+            )
+        );
+    }
+    # Blocked first, then the most overdue; a task can be both.
+    attention = blockedTasks + [
+        t
+        for t in overdueTasks
+        if t.status != "Blocked"
+    ];
     dayCounts = [
         len(
             [
@@ -133,19 +201,6 @@ def:pub OverviewPage -> JsxPage {
     for c in dayCounts {
         if c > maxDay {
             maxDay = c;
-        }
-    }
-    peakEntries = 1;
-    for mm in activeMembers {
-        cnt = len(
-            [
-                e
-                for e in entries
-                if e.member_name == mm.name
-            ]
-        );
-        if cnt > peakEntries {
-            peakEntries = cnt;
         }
     }
 
@@ -177,6 +232,15 @@ def:pub OverviewPage -> JsxPage {
                 </div>
                 <p className="page-subtitle">
                     Where the work stands across projects and people.
+                    {if not loading and not failed {
+                        <span key="counts" className="text-muted-foreground/70">
+                            {" · " + str(len(activeMembers)) + (
+                                " person" if len(activeMembers) == 1 else " people"
+                            ) + " · " + str(len(activeProjects)) + (
+                                " project" if len(activeProjects) == 1 else " projects"
+                            )}
+                        </span>
+                    }}
                 </p>
             </div>
             {if loading {
@@ -283,20 +347,122 @@ def:pub OverviewPage -> JsxPage {
                     <div
                         className="anim-fade-up anim-d1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
                     >
-                        <StatTile label="Members" value={str(len(activeMembers))}/>
-                        <StatTile label="Projects" value={str(len(activeProjects))}/>
-                        <StatTile label="Open tasks" value={str(len(openTasks))}/>
+                        <StatTile label="Open" value={str(len(openTasks))}/>
                         <StatTile
                             label="Done this week"
                             value={str(len(doneWeek))}
                             accent="text-success"
+                            delta={len(doneWeek) - len(doneLastWeek)}
+                            showDelta={True}
+                            spark={doneSpark}
+                        />
+                        <StatTile
+                            label="Overdue"
+                            value={str(len(overdueTasks))}
+                            accent={"text-destructive" if len(overdueTasks) > 0 else ""}
+                            hint={"all clear"
+                                if len(overdueTasks) == 0
+                                else "past due, still open"}
+                        />
+                        <StatTile
+                            label="Blocked"
+                            value={str(len(blockedTasks))}
+                            accent={"text-destructive" if len(blockedTasks) > 0 else ""}
+                            hint={"all clear"
+                                if len(blockedTasks) == 0
+                                else "needs a decision"}
                         />
                         <StatTile
                             label="Log entries"
                             value={str(len(entries))}
-                            hint="this week"
+                            delta={len(entries) - len(entriesLastWeek)}
+                            showDelta={True}
+                            spark={entrySpark}
                         />
                     </div>
+                    <Card className="anim-fade-up anim-d2">
+                        <CardHeader>
+                            <CardTitle className="text-base">Needs attention</CardTitle>
+                            <CardDescription>
+                                Blocked and overdue work, most urgent first. Open a row to work on it.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-1">
+                            {for t in attention[:8] {
+                                <Link
+                                    key={t.id}
+                                    to={"/board?task=" + t.id}
+                                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+                                >
+                                    <span
+                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide " + (
+                                            "bg-destructive/10 text-destructive"
+                                        )}
+                                    >
+                                        {"Blocked"
+                                            if t.status == "Blocked"
+                                            else "Overdue"}
+                                    </span>
+                                    <span
+                                        className="min-w-0 flex-1 truncate text-sm font-medium"
+                                    >
+                                        {t.title}
+                                    </span>
+                                    {if len(t.assignee_names) > 0 {
+                                        <AvatarStack
+                                            key="who"
+                                            names={t.assignee_names}
+                                        />
+                                    }}
+                                    <span
+                                        className="hidden shrink-0 text-xs text-muted-foreground sm:inline"
+                                    >
+                                        {(t.project_name + " · ")
+                                            if t.project_name
+                                            else ""}{(
+                                            ("since " + prettyDay(t.updated_at[:10]))
+                                                if t.status == "Blocked"
+                                                and len(t.updated_at) >= 10
+                                                else dueLabel(
+                                                    t.due_date, t.status, today
+                                                )
+                                        )}
+                                    </span>
+                                </Link>
+                            }}
+                            {if len(attention) > 8 {
+                                <Link
+                                    key="more"
+                                    to="/board"
+                                    className="block px-2 pt-2 text-xs font-medium text-primary hover:underline"
+                                >
+                                    {"+" + str(len(attention) - 8) + " more on the board"}
+                                </Link>
+                            }}
+                            {if len(attention) == 0 {
+                                <div
+                                    key="clear"
+                                    className="flex items-center gap-2 px-2 py-3 text-sm text-success"
+                                >
+                                    <svg
+                                        width={16}
+                                        height={16}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <circle cx={12} cy={12} r={10}/>
+                                        <path d="m9 12 2 2 4-4"/>
+                                    </svg>
+                                    Nothing needs attention. Nothing is blocked or past due.
+                                </div>
+                            }}
+                        </CardContent>
+                    </Card>
                     <div
                         className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
                     >
@@ -621,39 +787,60 @@ def:pub OverviewPage -> JsxPage {
                                         </div>
                                     </div>
                                     <div
-                                        className="flex w-full flex-1 items-center gap-3"
+                                        className="flex w-full flex-1 items-center justify-end gap-3"
                                     >
-                                        <div
-                                            className="flex-1"
-                                            title={m.name + ": " + str(
+                                        <span
+                                            className="inline-grid grid-cols-7 gap-1"
+                                            role="img"
+                                            aria-label={m.name + ": logged on " + str(
                                                 len(
                                                     [
-                                                        e
-                                                        for e in entries
-                                                        if e.member_name == m.name
+                                                        d
+                                                        for d in weekDays
+                                                        if len(
+                                                            [
+                                                                e
+                                                                for e in entries
+                                                                if logged(e, m.name)
+                                                                and e.date == d
+                                                            ]
+                                                        ) > 0
                                                     ]
                                                 )
-                                            ) + " entries this week"}
+                                            ) + " of 7 days"}
                                         >
-                                            <div
-                                                className="h-2.5 rounded-full transition-[width] duration-500 ease-out"
-                                                style={{
-                                                    "width": scaled(
+                                            {for (di, d) in enumerate(weekDays) {
+                                                <span
+                                                    key={d}
+                                                    title={DAY_LABELS[di] + ": " + str(
                                                         len(
                                                             [
                                                                 e
                                                                 for e in entries
-                                                                if e.member_name == m.name
+                                                                if logged(e, m.name)
+                                                                and e.date == d
                                                             ]
-                                                        ),
-                                                        peakEntries,
-                                                        92
-                                                    ),
-                                                    "background": "var(--primary)",
-                                                    "minWidth": "2px"
-                                                }}
-                                            />
-                                        </div>
+                                                        )
+                                                    ) + " entries"}
+                                                    className={"h-3.5 w-3.5 rounded-[4px] " + (
+                                                        "bg-primary"
+                                                            if len(
+                                                                [
+                                                                    e
+                                                                    for e in entries
+                                                                    if logged(e, m.name)
+                                                                    and e.date == d
+                                                                ]
+                                                            ) > 0
+                                                            else "bg-muted"
+                                                    ) + (
+                                                        " ring-1 ring-foreground/60 ring-offset-1 ring-offset-card"
+                                                            if d == today
+                                                            else ""
+                                                    )}
+                                                />
+                                            }}
+                                        </span>
                                         <span
                                             className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
                                         >
@@ -662,10 +849,18 @@ def:pub OverviewPage -> JsxPage {
                                                     [
                                                         e
                                                         for e in entries
-                                                        if e.member_name == m.name
+                                                        if logged(e, m.name)
                                                     ]
                                                 )
-                                            )} entries
+                                            )}{" entry"
+                                                if len(
+                                                    [
+                                                        e
+                                                        for e in entries
+                                                        if logged(e, m.name)
+                                                    ]
+                                                ) == 1
+                                                else " entries"}
                                         </span>
                                     </div>
                                 </div>
