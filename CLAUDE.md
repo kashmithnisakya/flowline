@@ -126,8 +126,10 @@ File-based routing with route groups:
 - **`components/ui/`** is jac-shadcn — import only, never edit. When a
   registry component ships broken, keep the fixed copy under a name
   `jac install --shadcn <name>` cannot write to, or the next install
-  silently restores the bug: `toaster.jac` (not `sonner.jac`) and
-  `tickbox.jac` (not `checkbox.jac`).
+  silently restores the bug: `toaster.jac` (not `sonner.jac`). The
+  Checkbox once needed the same treatment (`tickbox.jac`, for a stray
+  `# noqa` text node); the registry copy at jac 0.34.14 is clean, so
+  `checkbox.jac` is imported directly again.
 - **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper).
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
   the generator, not the SVGs. Reference brand assets as **`/static/...`**, not

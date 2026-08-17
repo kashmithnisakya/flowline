@@ -5,6 +5,14 @@ the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
 
 import from ...models { StepView }
 
+glob NODE_W: float = 176.0,
+     # Three lines: name, kind, and who holds work here.
+     NODE_H: float = 82.0,
+     EDGE_ZONE: float = 12.0,
+     # Working room kept beyond the furthest step, so there is always
+     # somewhere to drag to without the canvas jumping.
+     MARGIN: float = 120.0;
+
 # Does this transition travel backwards? One definition, shared by the canvas
 # and the inspector, so the two renderings of the same edge cannot disagree.
 # Node size is constant, so top-left deltas equal centre deltas.
@@ -18,14 +26,6 @@ def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
     }
     return dy < 0.0;
 }
-
-glob NODE_W: float = 176.0,
-     # Three lines: name, kind, and who holds work here.
-     NODE_H: float = 82.0,
-     EDGE_ZONE: float = 12.0,
-     # Working room kept beyond the furthest step, so there is always
-     # somewhere to drag to without the canvas jumping.
-     MARGIN: float = 120.0;
 
 
 # How close to a node's edge counts as grabbing its border (the wire port)

@@ -12,7 +12,7 @@ import from ...models { Project, StepView, GhIssueRow }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
-import from ..ui.tickbox { Checkbox }
+import from ..ui.checkbox { Checkbox }
 import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
