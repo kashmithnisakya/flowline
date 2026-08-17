@@ -81,9 +81,11 @@ jobs:
         run: |
           check() {
             git ls-files -z -- '*.jac' \
-              | xargs -0 jac check --nowarn --disable-error-code E5082 --
+              | xargs -0 jac check --nowarn --disable-error-code E5082 "$@" --
           }
-          echo "::group::warm-up pass (seeds .jac/cache; result ignored)"
-          check || true
-          echo "::endgroup::"
+          # The warm-up's E5082 misses are the cold-cache artefact described
+          # above, so only its summary line is shown; the log stays readable.
+          check --no-print_errs > warmup.log 2>&1 || true
+          echo "warm-up pass (seeds .jac/cache, cold-cache E5082 misses expected, result ignored):"
+          tail -n 1 warmup.log
           check
