@@ -1,12 +1,7 @@
 """standup - GitHub (/github): read issues and pull requests, import work.
-
-Top-level again: browsing a repo and importing issues onto the board is
-daily work, not configuration, so it earns a nav tab rather than a corner
-of Workspace. The GitHub App's callback URL is <HOST>/github, and
-GithubSection completes an in-flight install round trip on mount, so the
-OAuth params land here directly. Old /workspace?tab=github links redirect
-back here with their query string intact.
-"""
+Daily work, not configuration, so it has its own nav tab. The App's callback
+URL is <HOST>/github and GithubSection finishes an in-flight install on
+mount; old /workspace?tab=github links redirect here with their query intact."""
 
 import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.ui.button { Button }

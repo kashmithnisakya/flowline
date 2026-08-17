@@ -1,14 +1,7 @@
-"""Server-only GitHub App plumbing: app JWTs, installation tokens, HTTP.
-
-Every Python import the GitHub feature needs (`requests`, `jwt`, `os`) is
-quarantined HERE, the same way `util.jac` quarantines `datetime`. models.jac
-must stay Python-free because client components import types from it, and a
-Python anchor there drags the wasm host into the browser bundle.
-
-Nothing in this module ever returns a credential to a caller: `gh_request`
-hands back a normalized envelope, and `safe_error` strips everything except
-the status code and GitHub's own `message` field.
-"""
+"""Server-only GitHub App plumbing: app JWTs, installation tokens, HTTP. Every
+Python import the feature needs is quarantined HERE (models.jac must stay
+Python-free). Nothing returns a credential: `gh_request` hands back an
+envelope and `safe_error` keeps only the status and GitHub's own message."""
 
 import os;
 import time;
@@ -300,10 +293,8 @@ def exchange_code(code: str) -> str {
 
 
 # Is this installation one the calling GitHub user can actually see?
-# Installation ids are small integers, so without this an attacker could hand
-# a victim's browser someone else's id and bind the victim's workspace to an
-# installation they control. Returns the installation record, or {} on any
-# failure, callers treat empty as "not proven, refuse".
+# Installation ids are small integers, so without this a victim's workspace
+# could be bound to an attacker's installation. {} on any failure = refuse.
 def user_owns_installation(user_token: str, installation_id: int) -> dict[str, any] {
     nothing: dict[str, any] = {};
     if not user_token {

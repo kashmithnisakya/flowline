@@ -1,8 +1,6 @@
-"""standup - Entry Point.
-
-File-based routing: pages/ holds the routes. This module registers every
-server endpoint (a walker name missing from these imports 404s) and renders
-the routed children.
+"""standup - Entry Point. File-based routing: pages/ holds the routes. This
+module registers every server endpoint (a walker missing from these imports
+404s) and renders the routed children.
 """
 
 import ".styles.global.css";

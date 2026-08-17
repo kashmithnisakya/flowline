@@ -1,8 +1,6 @@
-"""standup - the public landing page at /.
-
-Hitting the server sells the product rather than bouncing to a login form.
-A visitor with a session still sees this page, but every call to action
-becomes "go to your board" instead of "sign up".
+"""standup - the public landing page at /. Sells the product rather than
+bouncing to login; a visitor with a session sees the same page with every
+call to action pointing at their board.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn }

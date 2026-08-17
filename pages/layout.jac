@@ -1,12 +1,6 @@
-"""standup - root layout.
-
-App pages get the nav, org name and logout. Public pages (the landing page
-and the auth screens) render bare, the landing brings its own header, and
-a logged-in visitor browsing / should not see two navs stacked.
-
-The header is sticky with a blur so the board still reads while scrolling;
-below md the six links collapse into a dropdown menu because they do not
-fit a phone row.
+"""standup - root layout. App pages get the nav, org name and logout; public
+pages render bare (the landing brings its own header). The header is sticky
+with a blur; below md the six links collapse into a dropdown menu.
 """
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }

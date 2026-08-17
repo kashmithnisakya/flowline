@@ -1,14 +1,13 @@
 """The disconnected state: what connecting buys, and the button that starts it.
-
-There is no token field anywhere in this flow. Standup connects through a
-GitHub App installation, so the credential is minted per request on the
-server and never typed, pasted, or stored by a person.
+No token field anywhere: standup connects through a GitHub App installation,
+so the credential is minted per request server-side and never typed or stored.
 """
 
 import from ..ui.button { Button }
 import from ..ui.card {
     Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
 }
+import from ..common.glyphs { Spinner }
 
 def:pub ConnectCard(
     starting: bool,
@@ -109,19 +108,7 @@ def:pub ConnectCard(
         <CardFooter>
             <Button onClick={onInstall} disabled={starting}>
                 {if starting {
-                    <svg
-                        key="sp"
-                        className="animate-spin"
-                        width={14}
-                        height={14}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                    >
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
+                    <Spinner key="sp"/>
                 }}
                 {"Opening GitHub…" if starting else "Install GitHub App"}
             </Button>

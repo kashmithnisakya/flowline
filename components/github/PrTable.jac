@@ -1,9 +1,6 @@
-"""One page of a repo's pull requests. Read-only.
-
-Nothing here writes to GitHub or to the board: a PR joins a task by its link
-or number on the task itself, and this table only says which ones already
-have. Merged and draft are standup's own reading of GitHub's flags, which
-report both as "closed" and "open".
+"""One page of a repo's pull requests, read-only: a PR joins a task by its link
+or number on the task itself, this table only says which already have. Merged
+and draft are standup's reading of GitHub's flags (which report closed/open).
 """
 
 glob PR_STATES: list[str] = ["open", "closed", "all"];
@@ -19,6 +16,7 @@ import from ..ui.skeleton { Skeleton }
 import from ..ui.table {
     Table, TableHeader, TableBody, TableRow, TableHead, TableCell
 }
+import from ..common.glyphs { Spinner }
 
 # Relative "3d ago" label from an ISO stamp. Empty in, empty out; anything
 # older than a month falls back to the plain date. No date libs, just an
@@ -224,19 +222,7 @@ def:pub PrTable(
                                 disabled={loadingMore}
                             >
                                 {if loadingMore {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Loading…" if loadingMore else "Load more"}
                             </Button>

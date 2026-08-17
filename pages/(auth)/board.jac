@@ -1,19 +1,12 @@
-"""standup - Board page (/board): the org's workflow as a kanban.
-
-The columns ARE the workflow steps, in the order they were designed, so the
-board and the Workflow tab can never disagree. An org that has not designed
-one yet falls back to the classic six statuses.
-
-Stateful shell: owns the data and every handler (bodies in the impl annex);
-the columns, cards, filters, and dialog are presentational components.
-"""
+"""standup - Board page (/board): the org's workflow as a kanban. The columns
+ARE the workflow steps in designed order, so board and Workflow tab cannot
+disagree; with no workflow yet it falls back to the six statuses. Stateful
+shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
 import from ...models { Project, MemberView, TaskView, StepView, RepoView }
 # The one client import of constants.jac. Beyond sharing the status/kind
-# mapping with the server, it is what makes the Jac compiler emit
-# constants.js at all: the client compiles lazily, so a module nothing
-# imports produces no output and the design-sync bundle barrel cannot
-# resolve it.
+# mapping, it is what makes the compiler emit constants.js at all: the client
+# compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
 import from ...walkers.projects { ListProjects, AssignToProject }
@@ -37,6 +30,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
+import from ...components.common.glyphs { Spinner }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -243,19 +237,7 @@ def:pub BoardPage -> JsxPage {
                                 onClick={syncGithub}
                             >
                                 {if syncing {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Syncing…" if syncing else "Sync GitHub"}
                             </Button>
@@ -344,12 +326,9 @@ def:pub BoardPage -> JsxPage {
                     </div>
                 </div>
             } else {
-                # ONE row, always: however many steps the workflow has, the
-                # columns divide the width between them. A workflow that wraps
-                # onto a second row stops reading as a pipeline, and a
-                # horizontal scrollbar hides the end of it. The one concession
-                # is below md, where columns keep a 16rem minimum and the row
-                # scroll-snaps horizontally instead of crushing every column.
+                # ONE row, always: columns divide the width between them, since
+                # a wrapping workflow stops reading as a pipeline. Below md the
+                # columns keep a 16rem minimum and the row scroll-snaps instead.
                 <div
                     key="columns"
                     className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"

@@ -1,26 +1,7 @@
-"""Computed swimlane layout for the workflow viewer.
-
-Nothing here is persisted: the lane is the step's owner role and the column
-is its depth in the flow, so the projection recomputes from live data and
-can never drift from it the way stored positions could. Steps arrive
-already sorted by sort_order (GetWorkflow sorts), and an edge counts as
-forward only when it points at a LATER step in that order, the same
-definition FlowCanvas uses for send-backs. Ignoring the send-backs is what
-makes the layout terminate on loops.
-
-Role lanes appear in the org's role order (the Roles tab's order), so
-reordering roles reorders lanes; owners that are not managed roles
-("anyone") come first by first appearance, and an Unowned lane comes last
-when any step has no owner. A lane carries who holds the role and how much sits
-on it (steps, tasks), so the labels double as the who-is-loaded answer.
-
-Wires are routed as elbows rather than the freeform canvas's curves: out of
-a card's side, along the gap after (or, for send-backs, before) its column,
-and into the target's side. Trunks that share a gap are spread across it,
-ports that share a side are fanned, and each label sits beside its own
-trunk, never on a card. Cards are shorter here (LANE_NODE_H) because the
-owner line is gone: the lane already says it.
-"""
+"""Computed swimlane layout for the workflow viewer. Nothing is persisted: lane
+= owner role, column = longest forward path (send-backs ignored, which makes
+loops terminate), so it recomputes from live data and cannot drift. Wires are
+elbows in the column gaps; cards are shorter because the owner line is gone."""
 
 import from ...models { StepView, RoleView, MemberView }
 import from .geometry { NODE_W }
@@ -81,12 +62,10 @@ def:pub laneLayout(
         holdersOf[r.name] = ", ".join(held);
     }
 
-    # Lane order: role lanes follow the org's role order (the same order
-    # the Roles tab and the strip use), so the picture agrees with the
-    # list and reordering roles reorders lanes. Owners that are not
-    # managed roles ("anyone", or a legacy free-text owner) come first in
-    # order of first appearance: that is where work enters before it
-    # belongs to any role. Unowned last.
+    # Lane order: role lanes follow the org's role order (the Roles tab's), so
+    # the picture agrees with the list. Owners that are not managed roles
+    # ("anyone", legacy free text) come first by first appearance, that being
+    # where work enters before it belongs to any role. Unowned last.
     seenOwners: list[str] = [];
     hasUnowned = False;
     for s in steps {

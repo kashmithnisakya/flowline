@@ -1,13 +1,11 @@
-"""standup - SSO landing page.
-
-jac-scale's /sso/{platform}/callback finishes the OAuth exchange and then
-redirects the browser here as `?token=<jwt>` (or `?error=CODE&message=...`),
-using [scale.sso] client_auth_callback_url. All this page does is store the
-token the same way a password login would and hand off to the app.
+"""standup - SSO landing page. jac-scale's /sso/{platform}/callback finishes
+the OAuth exchange and redirects here with ?token=<jwt> (or ?error=&message=);
+this page stores the token like a password login would and hands off.
 """
 
 import from "@jac/runtime" { jacSetToken }
 import from ....components.ui.button { Button }
+import from ....components.common.glyphs { WarnIcon }
 
 def:pub SsoCallbackPage() -> JsxPage {
     has failure: str = "";
@@ -49,21 +47,7 @@ def:pub SsoCallbackPage() -> JsxPage {
                 className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
             >
                 <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                    <svg
-                        width={20}
-                        height={20}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                    >
-                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                        <path d="M12 9v4"/>
-                        <path d="M12 17h.01"/>
-                    </svg>
+                    <WarnIcon size={20}/>
                 </div>
                 <h1 className="font-display mt-4 text-2xl font-bold tracking-tight">
                     Could not sign you in

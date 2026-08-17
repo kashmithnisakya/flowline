@@ -1,8 +1,6 @@
-"""standup - persisted graph model and shared helpers.
-
-EVERY node/edge/obj archetype lives HERE and must not move: archetype
-identity includes the module path, so relocating a declaration orphans
-persisted data. Walkers live in walkers/ and import from this module.
+"""standup - persisted graph model and shared helpers. EVERY node/edge/obj
+archetype lives HERE and must not move: archetype identity includes the module
+path, so relocating a declaration orphans persisted data.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -24,11 +22,9 @@ def on_attached(holder: any, fresh: any) -> None {
     return;
 }
 
-# "org/repo" and nothing else. Repo names are interpolated straight into
-# api.github.com paths, so a name carrying `..`, `?` or `#` could redirect a
-# request to a different endpoint. Pure string work, so it lives here rather
-# than in the Python-importing helpers and both the storage path and every
-# API call can share one definition.
+# "org/repo" and nothing else: repo names land in api.github.com paths, so
+# `..`, `?` or `#` could redirect a request. Pure string work, so it lives
+# here rather than in the Python-importing helpers, shared by storage and API.
 def valid_full_name(full_name: str) -> bool {
     if full_name.count("/") != 1 {
         return False;
@@ -211,13 +207,10 @@ node Milestone {
         updated_at: str = "";
 }
 
-# The org's GitHub App installation. Singleton per root, get-or-created.
-#
-# It stores an installation id, NOT a credential: API calls mint a one-hour
-# installation token on demand (walkers/ghutil.jac) and keep it in process
-# memory. `pending_state` is the one-shot CSRF nonce for an install round
-# trip — without it, a forged callback could bind someone else's
-# installation to this workspace.
+# The org's GitHub App installation, singleton per root. It stores an
+# installation id, NOT a credential: tokens are minted on demand in ghutil.
+# `pending_state` is the one-shot CSRF nonce for an install round trip;
+# without it a forged callback could bind someone else's installation here.
 node GithubConnection {
     has installation_id: int = 0,
         account_login: str = "",
@@ -229,11 +222,9 @@ node GithubConnection {
         pending_at: str = "";
 }
 
-# An org-level role definition, seeded by ApplyTemplate from the chosen
-# template and fully editable on the Workspace Roles tab. Members hold role
-# NAMES (Member.roles) and workflow steps name their owner role by string,
-# so the rename/delete walkers propagate through both rather than anything
-# holding a jid to this node.
+# An org-level role definition, seeded by ApplyTemplate and editable on the
+# Roles tab. Members and step owners hold role NAMES, so rename/delete
+# walkers propagate by name rather than anything holding a jid to this node.
 node Role {
     has name: str,
         blurb: str = "",
@@ -241,12 +232,10 @@ node Role {
         sort_order: float = 0.0;
 }
 
-# One step of the org's workflow: a named column-to-be with a semantic
-# `kind` behind the user's label. The kind, not the name, is what the rest
-# of the app will key behavior on ("done" is terminal, "blocked" raises
-# attention), so a renamed step never breaks anything. Position is the
-# designer's canvas placement in px — persisted, unlike roadmap layout,
-# because a workflow is drawn by hand rather than derived from arrows.
+# One step of the org's workflow: a named column with a semantic `kind`
+# behind the user's label. The kind, not the name, is what the app keys
+# behaviour on, so renaming never breaks anything. Position is the
+# designer's canvas placement in px, persisted because it is drawn by hand.
 node WorkflowStep {
     has name: str,
         kind: str = "active",
@@ -284,12 +273,9 @@ edge InMilestone: Task --> Milestone {}
 # acyclic (LinkSteps refuses anything that would close a loop), because both
 # the layout and the "ready to start" signal are derived from depth.
 edge LeadsTo: Milestone --> Milestone {}
-# A workflow transition. Unlike LeadsTo, cycles are ALLOWED by design: a
-# review step looping back to development is the whole point of letting orgs
-# draw their own flow. Only self-loops are refused, at link time.
-#
-# `label` is what has to be true to cross ("approved", "changes requested").
-# Empty on transitions drawn before labels existed, so this is additive.
+# A workflow transition. Cycles are ALLOWED by design (review looping back
+# to development is the point); only self-loops are refused, at link time.
+# `label` is what has to be true to cross; empty on older transitions.
 edge FlowsTo: WorkflowStep --> WorkflowStep {
     has label: str = "";
 }
@@ -342,33 +328,6 @@ obj RepoView {
         full_name: str,
         project_id: str,
         project_name: str;
-}
-
-obj MilestoneView {
-    has id: str,
-        title: str,
-        description: str,
-        start_date: str,
-        due_date: str,
-        status: str,
-        color: str,
-        sort_order: float,
-        project_id: str,
-        project_name: str,
-        task_count: int = 0,
-        done_count: int = 0,
-        # Graph shape, computed per request in ListMilestones where every
-        # step is in hand. `depth` is the row (longest path from a step with
-        # no predecessor); `lane` is 0 on the spine and alternates -1, 1, -2,
-        # 2 outward for branches. `ready` means every predecessor is Done, so
-        # this is startable now.
-        depth: int = 0,
-        lane: int = 0,
-        component: int = 0,
-        ready: bool = False,
-        blocked_by: int = 0,
-        prev_ids: list[str] = [],
-        next_ids: list[str] = [];
 }
 
 obj RoleView {
@@ -464,48 +423,6 @@ def repo_view(r: Repo) -> RepoView {
         full_name=r.full_name,
         project_id=project_id,
         project_name=project_name
-    );
-}
-
-
-def milestone_view(m: Milestone) -> MilestoneView {
-    project_id = "";
-    project_name = "";
-    for p in [m->:OnRoadmap:->] {
-        project_id = jid(p);
-        project_name = p.name;
-    }
-    total = 0;
-    done = 0;
-    for t in [m<-:InMilestone:<-] {
-        total = total + 1;
-        if t.status == "Done" {
-            done = done + 1;
-        }
-    }
-    prev_ids: list[str] = [];
-    for p in [m<-:LeadsTo:<-] {
-        prev_ids.append(jid(p));
-    }
-    next_ids: list[str] = [];
-    for n in [m->:LeadsTo:->] {
-        next_ids.append(jid(n));
-    }
-    return MilestoneView(
-        id=jid(m),
-        title=m.title,
-        description=m.description,
-        start_date=m.start_date,
-        due_date=m.due_date,
-        status=m.status,
-        color=m.color,
-        sort_order=m.sort_order,
-        project_id=project_id,
-        project_name=project_name,
-        task_count=total,
-        done_count=done,
-        prev_ids=prev_ids,
-        next_ids=next_ids
     );
 }
 

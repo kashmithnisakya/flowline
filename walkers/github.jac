@@ -1,19 +1,7 @@
-"""GitHub walkers: connect an installation, read issues and pull requests,
-import issues as tasks, open an issue from a task.
-
-Auth is a GitHub App installation, not a stored token. The workspace keeps
-an installation id; every call mints a short-lived installation token in
-`ghutil` and drops it. Nothing here ever reports a credential.
-
-Error contract: every walker except `GithubStatus` reports ONE dict , 
-`{"ok": True, ...}` or `{"ok": False, "error": <code>, "message": <text>}`.
-GitHub calls fail in ways the client must explain (not configured, revoked,
-rate limited), which a bare view object cannot express. `GithubStatus`
-cannot fail, so it reports its view directly.
-
-Reads are user-initiated. Nothing polls, and the only write to GitHub is an
-issue somebody explicitly asks for.
-"""
+"""GitHub walkers: connect an installation, read issues and PRs, import issues
+as tasks, open an issue from a task. Auth is an App installation (tokens minted
+per call, never reported). Every walker but GithubStatus reports ONE envelope,
+{"ok": True, ...} or {"ok": False, "error", "message"}. Nothing polls."""
 
 import from models {
     Project, Member, Repo, Task, TaskView, WorkflowStep, GithubConnection,
@@ -106,11 +94,8 @@ walker GithubStatus {
 
 
 walker StartGithubInstall {
-    """Hands back the install URL carrying a one-shot nonce.
-
-    The nonce is what stops a forged callback from binding somebody else's
-    installation to this workspace, so it is stored server-side and burned
-    on use."""
+    """Hands back the install URL carrying a one-shot nonce, stored server-side
+    and burned on use so a forged callback cannot bind another installation."""
     has reports: list[dict[str, any]] = [];
 
     can begin with Root entry {
@@ -138,14 +123,10 @@ walker StartGithubInstall {
 
 
 walker CompleteGithubInstall {
-    """Finish the round trip GitHub redirected back from.
-
-    Two independent checks before anything is stored: the nonce must match
-    the one this workspace issued (CSRF), and the GitHub user who just
-    authorized must actually be able to see the installation they claim
-    (`GET /user/installations`). Installation ids are small integers, so
-    without the second check a forged link could point a workspace at an
-    attacker's repos."""
+    """Finish the round trip GitHub redirected back from. Two checks before
+    anything is stored: the nonce matches the one this workspace issued (CSRF),
+    and the GitHub user can actually see the claimed installation, since
+    installation ids are small integers a forged link could otherwise pick."""
     has code: str = "",
         installation_id: int = 0,
         state: str = "",
@@ -524,13 +505,9 @@ walker ListRepoPulls {
 
 
 walker SearchRepoItems {
-    """One page of GitHub search results scoped to one repo.
-
-    `kind` picks issues or pull requests; rows come back in the same shapes
-    the list walkers use, so the tables and the import bar work unchanged.
-    GitHub's search API allows ~30 requests a minute, so the client only
-    calls this on an explicit search action, never per keystroke. A foreign
-    repo jid reports an empty page, like the list walkers."""
+    """One page of GitHub search results scoped to one repo. `kind` picks issues
+    or PRs; rows use the list walkers' shapes. GitHub allows ~30 searches a
+    minute, so the client only calls on an explicit action. Foreign repo: empty."""
     has repo_id: str = "",
         kind: str = "issues",
         query: str = "",
@@ -641,13 +618,9 @@ walker SearchRepoItems {
 # ---------------------------------------------------------------- writes
 
 walker ImportIssues {
-    """Turn chosen issues into tasks, once each.
-
-    `(gh_repo, gh_issue_number)` is the identity: an issue already on the
-    board is skipped rather than duplicated. A closed issue lands on the
-    org's done step, everything else on the chosen step. `step_id` names a
-    workflow step and wins over `status`; the legacy status list only
-    applies to an org with no workflow."""
+    """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
+    the identity. Closed issues land on the done step, the rest on the chosen
+    step; `step_id` wins over `status`, which only applies with no workflow."""
     has repo_id: str = "",
         numbers: list[int] = [],
         project_id: str = "",

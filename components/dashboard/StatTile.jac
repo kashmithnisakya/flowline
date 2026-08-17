@@ -1,8 +1,6 @@
-"""A single headline number with its label and an optional hint line.
-
-The hint line always renders (min-height reserved) so value baselines
-align across a row of tiles whether or not a tile has a hint. `accent`
-takes a literal text color class (e.g. "text-success") for the value.
+"""A headline number with label and optional hint. The hint line always
+reserves its height so value baselines align across a row; `accent` takes a
+literal text colour class for the value.
 """
 
 import from ..ui.card { Card, CardContent }

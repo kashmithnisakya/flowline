@@ -1,15 +1,7 @@
 """standup - Workspace (/workspace): everything you configure, in one place.
-
-Three tabs, all of them CRUD over settings rather than daily work: the
-organization's own name, the projects work is scoped to, and the people on
-the roster. GitHub graduated back to its own /github route (browsing and
-importing issues is daily work); old ?tab=github links and in-flight App
-install round trips redirect there with their query string intact.
-
-The page is a thin shell: each tab is a self-contained section component
-that loads and saves its own data, so switching tabs costs nothing and no
-section can break another.
-"""
+Four tabs of settings CRUD (organization, projects, people, roles); GitHub
+lives at /github and old ?tab=github links redirect there. Each tab is a
+self-contained section, so the page stays a thin shell."""
 
 import from ...models { Project, MemberView }
 import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
@@ -117,11 +109,9 @@ def:pub WorkspacePage -> JsxPage {
         }
     }
 
-    # The header carries one primary action at a time, swapping with the tab.
-    # The action slot keeps a fixed height so the h1 row never shifts when a
-    # tab without an action (Organization) is selected. The nav is a vertical
-    # rail at sm+ (line variant puts the indicator on the rail edge); below sm
-    # it collapses to a horizontal segmented strip driven by the same state.
+    # The header carries one primary action, swapping with the tab; the slot
+    # keeps a fixed height so the h1 row never shifts. The nav is a vertical
+    # rail at sm+ and a horizontal segmented strip below, on the same state.
     return
         <div className="flex w-full flex-col gap-8">
             <div className="flex items-center justify-between gap-6">

@@ -1,8 +1,6 @@
-"""One page of a repo's issues, with the ones you pick landing on the board.
-
-Import is keyed on (repo, issue number), so an issue already on the board is
-skipped rather than duplicated. Those rows stay visible but disabled: hiding
-them would make the table disagree with what GitHub shows.
+"""One page of a repo's issues; picked ones land on the board. Import is keyed
+on (repo, issue number), so an issue already on the board is skipped, shown
+disabled rather than hidden so the table still matches GitHub.
 """
 
 glob STATUSES: list[str] = [
@@ -22,6 +20,7 @@ import from ..ui.skeleton { Skeleton }
 import from ..ui.table {
     Table, TableHeader, TableBody, TableRow, TableHead, TableCell
 }
+import from ..common.glyphs { Spinner }
 
 def:pub IssueImportTable(
     rows: list[GhIssueRow],
@@ -193,19 +192,7 @@ def:pub IssueImportTable(
                                 disabled={loadingMore}
                             >
                                 {if loadingMore {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Loading…" if loadingMore else "Load more"}
                             </Button>
@@ -263,19 +250,7 @@ def:pub IssueImportTable(
                     disabled={importing or len(selected) == 0}
                 >
                     {if importing {
-                        <svg
-                            key="sp"
-                            className="animate-spin"
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                        >
-                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                        </svg>
+                        <Spinner key="sp"/>
                     }}
                     {
                         "Importing…" if importing

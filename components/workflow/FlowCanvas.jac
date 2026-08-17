@@ -1,18 +1,7 @@
-"""The workflow as a diagram: free-form step cards over SVG transitions.
-
-Purely presentational, positions come in as data (persisted x/y plus the
-page's live drag overrides) and every interaction is a callback. Unlike the
-roadmap's Flow, edges travel in any direction and loops are legal. Every
-transition is drawn the same way: the arrowhead already says which way work
-moves, and a second style for "backwards" needed a legend to mean anything.
-
-The viewport never scrolls. It fills its box and a zoom control shrinks the
-drawing to fit instead: a scrollbar hides
-half the graph behind a gesture, where a zoom level tells you at a glance
-that there is more and puts it back on screen in one click. The control
-sends a DELTA rather than a target, because two quick clicks would both
-read the same render-time zoom and only one would count.
-"""
+"""The workflow as a diagram: step cards over SVG transitions, purely
+presentational (positions come in as data, every interaction is a callback).
+Edges travel any direction and loops are legal. The viewport never scrolls: it
+zooms to fit, and the control sends a DELTA so two quick clicks both count."""
 
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
@@ -34,12 +23,9 @@ def:pub FlowCanvas(
     panY: float = 0.0,
     animate: bool = True,
     showGrid: bool = True,
-    # Lane view: horizontal role bands drawn behind the steps, computed by
-    # components/workflow/lanes.jac. Non-empty flips the canvas into lane
-    # mode: elbow-routed wires, compact cards without the owner line (the
-    # lane already says it), dashed send-backs, and lane labels that carry
-    # holders and totals. {key, label, sub, warn, totals, manage, color, y,
-    # h} per band, canvas px. `laneOf` maps step id to lane key so hovering
+    # Lane view bands drawn behind the steps, from lanes.jac. Non-empty flips
+    # lane mode: elbow wires, compact cards, dashed send-backs, and labels
+    # with holders and totals. `laneOf` maps step id to lane key so hovering
     # a lane can fade everything outside it.
     lanes: list[dict[str, any]] = [],
     laneOf: dict[str, str] = {},
@@ -177,10 +163,8 @@ def:pub FlowCanvas(
     }
 
     # The selected transition, so its label editor can be drawn in screen
-    # space OUTSIDE the zoom transform. An input placed inside the transform
-    # scales with the drawing and is unusable at anything but 100%.
-    # Tracked with a bool because len() on a dict compiles to an undefined
-    # .length read.
+    # space OUTSIDE the zoom transform (an input inside it scales with the
+    # drawing). Tracked with a bool: len() on a dict is undefined in JS.
     activeEdge: dict[str, any] = {};
     activeFound = False;
     for l in links {
@@ -207,11 +191,9 @@ def:pub FlowCanvas(
     # the board rather than the cards changing size against a fixed mesh.
     gridPitch = 22.0 * zoom;
 
-    # The grid is an editing affordance: it says the cards can be dragged and
-    # gives them something to line up against. The read-only view has nothing
-    # to align, so there it is only texture behind the diagram.
-    # Height fills whatever the viewport leaves under the header, title row
-    # and legend (~15rem of chrome), with a floor for short windows.
+    # The grid is an editing affordance (something to drag against); the
+    # read-only view skips it. Height fills what the viewport leaves under
+    # ~15rem of chrome, with a floor for short windows.
     boxStyle: dict[str, str] = {"height": "max(26rem, calc(100dvh - 15rem))"};
     if showGrid {
         boxStyle["backgroundImage"] = "radial-gradient(color-mix(in oklab, var(--color-muted-foreground) 20%, transparent) 1px, transparent 1px)";

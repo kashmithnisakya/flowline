@@ -1,10 +1,7 @@
-"""standup - Overview: org-wide summary, progress and activity metrics.
-
-Client-side aggregation over the existing walkers: tasks, members,
-projects and this week's log entries. Charts are plain marks built to the
-progress/status encoding: Done (pine) and Active (ember) fills over a
-muted Backlog track, with counts labeled so nothing is color-alone.
-"""
+"""standup - Overview: org-wide summary, progress and activity metrics,
+aggregated client-side over the existing walkers. Charts are plain marks:
+Done (pine) and Active (ember) fills over a muted Backlog track, counts
+labelled so nothing is colour-alone."""
 
 import from ...models { Project, MemberView, TaskView, LogEntry, VocabTerm }
 import from ...walkers.tasks { ListTasks }
@@ -20,6 +17,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "@jac/runtime" { Link }
 import from "sonner" { toast }
+import from ...components.common.glyphs { WarnIcon }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"];
@@ -211,11 +209,7 @@ def:pub OverviewPage() -> JsxPage {
             </div>
         } elif failed {
             <div key="failed" className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/10 px-6 py-12 text-center animate-in fade-in slide-in-from-top-1">
-                <svg className="text-destructive" width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z" />
-                    <path d="M12 9v4" />
-                    <path d="M12 17h.01" />
-                </svg>
+                <WarnIcon size={28} className="text-destructive"/>
                 <div>
                     <p className="text-sm font-semibold">Could not load the overview.</p>
                     <p className="mt-1 text-sm text-muted-foreground">

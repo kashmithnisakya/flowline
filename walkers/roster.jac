@@ -105,10 +105,9 @@ walker ArchiveMember {
 }
 
 # -------------------------------------------------------------------- roles
-# Role walkers are name-centric, not jid-centric: member.roles and each
-# workflow step's `owner` hold role NAMES, so the name is the identity that
-# has to be kept consistent. Everything runs on [here-->] under the caller's
-# own root, so structural isolation covers them without owned() checks.
+# Name-centric, not jid-centric: member.roles and step owners hold role NAMES,
+# so the name is the identity to keep consistent. Everything runs on
+# [here-->] under the caller's root, so isolation needs no owned() checks.
 
 walker ListRoles {
     has results: list[RoleView] = [],
@@ -129,12 +128,10 @@ walker ListRoles {
 }
 
 walker SaveRole {
-    """Create or update the role addressed by `name`, get-or-created so a
-    free-text role becomes managed on its first edit. A non-empty `new_name`
-    renames and propagates through every member's role list and every
-    workflow step's owner. Renaming onto an existing role is refused rather
-    than silently merging two roles. Blurb overwrite is opt-in via
-    touch_blurb so assignment-only callers cannot blank it."""
+    """Create or update the role named `name` (get-or-create, so a free-text
+    role becomes managed on first edit). `new_name` renames and propagates
+    through members and step owners; renaming onto an existing role is refused.
+    Blurb overwrite is opt-in via touch_blurb so assignment can't blank it."""
     has name: str = "",
         new_name: str = "",
         blurb: str = "",

@@ -1,9 +1,6 @@
-"""Workflow walkers: the org's step-graph API.
-
-One workflow per organization, steps hanging directly off the caller's root
-like every other archetype, so the one-hop ownership check keeps working
-unchanged. Unlike the roadmap there is NO cycle guard here: loops are the
-point. Only self-loops are refused, and duplicate transitions are deduped.
+"""Workflow walkers: the org's step-graph API. One workflow per organization,
+steps hanging off the caller's root so the one-hop ownership check works.
+NO cycle guard: loops are the point; only self-loops are refused.
 """
 
 import from models {
@@ -45,12 +42,25 @@ def restatus_tasks(holder: Root, step: WorkflowStep) {
 }
 
 
-# Canvas bound in px. Positions come straight off the wire, so this is the
-# only thing standing between a crafted request and a broken workspace: NaN
-# and ±Infinity both fail this range test and land at the origin. A stored
-# inf would serialize as the bare token `Infinity`, which JSON.parse rejects,
-# so every later read of the workflow would fail in the browser with no way
-# back through the UI.
+# Where a task lands: its own step when that step still exists, else the
+# first step whose kind matches its legacy status. One rule for the board,
+# the counts and the per-step panel.
+def landing_step(t: Task, known: list[str], first_of_kind: dict[str, str]) -> str {
+    if t.step_id and t.step_id in known {
+        return t.step_id;
+    }
+    kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+    if kind in first_of_kind {
+        return str(first_of_kind[kind]);
+    }
+    return "";
+}
+
+
+# Canvas bound in px. Positions come straight off the wire, so this is what
+# keeps a crafted request from breaking the workspace: NaN and ±Infinity fail
+# the range test and land at the origin (a stored inf would serialize as the
+# bare token `Infinity`, which JSON.parse rejects on every later read).
 glob MAX_COORD: float = 20000.0;
 
 
@@ -104,12 +114,9 @@ walker RenameWorkflow {
 
 
 walker GetWorkflow {
-    """The org's steps, each carrying how much work sits on it.
-
-    `project_id` narrows the count to one project; empty counts everything.
-    The count is computed here rather than on the client so the placement
-    rule (step first, then the legacy status fallback) has exactly one
-    implementation for the board and the workflow view to share."""
+    """The org's steps, each carrying how much work sits on it; `project_id`
+    narrows the count. Computed here so the placement rule (step first, then
+    the legacy status fallback) has one implementation for board and view."""
     has project_id: str = "",
         results: list[StepView] = [],
         reports: list[list[StepView]] = [];
@@ -143,15 +150,7 @@ walker GetWorkflow {
                     continue;
                 }
             }
-            landing: str = "";
-            if t.step_id and t.step_id in known {
-                landing = t.step_id;
-            } else {
-                kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
-                if kind in first_of_kind {
-                    landing = str(first_of_kind[kind]);
-                }
-            }
+            landing = landing_step(t, known, first_of_kind);
             if landing {
                 counts[landing] = int(counts[landing]) + 1;
             }
@@ -166,10 +165,7 @@ walker GetWorkflow {
 
 walker ListStepTasks {
     """The work sitting on one step, for the panel the workflow view opens.
-
-    Placement repeats GetWorkflow's rule (a task's own step, else the first
-    step whose kind matches its legacy status) rather than the client
-    guessing, so the list and the count on the card can never disagree."""
+    Placement reuses GetWorkflow's rule so list and count never disagree."""
     has step_id: str = "",
         project_id: str = "",
         results: list[TaskView] = [],
@@ -197,16 +193,7 @@ walker ListStepTasks {
                     continue;
                 }
             }
-            landing: str = "";
-            if t.step_id and t.step_id in known {
-                landing = t.step_id;
-            } else {
-                kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
-                if kind in first_of_kind {
-                    landing = str(first_of_kind[kind]);
-                }
-            }
-            if landing == wanted {
+            if landing_step(t, known, first_of_kind) == wanted {
                 self.results.append(t.to_view());
             }
         }
@@ -217,11 +204,9 @@ walker ListStepTasks {
 
 
 walker ApplyTemplate {
-    """Seed the org's workflow from one template, atomically on the server.
-
-    Idempotent by refusal: if any step already exists the template is NOT
-    applied and the existing workflow is reported instead, so a double-click
-    can never produce two overlaid workflows."""
+    """Seed the org's workflow from one template, atomically. Idempotent by
+    refusal: with any step already present the existing workflow is reported
+    instead, so a double-click cannot overlay two workflows."""
     has template_key: str = "",
         reports: list[list[StepView]] = [];
 
@@ -314,12 +299,8 @@ walker ApplyTemplate {
 
 walker find_step {
     """Lookup base: resolve the jid once, verify org parentage, then visit.
-
-    MoveStep and DeleteStep subclass this. SaveStep's update branch and
-    Link/UnlinkTransition need Root entry (a create path, and two endpoints
-    to check) so they repeat the resolve + isinstance + owned triple inline,
-    exactly as SaveMilestone and LinkSteps do. However a jid is reached,
-    resolution alone is NOT authorization."""
+    MoveStep and DeleteStep subclass this; walkers needing Root entry repeat
+    the resolve + isinstance + owned triple. Resolution is NOT authorization."""
     has step_id: str = "";
 
     can locate with Root entry {
@@ -332,11 +313,9 @@ walker find_step {
 
 
 walker SaveStep {
-    """Empty step_id creates; otherwise updates the addressed one.
-
-    Update is partial on purpose (empty means keep), unlike UpdateTask's
-    overwrite-everything: the inspector edits one field at a time and must
-    not blank the others."""
+    """Empty step_id creates; otherwise updates the addressed one. Update is
+    partial on purpose (empty means keep): the inspector edits one field at a
+    time and must not blank the others."""
     has step_id: str = "",
         name: str = "",
         kind: str = "",
@@ -429,12 +408,9 @@ walker MoveStep(find_step) {
 
 
 walker DeleteStep(find_step) {
-    """Removes the step; every FlowsTo transition touching it dies with the
-    node, and any task sitting on it falls back to its status.
-
-    Refuses to remove the LAST start or done step: the board places
-    workflow-less tasks by kind, and an org with no way in or no way out has
-    a board work cannot leave."""
+    """Removes the step; its transitions die with it and any task on it falls
+    back to its status. Refuses to remove the LAST start or done step: an org
+    with no way in or out has a board work cannot leave."""
     has reports: list[dict[str, any]] = [];
 
     can remove with WorkflowStep entry {
@@ -478,11 +454,8 @@ walker DeleteStep(find_step) {
 
 
 walker LinkTransition {
-    """Draw a transition: from_id flows to to_id.
-
-    Both ends are owned-checked independently. Loops and branches are legal;
-    a self-loop is refused and an existing duplicate reports success without
-    writing a second edge."""
+    """Draw a transition from_id -> to_id, both ends owned-checked. Loops and
+    branches are legal; a self-loop is refused and a duplicate reports success."""
     has from_id: str = "",
         to_id: str = "",
         # What has to be true to cross. Optional.
@@ -526,12 +499,9 @@ walker LinkTransition {
 
 
 walker LabelTransition {
-    """Set or clear what has to be true to cross an existing transition.
-
-    Separate from LinkTransition because an empty label means the opposite
-    in each. There it means "leave it alone", so re-drawing an arrow does
-    not wipe what it already says; here it means clear, which is the only
-    way to take the wording off an arrow without deleting the arrow."""
+    """Set or clear what has to be true to cross an existing transition. Unlike
+    LinkTransition, an empty label here means CLEAR, the only way to take the
+    wording off an arrow without deleting it."""
     has from_id: str = "",
         to_id: str = "",
         label: str = "",

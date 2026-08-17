@@ -1,14 +1,7 @@
-"""Manage the org's roles and who holds them.
-
-Self-contained like the other workspace sections: loads the role list and
-the roster itself. Roles are org data (Role nodes, seeded by the workflow
-template and editable here): add creates one, edit renames and rewrites the
-name through every member and workflow step owner, delete strips it from
-everyone. Free-text roles that predate management show up too and become
-managed on their first edit. Assignment writes through SetMemberRoles,
-which touches nothing but the member's role list. A person can hold any
-number of roles.
-"""
+"""Manage the org's roles and who holds them. Roles are Role nodes (seeded by
+the template, editable here): add creates, edit renames through every member
+and step owner, delete strips from everyone. Assignment goes through
+SetMemberRoles, which touches only the role list. Any number of roles per person."""
 
 import from ...models { MemberView, RoleView }
 import from ...walkers.roster {

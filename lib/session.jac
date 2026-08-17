@@ -1,8 +1,6 @@
-"""Thin wrapper over the runtime's /user/me endpoints.
-
-The account IS the organization, so org details live in the account profile
-rather than a graph node. `@jac/runtime` exports signup/login/logout but no
-/user/me helper, so these do the fetch by hand with the stored JWT.
+"""Thin wrapper over the runtime's /user/me endpoints. The account IS the
+organization, so org details live in the profile; `@jac/runtime` exports no
+/user/me helper, so these fetch by hand with the stored JWT.
 """
 
 

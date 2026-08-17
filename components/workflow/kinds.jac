@@ -1,7 +1,5 @@
-"""Step-kind and color metadata shared by every workflow surface.
-
-The step stores a color KEY; class strings must stay literal in these
-tables or Tailwind's scanner drops them from the build.
+"""Step-kind and colour metadata shared by every workflow surface. The step
+stores a colour KEY; class strings stay literal here or Tailwind drops them.
 """
 
 glob KIND_LABEL: dict[str, str] = {

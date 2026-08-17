@@ -1,21 +1,7 @@
-"""The assistant: byLLM over a deterministic workspace snapshot.
-
-Design constraints, all learned the hard way (see PLAN.md "Findings"):
-
-  * NO tools / ReAct. The whole org fits in one prompt, and byLLM tools that
-    read the graph come back EMPTY under streaming, while a nested `root spawn`
-    returns empty `.reports` and leaks its rows into the outer walker. Context
-    is assembled eagerly by walkers.insights.build_snapshot instead.
-  * NO streaming (`stream=True`) in v3.0, for the same reason.
-  * NO `:pub`. These walkers are bare, so they require a JWT and run on the
-    caller's own root. A :pub walker would let an anonymous caller burn the
-    OpenAI key against the shared guest graph.
-  * The model NEVER writes. `propose_action` returns a suggestion that the UI
-    confirms and the client then applies through the normal walkers.
-
-`llm` is an ambient builtin; `[byllm.model]` in jac.toml is the whole wiring,
-and litellm reads OPENAI_API_KEY straight from the environment.
-"""
+"""The assistant: byLLM over a deterministic snapshot. Hard-won constraints:
+NO tools/ReAct or streaming (graph-reading tools and nested `root spawn` come
+back empty), NO `:pub` (bare walkers require a JWT), and the model NEVER
+writes: propose_action returns a suggestion the UI applies via normal walkers."""
 
 import from constants { STATUSES, PRIORITIES }
 import from walkers.insights { Snapshot, build_snapshot }

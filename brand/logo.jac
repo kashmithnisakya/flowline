@@ -1,14 +1,6 @@
-"""standup brand mark — the single source of truth for the logo.
-
-The mark is a rising bar chart (a standup that trends up) with an ember
-status dot over the tallest bar. Run this to regenerate every variant:
-
-    jac run brand/logo.jac
-
-It writes SVGs into assets/brand/, plus PNG/JPG rasters of the mark drawn
-straight from the same geometry with Pillow. Commit the output so the
-frontend can reference plain static paths, and re-run this whenever the
-palette moves.
+"""standup brand mark, the single source of truth for the logo: a rising bar
+chart with an ember status dot. `jac run brand/logo.jac` regenerates every
+SVG and PNG/JPG variant into assets/brand/; commit the output.
 """
 
 import os;

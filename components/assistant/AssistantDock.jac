@@ -1,23 +1,7 @@
-"""The floating assistant: launcher button plus chat panel.
-
-Mounted once in the root layout, like `<Toaster />`, so it is reachable from
-the board, the log and everywhere the work actually happens. It owns its own
-state and its own walker calls (bodies in AssistantDock.impl.jac) rather than
-threading a dozen props through the layout, which has nothing to do with chat.
-
-A turn is a plain dict because it carries one of four payload shapes:
-
-    {"role": "user",      "kind": "text",     "text": ...}
-    {"role": "assistant", "kind": "text",     "text": ...}
-    {"role": "assistant", "kind": "error",    "text": ...}
-    {"role": "assistant", "kind": "note",     "note": StandupNote}
-    {"role": "assistant", "kind": "proposal", "proposal": ProposedAction,
-                                              "state": "" | "applied" | "dismissed"}
-
-Typing that as an obj would mean a component importing the walker module, and
-declaring it in models.jac would make models import walkers, which import
-models.
-"""
+"""The floating assistant: launcher button plus chat panel, mounted once in the
+root layout with its own state and walker calls. A turn is a plain dict with a
+`role` and a `kind` (text / error / note / proposal, proposals also carry
+`state`): typing it as an obj would create a models <-> walkers import cycle."""
 
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
 import from ...walkers.assistant { AskAssistant, WriteStandup, ProposeAction }

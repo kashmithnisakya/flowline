@@ -1,14 +1,7 @@
-"""Create/edit dialog for a kanban task.
-
-The form is a plain dict owned by the page; assignees ride separately as
-a list (tasks take several people in v2.5). Assignee chips group by
-project membership, and picking someone outside the selected project
-adds them to it on save. A handoff step reveals the reviewer fields.
-
-The body is one two-column grid. Title, Assignees, the GitHub issue link
-and Notes span both columns; the five classification selects and the due
-date pair off two per row. It collapses to a single column below sm.
-"""
+"""Create/edit dialog for a kanban task. The form is a plain dict owned by the
+page; assignees ride separately as a list and group by project membership
+(picking someone outside the project adds them on save). A handoff step reveals
+the reviewer fields. One two-column grid, collapsing to one column below sm."""
 
 # constants.jac is server-only (imported by walkers); define board vocabulary locally.
 glob STATUSES: list[str] = [
@@ -51,6 +44,7 @@ import from ..ui.dropdown_menu {
     DropdownMenuSeparator,
     DropdownMenuCheckboxItem
 }
+import from ..common.glyphs { Spinner }
 
 # Every control fills its cell, so the labels above them line up as a
 # grid instead of a ragged row of chips.
@@ -83,13 +77,10 @@ def:pub TaskDialog(
     ghIssueNumber: int = 0,
     onCreateIssue: Callable[[str], None] = None
 ) -> JsxElement {
-    # Which repo the new issue goes in, when the project tracks more than
-    # one. Purely local: the page never needs to know about the picker.
-    # Notes open rendered, not raw: the markdown is the point of writing
-    # them. The Edit button flips to the textarea and back.
-    # pendingAction remembers which button started the shared `saving`
-    # flight, so only that button shows the spinner. Only read while
-    # saving is true, so a stale value from a previous open is harmless.
+    # Which repo a new issue goes in when the project tracks several: local.
+    # Notes open rendered (the markdown is the point); Edit flips to a textarea.
+    # pendingAction remembers which button started the shared `saving` flight
+    # so only that one shows the spinner; only read while saving is true.
     has repoChoice: str = "",
         notesEditing: bool = False,
         pendingAction: str = "";
@@ -373,19 +364,7 @@ def:pub TaskDialog(
                                     }}}
                                 >
                                     {if saving and pendingAction == "issue" {
-                                        <svg
-                                            key="sp"
-                                            className="animate-spin"
-                                            width={14}
-                                            height={14}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                        >
-                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                        </svg>
+                                        <Spinner key="sp"/>
                                     }}
                                     {"Opening issue…"
                                         if saving and pendingAction == "issue"
@@ -507,19 +486,7 @@ def:pub TaskDialog(
                             disabled={saving}
                         >
                             {if saving and pendingAction == "delete" {
-                                <svg
-                                    key="sp"
-                                    className="animate-spin"
-                                    width={14}
-                                    height={14}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                >
-                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                </svg>
+                                <Spinner key="sp"/>
                             }}
                             {"Deleting…"
                                 if saving and pendingAction == "delete"
@@ -543,19 +510,7 @@ def:pub TaskDialog(
                             disabled={saving or not form["title"].strip()}
                         >
                             {if saving and pendingAction == "save" {
-                                <svg
-                                    key="sp"
-                                    className="animate-spin"
-                                    width={14}
-                                    height={14}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                >
-                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                </svg>
+                                <Spinner key="sp"/>
                             }}
                             {"Saving…"
                                 if saving and pendingAction == "save"

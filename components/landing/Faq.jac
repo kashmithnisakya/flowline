@@ -1,8 +1,5 @@
-"""FAQ.
-
-Every answer here is true of the app as it stands today, including the
-honest "not yet" ones. If a capability lands later, update the answer ,
-do not soften it in advance.
+"""FAQ. Every answer is true of the app today, including the honest "not yet"
+ones; update an answer when a capability lands, never soften it in advance.
 """
 
 obj QA {

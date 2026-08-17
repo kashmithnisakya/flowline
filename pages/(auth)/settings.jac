@@ -1,14 +1,7 @@
-"""standup - Settings page (/settings): personal preferences.
-
-Appearance only for now. The theme is a per-browser preference (localStorage),
-not an account field: the same account on a laptop and a meeting-room screen
-legitimately wants different modes.
-
-The theme cards are mini app previews. Each card must show its own palette
-regardless of the active theme, so the two palettes are deliberately
-hardcoded hexes here rather than tokens (tokens would repaint every card to
-the current theme and make the choice unreadable).
-"""
+"""standup - Settings page (/settings): appearance only. The theme is a
+per-browser preference (localStorage), not an account field. The theme cards
+are mini app previews with deliberately hardcoded palette hexes: tokens would
+repaint every card to the current theme and make the choice unreadable."""
 
 import from ...lib.theme { getThemePref, setThemePref }
 
