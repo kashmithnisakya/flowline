@@ -68,7 +68,9 @@ def:pub LogTable(
     emptyLabel: str,
     selecting: bool = False,
     selected: list[str] = [],
-    onToggleSelect: Callable[[str], None] = None
+    onToggleSelect: Callable[[str], None] = None,
+    # The day view already names the day in its header; only the time is news.
+    showDate: bool = True
 ) -> JsxElement {
     if len(entries) == 0 {
         return
@@ -126,13 +128,14 @@ def:pub LogTable(
                             {if selecting {
                                 <TableHead key="sel" className="w-8"/>
                             }}
-                            <TableHead className={HEAD_CLS}>Date</TableHead>
+                            <TableHead className={HEAD_CLS}>
+                                {"Date" if showDate else "Time"}
+                            </TableHead>
                             <TableHead className={HEAD_CLS}>Task</TableHead>
                             <TableHead className={HEAD_CLS}>Action</TableHead>
                             <TableHead className={HEAD_CLS}>Project</TableHead>
                             <TableHead className={HEAD_CLS}>Member</TableHead>
-                            <TableHead className={HEAD_CLS}>Issue</TableHead>
-                            <TableHead className={HEAD_CLS}>PR</TableHead>
+                            <TableHead className={HEAD_CLS}>Links</TableHead>
                             <TableHead className={HEAD_CLS}>Status</TableHead>
                             <TableHead className={HEAD_CLS}>Note</TableHead>
                         </TableRow>
@@ -164,17 +167,28 @@ def:pub LogTable(
                                     </TableCell>
                                 }}
                                 <TableCell className="whitespace-nowrap">
-                                    <div className="text-sm">
-                                        {prettyDate(en.date) if en.date else "—"}
-                                    </div>
+                                    {if showDate {
+                                        <div key="date" className="text-sm">
+                                            {prettyDate(en.date) if en.date else "—"}
+                                        </div>
+                                    }}
                                     {if len(en.at) >= 16 {
                                         <div
                                             key="at"
-                                            className="text-xs tabular-nums text-muted-foreground"
+                                            className={"tabular-nums text-muted-foreground " + (
+                                                "text-xs" if showDate else "text-sm"
+                                            )}
                                         >
                                             {en.at[11:16]}
                                         </div>
-                                    }}
+                                    } elif not showDate {
+                                        <span
+                                            key="nodate"
+                                            className="text-muted-foreground"
+                                        >
+                                            —
+                                        </span>
+                                    } }
                                 </TableCell>
                                 <TableCell className="max-w-56">
                                     <div className="truncate font-medium">
@@ -188,43 +202,47 @@ def:pub LogTable(
                                     {en.project_name}
                                 </TableCell>
                                 <TableCell>{en.member_name}</TableCell>
-                                <TableCell className="text-xs">
+                                <TableCell className="whitespace-nowrap text-xs">
                                     {if en.issue_link {
                                         <a
+                                            key="issue"
                                             href={en.issue_link}
                                             target="_blank"
                                             rel="noopener"
+                                            title="Issue"
                                             className="font-medium text-primary underline-offset-2 hover:underline"
                                         >
                                             {linkRef(en.issue_link)}
                                         </a>
-                                    } else {
+                                    }}
+                                    {if en.issue_link and en.pr_link {
                                         <span
-                                            key="dash"
+                                            key="sep"
                                             className="text-muted-foreground"
                                         >
-                                            —
+                                            {" · "}
                                         </span>
-                                    } }
-                                </TableCell>
-                                <TableCell className="text-xs">
+                                    }}
                                     {if en.pr_link {
                                         <a
+                                            key="pr"
                                             href={en.pr_link}
                                             target="_blank"
                                             rel="noopener"
+                                            title="Pull request"
                                             className="font-medium text-primary underline-offset-2 hover:underline"
                                         >
-                                            {linkRef(en.pr_link)}
+                                            {"PR " + linkRef(en.pr_link)}
                                         </a>
-                                    } else {
+                                    }}
+                                    {if not en.issue_link and not en.pr_link {
                                         <span
                                             key="dash"
                                             className="text-muted-foreground"
                                         >
                                             —
                                         </span>
-                                    } }
+                                    }}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                     {if en.status {

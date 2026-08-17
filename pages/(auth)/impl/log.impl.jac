@@ -19,6 +19,16 @@ impl DailyLogPage.loadWeek -> None {
             entries = result.reports[0] if result.reports else [];
             loadedMonday = monday;
         }
+        # Roster only on the first load; it does not change with the week.
+        if len(memberNames) == 0 {
+            mResult = root spawn ListMembers();
+            fetched = mResult.reports[0] if mResult.reports else [];
+            memberNames = [
+                m.name
+                for m in fetched
+                if m.active
+            ];
+        }
     } except Exception as e {
         toast("Failed to load log entries");
     }
