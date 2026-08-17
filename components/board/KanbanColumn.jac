@@ -6,19 +6,18 @@ board) and the card list scrolls inside it, so header and add row stay put.
 """
 
 import from ...models { TaskView }
+import from ...constants { KIND_COLORS }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
 import from ..workflow.kinds { DOT_VAR, LANE_BAR, RING_TINT, COUNT_TINT, colorKey }
 
-# Accent per step kind, so a column reads the same on the board as its step
-# does on the workflow canvas.
-glob KIND_DOT: dict[str, str] = {
-         "start": "var(--chart-4)",
-         "active": "var(--primary)",
-         "handoff": "var(--warning)",
-         "blocked": "var(--destructive)",
-         "done": "var(--success)"
-     };
+
+# A legacy status column has no step colour of its own; it borrows the
+# kind's default so it reads the same as the workflow legend in both themes
+# (the old chart-4 fallback was grey in light and sky blue in dark).
+def kindDot(kind: str) -> str {
+    return DOT_VAR[colorKey(KIND_COLORS[kind] if kind in KIND_COLORS else "slate")];
+}
 
 
 def:pub KanbanColumn(
@@ -104,9 +103,7 @@ def:pub KanbanColumn(
                         className="h-2 w-2 shrink-0 rounded-full"
                         style={{
                             "background": (
-                                DOT_VAR[colorKey(color)]
-                                    if color
-                                    else KIND_DOT.get(kind, "var(--chart-4)")
+                                DOT_VAR[colorKey(color)] if color else kindDot(kind)
                             )
                         }}
                     />

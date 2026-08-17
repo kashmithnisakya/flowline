@@ -207,7 +207,7 @@ def:pub TaskCard(
                     <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
                         disabled={not prevKey}
                         title={"Move to " + prevLabel if prevKey else ""}
                         aria-label={"Move to " + prevLabel
@@ -234,7 +234,7 @@ def:pub TaskCard(
                     <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
                         disabled={not nextKey}
                         title={"Move to " + nextLabel if nextKey else ""}
                         aria-label={"Move to " + nextLabel
