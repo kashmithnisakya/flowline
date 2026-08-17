@@ -10,6 +10,7 @@ writing `.jac`** — the syntax looks like Python/JSX but is neither.
 
 ```bash
 jac check <file>                    # type-check + lint; run on every file you touch
+jac fmt --lintfix <file>            # format + auto-fix lint; CI enforces this (see Verification)
 jac start main.jac                  # production mode — app and API share one origin
 jac start --dev main.jac            # dev mode with HMR (see caveats below)
 jac run brand/logo.jac              # regenerate the logo into assets/brand/
@@ -198,6 +199,20 @@ not reliably trigger React onChange** (it sets the value in a way React's
 tracker ignores, making working inputs look broken). Use `agent-browser
 keyboard type` for real key events. Assert on rendered text, not just
 coordinates — a stale `@eN` ref can produce a phantom pass.
+
+**CI** (`.github/workflows/ci.yml`) runs on every PR and on pushes to
+`main`/`dev`: `jac fmt --check --lintfix` over every tracked `.jac` except
+`components/ui/` (registry copies get rewritten by `jac install --shadcn`),
+`jac check --lint`, then a per-file `jac check`, all with the jac release
+pinned in `jac.toml`. **Format with that exact version.** Release lines
+disagree on line breaking (0.34.x and 0.36.x differ on 39 files here), so a
+dev-build `jac` on PATH can produce output CI rejects. Get the pinned binary
+with `curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash -s -- --version <pin>`
+(lands in `~/.local/bin/jac`), then `~/.local/bin/jac fmt --lintfix <paths>`.
+`jac check main.jac` does not surface errors in imported modules, which is why
+CI checks each file; the type-check step runs twice on purpose (0.34.x reports
+cold-cache E5082 false positives that a seeded `.jac/cache` clears; the
+workflow comment explains).
 
 **SSO** — `jac start --dev` does **not** proxy `/sso` to the API (only
 `/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`, `/assets`,

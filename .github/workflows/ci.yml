@@ -1,0 +1,85 @@
+# Format, lint and type-check every tracked .jac file with the jac release
+# pinned in jac.toml. Formatter output differs between jac release lines
+# (0.34.x vs 0.36.x disagree on line breaking), so the pin is what makes the
+# fmt check reproducible: format locally with the same version this job
+# installs, not with whatever `jac` happens to be on PATH.
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jac:
+    name: jac fmt / lint / check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the jac version pinned in jac.toml
+        id: pin
+        run: |
+          version="$(sed -nE 's/^jac-version *= *"(==)?([0-9][0-9.]*)".*/\2/p' jac.toml)"
+          if [ -z "$version" ]; then
+            echo "::error file=jac.toml::jac-version must be an exact pin, e.g. jac-version = \"==0.34.14\""
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install jac ${{ steps.pin.outputs.version }}
+        env:
+          # The installer resolves the release through the GitHub API; the
+          # token keeps it off the unauthenticated per-IP rate limit shared by
+          # all runners.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh \
+            | bash -s -- --version "${{ steps.pin.outputs.version }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: jac --version
+        run: jac --version
+
+      # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
+      # those files verbatim from the registry, so holding them to the
+      # formatter would go red on the next install. They still get linted and
+      # type-checked below.
+      - name: Format check (jac fmt --check --lintfix)
+        run: |
+          git ls-files -z -- '*.jac' ':!components/ui/*' \
+            | xargs -0 jac fmt --check --lintfix
+
+      - name: Lint (jac check --lint)
+        run: |
+          git ls-files -z -- '*.jac' \
+            | xargs -0 jac check --lint --
+
+      # `jac check main.jac` does not report errors inside imported modules,
+      # so every file is checked on its own. Two passes, on purpose: on a cold
+      # .jac/cache the 0.34.x placement solver has not yet settled glob-only
+      # modules (components/workflow/kinds.jac, constants.jac, ...) as client
+      # code when a lone component that imports them is analysed, and reports
+      # E5082 "no client-side presence" for imports that build fine from
+      # main.jac. The first pass seeds the cache with settled placements (its
+      # exit code is ignored); the second pass is the one that counts, and
+      # real errors survive it. --disable-error-code E5082 lets enough of the
+      # first pass complete to seed the cache. A genuine E5082 still fails
+      # `jac start` / `jac build`.
+      - name: Type check (jac check)
+        run: |
+          check() {
+            git ls-files -z -- '*.jac' \
+              | xargs -0 jac check --nowarn --disable-error-code E5082 --
+          }
+          echo "::group::warm-up pass (seeds .jac/cache; result ignored)"
+          check || true
+          echo "::endgroup::"
+          check
