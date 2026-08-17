@@ -22,6 +22,7 @@ import from ...components.ui.skeleton { Skeleton }
 import from "@jac/runtime" { Link }
 import from "sonner" { toast }
 import from ...components.common.glyphs { WarnIcon }
+import from ...components.common.Avatar { Avatar }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
@@ -39,16 +40,7 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
          "Nov",
          "Dec"
      ],
-     HUES: list[str] = [
-         "bg-chart-1/15 text-chart-1",
-         "bg-chart-2/15 text-chart-2",
-         "bg-chart-3/15 text-chart-3",
-         "bg-chart-4/15 text-chart-4",
-         "bg-chart-5/15 text-chart-5"
-     ],
      SK_BARS: list[str] = ["h-16", "h-24", "h-12", "h-32", "h-20", "h-10", "h-28"];
-
-# Avatar hue pairs picked by name hash; whole literal strings so Tailwind scans them.
 
 # Fixed bar-stub heights for the loading chart skeleton (literal classes).
 def localIso(d: any) -> str {
@@ -75,14 +67,6 @@ def fmtDay(iso: str) -> str {
     return MONTHS[mi] + " " + str(d.getDate());
 }
 
-# Deterministic avatar hue: sum of character codes into the hue table.
-def hueFor(name: any) -> str {
-    total = 0;
-    for i in range(len(name)) {
-        total = total + name.charCodeAt(i);
-    }
-    return HUES[total % 5];
-}
 
 def pct(part: int, whole: int) -> str {
     if whole == 0 {
@@ -606,19 +590,7 @@ def:pub OverviewPage -> JsxPage {
                                     <div
                                         className="flex min-w-0 items-center gap-3 sm:w-52 sm:shrink-0"
                                     >
-                                        <span
-                                            className={"flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold " + hueFor(
-                                                m.name
-                                            )}
-                                        >
-                                            {(
-                                                m.name.split()[0][:1] + (
-                                                    m.name.split()[1][:1]
-                                                        if len(m.name.split()) > 1
-                                                        else ""
-                                                )
-                                            ).upper()}
-                                        </span>
+                                        <Avatar name={m.name} size="md"/>
                                         <div className="min-w-0 flex-1">
                                             <div
                                                 className="truncate text-sm font-medium"

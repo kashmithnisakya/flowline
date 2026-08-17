@@ -5,35 +5,58 @@ pointers and keeps an in-flow spot at reduced opacity on touch."""
 
 import from ...models { TaskView }
 import from ..workflow.kinds { CARD_BAR, colorKey }
-
-glob MONTH_SHORT: list[str] = [
-         "Jan",
-         "Feb",
-         "Mar",
-         "Apr",
-         "May",
-         "Jun",
-         "Jul",
-         "Aug",
-         "Sep",
-         "Oct",
-         "Nov",
-         "Dec"
-     ];
-
-# "2026-08-07" -> "Aug 7"
-def prettyDay(iso: str) -> str {
-    if len(iso) < 10 {
-        return iso;
-    }
-    return MONTH_SHORT[int(iso[5:7]) - 1] + " " + str(int(iso[8:10]));
-}
-
+import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
+import from ..common.Avatar { AvatarStack, dotFor }
 import from ..common.Markdown { Markdown }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from .GitHubChip { GitHubChip }
+
+# Due chip by urgency; "" is the quiet default for far-off or done work.
+glob DUE_TINT: dict[str, str] = {
+         "overdue": "rounded-md bg-destructive/10 px-1.5 py-0.5 font-semibold text-destructive",
+         "soon": "rounded-md bg-warning/15 px-1.5 py-0.5 font-semibold text-warning",
+         "": "text-muted-foreground"
+     };
+
+
+# Three bars: all lit for High, one for Low. Medium is the default and gets
+# no ink at all, so the glyph only appears when it says something.
+def PriorityGlyph(level: str) -> JsxElement {
+    high = level == "High";
+    return
+        <svg
+            width={12}
+            height={12}
+            viewBox="0 0 12 12"
+            fill="currentColor"
+            className={"shrink-0 " + (
+                "text-destructive" if high else "text-muted-foreground/70"
+            )}
+            role="img"
+            aria-label={level + " priority"}
+        >
+            <rect x={1} y={8} width={2.5} height={4} rx={0.5}/>
+            <rect
+                x={4.75}
+                y={5}
+                width={2.5}
+                height={7}
+                rx={0.5}
+                opacity={1 if high else 0.3}
+            />
+            <rect
+                x={8.5}
+                y={1}
+                width={2.5}
+                height={11}
+                rx={0.5}
+                opacity={1 if high else 0.3}
+            />
+        </svg>;
+}
+
 
 def:pub TaskCard(
     task: TaskView,
@@ -63,17 +86,13 @@ def:pub TaskCard(
             onArrowMove(task, doneKey);
         }
     }
-    priorityVariant = "destructive"
-        if task.priority == "High"
-        else ("secondary" if task.priority == "Medium" else "outline");
-    # Overdue = due before today and not already done. `status` is the mapped
-    # legacy status, so "Done" covers the done column in both board modes.
-    d = new(Date);
-    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
-    todayIso = shifted.toISOString()[:10];
-    overdue = len(task.due_date) >= 10
-    and task.due_date < todayIso
-    and task.status != "Done";
+    today = todayIso();
+    tone = dueTone(task.due_date, task.status, today);
+    showPriority = task.priority == "High" or task.priority == "Low";
+    hasFooter = len(task.assignee_names) > 0
+    or bool(task.category)
+    or showPriority
+    or bool(task.due_date);
 
     return
         <Card
@@ -95,7 +114,7 @@ def:pub TaskCard(
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing " + (
+            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing " + (
                 "opacity-50 " if isDragging else ""
             ) + (
                 # The COLUMN carries the step's colour; a card only
@@ -106,65 +125,75 @@ def:pub TaskCard(
                     else "border-border/70"
             )}
         >
-            <CardContent className="space-y-2 p-3">
+            <CardContent className="space-y-1.5 p-3">
+                {if task.project_name {
+                    <div
+                        key="project"
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+                    >
+                        <span
+                            className={"h-1.5 w-1.5 shrink-0 rounded-full " + dotFor(
+                                task.project_name
+                            )}
+                        />
+                        <span className="truncate">{task.project_name}</span>
+                    </div>
+                }}
                 <div
                     className="line-clamp-2 text-sm font-medium leading-snug"
                     title={task.title}
                 >
                     {task.title}
                 </div>
-                <div className="flex flex-wrap items-center gap-1">
-                    {if task.project_name {
-                        <Badge key="project" variant="secondary">
-                            {task.project_name}
-                        </Badge>
-                    }}
-                    {if task.priority {
-                        <Badge key="priority" variant={priorityVariant}>
-                            {task.priority}
-                        </Badge>
-                    }}
-                    {if task.category {
-                        <Badge key="category" variant="outline">{task.category}</Badge>
-                    }}
-                </div>
-                {if len(task.assignee_names) > 0 or task.due_date {
+                {if hasFooter {
                     <div
-                        key="meta"
-                        className="flex items-center justify-between text-xs text-muted-foreground"
+                        key="footer"
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5 text-xs text-muted-foreground"
                     >
-                        <span className="truncate">
-                            {", ".join(task.assignee_names)}
-                        </span>
-                        <span
-                            className={"flex shrink-0 items-center gap-1" + (
-                                " font-medium text-destructive" if overdue else ""
-                            )}
-                        >
-                            {if overdue {
-                                <svg
-                                    key="clock"
-                                    width={14}
-                                    height={14}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <circle cx={12} cy={12} r={10}/>
-                                    <path d="M12 6v6l4 2"/>
-                                </svg>
-                            }}
-                            {prettyDay(task.due_date)}
-                        </span>
+                        {if len(task.assignee_names) > 0 {
+                            <AvatarStack key="who" names={task.assignee_names}/>
+                        }}
+                        {if task.category {
+                            <Badge
+                                key="category"
+                                variant="outline"
+                                className="h-5 max-w-28 truncate rounded-full px-2 text-[11px] font-medium"
+                            >
+                                {task.category}
+                            </Badge>
+                        }}
+                        {if showPriority or task.due_date {
+                            # Right-aligned; wraps to its own line, still
+                            # right-aligned, when the lane is narrow.
+                            <span
+                                key="when"
+                                className="ml-auto flex shrink-0 items-center gap-1.5"
+                            >
+                                {if showPriority {
+                                    <PriorityGlyph
+                                        key="priority"
+                                        level={task.priority}
+                                    />
+                                }}
+                                {if task.due_date {
+                                    <span
+                                        key="due"
+                                        className={"whitespace-nowrap text-[11px] " + DUE_TINT[
+                                            tone
+                                        ]}
+                                        title={"Due " + prettyDay(task.due_date)}
+                                    >
+                                        {dueLabel(task.due_date, task.status, today)}
+                                    </span>
+                                }}
+                            </span>
+                        }}
                     </div>
                 }}
                 {if task.status == "Blocked" and task.notes {
                     <div
                         key="blocked"
-                        className="line-clamp-3 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+                        className="line-clamp-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
                     >
                         <Markdown text={task.notes}/>
                     </div>
@@ -181,6 +210,9 @@ def:pub TaskCard(
                         className="text-muted-foreground hover:text-foreground"
                         disabled={not prevKey}
                         title={"Move to " + prevLabel if prevKey else ""}
+                        aria-label={"Move to " + prevLabel
+                            if prevKey
+                            else "No earlier step"}
                         onClick={lambda (e: MouseEvent) {
                             e.stopPropagation();
                             onArrowMove(task, prevKey);
@@ -205,6 +237,9 @@ def:pub TaskCard(
                         className="text-muted-foreground hover:text-foreground"
                         disabled={not nextKey}
                         title={"Move to " + nextLabel if nextKey else ""}
+                        aria-label={"Move to " + nextLabel
+                            if nextKey
+                            else "No later step"}
                         onClick={lambda (e: MouseEvent) {
                             e.stopPropagation();
                             onArrowMove(task, nextKey);
