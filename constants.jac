@@ -9,8 +9,10 @@ glob STATUSES: list[str] = [
          "Blocked"
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"],
-     MILESTONE_STATUSES: list[str] = ["Planned", "In Progress", "Done"],
+     # What a step MEANS independent of its name; the app keys behaviour on
+     # the kind, so renaming a step is always safe.
      STEP_KINDS: list[str] = ["start", "active", "handoff", "blocked", "done"],
+     # Default colour key per kind; the client maps keys to literal classes.
      KIND_COLORS: dict[str, str] = {
          "start": "sky",
          "active": "indigo",
@@ -134,6 +136,8 @@ glob STATUSES: list[str] = [
              ]
          }
      ],
+     # Kind -> legacy status. A move writes both, so insights, GitHub sync
+     # and the assistant never have to learn what a step is.
      KIND_STATUS: dict[str, str] = {
          "start": "Backlog",
          "active": "In Progress",
@@ -141,6 +145,7 @@ glob STATUSES: list[str] = [
          "blocked": "Blocked",
          "done": "Done"
      },
+     # Legacy status -> kind, for placing tasks that carry no step_id.
      STATUS_KIND: dict[str, str] = {
          "Backlog": "start",
          "In Progress": "active",
@@ -149,22 +154,3 @@ glob STATUSES: list[str] = [
          "Done": "done",
          "Blocked": "blocked"
      };
-# What a workflow step MEANS, independent of what the org names it. The rest
-# of the app keys behavior on the kind ("done" is terminal, "blocked" raises
-# attention, "handoff" is waiting on someone), so renaming a step is always
-# safe and every workflow needs at least a start and a done to be complete.
-
-# Default color key per kind; the step stores the key, the client maps it to
-# literal Tailwind classes.
-
-# Seed data for ApplyTemplate AND the picker's mini previews: one source, so
-# the preview can never drift from what actually gets created. `links` pairs
-# are indexes into `steps`; x/y are designer-canvas px.
-
-# A step's kind maps onto the legacy status vocabulary. Moving a task to a
-# step writes both: `step_id` drives the board, `status` keeps every semantic
-# check in insights, GitHub sync, the assistant and the log working without
-# any of them learning what a step is.
-
-# The other direction, for placing tasks written before workflows existed:
-# a task with no step_id lands in the first step whose kind matches.

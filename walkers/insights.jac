@@ -1,14 +1,7 @@
-"""Deterministic workspace insights: the Snapshot every assistant answer is built on.
-
-No LLM lives here on purpose. This module is three things at once:
-  (a) the context builder for every byLLM call in ai/assistant.jac,
-  (b) exact answers to half the questions people would otherwise ask the bot,
-  (c) a server-side source for the Overview page, which recomputes in the browser today.
-
-NEVER nest `root spawn` in this module. A nested walker's `.reports` comes back EMPTY
-and its rows leak into the outer walker's reports (jac 0.35.1 `_sv_on_complete` merges
-into the outer frame and returns early). Everything here traverses `[root-->]` directly.
-"""
+"""Deterministic workspace insights: the Snapshot every assistant answer is
+built on, exact answers for the Overview, no LLM here. NEVER nest `root spawn`
+in this module: a nested walker's reports come back EMPTY and leak into the
+outer walker (jac 0.35.1). Everything traverses `[root-->]` directly."""
 
 import from models {
     Project, Member, Task, LogDay, LogEntry,

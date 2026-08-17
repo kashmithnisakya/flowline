@@ -1,17 +1,7 @@
-"""Create/edit dialog for a roster member.
-
-v2.3: members carry multiple roles, multiple tags (picked from the
-workspace vocabulary) and multiple project assignments (toggle chips).
-The page owns all state; `form` carries name, email, github and the
-in-progress role draft.
-
-Roles follow the workflow: when `roleOptions` is non-empty (the applied
-template defines fixed roles) they render as toggle chips and the
-free-text input disappears; empty means a scratch workflow and the
-type-and-enter chips stay. Roles a member already holds that are not in
-the options remain visible and removable, so old vocabulary never gets
-stranded.
-"""
+"""Create/edit dialog for a roster member: multiple roles, tags and project
+assignments as chips; the page owns all state. Roles follow the workspace: a
+non-empty `roleOptions` renders toggle chips (held roles outside the options
+stay removable), empty falls back to type-and-enter free text."""
 
 import from ...models { Project }
 import from ..ui.button { Button }
@@ -26,6 +16,7 @@ import from ..ui.dialog {
 }
 import from ..ui.input { Input }
 import from ..ui.label { Label }
+import from ..common.glyphs { Spinner }
 
 def:pub MemberDialog(
     open: bool,
@@ -261,19 +252,7 @@ def:pub MemberDialog(
                         disabled={saving or not form["name"].strip()}
                     >
                         {if saving {
-                            <svg
-                                key="sp"
-                                className="animate-spin"
-                                width={14}
-                                height={14}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                            >
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                            </svg>
+                            <Spinner key="sp"/>
                         }}
                         {"Saving…"
                             if saving

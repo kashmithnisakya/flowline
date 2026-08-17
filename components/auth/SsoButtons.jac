@@ -1,14 +1,10 @@
-"""Google / GitHub sign-in, wired to jac-scale's SSO endpoints.
-
-jacSsoLogin redirects the browser to /sso/{platform}/{operation}; jac-scale
-finishes the exchange and bounces back to [scale.sso] client_auth_callback_url
-with ?token=<jwt>, which pages/(public)/auth/callback.jac stores.
-
-Credentials live in jac.toml under [scale.sso.google] / [scale.sso.github].
-Until they are filled in the server answers SSO_NOT_CONFIGURED (501).
-"""
+"""Google / GitHub sign-in over jac-scale's /sso/{platform}/{operation}
+endpoints; the exchange bounces back to client_auth_callback_url with
+?token=<jwt>, stored by pages/(public)/auth/callback.jac. Credentials live in
+jac.toml [scale.sso.*]; until set the server answers SSO_NOT_CONFIGURED (501)."""
 
 import from "@jac/runtime" { jacSsoLogin }
+import from ..common.glyphs { Spinner }
 
 def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxElement {
     has pending: str = "";
@@ -26,20 +22,7 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
                 onClick={lambda { start("google"); }}
             >
                 {if pending == "google" {
-                    <svg
-                        key="gspin"
-                        className="animate-spin"
-                        width={15}
-                        height={15}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        aria-hidden="true"
-                    >
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                    </svg>
+                    <Spinner key="gspin"/>
                 } else {
                     <svg key="glogo" width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
                         <path
@@ -69,20 +52,7 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
                 onClick={lambda { start("github"); }}
             >
                 {if pending == "github" {
-                    <svg
-                        key="hspin"
-                        className="animate-spin"
-                        width={15}
-                        height={15}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        aria-hidden="true"
-                    >
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                    </svg>
+                    <Spinner key="hspin"/>
                 } else {
                     <svg key="hlogo" width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
                         <path

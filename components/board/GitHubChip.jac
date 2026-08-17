@@ -1,7 +1,5 @@
-"""GitHub state on a kanban card: the linked issue, its PR, and the nudge.
-
-A merged PR only ever *suggests* Done. The board never moves a card on its
-own, so the suggestion is a button somebody has to press.
+"""GitHub state on a kanban card: the linked issue, its PR, and the nudge. A
+merged PR only ever *suggests* Done; the board never moves a card on its own.
 """
 
 import from ...models { TaskView }

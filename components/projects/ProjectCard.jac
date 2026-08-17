@@ -1,7 +1,5 @@
-"""One project card: identity, its repos, edit/archive actions.
-
-Display-only: repos are attached in the project dialog (creation has an
-optional repo field; editing manages the list).
+"""One project card: identity, its repos, edit/archive actions. Display-only;
+repos are attached in the project dialog.
 """
 
 import from ...models { Project, RepoView }

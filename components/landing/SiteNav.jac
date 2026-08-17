@@ -1,7 +1,5 @@
-"""Public site header. Shows the app link when a session already exists.
-
-Below sm the anchor links live behind a disclosure toggle so phones can
-still reach Product / How it works / FAQ.
+"""Public site header; shows the app link when a session exists. Below sm the
+anchor links sit behind a disclosure toggle so phones can still reach them.
 """
 
 import from "@jac/runtime" { Link }

@@ -1,22 +1,14 @@
-"""First-run gallery: pick how the team moves work.
-
-The mini previews are rendered from WORKFLOW_TEMPLATES itself, the same
-data ApplyTemplate seeds from, so a preview can never drift from what
-actually gets created. Everything is editable after choosing; the choice is
-a starting point, not a commitment.
-
-Each thumbnail's viewBox is computed from that template's own step extents,
-so a sprawling flow scales down to fit instead of clipping its far corner.
-The curve math is a thumb-scale copy of geometry.wire(): facing borders
-along the dominant axis, a sideways shift for two-way pairs, and a small
-filled arrowhead, so the previews read like the real canvas.
-"""
+"""First-run gallery: pick how the team moves work. Previews render from
+WORKFLOW_TEMPLATES itself, so they cannot drift from what ApplyTemplate seeds.
+Each thumbnail's viewBox comes from its own step extents, and the curve math is
+a thumb-scale copy of geometry.wire() so previews read like the real canvas."""
 
 import from ...constants { WORKFLOW_TEMPLATES }
 import from .geometry { NODE_W, NODE_H }
 import from .kinds { TEXT_FILL, colorKey }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
+import from ..common.glyphs { Spinner }
 
 # Preview canvas: template px scaled down to a card-sized thumbnail.
 glob THUMB_SCALE: float = 0.2,
@@ -294,19 +286,7 @@ def:pub TemplatePicker(
                                 onClick={lambda { if onPick { onPick(t["key"]); }}}
                             >
                                 {if applying == t["key"] {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Setting up…"
                                     if applying == t["key"]

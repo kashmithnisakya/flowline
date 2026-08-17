@@ -1,9 +1,6 @@
-"""Implementations for the assistant dock.
-
-Every LLM call is one `root spawn` of a bare walker, so it inherits the JWT and
-the per-root tenant isolation the rest of the app already relies on. The model
-never mutates: `applyProposal` is the only path to the graph, it runs only after
-the user presses Apply, and it goes through the ordinary CreateTask / MoveTask.
+"""Implementations for the assistant dock. Every LLM call is one `root spawn`
+of a bare walker (JWT + per-root isolation). The model never mutates: only
+`applyProposal` writes, after the user presses Apply, via CreateTask/MoveTask.
 """
 
 impl AssistantDock.setTurnState(index: int, state: str) -> None {

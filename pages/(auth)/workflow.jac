@@ -1,19 +1,7 @@
-"""standup - Workflow page (/workflow): how work moves through the org.
-
-Stateful shell over three faces of one graph: the template picker when no
-workflow exists yet, the designer when editing, and a read-only diagram the
-rest of the time. One workflow per organization, steps hang off the root
-like everything else, so there is no project selector here.
-
-Validation is advisory on purpose: the chip points out a missing start or
-done step and unreachable steps, but never blocks saving. The graph belongs
-to the org, loops and all.
-
-The editor floats OVER the canvas rather than taking a column beside it: the
-drawing is the page and the editor is a layer on top. Note that a `#` comment
-placed among JSX children is not a comment at all, it renders as visible
-text, so notes like this one stay in the docstring.
-"""
+"""standup - Workflow page (/workflow): three faces of one graph, the template
+picker, the designer, and a read-only diagram (Flow or Lanes). One workflow per
+org, so no project selector. Validation is advisory and never blocks saving.
+The editor floats OVER the canvas; keep notes out of JSX (a `#` there renders)."""
 
 import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS }
@@ -60,6 +48,7 @@ import from ...components.ui.select {
 }
 import from "sonner" { toast }
 import from "react" { useEffect, useLayoutEffect }
+import from ...components.common.glyphs { WarnIcon }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -138,17 +127,10 @@ def:pub WorkflowPage -> JsxPage {
         boot();
     }
 
-    # Fit whenever the visible area changes: first load (the viewport has no
-    # measured size until then), a template or a new step widening the graph,
-    # and entering edit mode, where the floating editor covers the right
-    # third of the canvas.
-    # Layout effect, not a plain effect: it runs after layout but BEFORE the
-    # browser paints, so the first visible frame is already fitted and
-    # centered. A plain effect fires post-paint and the canvas's transform
-    # transition animates the correction - the diagram visibly "flies" from
-    # the top-left corner on every visit to this tab. wfView is a dep so a
-    # view flip refits AFTER the state lands, never against the stale value
-    # a same-tick read would see.
+    # Fit whenever the visible area changes: first load, a widened graph,
+    # entering edit mode (the editor covers the right third), a view flip.
+    # A LAYOUT effect so the first frame is already fitted; a plain effect
+    # would animate the correction and the diagram would visibly fly in.
     useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView]);
 
     # Refit when the window itself changes size: the canvas tracks the
@@ -171,6 +153,7 @@ def:pub WorkflowPage -> JsxPage {
     async def loadMeta -> None;
     def switchView(v: str) -> None;
     def lanePlan -> dict[str, any];
+    def viewBounds -> list[float];
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
     def startRename -> None;
@@ -468,21 +451,7 @@ def:pub WorkflowPage -> JsxPage {
                                 key="issues"
                                 className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                <svg
-                                    className="mt-0.5 shrink-0"
-                                    width={13}
-                                    height={13}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                    <path d="M12 9v4"/>
-                                    <path d="M12 17h.01"/>
-                                </svg>
+                                <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span className="tabular-nums">
                                     {issues[0]
                                         + (
@@ -681,21 +650,7 @@ def:pub WorkflowPage -> JsxPage {
                                 key="issues"
                                 className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                <svg
-                                    className="mt-0.5 shrink-0"
-                                    width={13}
-                                    height={13}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                    <path d="M12 9v4"/>
-                                    <path d="M12 17h.01"/>
-                                </svg>
+                                <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span>{issues[0]}</span>
                             </span>
                         }}

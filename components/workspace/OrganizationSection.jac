@@ -1,8 +1,6 @@
-"""Rename the organization and its project manager.
-
-Both live in the account profile rather than the graph (the account IS the
-organization), so this talks to /user/me through lib/session instead of a
-walker. Self-contained state: the tab host stays a thin shell.
+"""Rename the organization and its project manager. Both live in the account
+profile (the account IS the organization), so this talks to /user/me through
+lib/session rather than a walker. Self-contained state.
 """
 
 import from ...lib.session { fetchProfile, patchProfile }
@@ -12,6 +10,7 @@ import from ..ui.input { Input }
 import from ..ui.label { Label }
 import from ..ui.skeleton { Skeleton }
 import from "sonner" { toast }
+import from ..common.glyphs { Spinner }
 
 
 def:pub OrganizationSection() -> JsxElement {
@@ -76,19 +75,7 @@ def:pub OrganizationSection() -> JsxElement {
                             disabled={saving or not orgName.strip() or not fullName.strip()}
                         >
                             {if saving {
-                                <svg
-                                    key="sp"
-                                    className="animate-spin"
-                                    width={14}
-                                    height={14}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                >
-                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                </svg>
+                                <Spinner key="sp"/>
                             }}
                             {"Saving…" if saving else "Save changes"}
                         </Button>

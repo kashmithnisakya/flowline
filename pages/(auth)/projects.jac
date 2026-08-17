@@ -1,8 +1,5 @@
-"""standup - retired route.
-
-Projects moved into the Workspace tab, where the rest of the configuration
-lives. Kept as a redirect so existing bookmarks and links still land
-somewhere useful; safe to delete a release from now.
+"""standup - retired route. Projects moved into the Workspace tab; kept as a
+redirect so bookmarks still land somewhere useful. Safe to delete a release on.
 """
 
 import from ...components.ui.skeleton { Skeleton }

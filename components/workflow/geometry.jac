@@ -1,15 +1,7 @@
-"""Canvas geometry shared by FlowCanvas and the workflow page impl.
-
-ONE module on purpose: the roadmap keeps its grid constants duplicated
-between Flow.jac and the page impl, and a change to one side silently breaks
-hit-testing. Everything that maps a pointer to a step, or a step pair to a
-curve, lives here so that trap cannot recur.
-
-Positions are free-form px (persisted on the step), so unlike the roadmap's
-downward-only grid, an edge can travel any direction. The control handles
-are axis-aligned along the dominant axis, which keeps the end tangent exact
-arithmetic and the arrowhead a fixed triangle rather than a rotation.
-"""
+"""Canvas geometry shared by FlowCanvas and the workflow page impl, in ONE
+module so hit-testing and drawing cannot drift apart. Positions are free-form
+px, so an edge can travel any direction; control handles are axis-aligned along
+the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
 
 import from ...models { StepView }
 
@@ -50,14 +42,10 @@ def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
 
 # Canvas big enough for every node plus working room to drag into.
 def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
-    # Content plus a margin to drag into. Deliberately NOT padded out to some
-    # minimum: the surface is stretched to the viewport box with a CSS
-    # min-width/height instead, so a workflow that fits shows no scrollbars
-    # at all, and the canvas only starts scrolling once a step is dragged
-    # past the edge.
-    # A blank canvas still needs a surface to draw the empty state on; the
-    # CSS min-width/height stretches this to the viewport box, and content
-    # grows it from there.
+    # Content plus a margin to drag into, NOT padded to a minimum: CSS
+    # min-width/height stretches the surface to the viewport, so a fitting
+    # workflow shows no scrollbars and scrolling starts only past the edge.
+    # A blank canvas keeps a surface for the empty state the same way.
     w = 320.0;
     h = 240.0;
     for s in steps {
@@ -111,13 +99,10 @@ def hitStep(
 }
 
 
-# The curve between two node rects (top-left positions), leaving and
-# entering through the borders that face each other along the dominant axis.
-# `twoWay` shifts the curve sideways so an A→B / B→A pair reads as two arcs
-# rather than one doubled line. Returns the path, the arrowhead triangle,
-# the true curve midpoint for the delete chip, and `back`, whether the edge
-# travels right-to-left or bottom-to-top, which the canvas styles as a
-# return path.
+# The curve between two node rects, leaving and entering through the borders
+# that face each other along the dominant axis. `twoWay` shifts it sideways so
+# an A→B / B→A pair reads as two arcs. Returns the path, arrowhead, true
+# midpoint (for the chip) and `back` (right-to-left or bottom-to-top travel).
 def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, any] {
     c1x = x1 + NODE_W / 2.0;
     c1y = y1 + NODE_H / 2.0;
