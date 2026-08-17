@@ -82,8 +82,9 @@ def:pub BoardPage -> JsxPage {
         moveKind: str = "handoff",
         mForm: dict[str, str] = BLANK_MOVE,
         saving: bool = False,
-        # A /board?task=<id> deep link (the overview's attention list) opens
-        # that card once the first load has landed.
+        # A /board?task=<id> deep link (the overview's attention list, the
+        # palette) opens that card once the first load has landed; "new"
+        # opens the create dialog (/board?new=1).
         pendingTaskId: str = "";
 
     async can with entry {
@@ -97,8 +98,9 @@ def:pub BoardPage -> JsxPage {
         wanted = params.get("task") or "";
         if wanted {
             pendingTaskId = str(wanted);
-            # Consume it so a reload or the poll does not reopen the card.
-            w.history.replaceState(None, "", w.location.pathname);
+        }
+        if params.get("new") {
+            pendingTaskId = "new";
         }
         boot();
     }
@@ -108,12 +110,24 @@ def:pub BoardPage -> JsxPage {
     # would see the pre-load snapshot).
     useEffect(
         lambda { if pendingTaskId and not loading {
-            for t in tasks {
-                if t.id == pendingTaskId {
-                    openEdit(t);
+            if pendingTaskId == "new" {
+                openCreate("");
+            } else {
+                for t in tasks {
+                    if t.id == pendingTaskId {
+                        openEdit(t);
+                    }
                 }
             }
             pendingTaskId = "";
+            # Consume the param only now: on a full load the page mounts
+            # twice (bare, then inside the chrome once login resolves), and
+            # the second mount must still find it. Stripping it here also
+            # keeps a reload or the poll from reopening the card.
+            w: any = window;
+            if w.location.search {
+                w.history.replaceState(None, "", w.location.pathname);
+            }
         }},
         [pendingTaskId, loading, len(tasks)]
     );
@@ -129,10 +143,18 @@ def:pub BoardPage -> JsxPage {
             # applied proposal announces itself with an event rather than leaving
             # the new card invisible until the next poll.
             window.addEventListener("standup:refresh", onFocus);
+            # The command palette, mounted in the layout, asks an already
+            # mounted board to open a card or the new-task dialog.
+            onOpenTask = lambda (e: any) { pendingTaskId = str(e.detail or ""); };
+            onNewTask = lambda { pendingTaskId = "new"; };
+            window.addEventListener("standup:open-task", onOpenTask);
+            window.addEventListener("standup:new-task", onNewTask);
             timer = window.setInterval(lambda { loadAll(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("standup:refresh", onFocus);
+                window.removeEventListener("standup:open-task", onOpenTask);
+                window.removeEventListener("standup:new-task", onNewTask);
                 window.clearInterval(timer);
             };
         },
