@@ -22,7 +22,7 @@ jobs:
     name: jac fmt / lint / check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Read the jac version pinned in jac.toml
         id: pin
