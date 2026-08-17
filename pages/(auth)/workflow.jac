@@ -245,6 +245,22 @@ def:pub WorkflowPage -> JsxPage {
     }
     lanePose: dict[str, list[float]] = plan["positions"];
     laneBands: list[dict[str, any]] = plan["lanes"];
+    laneOfStep: dict[str, str] = plan["laneOf"] if "laneOf" in plan else {};
+    # Roles that own no step: they get no lane (an empty lane only pushes
+    # content down), so they are named under the canvas instead.
+    owners: list[str] = [];
+    for s in steps {
+        said = s.owner.strip() if s.owner else "";
+        if said and said not in owners {
+            owners.append(said);
+        }
+    }
+    offFlow: list[str] = [];
+    for rr in roleRows {
+        if rr.name not in owners {
+            offFlow.append(rr.name);
+        }
+    }
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -782,6 +798,7 @@ def:pub WorkflowPage -> JsxPage {
                         steps={steps}
                         live={lanePose}
                         lanes={laneBands}
+                        laneOf={laneOfStep}
                         zoom={zoom}
                         panX={panX}
                         panY={panY}
@@ -792,6 +809,15 @@ def:pub WorkflowPage -> JsxPage {
                         onZoomFit={fitZoom}
                         onSelect={peekStep}
                     />
+                    {if laneMode and len(offFlow) > 0 {
+                        <p key="offflow" className="text-xs text-muted-foreground">
+                            {"Not on the flow yet: "}
+                            <span className="font-medium text-foreground">
+                                {", ".join(offFlow)}
+                            </span>
+                            {(" · owns no step" if len(offFlow) == 1 else " · own no step")}
+                        </p>
+                    }}
                 </div>
             }   }
             <Dialog
