@@ -1,6 +1,8 @@
-"""One board column: header with live count, drop target, card list. Columns
-come from the org's workflow, so a column is addressed by an opaque key (step
-jid, or the legacy status when no workflow exists) with its own label and colour.
+"""One board column: header with live count, drop target, card list, add row.
+Columns come from the org's workflow, so a column is addressed by an opaque
+key (step jid, or the legacy status when no workflow exists) with its own
+label and colour. On md+ the lane is viewport-high (--lane-h, set by the
+board) and the card list scrolls inside it, so header and add row stay put.
 """
 
 import from ...models { TaskView }
@@ -35,15 +37,20 @@ def:pub KanbanColumn(
     doneKey: str = "",
     extraCount: int = 0,
     showingAll: bool = False,
-    onToggleOlder: Callable[[], None] = None
+    onToggleOlder: Callable[[], None] = None,
+    # Opens the task dialog with this column preselected.
+    onAddTask: Callable[[str], None] = None,
+    # Overdue cards in this column, for the header signal.
+    overdueCount: int = 0
 ) -> JsxElement {
     has dragOver: bool = False;
 
     return
         <div
-            # Neutral ground; the step colour lives in the top rule, the dot
-            # and the count, and floods the panel only while a drop is live.
-            className={"relative flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 overflow-hidden rounded-xl border bg-muted/30 p-2 transition-[box-shadow,background-color] duration-150" + (
+            className={"relative flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2 transition-[box-shadow,background-color] duration-150 md:h-[var(--lane-h)]" + (
+                # Neutral ground; the step colour lives in the top rule, the
+                # dot and the count, and floods the panel only while a drop
+                # is live.
                 (
                     (" " + RING_TINT[colorKey(color)])
                         if color
@@ -89,7 +96,7 @@ def:pub KanbanColumn(
                     ]}
                 />
             }}
-            <div className="flex items-center justify-between px-1 py-1">
+            <div className="flex shrink-0 items-center justify-between px-1 py-1">
                 <span
                     className="flex min-w-0 items-center gap-1.5 text-sm font-semibold"
                 >
@@ -105,50 +112,88 @@ def:pub KanbanColumn(
                     />
                     <span className="truncate" title={label}>{label}</span>
                 </span>
-                <Badge
-                    variant="secondary"
-                    className={"tabular-nums " + (
-                        COUNT_TINT[colorKey(color)] if color else ""
-                    )}
-                    aria-label={str(len(tasks)) + (
-                        " task" if len(tasks) == 1 else " tasks"
-                    )}
-                >
-                    {len(tasks)}
-                </Badge>
+                <span className="flex shrink-0 items-center gap-1.5">
+                    {if overdueCount > 0 {
+                        <span
+                            key="overdue"
+                            className="text-[11px] font-semibold tabular-nums text-destructive"
+                            title={str(overdueCount) + " overdue"}
+                        >
+                            {str(overdueCount) + " over"}
+                        </span>
+                    }}
+                    <Badge
+                        variant="secondary"
+                        className={"tabular-nums " + (
+                            COUNT_TINT[colorKey(color)] if color else ""
+                        )}
+                        aria-label={str(len(tasks)) + (
+                            " task" if len(tasks) == 1 else " tasks"
+                        )}
+                    >
+                        {len(tasks)}
+                    </Badge>
+                </span>
             </div>
-            {for t in tasks {
-                <TaskCard
-                    key={t.id}
-                    task={t}
-                    onOpen={onOpen}
-                    onArrowMove={onArrowMove}
-                    color={color}
-                    prevKey={prevKey}
-                    prevLabel={prevLabel}
-                    nextKey={nextKey}
-                    nextLabel={nextLabel}
-                    doneKey={doneKey}
-                />
-            }}
-            {if len(tasks) == 0 {
-                <div
-                    key="empty"
-                    className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground"
-                >
-                    Drop a task here
-                </div>
-            }}
-            {if extraCount > 0 or showingAll {
+            <div
+                className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden px-0.5 pt-0.5 pb-1 -mx-0.5"
+            >
+                {for t in tasks {
+                    <TaskCard
+                        key={t.id}
+                        task={t}
+                        onOpen={onOpen}
+                        onArrowMove={onArrowMove}
+                        color={color}
+                        prevKey={prevKey}
+                        prevLabel={prevLabel}
+                        nextKey={nextKey}
+                        nextLabel={nextLabel}
+                        doneKey={doneKey}
+                    />
+                }}
+                {if len(tasks) == 0 {
+                    <div
+                        key="empty"
+                        className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground"
+                    >
+                        {"Nothing here yet" if onAddTask else "Drop a task here"}
+                    </div>
+                }}
+                {if extraCount > 0 or showingAll {
+                    <button
+                        key="older"
+                        type="button"
+                        className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={lambda { if onToggleOlder { onToggleOlder(); }}}
+                    >
+                        {("Show " + str(extraCount) + " completed earlier")
+                            if not showingAll
+                            else "Show recent only"}
+                    </button>
+                }}
+            </div>
+            {if onAddTask {
                 <button
-                    key="older"
+                    key="add"
                     type="button"
-                    className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    onClick={lambda { if onToggleOlder { onToggleOlder(); }}}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={lambda { onAddTask(columnKey); }}
                 >
-                    {("Show " + str(extraCount) + " completed earlier")
-                        if not showingAll
-                        else "Show recent only"}
+                    <svg
+                        width={12}
+                        height={12}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M12 5v14"/>
+                        <path d="M5 12h14"/>
+                    </svg>
+                    Add task
                 </button>
             }}
         </div>;
