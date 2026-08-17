@@ -53,11 +53,11 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     history = turns + [{"role": "user", "kind": "text", "text": label}];
     turns = history;
 
-    reply: dict = {
-        "role": "assistant",
-        "kind": "error",
-        "text": "I did not get an answer back. Try again."
-    };
+    # One user-facing line for every way the model can fail to answer. The
+    # walkers log the real cause server-side; nothing about keys or billing
+    # belongs in a browser.
+    unavailable = "The assistant is not available right now. Try again in a moment.";
+    reply: dict = {"role": "assistant", "kind": "error", "text": unavailable};
     try {
         if kind == "note" {
             noteRun = root spawn WriteStandup(
@@ -67,11 +67,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             if note {
                 reply = {"role": "assistant", "kind": "note", "note": note};
             } else {
-                reply = {
-                    "role": "assistant",
-                    "kind": "error",
-                    "text": "I could not write that note. Try again in a moment."
-                };
+                reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
         } elif kind == "do" {
             propRun = root spawn ProposeAction(
@@ -86,11 +82,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
                     "state": ""
                 };
             } else {
-                reply = {
-                    "role": "assistant",
-                    "kind": "error",
-                    "text": "I could not turn that into a board change."
-                };
+                reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
         } else {
             askRun = root spawn AskAssistant(
@@ -102,14 +94,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             }
         }
     } except Exception as e {
-        # Almost always a missing or rejected OPENAI_API_KEY, which is worth
-        # naming: the failure is in .env, not in anything the user typed.
-        reply = {
-            "role": "assistant",
-            "kind": "error",
-            "text": "The assistant is unreachable. Check that OPENAI_API_KEY is set in .env "
-            "and that the server was restarted after."
-        };
+        reply = {"role": "assistant", "kind": "error", "text": unavailable};
     }
     turns = history + [reply];
     busy = False;
