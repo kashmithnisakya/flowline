@@ -13,6 +13,7 @@ import from ...walkers.workflow {
     SaveStep,
     MoveStep,
     DeleteStep,
+    DeleteWorkflow,
     LinkTransition,
     LabelTransition,
     UnlinkTransition,
@@ -40,7 +41,8 @@ import from ...components.ui.dialog {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription
+    DialogDescription,
+    DialogFooter
 }
 import from ...components.ui.badge { Badge }
 import from ...components.ui.select {
@@ -52,7 +54,7 @@ import from ...components.ui.select {
 }
 import from "sonner" { toast }
 import from "react" { useEffect, useLayoutEffect }
-import from ...components.common.glyphs { WarnIcon }
+import from ...components.common.glyphs { Spinner, WarnIcon }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -92,6 +94,10 @@ def:pub WorkflowPage -> JsxPage {
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
+        # Whole-workflow delete confirms in a dialog, not by re-clicking: it
+        # takes every step, so it spells out what goes and what stays first.
+        confirmWipe: bool = False,
+        wiping: bool = False,
         # Add step opens a naming panel first: the step only exists once the
         # user has called it something, never as a placeholder card.
         creatingStep: bool = False,
@@ -164,6 +170,7 @@ def:pub WorkflowPage -> JsxPage {
     async def commitName -> None;
     async def commitField(key: str, value: str) -> None;
     async def deleteStep -> None;
+    async def deleteWorkflow -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
     def selectEdge(key: str, said: str) -> None;
@@ -294,6 +301,13 @@ def:pub WorkflowPage -> JsxPage {
             }
         }
     }
+
+    # The delete dialog's tally, counted here so copy and diagram agree.
+    stepNoun = "step" if len(steps) == 1 else "steps";
+    linkNoun = "transition" if linkCount == 1 else "transitions";
+    wipeSummary = (
+        str(len(steps)) + " " + stepNoun + " and " + str(linkCount) + " " + linkNoun + " will be removed."
+    );
 
     # Advisory checks. All plain BFS over the views already in hand.
     issues: list[str] = [];
@@ -434,6 +448,17 @@ def:pub WorkflowPage -> JsxPage {
                                 onClick={startRename}
                             >
                                 Rename
+                            </Button>
+                        }}
+                        {if not renaming {
+                            <Button
+                                key="wipe-btn"
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                onClick={lambda { confirmWipe = True; }}
+                            >
+                                Delete workflow
                             </Button>
                         }}
                         <div className="flex-1"/>
@@ -759,6 +784,41 @@ def:pub WorkflowPage -> JsxPage {
                     }}
                 </div>
             }   }
+            <Dialog
+                open={confirmWipe}
+                onOpenChange={lambda (o: bool) { if not o and not wiping {
+                    confirmWipe = False;
+                }}}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete this workflow?</DialogTitle>
+                        <DialogDescription>{wipeSummary}</DialogDescription>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                        Tasks keep their status and land by kind on whatever you design next. Roles and the workflow name stay. You start again from the template picker.
+                    </p>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            disabled={wiping}
+                            onClick={lambda { confirmWipe = False; }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={wiping}
+                            onClick={deleteWorkflow}
+                        >
+                            {if wiping {
+                                <Spinner key="sp"/>
+                            }}
+                            {"Deleting…" if wiping else "Delete workflow"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <Dialog
                 open={bool(peekId)}
                 onOpenChange={lambda (o: bool) { if not o { peekId = ""; }}}

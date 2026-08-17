@@ -289,6 +289,37 @@ impl WorkflowPage.deleteStep -> None {
     saving = False;
 }
 
+impl WorkflowPage.deleteWorkflow -> None {
+    wiping = True;
+    try {
+        result = root spawn DeleteWorkflow();
+        payload = result.reports[0] if result.reports else None;
+        if not payload or not payload["ok"] {
+            toast("The workflow could not be deleted");
+            wiping = False;
+            return;
+        }
+        # Back to the empty state the picker guards: nothing selected or
+        # half-drawn, not scratch, not editing.
+        steps = [];
+        scratch = False;
+        editing = False;
+        renaming = False;
+        creatingStep = False;
+        selectedId = "";
+        selectedEdge = "";
+        connectFrom = "";
+        confirmDelete = False;
+        peekId = "";
+        confirmWipe = False;
+        await reload(projectId);
+        toast("Workflow deleted, pick a template or start from scratch");
+    } except Exception as e {
+        toast("Failed to delete the workflow");
+    }
+    wiping = False;
+}
+
 impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
     try {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);

@@ -451,6 +451,35 @@ walker DeleteStep(find_step) {
 }
 
 
+walker DeleteWorkflow {
+    """Removes every step and transition so the workflow can be designed again.
+    Walks the caller's own root (no jid input, nothing to owned()-check).
+    Tasks fall back to their status as after DeleteStep; name and roles stay;
+    the template marker is cleared so a scratch redo does not report it."""
+    has reports: list[dict[str, any]] = [];
+
+    can wipe with Root entry {
+        steps = [here-->[?:WorkflowStep]];
+        gone: list[str] = [];
+        for s in steps {
+            gone.append(jid(s));
+        }
+        for t in [here-->[?:Task]] {
+            if t.step_id and t.step_id in gone {
+                t.step_id = "";
+            }
+        }
+        for s in steps {
+            del s;
+        }
+        for meta in [here-->[?:WorkflowMeta]] {
+            meta.template_key = "";
+        }
+        report {"ok": True, "deleted": len(gone)};
+    }
+}
+
+
 walker LinkTransition {
     """Draw a transition from_id -> to_id, both ends owned-checked. Loops and
     branches are legal; a self-loop is refused and a duplicate reports success."""
