@@ -88,6 +88,8 @@ def:pub Shell -> JsxLayout {
 
     location = useLocation();
     chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
+    # The wizard has nothing to link to yet: every page would be empty.
+    navItems: list[dict[str, str]] = [] if location.pathname == "/setup" else NAV_ITEMS;
 
     def navClass(path: str) -> str {
         base = "rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 ";
@@ -125,7 +127,7 @@ def:pub Shell -> JsxLayout {
                             </span>
                         </Link>
                         <div className="hidden items-center gap-1 md:flex">
-                            {for item in NAV_ITEMS {
+                            {for item in navItems {
                                 <Link
                                     key={item["to"]}
                                     to={item["to"]}
