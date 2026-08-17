@@ -31,6 +31,7 @@ import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
+import from ...lib.dates { todayIso, dueTone }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -80,7 +81,11 @@ def:pub BoardPage -> JsxPage {
         moveStatus: str = "",
         moveKind: str = "handoff",
         mForm: dict[str, str] = BLANK_MOVE,
-        saving: bool = False;
+        saving: bool = False,
+        # A /board?task=<id> deep link (the overview's attention list, the
+        # palette) opens that card once the first load has landed; "new"
+        # opens the create dialog (/board?new=1).
+        pendingTaskId: str = "";
 
     async can with entry {
         movesRef.current = 0;
@@ -88,8 +93,44 @@ def:pub BoardPage -> JsxPage {
         if stored {
             fProject = stored;
         }
+        w: any = window;
+        params: any = new(w.URLSearchParams, w.location.search);
+        wanted = params.get("task") or "";
+        if wanted {
+            pendingTaskId = str(wanted);
+        }
+        if params.get("new") {
+            pendingTaskId = "new";
+        }
         boot();
     }
+
+    # Runs from the render that has the loaded tasks and steps, so openEdit
+    # sees fresh state (reading `tasks` right after `await loadAll()` in boot
+    # would see the pre-load snapshot).
+    useEffect(
+        lambda { if pendingTaskId and not loading {
+            if pendingTaskId == "new" {
+                openCreate("");
+            } else {
+                for t in tasks {
+                    if t.id == pendingTaskId {
+                        openEdit(t);
+                    }
+                }
+            }
+            pendingTaskId = "";
+            # Consume the param only now: on a full load the page mounts
+            # twice (bare, then inside the chrome once login resolves), and
+            # the second mount must still find it. Stripping it here also
+            # keeps a reload or the poll from reopening the card.
+            w: any = window;
+            if w.location.search {
+                w.history.replaceState(None, "", w.location.pathname);
+            }
+        }},
+        [pendingTaskId, loading, len(tasks)]
+    );
 
     # Live-ish board: refetch on tab focus plus a 60s poll. One manual
     # useEffect so the listener/interval handles are visible to the cleanup
@@ -102,10 +143,18 @@ def:pub BoardPage -> JsxPage {
             # applied proposal announces itself with an event rather than leaving
             # the new card invisible until the next poll.
             window.addEventListener("standup:refresh", onFocus);
+            # The command palette, mounted in the layout, asks an already
+            # mounted board to open a card or the new-task dialog.
+            onOpenTask = lambda (e: any) { pendingTaskId = str(e.detail or ""); };
+            onNewTask = lambda { pendingTaskId = "new"; };
+            window.addEventListener("standup:open-task", onOpenTask);
+            window.addEventListener("standup:new-task", onNewTask);
             timer = window.setInterval(lambda { loadAll(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("standup:refresh", onFocus);
+                window.removeEventListener("standup:open-task", onOpenTask);
+                window.removeEventListener("standup:new-task", onNewTask);
                 window.clearInterval(timer);
             };
         },
@@ -133,7 +182,8 @@ def:pub BoardPage -> JsxPage {
     def setMoveField(key: str, value: str) -> None;
     def toggleAssignee(memberId: str) -> None;
     async def saveMoveInfo -> None;
-    def openCreate -> None;
+    # Empty inKey lands the task in the first column.
+    def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
     async def syncGithub -> None;
     async def createIssue(repoId: str) -> None;
@@ -160,6 +210,7 @@ def:pub BoardPage -> JsxPage {
 
     colKeys = columnKeys();
     doneKey = doneColumnKey();
+    today = todayIso();
     # No workflow AND nothing to show: six empty placeholder columns are noise
     # on a workspace that has not decided what its columns are yet. A legacy
     # org that HAS tasks still gets the fallback columns, because hiding the
@@ -237,7 +288,7 @@ def:pub BoardPage -> JsxPage {
                                 {"Syncing…" if syncing else "Sync GitHub"}
                             </Button>
                         }}
-                        <Button onClick={openCreate}>New task</Button>
+                        <Button onClick={lambda { openCreate(""); }}>New task</Button>
                     </div>
                 } }
             </div>
@@ -247,15 +298,13 @@ def:pub BoardPage -> JsxPage {
                 # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"
-                    style={{
-                        "gridTemplateColumns": "repeat(5, minmax(var(--board-col-min), 1fr))"
-                    }}
+                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch [--lane-h:calc(100dvh-12.5rem)]"
+                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 20rem))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
                         <div
                             key={"sk" + str(i)}
-                            className="flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2"
+                            className="flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2 md:h-[var(--lane-h)]"
                         >
                             <div
                                 className="flex items-center justify-between px-1 py-1"
@@ -336,9 +385,9 @@ def:pub BoardPage -> JsxPage {
                 # columns keep a 16rem minimum and the row scroll-snaps instead.
                 <div
                     key="columns"
-                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-1 [--board-col-min:16rem] md:snap-none md:overflow-visible md:pb-0 md:[--board-col-min:0px]"
+                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch [--lane-h:calc(100dvh-12.5rem)]"
                     style={{
-                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(var(--board-col-min), 1fr))"
+                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 20rem))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {
@@ -370,6 +419,17 @@ def:pub BoardPage -> JsxPage {
                                 else 0}
                             showingAll={showAllDone if key == doneKey else False}
                             onToggleOlder={lambda { showAllDone = not showAllDone; }}
+                            onAddTask={openCreate}
+                            overdueCount={0
+                                if key == doneKey
+                                else len(
+                                    [
+                                        t
+                                        for t in visible
+                                        if columnKeyOf(t) == key
+                                        and dueTone(t.due_date, t.status, today) == "overdue"
+                                    ]
+                                )}
                         />
                     }}
                 </div>

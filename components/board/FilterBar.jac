@@ -31,7 +31,11 @@ def:pub FilterBar(
     return
         <div className="flex flex-wrap items-center gap-2">
             <Select value={project} onValueChange={onProject}>
-                <SelectTrigger className="h-8 w-44" size="sm">
+                <SelectTrigger
+                    className="h-8 w-44"
+                    size="sm"
+                    aria-label="Filter by project"
+                >
                     <SelectValue placeholder="Project"/>
                 </SelectTrigger>
                 <SelectContent>
@@ -42,7 +46,11 @@ def:pub FilterBar(
                 </SelectContent>
             </Select>
             <Select value={assignee} onValueChange={onAssignee}>
-                <SelectTrigger className="h-8 w-40" size="sm">
+                <SelectTrigger
+                    className="h-8 w-40"
+                    size="sm"
+                    aria-label="Filter by assignee"
+                >
                     <SelectValue placeholder="Assignee"/>
                 </SelectTrigger>
                 <SelectContent>
@@ -53,7 +61,11 @@ def:pub FilterBar(
                 </SelectContent>
             </Select>
             <Select value={category} onValueChange={onCategory}>
-                <SelectTrigger className="h-8 w-40" size="sm">
+                <SelectTrigger
+                    className="h-8 w-40"
+                    size="sm"
+                    aria-label="Filter by category"
+                >
                     <SelectValue placeholder="Category"/>
                 </SelectTrigger>
                 <SelectContent>
@@ -67,6 +79,7 @@ def:pub FilterBar(
                 variant={"default" if hideDone else "outline"}
                 size="sm"
                 className="h-8"
+                aria-pressed={hideDone}
                 onClick={lambda { onHideDone(); }}
             >
                 Hide Done

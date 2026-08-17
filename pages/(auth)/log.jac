@@ -3,11 +3,14 @@ behalf of roster members (members have no accounts). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """
 
-import from ...models { LogEntry }
+import from ...models { LogEntry, MemberView }
 import from ...walkers.log { ListLogEntries, DeleteLogEntries }
+import from ...walkers.roster { ListMembers }
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
+import from ...components.log.Digest { Digest }
+import from ...components.log.WeekMatrix { WeekMatrix }
 import from ...components.ui.button { Button }
 import from ...components.ui.card { Card, CardContent }
 import from ...components.ui.skeleton { Skeleton }
@@ -37,6 +40,8 @@ def mondayOf(iso: str) -> str {
 
 def:pub DailyLogPage -> JsxPage {
     has entries: list[LogEntry] = [],
+        # Roster names give the week matrix a row per person, quiet or not.
+        memberNames: list[str] = [],
         selecting: bool = False,
         selectedIds: list[str] = [],
         selectedDate: str = "",
@@ -66,6 +71,8 @@ def:pub DailyLogPage -> JsxPage {
             for e in entries
             if e.date == selectedDate
         ];
+    weekMonday = mondayOf(selectedDate) if selectedDate else "";
+    weekDays = [shiftDay(weekMonday, i) for i in range(7)] if weekMonday else [];
 
     return
         <div className="space-y-6">
@@ -241,11 +248,30 @@ def:pub DailyLogPage -> JsxPage {
                         }}
                     </CardContent>
                 </Card>
+            } elif viewMode == "week" and not selecting and len(entries) > 0 {
+                <div
+                    key="matrix"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+                >
+                    <WeekMatrix
+                        entries={entries}
+                        weekDays={weekDays}
+                        memberNames={memberNames}
+                        selectedDate={selectedDate}
+                        onSelectDate={lambda (d: str) {
+                            selectedDate = d;
+                            viewMode = "day";
+                        }}
+                    />
+                </div>
             } else {
                 <div
                     key="table"
-                    className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-300 space-y-4"
                 >
+                    {if viewMode == "day" and not selecting {
+                        <Digest key="digest" entries={entries} day={selectedDate}/>
+                    }}
                     <LogTable
                         entries={shown}
                         emptyLabel={"Nothing logged this week yet."
@@ -254,8 +280,9 @@ def:pub DailyLogPage -> JsxPage {
                         selecting={selecting}
                         selected={selectedIds}
                         onToggleSelect={toggleSelect}
+                        showDate={viewMode == "week"}
                     />
                 </div>
-            } }
+            }  }
         </div>;
 }

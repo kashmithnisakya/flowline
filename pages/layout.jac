@@ -1,12 +1,16 @@
-"""standup - root layout. App pages get the nav, org name and logout; public
-pages render bare (the landing brings its own header). The header is sticky
-with a blur; below md the six links collapse into a dropdown menu.
+"""standup - root layout. App pages get the nav, an account menu (org name,
+settings, theme, log out) and the ⌘K palette; public pages render bare (the
+landing brings its own header). The header is sticky with a blur; below md
+the six links collapse into a dropdown menu.
 """
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
-import from ..lib.session { fetchOrgName }
+import from "react" { useEffect }
+import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
+import from ..components.common.Avatar { Avatar }
+import from ..components.common.CommandPalette { CommandPalette }
 # Note: the wrapper lives in toaster.jac, not sonner.jac, a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
 # producing a self-rendering Toaster and an infinite React mount loop.
@@ -15,11 +19,20 @@ import from ..components.ui.dropdown_menu {
     DropdownMenu,
     DropdownMenuTrigger,
     DropdownMenuContent,
-    DropdownMenuItem
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem
 }
 import from ..components.assistant.AssistantDock { AssistantDock }
 
 glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
+     THEME_CHOICES: list[dict[str, str]] = [
+         {"value": "light", "label": "Light"},
+         {"value": "dark", "label": "Dark"},
+         {"value": "system", "label": "System"}
+     ],
      NAV_ITEMS: list[dict[str, str]] = [
          {"to": "/workflow", "label": "Workflow"},
          {"to": "/board", "label": "Board"},
@@ -29,20 +42,24 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
          {"to": "/workspace", "label": "Workspace"}
      ];
 
-# Settings is not in the text row: it collapses to the gear icon on the
-# right, next to the theme toggle.
+# Settings lives in the account menu on the right, next to the theme toggle
+# and the palette button; the text row is pages only.
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
         orgName: str = "",
+        fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
         # applyTheme so "system" resolves to what is actually showing.
-        themeDark: bool = False;
+        themeDark: bool = False,
+        themePref: str = "system",
+        paletteOpen: bool = False;
 
     async can with entry {
         applyTheme(getThemePref());
         watchTheme();
         doc: any = document;
         themeDark = bool(doc.documentElement.classList.contains("dark"));
+        themePref = getThemePref();
         isIn = jacIsLoggedIn();
         loggedIn = isIn;
         if isIn {
@@ -50,12 +67,29 @@ def:pub Shell -> JsxLayout {
         }
     }
 
+    # ⌘K / Ctrl+K anywhere in the app opens the palette.
+    useEffect(
+        lambda {
+            onKey = lambda (e: any) { if (e.metaKey or e.ctrlKey)
+            and str(e.key).lower() == "k" {
+                e.preventDefault();
+                paletteOpen = True;
+            }};
+            window.addEventListener("keydown", onKey);
+            return lambda { window.removeEventListener("keydown", onKey); };
+        },
+        []
+    );
+
     async def loadOrg -> None;
     def logout -> None;
     def toggleTheme -> None;
+    def pickTheme(pref: str) -> None;
 
     location = useLocation();
     chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
+    # The wizard has nothing to link to yet: every page would be empty.
+    navItems: list[dict[str, str]] = [] if location.pathname == "/setup" else NAV_ITEMS;
 
     def navClass(path: str) -> str {
         base = "rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 ";
@@ -93,7 +127,7 @@ def:pub Shell -> JsxLayout {
                             </span>
                         </Link>
                         <div className="hidden items-center gap-1 md:flex">
-                            {for item in NAV_ITEMS {
+                            {for item in navItems {
                                 <Link
                                     key={item["to"]}
                                     to={item["to"]}
@@ -104,14 +138,33 @@ def:pub Shell -> JsxLayout {
                             }}
                         </div>
                         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-                            {if orgName {
-                                <span
-                                    key="org"
-                                    className="mr-1 hidden items-center rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex"
+                            <button
+                                type="button"
+                                aria-label="Open command palette"
+                                title="Command palette (⌘K)"
+                                className="inline-flex items-center gap-2 rounded-full p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground sm:rounded-lg sm:border sm:border-border/70 sm:bg-card sm:py-1 sm:pr-1.5 sm:pl-2.5"
+                                onClick={lambda { paletteOpen = True; }}
+                            >
+                                <svg
+                                    width={16}
+                                    height={16}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
                                 >
-                                    {orgName}
-                                </span>
-                            }}
+                                    <circle cx={11} cy={11} r={8}/>
+                                    <path d="m21 21-4.3-4.3"/>
+                                </svg>
+                                <kbd
+                                    className="hidden rounded border border-border bg-muted px-1 font-mono text-[10px] sm:inline"
+                                >
+                                    ⌘K
+                                </kbd>
+                            </button>
                             <button
                                 type="button"
                                 aria-label={"Switch to light mode"
@@ -161,40 +214,88 @@ def:pub Shell -> JsxLayout {
                                     </svg>
                                 } }
                             </button>
-                            <Link
-                                to="/settings"
-                                aria-label="Settings"
-                                title="Settings"
-                                className={"hidden rounded-full p-2 transition-colors duration-200 md:inline-flex " + (
-                                    "bg-primary/10 text-primary"
-                                        if location.pathname == "/settings"
-                                        else "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                )}
-                            >
-                                <svg
-                                    width={16}
-                                    height={16}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path
-                                        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-                                    />
-                                    <circle cx={12} cy={12} r={3}/>
-                                </svg>
-                            </Link>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="ml-1"
-                                onClick={logout}
-                            >
-                                Log out
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild={True}>
+                                    <button
+                                        type="button"
+                                        aria-label="Account menu"
+                                        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card py-0.5 pr-2 pl-0.5 text-xs font-medium text-foreground transition-colors duration-200 hover:bg-accent"
+                                    >
+                                        <Avatar name={orgName or "standup"} size="sm"/>
+                                        <span
+                                            className="hidden max-w-40 truncate sm:inline"
+                                        >
+                                            {orgName or "Account"}
+                                        </span>
+                                        <svg
+                                            width={12}
+                                            height={12}
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="text-muted-foreground"
+                                            aria-hidden="true"
+                                        >
+                                            <path d="m6 9 6 6 6-6"/>
+                                        </svg>
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel
+                                        className="flex flex-col gap-0.5"
+                                    >
+                                        <span
+                                            className="truncate text-sm font-semibold"
+                                        >
+                                            {orgName or "Your workspace"}
+                                        </span>
+                                        {if fullName {
+                                            <span
+                                                key="who"
+                                                className="truncate text-xs font-normal text-muted-foreground"
+                                            >
+                                                {fullName}
+                                            </span>
+                                        }}
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator/>
+                                    <DropdownMenuItem asChild={True}>
+                                        <Link to="/settings">Settings</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild={True}>
+                                        <Link to="/workspace">Workspace</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator/>
+                                    <DropdownMenuLabel
+                                        className="text-xs font-medium text-muted-foreground"
+                                    >
+                                        Theme
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuRadioGroup
+                                        value={themePref}
+                                        onValueChange={pickTheme}
+                                    >
+                                        {for choice in THEME_CHOICES {
+                                            <DropdownMenuRadioItem
+                                                key={choice["value"]}
+                                                value={choice["value"]}
+                                            >
+                                                {choice["label"]}
+                                            </DropdownMenuRadioItem>
+                                        }}
+                                    </DropdownMenuRadioGroup>
+                                    <DropdownMenuSeparator/>
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={lambda { logout(); }}
+                                    >
+                                        Log out
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             <div className="md:hidden">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild={True}>
@@ -229,9 +330,6 @@ def:pub Shell -> JsxLayout {
                                                 </Link>
                                             </DropdownMenuItem>
                                         }}
-                                        <DropdownMenuItem asChild={True}>
-                                            <Link to="/settings">Settings</Link>
-                                        </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
@@ -248,6 +346,13 @@ def:pub Shell -> JsxLayout {
             } }
             {if chrome {
                 <AssistantDock key="assistant"/>
+            }}
+            {if chrome {
+                <CommandPalette
+                    key="palette"
+                    open={paletteOpen}
+                    onOpenChange={lambda (o: bool) { paletteOpen = o; }}
+                />
             }}
             <Toaster/>
         </div>;

@@ -1,10 +1,11 @@
 """Landing hero. Copy describes only what the app does today (a board plus a
 written daily log): no trial terms, integrations or usage figures. The board
-mock under the CTAs is decorative and aria-hidden.
+under the CTAs (HeroBoard) is decorative and aria-hidden.
 """
 
 import from ..ui.button { Button }
 import from ..common.KineticGrid { KineticGrid }
+import from .HeroBoard { HeroBoard }
 
 def:pub Hero(loggedIn: bool) -> JsxElement {
     return
@@ -63,125 +64,7 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                 <p className="anim-fade-up anim-d4 mt-5 text-xs text-muted-foreground">
                     One account is one organization · your data stays in your own workspace
                 </p>
-                <div
-                    aria-hidden="true"
-                    className="anim-fade-up anim-d5 mx-auto mt-14 max-w-3xl"
-                >
-                    <div
-                        className="rounded-2xl bg-background/70 p-3 shadow-xl ring-1 ring-foreground/10 backdrop-blur"
-                    >
-                        <div className="grid grid-cols-3 gap-3 text-left">
-                            <div className="rounded-xl bg-muted/50 p-2.5">
-                                <div className="flex items-center gap-1.5 px-1 pb-2">
-                                    <span className="h-2 w-2 rounded-full bg-sky-500"></span>
-                                    <span
-                                        className="text-xs font-semibold text-muted-foreground"
-                                    >
-                                        Up next
-                                    </span>
-                                </div>
-                                <div className="space-y-2">
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-3/4 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-8 rounded-full bg-sky-500/50"
-                                        ></div>
-                                    </div>
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-1/2 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-10 rounded-full bg-sky-500/50"
-                                        ></div>
-                                    </div>
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-2/3 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-7 rounded-full bg-sky-500/50"
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="rounded-xl bg-muted/50 p-2.5">
-                                <div className="flex items-center gap-1.5 px-1 pb-2">
-                                    <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                                    <span
-                                        className="text-xs font-semibold text-muted-foreground"
-                                    >
-                                        In progress
-                                    </span>
-                                </div>
-                                <div className="space-y-2">
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-4/5 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-9 rounded-full bg-amber-500/50"
-                                        ></div>
-                                    </div>
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-3/5 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-7 rounded-full bg-amber-500/50"
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="rounded-xl bg-muted/50 p-2.5">
-                                <div className="flex items-center gap-1.5 px-1 pb-2">
-                                    <span
-                                        className="h-2 w-2 rounded-full bg-emerald-500"
-                                    ></span>
-                                    <span
-                                        className="text-xs font-semibold text-muted-foreground"
-                                    >
-                                        Done
-                                    </span>
-                                </div>
-                                <div className="space-y-2">
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-2/3 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-8 rounded-full bg-emerald-500/50"
-                                        ></div>
-                                    </div>
-                                    <div
-                                        className="rounded-lg bg-card p-2.5 shadow-xs ring-1 ring-foreground/10"
-                                    >
-                                        <div
-                                            className="h-2 w-1/2 rounded-full bg-foreground/15"
-                                        ></div>
-                                        <div
-                                            className="mt-2 h-1.5 w-10 rounded-full bg-emerald-500/50"
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <HeroBoard/>
             </div>
         </section>;
 }

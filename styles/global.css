@@ -30,7 +30,24 @@
     --input: #E2DACC;
     --ring: #E8552F;
     --success: #2C5545;             /* pine */
-    --warning: #B07C1F;             /* readable amber text on paper */
+    --warning: #8F6314;             /* amber dark enough for small text on paper (4.7:1) */
+    /* Workflow step colours (keys in components/workflow/kinds.jac). Warmer,
+       lower-chroma neighbours of Tailwind's sky/indigo/amber/rose/emerald/slate
+       so six lanes sit in one family with ember and paper. -ink is the text
+       weight (>= 4.5:1 on paper); -wash is an opaque pale fill for cards that
+       sit over the canvas dot grid. */
+    --step-sky: #3D7EA6;      --step-sky-ink: #285F80;
+    --step-indigo: #6F63B8;   --step-indigo-ink: #504590;
+    --step-amber: #C4891F;    --step-amber-ink: #855A0F;
+    --step-rose: #C6544D;     --step-rose-ink: #993D37;
+    --step-emerald: #4E8C5E;  --step-emerald-ink: #366A44;
+    --step-slate: #7C7568;    --step-slate-ink: #59534A;
+    --step-sky-wash: color-mix(in oklab, var(--step-sky) 12%, var(--card));
+    --step-indigo-wash: color-mix(in oklab, var(--step-indigo) 12%, var(--card));
+    --step-amber-wash: color-mix(in oklab, var(--step-amber) 12%, var(--card));
+    --step-rose-wash: color-mix(in oklab, var(--step-rose) 12%, var(--card));
+    --step-emerald-wash: color-mix(in oklab, var(--step-emerald) 12%, var(--card));
+    --step-slate-wash: color-mix(in oklab, var(--step-slate) 12%, var(--card));
     --chart-1: #E8552F;
     --chart-2: #2C5545;
     --chart-3: #E8A22F;
@@ -76,6 +93,14 @@
     --ring: #2DD4BF;
     --success: #34D399;
     --warning: #FBBF24;
+    /* Step colours lifted for the dark ground; ink equals fill, which already
+       clears 7:1 on pine. The washes re-derive from the dark --card. */
+    --step-sky: #6FB1D6;      --step-sky-ink: #8FC6E4;
+    --step-indigo: #A29BE0;   --step-indigo-ink: #B8B2EA;
+    --step-amber: #E5B14C;    --step-amber-ink: #EFC46E;
+    --step-rose: #E8827B;     --step-rose-ink: #F09D97;
+    --step-emerald: #7DC08C;  --step-emerald-ink: #98D0A4;
+    --step-slate: #A79F92;    --step-slate-ink: #BDB6AB;
     --chart-1: #2DD4BF;
     --chart-2: #818CF8;
     --chart-3: #FBBF24;
@@ -100,6 +125,24 @@
     --font-display: 'Bricolage Grotesque Variable', 'Space Grotesk Variable', sans-serif;
     --color-success: var(--success);
     --color-warning: var(--warning);
+    --color-step-sky: var(--step-sky);
+    --color-step-sky-ink: var(--step-sky-ink);
+    --color-step-sky-wash: var(--step-sky-wash);
+    --color-step-indigo: var(--step-indigo);
+    --color-step-indigo-ink: var(--step-indigo-ink);
+    --color-step-indigo-wash: var(--step-indigo-wash);
+    --color-step-amber: var(--step-amber);
+    --color-step-amber-ink: var(--step-amber-ink);
+    --color-step-amber-wash: var(--step-amber-wash);
+    --color-step-rose: var(--step-rose);
+    --color-step-rose-ink: var(--step-rose-ink);
+    --color-step-rose-wash: var(--step-rose-wash);
+    --color-step-emerald: var(--step-emerald);
+    --color-step-emerald-ink: var(--step-emerald-ink);
+    --color-step-emerald-wash: var(--step-emerald-wash);
+    --color-step-slate: var(--step-slate);
+    --color-step-slate-ink: var(--step-slate-ink);
+    --color-step-slate-wash: var(--step-slate-wash);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

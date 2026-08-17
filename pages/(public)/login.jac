@@ -14,6 +14,8 @@ import from ...lib.utils { cn }
 import from ...components.common.glyphs { Spinner }
 import from ...components.common.ErrorNote { ErrorNote }
 
+glob MIN_PASSWORD: int = 8;
+
 def:pub LoginPage -> JsxPage {
     has mode: str = "login",
         email: str = "",
@@ -44,7 +46,9 @@ def:pub LoginPage -> JsxPage {
     def switchMode(next: str) -> None;
 
     signup = mode == "signup";
-    ready = not busy and bool(email.strip()) and bool(password);
+    # Sign-up asks for eight characters; sign-in accepts whatever was set.
+    longEnough = len(password) >= MIN_PASSWORD or not signup;
+    ready = not busy and bool(email.strip()) and bool(password) and longEnough;
     tabBase = "relative z-10 rounded-lg py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
     tabOn = "text-foreground";
     tabOff = "text-muted-foreground hover:text-foreground";
@@ -232,6 +236,36 @@ def:pub LoginPage -> JsxPage {
                                     } }
                                 </button>
                             </div>
+                            {if signup {
+                                <p
+                                    key="rule"
+                                    className={"flex items-center gap-1.5 text-xs transition-colors " + (
+                                        "text-success"
+                                            if len(password) >= MIN_PASSWORD
+                                            else "text-muted-foreground"
+                                    )}
+                                    aria-live="polite"
+                                >
+                                    <svg
+                                        width={12}
+                                        height={12}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2.5}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        {if len(password) >= MIN_PASSWORD {
+                                            <path key="ok" d="m5 12 5 5L20 7"/>
+                                        } else {
+                                            <circle key="dot" cx={12} cy={12} r={4}/>
+                                        } }
+                                    </svg>
+                                    {"At least " + str(MIN_PASSWORD) + " characters"}
+                                </p>
+                            }}
                         </div>
                         {if error {
                             <ErrorNote key="err" message={error}/>

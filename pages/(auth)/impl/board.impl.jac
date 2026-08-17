@@ -83,17 +83,19 @@ impl BoardPage.setField(key: str, value: str) -> None {
     form = updated;
 }
 
-impl BoardPage.openCreate -> None {
+impl BoardPage.openCreate(inKey: str = "") -> None {
     editingId = "";
     d = new(Date);
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
-    # A new task lands in the first column of the workflow (or the first
-    # legacy status), never a hardcoded "Backlog" that may not exist.
+    # A lane's add row names its own column; otherwise a new task lands in
+    # the first column of the workflow (or the first legacy status), never a
+    # hardcoded "Backlog" that may not exist.
     keys = columnKeys();
+    landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
     form = {
         ** BLANK_TASK,
         "project": fProject if fProject != "all" else "none",
-        "status": keys[0] if keys else "Backlog",
+        "status": landing,
         "due_date": shifted.toISOString()[:10]
     };
     fAssignees = [];

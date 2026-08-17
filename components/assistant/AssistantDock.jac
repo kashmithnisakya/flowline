@@ -122,9 +122,19 @@ def:pub AssistantDock -> JsxElement {
                 type="button"
                 aria-label="Open the assistant"
                 onClick={lambda { open = True; }}
-                className="fixed bottom-6 right-6 z-50 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:scale-105 active:scale-95"
+                className={(
+                    # Card volume, ember only on the glyph: each page already
+                    # has one solid primary action and this sits on every page.
+                    "fixed bottom-6 right-6 z-50 flex h-11 items-center gap-2 rounded-full border border-border/70 bg-card px-4 text-sm font-semibold text-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:-translate-y-0.5 hover:bg-accent active:scale-95"
+                )}
             >
-                <svg width={17} height={17} viewBox="0 0 24 24" aria-hidden="true">
+                <svg
+                    width={17}
+                    height={17}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="text-primary"
+                >
                     <path fill="currentColor" d={SPARKLE}/>
                 </svg>
                 Assistant
