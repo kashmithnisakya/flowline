@@ -140,6 +140,21 @@ File-based routing with route groups:
   `# noqa` text node); the registry copy at jac 0.34.14 is clean, so
   `checkbox.jac` is imported directly again.
 - **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper).
+  **`lib/dates.jac`** owns the calendar rules (`todayIso`, `daysUntil`,
+  `dueTone`, `dueLabel`): the card, the lane header and the overview all
+  derive "overdue" from it, so change it there or nowhere.
+- **`components/common/`** holds the shared bits: `Avatar.jac` (initials
+  avatars, hue hashed from the name, `AvatarStack` for assignees),
+  `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`, `KineticGrid`.
+- **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
+  (opaque canvas fill) in `styles/global.css` for both palettes; the tables
+  in `components/workflow/kinds.jac` only name them (`bg-step-sky`). A new
+  colour key needs tokens in both palettes, and its key is what persists.
+- **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
+  create dialog; an already mounted board listens for `standup:open-task` /
+  `standup:new-task` instead (the palette uses both paths).
+- **A log entry's `member_name` is every assignee comma-joined**, so split
+  it before comparing to a member.
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
   the generator, not the SVGs. Reference brand assets as **`/static/...`**, not
   `/assets/...` — Vite owns `/assets/*` at build time.
@@ -176,6 +191,16 @@ File-based routing with route groups:
   the clash only exists in the emitted JS). Name the method something else.
 - **A docstring as the first statement of a plain `def` is a parse error** —
   use a `#` comment above the `def`.
+- **On a full page load an app page mounts twice**: once bare, before the
+  layout's `loggedIn` resolves, then again inside the chrome. Anything a
+  page consumes in `can with entry` (a URL param, a one-shot flag) is gone
+  for the second mount. Read it in entry, but consume it in the effect that
+  acts on it (see `pendingTaskId` on the board).
+- **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
+  not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
+- **A `has` list read after `await` is stale, and so is a `has` read inside a
+  `setInterval` callback**: re-arm a `setTimeout` from an effect keyed on the
+  value instead (see `HeroBoard`).
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.
