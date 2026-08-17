@@ -262,7 +262,7 @@ def:pub laneWires(
         sideKeys[ko].append(idx + 1);
         sideKeys[ki].append(0 - (idx + 1));
     }
-    for k in sideKeys {
+    for k in list(sideKeys.keys()) {
         uses = sideKeys[k];
         # Sort key: the y of the far end, ties broken outgoing-first.
         keyed: list[list[float]] = [];
@@ -300,7 +300,7 @@ def:pub laneWires(
         }
         gapUsers[gk].append(idx);
     }
-    for gk in gapUsers {
+    for gk in list(gapUsers.keys()) {
         users = gapUsers[gk];
         ranked: list[list[float]] = [];
         for idx in users {
