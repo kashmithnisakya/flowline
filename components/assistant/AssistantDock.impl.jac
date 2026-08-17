@@ -107,7 +107,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
         reply = {
             "role": "assistant",
             "kind": "error",
-            "text": "The assistant is unreachable. Check that OPENAI_API_KEY is set in .env " + "and that the server was restarted after."
+            "text": "The assistant is unreachable. Check that OPENAI_API_KEY is set in .env "
+            "and that the server was restarted after."
         };
     }
     turns = history + [reply];

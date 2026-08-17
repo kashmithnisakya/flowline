@@ -429,7 +429,8 @@ walker DeleteStep(find_step) {
                     "ok": False,
                     "error": "last_of_kind",
                     "message": (
-                        "This is the only " + kind + " step. Give another step " + "that kind first, then delete this one."
+                        "This is the only " + kind + " step. Give another step "
+                        "that kind first, then delete this one."
                     )
                 };
                 disengage;
