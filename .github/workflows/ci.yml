@@ -57,7 +57,10 @@ jobs:
           git ls-files -z -- '*.jac' ':!components/ui/*' \
             | xargs -0 jac fmt --check --lintfix
 
+      # Lint and type check still run when the format check fails, so one run
+      # reports all three signals; the job fails if any step does.
       - name: Lint (jac check --lint)
+        if: ${{ !cancelled() }}
         run: |
           git ls-files -z -- '*.jac' \
             | xargs -0 jac check --lint --
@@ -74,6 +77,7 @@ jobs:
       # first pass complete to seed the cache. A genuine E5082 still fails
       # `jac start` / `jac build`.
       - name: Type check (jac check)
+        if: ${{ !cancelled() }}
         run: |
           check() {
             git ls-files -z -- '*.jac' \
