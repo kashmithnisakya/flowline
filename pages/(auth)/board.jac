@@ -3,14 +3,14 @@ ARE the workflow steps in designed order, so board and Workflow tab cannot
 disagree; with no workflow yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
-import from ...models { Project, MemberView, TaskView, StepView, RepoView }
+import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleView }
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
 import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers, ListRepos }
+import from ...walkers.roster { ListMembers, ListRepos, ListRoles }
 import from ...walkers.tasks {
     ListTasks,
     CreateTask,
@@ -24,6 +24,8 @@ import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
+import from ...components.board.SwimlaneBoard { SwimlaneBoard }
+import from ...components.workflow.lanes { laneLayout }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.ui.button { Button }
@@ -63,7 +65,13 @@ def:pub BoardPage -> JsxPage {
         members: list[MemberView] = [],
         projects: list[Project] = [],
         steps: list[StepView] = [],
+        # Roles feed the swimlane bands (lane = owner role, as on the
+        # Workflow's Lanes view).
+        roles: list[RoleView] = [],
         repos: list[RepoView] = [],
+        # "lanes" (bands per role, the client's requested shape) or
+        # "columns" (one vertical column per step). Persisted per browser.
+        boardView: str = "lanes",
         ghConnected: bool = False,
         syncing: bool = False,
         loading: bool = True,
@@ -92,6 +100,10 @@ def:pub BoardPage -> JsxPage {
         stored = localStorage.getItem("standup_project") or "";
         if stored {
             fProject = stored;
+        }
+        storedView = localStorage.getItem("standup_board_view") or "";
+        if storedView == "columns" or storedView == "lanes" {
+            boardView = storedView;
         }
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
@@ -184,6 +196,7 @@ def:pub BoardPage -> JsxPage {
     async def saveMoveInfo -> None;
     # Empty inKey lands the task in the first column.
     def openCreate(inKey: str = "") -> None;
+    def pickBoardView(v: str) -> None;
     def openEdit(t: TaskView) -> None;
     async def syncGithub -> None;
     async def createIssue(repoId: str) -> None;
@@ -239,6 +252,71 @@ def:pub BoardPage -> JsxPage {
         if t.updated_at[:10] >= weekAgo
     ];
     olderDoneCount = len(doneVisible) - len(recentDone);
+    # Swimlanes need real steps (a legacy status board has no owners).
+    laneMode = boardView == "lanes" and len(steps) > 0;
+    laneColumns: list[dict[str, str]] = [];
+    laneBands: list[dict[str, str]] = [];
+    tasksByKey: dict[str, list[TaskView]] = {};
+    overdueByKey: dict[str, int] = {};
+    if laneMode {
+        plan: dict[str, any] = laneLayout(steps, roles, activeMembers);
+        laneOf: dict[str, str] = plan["laneOf"];
+        for key in colKeys {
+            laneColumns.append(
+                {
+                    "key": key,
+                    "label": columnLabel(key),
+                    "kind": columnKind(key),
+                    "color": columnColor(key),
+                    "lane": laneOf[key] if key in laneOf else "__unowned"
+                }
+            );
+            tasksByKey[key] = (
+                (doneVisible if showAllDone else recentDone)
+                    if key == doneKey
+                    else [
+                        t
+                        for t in visible
+                        if columnKeyOf(t) == key
+                    ]
+            );
+            overdueByKey[key] = 0
+                if key == doneKey
+                else len(
+                    [
+                        t
+                        for t in tasksByKey[key]
+                        if dueTone(t.due_date, t.status, today) == "overdue"
+                    ]
+                );
+        }
+        rawLanes: list[dict[str, any]] = plan["lanes"];
+        for ln in rawLanes {
+            lkey = str(ln["key"]);
+            # Totals from what is on screen, not the server's unfiltered
+            # task_count, so they follow the filters like the headers do.
+            nSteps = 0;
+            nTasks = 0;
+            for c in laneColumns {
+                if c["lane"] == lkey {
+                    nSteps = nSteps + 1;
+                    nTasks = nTasks + len(tasksByKey[c["key"]]);
+                }
+            }
+            laneBands.append(
+                {
+                    "key": lkey,
+                    "label": str(ln["label"]),
+                    "sub": str(ln["sub"]),
+                    "warn": "y" if ln["warn"] else "",
+                    "color": str(ln["color"]),
+                    "totals": str(nSteps) + (" step" if nSteps == 1 else " steps") + " · " + str(
+                        nTasks
+                    ) + (" task" if nTasks == 1 else " tasks")
+                }
+            );
+        }
+    }
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
     editingIssueNumber = 0;
@@ -287,6 +365,35 @@ def:pub BoardPage -> JsxPage {
                                 }}
                                 {"Syncing…" if syncing else "Sync GitHub"}
                             </Button>
+                        }}
+                        {if len(steps) > 0 {
+                            <div
+                                key="view"
+                                className="inline-flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted p-0.5"
+                                role="group"
+                                aria-label="Board layout"
+                            >
+                                <button
+                                    type="button"
+                                    aria-pressed={boardView == "lanes"}
+                                    className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        if boardView == "lanes"
+                                        else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+                                    onClick={lambda { pickBoardView("lanes"); }}
+                                >
+                                    Lanes
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-pressed={boardView == "columns"}
+                                    className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        if boardView == "columns"
+                                        else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+                                    onClick={lambda { pickBoardView("columns"); }}
+                                >
+                                    Columns
+                                </button>
+                            </div>
                         }}
                         <Button onClick={lambda { openCreate(""); }}>New task</Button>
                     </div>
@@ -379,10 +486,26 @@ def:pub BoardPage -> JsxPage {
                         </Button>
                     </div>
                 </div>
+            } elif laneMode {
+                <div key="swimlanes" className="[--lane-h:calc(100dvh-12.5rem)]">
+                    <SwimlaneBoard
+                        columns={laneColumns}
+                        lanes={laneBands}
+                        tasksByKey={tasksByKey}
+                        overdueByKey={overdueByKey}
+                        onOpen={openEdit}
+                        onArrowMove={arrowMove}
+                        onDropTask={moveTo}
+                        onAddTask={openCreate}
+                        doneKey={doneKey}
+                        doneExtra={olderDoneCount if not showAllDone else 0}
+                        showingAllDone={showAllDone}
+                        onToggleOlder={lambda { showAllDone = not showAllDone; }}
+                    />
+                </div>
             } else {
-                # ONE row, always: columns divide the width between them, since
-                # a wrapping workflow stops reading as a pipeline. Below md the
-                # columns keep a 16rem minimum and the row scroll-snaps instead.
+                # Columns view: one vertical lane per step, viewport-high on
+                # md+, the row scrolling sideways at every width.
                 <div
                     key="columns"
                     className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch [--lane-h:calc(100dvh-12.5rem)]"
@@ -433,7 +556,7 @@ def:pub BoardPage -> JsxPage {
                         />
                     }}
                 </div>
-            }  }
+            }   }
             <TaskDialog
                 open={dialogOpen}
                 editing={bool(editingId)}

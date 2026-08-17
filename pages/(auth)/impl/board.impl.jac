@@ -38,6 +38,7 @@ impl BoardPage.loadAll -> None {
         pResult = root spawn ListProjects();
         sResult = root spawn GetWorkflow();
         rResult = root spawn ListRepos();
+        roleResult = root spawn ListRoles();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
@@ -47,6 +48,7 @@ impl BoardPage.loadAll -> None {
             projects = fetchedProjects;
             steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
+            roles = roleResult.reports[0] if roleResult.reports else [];
         }
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
@@ -478,4 +480,9 @@ impl BoardPage.createIssue(repoId: str) -> None {
         toast("Failed to open a GitHub issue");
     }
     saving = False;
+}
+
+impl BoardPage.pickBoardView(v: str) -> None {
+    boardView = v;
+    localStorage.setItem("standup_board_view", v);
 }

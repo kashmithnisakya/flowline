@@ -1,8 +1,11 @@
 """Step-kind and colour metadata shared by every workflow surface. The step
 stores a colour KEY; class strings stay literal here or Tailwind drops them.
+Pinned client (.cl.jac) with :pub on every table, so the compiled module
+always exports all of them: a plain glob module only exports what the first
+importers the client build happens to visit have pulled (see CLAUDE.md).
 """
 
-glob KIND_LABEL: dict[str, str] = {
+glob:pub KIND_LABEL: dict[str, str] = {
          "start": "Start",
          "active": "Active",
          "handoff": "Handoff",
@@ -48,7 +51,7 @@ glob KIND_LABEL: dict[str, str] = {
      };
 
 # The same colour as a raw CSS value, for the board column dots.
-glob DOT_VAR: dict[str, str] = {
+glob:pub DOT_VAR: dict[str, str] = {
          "sky": "var(--step-sky)",
          "indigo": "var(--step-indigo)",
          "amber": "var(--step-amber)",
@@ -57,7 +60,7 @@ glob DOT_VAR: dict[str, str] = {
          "slate": "var(--step-slate)"
      };
 
-glob CARD_BAR: dict[str, str] = {
+glob:pub CARD_BAR: dict[str, str] = {
          "sky": "border-l-4 border-l-step-sky",
          "indigo": "border-l-4 border-l-step-indigo",
          "amber": "border-l-4 border-l-step-amber",
@@ -69,7 +72,7 @@ glob CARD_BAR: dict[str, str] = {
 # The step's colour on a board lane: a solid rule at the top of the panel
 # (and the header dot and count). The lane ground itself stays neutral so the
 # cards, not the panel, are the brightest thing in it.
-glob LANE_BAR: dict[str, str] = {
+glob:pub LANE_BAR: dict[str, str] = {
          "sky": "bg-step-sky",
          "indigo": "bg-step-indigo",
          "amber": "bg-step-amber",
@@ -80,7 +83,7 @@ glob LANE_BAR: dict[str, str] = {
 
 # Drag-over highlight in the column's own voice: the full tint comes back
 # only while a card can be dropped here.
-glob RING_TINT: dict[str, str] = {
+glob:pub RING_TINT: dict[str, str] = {
          "sky": "ring-2 ring-step-sky/60 bg-step-sky/10",
          "indigo": "ring-2 ring-step-indigo/60 bg-step-indigo/10",
          "amber": "ring-2 ring-step-amber/60 bg-step-amber/10",
@@ -90,7 +93,7 @@ glob RING_TINT: dict[str, str] = {
      };
 
 # Count-badge tint for column headers: the step colour at chip volume.
-glob COUNT_TINT: dict[str, str] = {
+glob:pub COUNT_TINT: dict[str, str] = {
          "sky": "border-transparent bg-step-sky/15 text-step-sky-ink",
          "indigo": "border-transparent bg-step-indigo/15 text-step-indigo-ink",
          "amber": "border-transparent bg-step-amber/15 text-step-amber-ink",
@@ -100,7 +103,7 @@ glob COUNT_TINT: dict[str, str] = {
      };
 
 
-def colorKey(raw: str) -> str {
+def:pub colorKey(raw: str) -> str {
     if raw in DOT_FILL {
         return raw;
     }

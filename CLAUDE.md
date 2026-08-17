@@ -153,6 +153,14 @@ File-based routing with route groups:
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   create dialog; an already mounted board listens for `standup:open-task` /
   `standup:new-task` instead (the palette uses both paths).
+- **The board has two layouts.** `Lanes` (default, what the client asked
+  for): one band per owner role, steps left to right, a step's cards in its
+  owner's band, drops on the owner cell or the column header
+  (`components/board/SwimlaneBoard.jac`; bands and order come from the same
+  `laneLayout` the Workflow's Lanes view uses). `Columns`: one vertical lane
+  per step (`KanbanColumn.jac`). Persisted per browser in
+  `localStorage["standup_board_view"]`; a legacy status board (no steps)
+  always renders columns. Both share `LaneHeader.jac`.
 - **A log entry's `member_name` is every assignee comma-joined**, so split
   it before comparing to a member.
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
@@ -191,6 +199,15 @@ File-based routing with route groups:
   the clash only exists in the emitted JS). Name the method something else.
 - **A docstring as the first statement of a plain `def` is a parse error** —
   use a `#` comment above the `def`.
+- **A pure module (globs and defs, no JSX) imported by more than one client
+  module must be pinned `.cl.jac` with `:pub` on every exported name**
+  (`components/workflow/kinds.cl.jac`, `lanes.cl.jac`, `geometry.cl.jac`).
+  The client build walks imports depth-first and writes each module's JS the
+  first time it reaches it, exporting only the names client importers have
+  *already* pulled; a later importer's names are missing and Vite fails with
+  "X is not exported by kinds.js". Which importer comes first depends on
+  page and import order, so a plain module works until someone adds an
+  import. Pinning makes every `:pub` name export unconditionally.
 - **On a full page load an app page mounts twice**: once bare, before the
   layout's `loggedIn` resolves, then again inside the chrome. Anything a
   page consumes in `can with entry` (a URL param, a one-shot flag) is gone

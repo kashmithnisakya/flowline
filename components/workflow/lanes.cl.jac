@@ -1,14 +1,14 @@
-"""Computed swimlane layout for the workflow viewer. Nothing is persisted: lane
-= owner role, column = longest forward path (send-backs ignored, which makes
-loops terminate), so it recomputes from live data and cannot drift. Wires are
-elbows in the column gaps; cards are shorter because the owner line is gone."""
+"""Computed swimlane layout for the workflow viewer and the board's Lanes view.
+Nothing is persisted: lane = owner role, column = longest forward path
+(send-backs ignored, which makes loops terminate), so it recomputes from live
+data and cannot drift. Pinned client with :pub exports (see CLAUDE.md)."""
 
 import from ...models { StepView, RoleView, MemberView }
 import from .geometry { NODE_W }
 
 # Label gutter on the left, column pitch, lane breathing room and the
 # compact card height. Canvas px, the same space the designer draws in.
-glob LANE_GUTTER: float = 176.0,
+glob:pub LANE_GUTTER: float = 176.0,
      LANE_COL_W: float = 208.0,
      LANE_PAD: float = 16.0,
      LANE_ROW_GAP: float = 14.0,

@@ -1,11 +1,13 @@
 """Canvas geometry shared by FlowCanvas and the workflow page impl, in ONE
-module so hit-testing and drawing cannot drift apart. Positions are free-form
+module so hit-testing and drawing cannot drift apart. Pinned client with :pub
+exports so the compiled module is complete whichever importer the client
+build visits first (see CLAUDE.md). Positions are free-form
 px, so an edge can travel any direction; control handles are axis-aligned along
 the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
 
 import from ...models { StepView }
 
-glob NODE_W: float = 176.0,
+glob:pub NODE_W: float = 176.0,
      # Three lines: name, kind, and who holds work here.
      NODE_H: float = 82.0,
      EDGE_ZONE: float = 12.0,
@@ -16,7 +18,7 @@ glob NODE_W: float = 176.0,
 # Does this transition travel backwards? One definition, shared by the canvas
 # and the inspector, so the two renderings of the same edge cannot disagree.
 # Node size is constant, so top-left deltas equal centre deltas.
-def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
+def:pub isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
     dx = tx - fx;
     dy = ty - fy;
     ax = dx if dx >= 0.0 else 0.0 - dx;
@@ -32,7 +34,7 @@ def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
 # rather than its body (a move).
 # The position a step is actually drawn at: its live drag override, else the
 # persisted one.
-def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
+def:pub stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
     if s.id in live {
         return live[s.id];
     }
@@ -41,7 +43,7 @@ def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
 
 
 # Canvas big enough for every node plus working room to drag into.
-def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
+def:pub canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
     # Content plus a margin to drag into, NOT padded to a minimum: CSS
     # min-width/height stretches the surface to the viewport, so a fitting
     # workflow shows no scrollbars and scrolling starts only past the edge.
@@ -63,7 +65,7 @@ def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[floa
 
 # Which step is under the canvas-relative pointer, and whether the pointer
 # is in its border strip. Later steps render on top, so the LAST hit wins.
-def hitStep(
+def:pub hitStep(
     steps: list[StepView], live: dict[str, list[float]], px: float, py: float
 ) -> dict[str, any] {
     miss: dict[str, any] = {};
@@ -103,7 +105,9 @@ def hitStep(
 # that face each other along the dominant axis. `twoWay` shifts it sideways so
 # an A→B / B→A pair reads as two arcs. Returns the path, arrowhead, true
 # midpoint (for the chip) and `back` (right-to-left or bottom-to-top travel).
-def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, any] {
+def:pub wire(
+    x1: float, y1: float, x2: float, y2: float, twoWay: bool
+) -> dict[str, any] {
     c1x = x1 + NODE_W / 2.0;
     c1y = y1 + NODE_H / 2.0;
     c2x = x2 + NODE_W / 2.0;
