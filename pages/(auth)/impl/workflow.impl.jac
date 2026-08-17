@@ -224,9 +224,7 @@ impl WorkflowPage.commitName -> None {
     saving = True;
     try {
         # SaveStep reads empty as "keep", so a lone space clears the owner.
-        root spawn SaveStep(
-            step_id=selectedId, name=name, owner=owner if owner else " "
-        );
+        root spawn SaveStep(step_id=selectedId, name=name, owner=owner or " ");
         await reload(projectId);
     } except Exception as e {
         toast("Failed to update the step");
@@ -291,6 +289,37 @@ impl WorkflowPage.deleteStep -> None {
     saving = False;
 }
 
+impl WorkflowPage.deleteWorkflow -> None {
+    wiping = True;
+    try {
+        result = root spawn DeleteWorkflow();
+        payload = result.reports[0] if result.reports else None;
+        if not payload or not payload["ok"] {
+            toast("The workflow could not be deleted");
+            wiping = False;
+            return;
+        }
+        # Back to the empty state the picker guards: nothing selected or
+        # half-drawn, not scratch, not editing.
+        steps = [];
+        scratch = False;
+        editing = False;
+        renaming = False;
+        creatingStep = False;
+        selectedId = "";
+        selectedEdge = "";
+        connectFrom = "";
+        confirmDelete = False;
+        peekId = "";
+        confirmWipe = False;
+        await reload(projectId);
+        toast("Workflow deleted, pick a template or start from scratch");
+    } except Exception as e {
+        toast("Failed to delete the workflow");
+    }
+    wiping = False;
+}
+
 impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
     try {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);
@@ -328,9 +357,7 @@ impl WorkflowPage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
     # An empty `said` is a clear, not a no-op, which is why this goes
     # through LabelTransition rather than re-drawing the arrow.
     try {
-        result = root spawn LabelTransition(
-            from_id=fromId, to_id=toId, label=said
-        );
+        result = root spawn LabelTransition(from_id=fromId, to_id=toId, label=said);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             edgeDraft = payload["label"];
@@ -428,9 +455,7 @@ impl WorkflowPage.setField(key: str, value: str) -> None {
 # The diagram's true bounding box in canvas px: [minX, minY, maxX, maxY].
 # canvasSize measures from the ORIGIN plus the drag margin, so fitting against
 # it would shrink a diagram that starts away from the corner.
-def contentBounds(
-    steps: list[StepView], live: dict[str, list[float]]
-) -> list[float] {
+def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
     minX = 0.0;
     minY = 0.0;
     maxX = 0.0;

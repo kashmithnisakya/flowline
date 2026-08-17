@@ -29,7 +29,11 @@ impl DailyLogPage.loadWeek -> None {
 
 impl DailyLogPage.toggleSelect(entryId: str) -> None {
     if entryId in selectedIds {
-        selectedIds = [i for i in selectedIds if i != entryId];
+        selectedIds = [
+            i
+            for i in selectedIds
+            if i != entryId
+        ];
     } else {
         selectedIds = selectedIds + [entryId];
     }

@@ -212,14 +212,13 @@ impl GithubSection.loadIssues(reset: bool) -> None {
     try {
         result = (
             root spawn SearchRepoItems(
-                repo_id=repoId, kind="issues", query=q,
-                state=issueState, page=wanted
+                repo_id=repoId, kind="issues", query=q, state=issueState, page=wanted
             )
-        ) if q else (
-            root spawn ListRepoIssues(
-                repo_id=repoId, state=issueState, page=wanted
-            )
-        );
+        )
+            if q
+            else (
+                root spawn ListRepoIssues(repo_id=repoId, state=issueState, page=wanted)
+            );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
             issues = base + (payload["rows"] or []);
@@ -258,14 +257,11 @@ impl GithubSection.loadPulls(reset: bool) -> None {
     try {
         result = (
             root spawn SearchRepoItems(
-                repo_id=repoId, kind="pulls", query=q,
-                state=prState, page=wanted
+                repo_id=repoId, kind="pulls", query=q, state=prState, page=wanted
             )
-        ) if q else (
-            root spawn ListRepoPulls(
-                repo_id=repoId, state=prState, page=wanted
-            )
-        );
+        )
+            if q
+            else (root spawn ListRepoPulls(repo_id=repoId, state=prState, page=wanted));
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
             pulls = base + (payload["rows"] or []);
@@ -283,7 +279,11 @@ impl GithubSection.loadPulls(reset: bool) -> None {
 
 impl GithubSection.toggleIssue(number: int) -> None {
     if number in selected {
-        selected = [n for n in selected if n != number];
+        selected = [
+            n
+            for n in selected
+            if n != number
+        ];
     } else {
         selected = selected + [number];
     }
@@ -319,8 +319,11 @@ impl GithubSection.importSelected -> None {
     blank: dict[str, any] = {};
     try {
         result = root spawn ImportIssues(
-            repo_id=repoId, numbers=selected, project_id=project,
-            status=importStatus, step_id=importStep
+            repo_id=repoId,
+            numbers=selected,
+            project_id=project,
+            status=importStatus,
+            step_id=importStep
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {

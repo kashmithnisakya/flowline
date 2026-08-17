@@ -15,12 +15,17 @@ def normalizeRepoInput(raw: str) -> str {
         cleaned = cleaned[:-4];
     }
     cleaned = cleaned.strip("/");
-    parts = [p for p in cleaned.split("/") if p];
+    parts = [
+        p
+        for p in cleaned.split("/")
+        if p
+    ];
     if len(parts) >= 2 {
         return parts[0] + "/" + parts[1];
     }
     return cleaned;
 }
+
 import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
@@ -43,8 +48,6 @@ def:pub ProjectsSection(openNonce: int = 0) -> JsxElement {
         loadProjects();
     }
 
-
-
     async def loadProjects -> None;
     async def removeRepo(repoId: str) -> None;
     async def saveProject -> None;
@@ -60,68 +63,77 @@ def:pub ProjectsSection(openNonce: int = 0) -> JsxElement {
         handled.current = openNonce + 1;
     }
 
-    useEffect(lambda {
-        if openNonce + 1 != handled.current {
+    useEffect(
+        lambda { if openNonce + 1 != handled.current {
             handled.current = openNonce + 1;
             openCreate();
-        }
-    }, [openNonce]);
+        }},
+        [openNonce]
+    );
 
-    active = [p for p in projects if p.active];
+    active = [
+        p
+        for p in projects
+        if p.active
+    ];
 
-    return <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-            <span className="tabular-nums">{str(len(active))}</span>
-            {" active. Tasks, logs and repos are scoped to these."}
-        </p>
-
-        {if loading {
-            <div
-                key="sk"
-                className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            >
-                {for i in [0, 1, 2, 3] {
-                    <div
-                        key={"c" + str(i)}
-                        className="flex flex-col gap-3 rounded-xl border bg-card p-5"
-                    >
-                        <div className="flex items-center gap-2">
-                            <Skeleton className="h-2 w-2 rounded-full"/>
-                            <Skeleton className="h-4 w-28"/>
+    return
+        <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+                <span className="tabular-nums">{str(len(active))}</span>
+                {" active. Tasks, logs and repos are scoped to these."}
+            </p>
+            {if loading {
+                <div
+                    key="sk"
+                    className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                >
+                    {for i in [0, 1, 2, 3] {
+                        <div
+                            key={"c" + str(i)}
+                            className="flex flex-col gap-3 rounded-xl border bg-card p-5"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Skeleton className="h-2 w-2 rounded-full"/>
+                                <Skeleton className="h-4 w-28"/>
+                            </div>
+                            <Skeleton className="h-3 w-full"/>
+                            <Skeleton className="h-3 w-2/3"/>
+                            <div className="mt-2 flex gap-1.5">
+                                <Skeleton className="h-5 w-16 rounded-full"/>
+                                <Skeleton className="h-5 w-12 rounded-full"/>
+                            </div>
                         </div>
-                        <Skeleton className="h-3 w-full"/>
-                        <Skeleton className="h-3 w-2/3"/>
-                        <div className="mt-2 flex gap-1.5">
-                            <Skeleton className="h-5 w-16 rounded-full"/>
-                            <Skeleton className="h-5 w-12 rounded-full"/>
-                        </div>
-                    </div>
-                }}
-            </div>
-        } else {
-            <ProjectTable key="table"
-                projects={active}
-                repos={repos}
-                onEdit={openEdit}
-                onArchive={archiveProject}
-                onCreate={openCreate}
+                    }}
+                </div>
+            } else {
+                <ProjectTable
+                    key="table"
+                    projects={active}
+                    repos={repos}
+                    onEdit={openEdit}
+                    onArchive={archiveProject}
+                    onCreate={openCreate}
+                />
+            } }
+            <ProjectDialog
+                open={dialogOpen}
+                editing={bool(editingId)}
+                name={fName}
+                description={fDescription}
+                saving={saving}
+                onName={lambda (v: str) { fName = v; }}
+                onDescription={lambda (v: str) { fDescription = v; }}
+                onOpenChange={lambda (o: bool) { dialogOpen = o; }}
+                onSave={saveProject}
+                repos={[
+                    r
+                    for r in repos
+                    if editingId and r.project_id == editingId
+                ]}
+                repoDraft={fRepoDraft}
+                onRepoDraft={lambda (v: str) { fRepoDraft = v; }}
+                onRemoveRepo={removeRepo}
             />
-        }}
-
-        <ProjectDialog
-            open={dialogOpen}
-            editing={bool(editingId)}
-            name={fName}
-            description={fDescription}
-            saving={saving}
-            onName={lambda (v: str) { fName = v; }}
-            onDescription={lambda (v: str) { fDescription = v; }}
-            onOpenChange={lambda (o: bool) { dialogOpen = o; }}
-            onSave={saveProject}
-            repos={[r for r in repos if editingId and r.project_id == editingId]}
-            repoDraft={fRepoDraft}
-            onRepoDraft={lambda (v: str) { fRepoDraft = v; }}
-            onRemoveRepo={removeRepo}
-        />
-    </div>;
+        </div>;
 }

@@ -21,3 +21,5 @@ package.json
 # Jachammer / jaccoder tool artifacts
 .jaccoder/
 *.log
+docs/
+plan-archive/

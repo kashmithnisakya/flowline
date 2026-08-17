@@ -19,11 +19,8 @@ import from ..components.ui.dropdown_menu {
 }
 import from ..components.assistant.AssistantDock { AssistantDock }
 
-glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"];
-
-# Settings is not in the text row: it collapses to the gear icon on the
-# right, next to the theme toggle.
-glob NAV_ITEMS: list[dict[str, str]] = [
+glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
+     NAV_ITEMS: list[dict[str, str]] = [
          {"to": "/workflow", "label": "Workflow"},
          {"to": "/board", "label": "Board"},
          {"to": "/overview", "label": "Overview"},
@@ -32,6 +29,8 @@ glob NAV_ITEMS: list[dict[str, str]] = [
          {"to": "/workspace", "label": "Workspace"}
      ];
 
+# Settings is not in the text row: it collapses to the gear icon on the
+# right, next to the theme toggle.
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
         orgName: str = "",
@@ -73,8 +72,13 @@ def:pub Shell -> JsxLayout {
                     key="nav"
                     className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
                 >
-                    <nav className="flex h-14 w-full items-center gap-1 px-4 sm:px-6 lg:px-10">
-                        <Link to="/board" className="mr-3 flex shrink-0 items-center gap-2">
+                    <nav
+                        className="flex h-14 w-full items-center gap-1 px-4 sm:px-6 lg:px-10"
+                    >
+                        <Link
+                            to="/board"
+                            className="mr-3 flex shrink-0 items-center gap-2"
+                        >
                             <img
                                 src="/static/brand/logo-mark.svg"
                                 alt=""
@@ -110,8 +114,12 @@ def:pub Shell -> JsxLayout {
                             }}
                             <button
                                 type="button"
-                                aria-label={"Switch to light mode" if themeDark else "Switch to dark mode"}
-                                title={"Switch to light mode" if themeDark else "Switch to dark mode"}
+                                aria-label={"Switch to light mode"
+                                    if themeDark
+                                    else "Switch to dark mode"}
+                                title={"Switch to light mode"
+                                    if themeDark
+                                    else "Switch to dark mode"}
                                 className="rounded-full p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
                                 onClick={toggleTheme}
                             >
@@ -151,20 +159,17 @@ def:pub Shell -> JsxLayout {
                                     >
                                         <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
                                     </svg>
-                                }}
+                                } }
                             </button>
                             <Link
                                 to="/settings"
                                 aria-label="Settings"
                                 title="Settings"
-                                className={
-                                    "hidden rounded-full p-2 transition-colors duration-200 md:inline-flex "
-                                    + (
-                                        "bg-primary/10 text-primary"
-                                            if location.pathname == "/settings"
-                                            else "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                    )
-                                }
+                                className={"hidden rounded-full p-2 transition-colors duration-200 md:inline-flex " + (
+                                    "bg-primary/10 text-primary"
+                                        if location.pathname == "/settings"
+                                        else "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                )}
                             >
                                 <svg
                                     width={16}
@@ -176,7 +181,9 @@ def:pub Shell -> JsxLayout {
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                 >
-                                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                                    <path
+                                        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                                    />
                                     <circle cx={12} cy={12} r={3}/>
                                 </svg>
                             </Link>
@@ -233,10 +240,7 @@ def:pub Shell -> JsxLayout {
                 </header>
             }}
             {if chrome {
-                <main
-                    key="app"
-                    className="w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8"
-                >
+                <main key="app" className="w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
                     <Outlet/>
                 </main>
             } else {

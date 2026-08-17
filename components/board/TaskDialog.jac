@@ -126,7 +126,9 @@ def:pub TaskDialog(
 
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="grid max-h-[calc(100dvh-6rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-6 sm:max-w-3xl">
+            <DialogContent
+                className="grid max-h-[calc(100dvh-6rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-6 sm:max-w-3xl"
+            >
                 <DialogHeader>
                     <DialogTitle>{"Edit task" if editing else "New task"}</DialogTitle>
                 </DialogHeader>
@@ -150,12 +152,11 @@ def:pub TaskDialog(
                                     className="flex h-8 w-full cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-input bg-card py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                 >
                                     <span
-                                        className={"truncate"
-                                            + (
-                                                ""
-                                                    if len(assignees) > 0
-                                                    else " text-muted-foreground"
-                                            )}
+                                        className={"truncate" + (
+                                            ""
+                                                if len(assignees) > 0
+                                                else " text-muted-foreground"
+                                        )}
                                     >
                                         {", ".join(
                                             [
@@ -474,7 +475,9 @@ def:pub TaskDialog(
                         }  }
                     </div>
                 </div>
-                <DialogFooter className="-mx-6 -mb-6 gap-2 border-t px-6 pt-4 pb-4 sm:justify-between">
+                <DialogFooter
+                    className="-mx-6 -mb-6 gap-2 border-t px-6 pt-4 pb-4 sm:justify-between"
+                >
                     {if editing {
                         <Button
                             key="del"

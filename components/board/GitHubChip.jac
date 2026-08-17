@@ -42,8 +42,7 @@ def:pub GitHubChip(task: TaskView, onMarkDone: Callable[[str], None]) -> JsxElem
                         title={task.gh_repo + " #" + str(task.gh_issue_number)}
                         # The card itself opens the task dialog on click.
                         onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
-                        className={"inline-flex h-5 items-center rounded-full border px-2 text-xs font-medium transition-colors "
-                            + issueTint}
+                        className={"inline-flex h-5 items-center rounded-full border px-2 text-xs font-medium transition-colors " + issueTint}
                     >
                         {"#" + str(task.gh_issue_number)}
                     </a>

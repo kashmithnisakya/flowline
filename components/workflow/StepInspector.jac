@@ -6,7 +6,6 @@ plus Anyone; a legacy free-text owner stays pickable until changed."""
 import from ...models { StepView }
 import from ...constants { STEP_KINDS }
 import from .kinds { KIND_LABEL, KIND_HINT, COLOR_KEYS, DOT_FILL, colorKey }
-import from .geometry { isBackEdge }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
 import from ..ui.input { Input }
@@ -27,8 +26,9 @@ def:pub TransitionRow(
 ) -> JsxElement {
     return
         <div
-            className={"flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs "
-                + ("border-warning/40 bg-warning/10" if back else "bg-muted/40")}
+            className={"flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs " + (
+                "border-warning/40 bg-warning/10" if back else "bg-muted/40"
+            )}
         >
             <span className="flex min-w-0 items-center gap-1.5">
                 {if back {
@@ -106,9 +106,7 @@ def:pub StepInspector(
     }
     currentOwner = (form["owner"] or "").strip();
     if (
-        currentOwner
-        and currentOwner != "anyone"
-        and currentOwner not in ownerChoices
+        currentOwner and currentOwner != "anyone" and currentOwner not in ownerChoices
     ) {
         ownerChoices.append(currentOwner);
     }
@@ -121,8 +119,22 @@ def:pub StepInspector(
         if fromId not in byId or toId not in byId {
             return False;
         }
-        # Same call the canvas makes, so a row and its edge always agree.
-        return isBackEdge(byId[fromId].x, byId[fromId].y, byId[toId].x, byId[toId].y);
+        # Same rule the canvas uses (geometry.isBackEdge), inlined here because
+        # the standalone export keeps vanishing from the compiled client
+        # bundle on a cold start; duplicating the arithmetic is cheap and
+        # removes the cross-module dependency that triggers the bug.
+        fx = byId[fromId].x;
+        fy = byId[fromId].y;
+        tx = byId[toId].x;
+        ty = byId[toId].y;
+        dx = tx - fx;
+        dy = ty - fy;
+        ax = dx if dx >= 0.0 else 0.0 - dx;
+        ay = dy if dy >= 0.0 else 0.0 - dy;
+        if ax >= ay {
+            return dx < 0.0;
+        }
+        return dy < 0.0;
     }
 
     return
@@ -142,7 +154,7 @@ def:pub StepInspector(
                         }}}
                         onBlur={lambda { if onNameCommit { onNameCommit(); }}}
                         onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onNameCommit {
+                        and onNameCommit {
                             onNameCommit();
                         }}}
                     />
@@ -213,13 +225,11 @@ def:pub StepInspector(
                                 key={c}
                                 type="button"
                                 title={c}
-                                className={"h-5 w-5 rounded-full "
-                                    + DOT_FILL[c]
-                                    + (
-                                        " ring-2 ring-ring ring-offset-2 ring-offset-card"
-                                            if colorKey(form["color"] or "") == c
-                                            else ""
-                                    )}
+                                className={"h-5 w-5 rounded-full " + DOT_FILL[c] + (
+                                    " ring-2 ring-ring ring-offset-2 ring-offset-card"
+                                        if colorKey(form["color"] or "") == c
+                                        else ""
+                                )}
                                 onClick={lambda { if onField { onField("color", c); }}}
                             />
                         }}

@@ -14,38 +14,41 @@ glob FEATURES: list[Feature] = [
              n="01",
              title="A workflow you design",
              body="Name the steps your team actually uses and connect them however "
-                 + "work moves, loops included. The board is those steps, with "
-                 + "drag-and-drop between them and filters by project and assignee.",
+             "work moves, loops included. The board is those steps, with "
+             "drag-and-drop between them and filters by project and assignee.",
              tag="Workflow"
          ),
          Feature(
              n="02",
              title="A written daily log",
              body="One row per person per weekday: what they worked on, the project, "
-                 + "status, notes and links to the issue or PR. It becomes the archive "
-                 + "nobody has to remember.",
+             "status, notes and links to the issue or PR. It becomes the archive "
+             "nobody has to remember.",
              tag="Daily Log"
          ),
          Feature(
              n="03",
              title="Projects and people you control",
              body="Create, rename and archive projects; add teammates and assign them "
-                 + "to as many projects as you need. Archiving keeps the history and "
-                 + "frees the open work.",
+             "to as many projects as you need. Archiving keeps the history and "
+             "frees the open work.",
              tag="Admin"
          ),
          Feature(
              n="04",
              title="A workspace that is yours",
              body="Your account is your organization. Everything you create lives on "
-                 + "your own private graph. Another account cannot read or touch it.",
+             "your own private graph. Another account cannot read or touch it.",
              tag="Private"
          )
      ];
 
 def:pub Features -> JsxElement {
     return
-        <section id="product" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
+        <section
+            id="product"
+            className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24"
+        >
             <span
                 className="text-xs font-semibold uppercase tracking-widest text-primary"
             >
@@ -61,7 +64,10 @@ def:pub Features -> JsxElement {
             </p>
             <div className="mt-10 grid gap-6 sm:grid-cols-2">
                 {for f in FEATURES {
-                    <Card key={f.n} className="card-hover h-full py-0 hover:ring-foreground/20">
+                    <Card
+                        key={f.n}
+                        className="card-hover h-full py-0 hover:ring-foreground/20"
+                    >
                         <CardContent className="flex h-full flex-col gap-3 p-7">
                             <div className="flex items-center justify-between">
                                 <span

@@ -8,7 +8,7 @@ impl AssistantDock.setTurnState(index: int, state: str) -> None {
     at = 0;
     for t in turns {
         if at == index {
-            out.append({**t, "state": state});
+            out.append({** t, "state": state});
         } else {
             out.append(t);
         }
@@ -54,7 +54,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     turns = history;
 
     reply: dict = {
-        "role": "assistant", "kind": "error",
+        "role": "assistant",
+        "kind": "error",
         "text": "I did not get an answer back. Try again."
     };
     try {
@@ -67,7 +68,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
                 reply = {"role": "assistant", "kind": "note", "note": note};
             } else {
                 reply = {
-                    "role": "assistant", "kind": "error",
+                    "role": "assistant",
+                    "kind": "error",
                     "text": "I could not write that note. Try again in a moment."
                 };
             }
@@ -78,12 +80,15 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             proposal = propRun.reports[0] if propRun.reports else None;
             if proposal {
                 reply = {
-                    "role": "assistant", "kind": "proposal",
-                    "proposal": proposal, "state": ""
+                    "role": "assistant",
+                    "kind": "proposal",
+                    "proposal": proposal,
+                    "state": ""
                 };
             } else {
                 reply = {
-                    "role": "assistant", "kind": "error",
+                    "role": "assistant",
+                    "kind": "error",
                     "text": "I could not turn that into a board change."
                 };
             }
@@ -100,9 +105,10 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
         # Almost always a missing or rejected OPENAI_API_KEY, which is worth
         # naming: the failure is in .env, not in anything the user typed.
         reply = {
-            "role": "assistant", "kind": "error",
+            "role": "assistant",
+            "kind": "error",
             "text": "The assistant is unreachable. Check that OPENAI_API_KEY is set in .env "
-                    + "and that the server was restarted after."
+            "and that the server was restarted after."
         };
     }
     turns = history + [reply];
@@ -140,9 +146,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
                 busy = False;
                 return;
             }
-            root spawn MoveTask(
-                task_id=taskId, status=p.status if p.status else "In Progress"
-            );
+            root spawn MoveTask(task_id=taskId, status=p.status or "In Progress");
         } else {
             mResult = root spawn ListMembers();
             pResult = root spawn ListProjects();
@@ -161,11 +165,14 @@ impl AssistantDock.applyProposal(index: int) -> None {
                 }
             }
             root spawn CreateTask(
-                title=p.title, category=p.category,
-                priority=p.priority if p.priority else "Medium",
-                status=p.status if p.status else "Backlog",
-                due_date=p.due_date, notes=p.note,
-                assignee_ids=assignees, project_id=projectId
+                title=p.title,
+                category=p.category,
+                priority=p.priority or "Medium",
+                status=p.status or "Backlog",
+                due_date=p.due_date,
+                notes=p.note,
+                assignee_ids=assignees,
+                project_id=projectId
             );
         }
         setTurnState(index, "applied");
@@ -205,8 +212,7 @@ impl AssistantDock.toggleMic -> None {
     }
     # Interim results stream in, so the composer fills as the user speaks.
     started = startVoice(
-        lambda (text: str) { draft = text; },
-        lambda { listening = False; }
+        lambda (text: str) { draft = text; }, lambda { listening = False; }
     );
     listening = started;
     if not started {

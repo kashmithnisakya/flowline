@@ -1,9 +1,24 @@
 """Roster walkers: members and GitHub repos."""
 
 import from models {
-    Project, Member, Repo, Task, Role, WorkflowStep, MemberView, RepoView,
-    RoleView, AssignedTo, HasRepo, member_view, repo_view, role_view,
-    resolve, on_attached, owned, valid_full_name
+    Project,
+    Member,
+    Repo,
+    Task,
+    Role,
+    WorkflowStep,
+    MemberView,
+    RepoView,
+    RoleView,
+    AssignedTo,
+    HasRepo,
+    member_view,
+    repo_view,
+    role_view,
+    resolve,
+    on_attached,
+    owned,
+    valid_full_name
 }
 
 # ------------------------------------------------------------------- roster
@@ -44,18 +59,35 @@ walker SaveMember {
             target = resolve(self.member_id);
             if isinstance(target, Member) and owned(here, target) {
                 target.name = self.name.strip();
-                target.roles = [r.strip() for r in self.roles if r.strip()];
+                target.roles = [
+                    r.strip()
+                    for r in self.roles
+                    if r.strip()
+                ];
                 target.email = self.email;
                 target.github_username = self.github_username;
-                target.tags = [t.strip() for t in self.tags if t.strip()];
+                target.tags = [
+                    t.strip()
+                    for t in self.tags
+                    if t.strip()
+                ];
                 report member_view(target);
             }
         } else {
             fresh = here ++> Member(
                 name=self.name.strip(),
-                roles=[r.strip() for r in self.roles if r.strip()],
-                email=self.email, github_username=self.github_username,
-                tags=[t.strip() for t in self.tags if t.strip()]
+                roles=[
+                    r.strip()
+                    for r in self.roles
+                    if r.strip()
+                ],
+                email=self.email,
+                github_username=self.github_username,
+                tags=[
+                    t.strip()
+                    for t in self.tags
+                    if t.strip()
+                ]
             );
             on_attached(here, fresh);
             report member_view(fresh);
@@ -74,7 +106,11 @@ walker SetMemberRoles {
     can set_roles with Root entry {
         target = resolve(self.member_id);
         if isinstance(target, Member) and owned(here, target) {
-            target.roles = [r.strip() for r in self.roles if r.strip()];
+            target.roles = [
+                r.strip()
+                for r in self.roles
+                if r.strip()
+            ];
             report member_view(target);
         }
     }
@@ -94,7 +130,7 @@ walker ArchiveMember {
             # Organization's generic parent edge, which has no `status`.
             for t in [target<-:AssignedTo:<-[?:Task]] {
                 if t.status != "Done" {
-                    for e in [edge t ->:AssignedTo:->] {
+                    for e in [edge t->:AssignedTo:->] {
                         del e;
                     }
                 }
@@ -146,12 +182,12 @@ walker SaveRole {
         }
         wanted = self.new_name.strip();
         if wanted and wanted != said {
-            if [here-->[?:Role, name == wanted]] {
+            if [here-->[?:Role, name==wanted]] {
                 report {"ok": False, "error": "name_taken"};
                 disengage;
             }
         }
-        existing = [here-->[?:Role, name == said]];
+        existing = [here-->[?:Role, name==said]];
         target = existing[0] if existing else None;
         if not target {
             peak = 0.0;
@@ -173,10 +209,7 @@ walker SaveRole {
             target.name = wanted;
             for m in [here-->[?:Member]] {
                 if said in m.roles {
-                    m.roles = [
-                        (wanted if r == said else r)
-                        for r in m.roles
-                    ];
+                    m.roles = [(wanted if r == said else r) for r in m.roles];
                 }
             }
             for s in [here-->[?:WorkflowStep]] {
@@ -201,7 +234,7 @@ walker DeleteRole {
         if not said {
             disengage;
         }
-        for r in [here-->[?:Role, name == said]] {
+        for r in [here-->[?:Role, name==said]] {
             del r;
         }
         for m in [here-->[?:Member]] {
@@ -255,7 +288,7 @@ walker AddRepo {
         if not fn or not valid_full_name(fn) {
             disengage;
         }
-        existing = [here-->[?:Repo, full_name == fn]];
+        existing = [here-->[?:Repo, full_name==fn]];
         target = existing[0] if existing else None;
         if not target {
             target = here ++> Repo(full_name=fn);
@@ -264,7 +297,7 @@ walker AddRepo {
         if self.project_id {
             proj = resolve(self.project_id);
             if isinstance(proj, Project) and owned(here, proj) {
-                if not [edge proj ->:HasRepo:-> target] {
+                if not [edge proj->:HasRepo:->target] {
                     proj +>:HasRepo():+> target;
                 }
             }
@@ -285,4 +318,3 @@ walker RemoveRepo {
         }
     }
 }
-

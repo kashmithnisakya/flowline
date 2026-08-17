@@ -3,13 +3,27 @@ date the way a person says it, the dropdown is a grid with prev/next controls.
 """
 
 import from ..ui.button { Button }
-import from ..ui.dropdown_menu { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent }
+import from ..ui.dropdown_menu {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent
+}
 
 glob MONTHS: list[str] = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-];
-glob WEEKDAYS: list[str] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+         "January",
+         "February",
+         "March",
+         "April",
+         "May",
+         "June",
+         "July",
+         "August",
+         "September",
+         "October",
+         "November",
+         "December"
+     ],
+     WEEKDAYS: list[str] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 def pad2(n: int) -> str {
     return ("0" + str(n))[-2:];
@@ -32,7 +46,9 @@ def firstOffset(year: int, month: int) -> int {
 def prettyLabel(iso: str) -> str {
     d = new(Date, iso + "T00:00:00");
     names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return names[int(d.getDay())] + ", " + MONTHS[int(d.getMonth())][:3] + " " + str(int(d.getDate()));
+    return names[int(d.getDay())] + ", " + MONTHS[int(d.getMonth())][:3] + " " + str(
+        int(d.getDate())
+    );
 }
 
 def todayIso -> str {
@@ -52,7 +68,7 @@ def:pub DatePicker(
         viewMonth: int = -1;
 
     # An empty value (nothing picked yet) anchors the grid to today.
-    anchor = value if value else todayIso();
+    anchor = value or todayIso();
     year = viewYear if viewMonth >= 0 else int(anchor[:4]);
     month = viewMonth if viewMonth >= 0 else int(anchor[5:7]) - 1;
     total = daysIn(year, month);
@@ -60,121 +76,156 @@ def:pub DatePicker(
     prevTotal = daysIn(year - 1, 11) if month == 0 else daysIn(year, month - 1);
     todayStr = todayIso();
 
-    return <DropdownMenu
-        open={pickerOpen}
-        onOpenChange={lambda (o: bool) {
-            pickerOpen = o;
-            if o {
-                seed = value if value else todayIso();
-                viewYear = int(seed[:4]);
-                viewMonth = int(seed[5:7]) - 1;
-            }
-        }}
-    >
-        <DropdownMenuTrigger
-            asChild={False}
-            className={
-                "inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                + (" " + className if className else "")
-            }
+    return
+        <DropdownMenu
+            open={pickerOpen}
+            onOpenChange={lambda (o: bool) {
+                pickerOpen = o;
+                if o {
+                    seed = value or todayIso();
+                    viewYear = int(seed[:4]);
+                    viewMonth = int(seed[5:7]) - 1;
+                }
+            }}
         >
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                <path d="M8 2v4"/>
-                <path d="M16 2v4"/>
-                <rect width={18} height={18} x={3} y={4} rx={2}/>
-                <path d="M3 10h18"/>
-            </svg>
-            {prettyLabel(value) if value else "Pick a date"}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 p-3">
-            <div className="mb-2 flex items-center justify-between">
-                <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Previous month"
-                    onClick={lambda (e: MouseEvent) {
-                        e.preventDefault();
-                        if month == 0 {
-                            viewMonth = 11;
-                            viewYear = year - 1;
-                        } else {
-                            viewMonth = month - 1;
-                            viewYear = year;
-                        }
-                    }}
+            <DropdownMenuTrigger
+                asChild={False}
+                className={"inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" + (
+                    " " + className if className else ""
+                )}
+            >
+                <svg
+                    width={14}
+                    height={14}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-muted-foreground"
                 >
-                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m15 18-6-6 6-6"/>
-                    </svg>
-                </Button>
-                <span className="text-sm font-semibold tabular-nums">{MONTHS[month]} {year}</span>
-                <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Next month"
-                    onClick={lambda (e: MouseEvent) {
-                        e.preventDefault();
-                        if month == 11 {
-                            viewMonth = 0;
-                            viewYear = year + 1;
-                        } else {
-                            viewMonth = month + 1;
-                            viewYear = year;
-                        }
-                    }}
-                >
-                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                </Button>
-            </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center">
-                {for w in WEEKDAYS {
-                    <span key={w} className="py-1 text-xs font-medium text-muted-foreground">{w}</span>
-                }}
-                {for i in range(offset) {
-                    <span key={"pad" + str(i)} className="py-1 text-sm tabular-nums text-muted-foreground/40">
-                        {prevTotal - offset + 1 + i}
+                    <path d="M8 2v4"/>
+                    <path d="M16 2v4"/>
+                    <rect width={18} height={18} x={3} y={4} rx={2}/>
+                    <path d="M3 10h18"/>
+                </svg>
+                {prettyLabel(value) if value else "Pick a date"}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Previous month"
+                        onClick={lambda (e: MouseEvent) {
+                            e.preventDefault();
+                            if month == 0 {
+                                viewMonth = 11;
+                                viewYear = year - 1;
+                            } else {
+                                viewMonth = month - 1;
+                                viewYear = year;
+                            }
+                        }}
+                    >
+                        <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m15 18-6-6 6-6"/>
+                        </svg>
+                    </Button>
+                    <span className="text-sm font-semibold tabular-nums">
+                        {MONTHS[month]} {year}
                     </span>
-                }}
-                {for d in range(1, total + 1) {
-                    <button
-                        key={"d" + str(d)}
-                        type="button"
-                        className={
-                            "rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] "
-                            + (
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Next month"
+                        onClick={lambda (e: MouseEvent) {
+                            e.preventDefault();
+                            if month == 11 {
+                                viewMonth = 0;
+                                viewYear = year + 1;
+                            } else {
+                                viewMonth = month + 1;
+                                viewYear = year;
+                            }
+                        }}
+                    >
+                        <svg
+                            width={14}
+                            height={14}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m9 18 6-6-6-6"/>
+                        </svg>
+                    </Button>
+                </div>
+                <div className="grid grid-cols-7 gap-0.5 text-center">
+                    {for w in WEEKDAYS {
+                        <span
+                            key={w}
+                            className="py-1 text-xs font-medium text-muted-foreground"
+                        >
+                            {w}
+                        </span>
+                    }}
+                    {for i in range(offset) {
+                        <span
+                            key={"pad" + str(i)}
+                            className="py-1 text-sm tabular-nums text-muted-foreground/40"
+                        >
+                            {prevTotal - offset + 1 + i}
+                        </span>
+                    }}
+                    {for d in range(1, total + 1) {
+                        <button
+                            key={"d" + str(d)}
+                            type="button"
+                            className={"rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] " + (
                                 "bg-primary font-semibold text-primary-foreground"
-                                if isoOf(year, month, d) == value
-                                else (
-                                    "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
-                                    if isoOf(year, month, d) == todayStr
-                                    else "hover:bg-accent"
-                                )
-                            )
-                        }
+                                    if isoOf(year, month, d) == value
+                                    else (
+                                        "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
+                                            if isoOf(year, month, d) == todayStr
+                                            else "hover:bg-accent"
+                                    )
+                            )}
+                            onClick={lambda {
+                                onChange(isoOf(year, month, d));
+                                pickerOpen = False;
+                            }}
+                        >
+                            {d}
+                        </button>
+                    }}
+                </div>
+                {if clearable and value {
+                    <button
+                        key="clear"
+                        type="button"
+                        className="mt-2 w-full rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent"
                         onClick={lambda {
-                            onChange(isoOf(year, month, d));
+                            onChange("");
                             pickerOpen = False;
                         }}
                     >
-                        {d}
+                        Clear
                     </button>
                 }}
-            </div>
-            {if clearable and value {
-                <button
-                    key="clear"
-                    type="button"
-                    className="mt-2 w-full rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent"
-                    onClick={lambda {
-                        onChange("");
-                        pickerOpen = False;
-                    }}
-                >
-                    Clear
-                </button>
-            }}
-        </DropdownMenuContent>
-    </DropdownMenu>;
+            </DropdownMenuContent>
+        </DropdownMenu>;
 }

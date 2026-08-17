@@ -72,8 +72,8 @@ def:pub TaskCard(
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
     todayIso = shifted.toISOString()[:10];
     overdue = len(task.due_date) >= 10
-        and task.due_date < todayIso
-        and task.status != "Done";
+    and task.due_date < todayIso
+    and task.status != "Done";
 
     return
         <Card
@@ -91,20 +91,20 @@ def:pub TaskCard(
             role="button"
             tabIndex={0}
             onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter"
-                or e.key == " " {
+            or e.key == " " {
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing "
-                + ("opacity-50 " if isDragging else "")
-                + (
-                    # The COLUMN carries the step's colour; a card only
-                    # wears a bar of it. Tinting both made the board shout,
-                    # and the grouping is already clear from the panel.
-                    ("bg-card " + CARD_BAR[colorKey(color)])
-                        if color
-                        else "border-border/70"
-                )}
+            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing " + (
+                "opacity-50 " if isDragging else ""
+            ) + (
+                # The COLUMN carries the step's colour; a card only
+                # wears a bar of it. Tinting both made the board shout,
+                # and the grouping is already clear from the panel.
+                ("bg-card " + CARD_BAR[colorKey(color)])
+                    if color
+                    else "border-border/70"
+            )}
         >
             <CardContent className="space-y-2 p-3">
                 <div
@@ -137,12 +137,9 @@ def:pub TaskCard(
                             {", ".join(task.assignee_names)}
                         </span>
                         <span
-                            className={"flex shrink-0 items-center gap-1"
-                                + (
-                                    " font-medium text-destructive"
-                                        if overdue
-                                        else ""
-                                )}
+                            className={"flex shrink-0 items-center gap-1" + (
+                                " font-medium text-destructive" if overdue else ""
+                            )}
                         >
                             {if overdue {
                                 <svg

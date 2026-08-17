@@ -47,12 +47,16 @@ def:pub SetupPage -> JsxPage {
 
     return
         <div className="relative overflow-hidden">
-            <KineticGrid className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"/>
+            <KineticGrid
+                className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
+            />
             <div
                 aria-hidden="true"
                 className="bg-glow pointer-events-none absolute inset-0"
             />
-            <div className="relative z-10 mx-auto flex min-h-[80svh] w-full max-w-lg flex-col justify-center gap-6 py-10">
+            <div
+                className="relative z-10 mx-auto flex min-h-[80svh] w-full max-w-lg flex-col justify-center gap-6 py-10"
+            >
                 {if step == 0 {
                     <div key="stepper-skel" className="grid w-full gap-2">
                         <Skeleton className="h-4 w-24"/>
@@ -64,7 +68,9 @@ def:pub SetupPage -> JsxPage {
                     </div>
                 } else {
                     <div key="stepper" className="grid w-full gap-2">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <p
+                            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                        >
                             {"Step "}
                             <span className="tabular-nums text-foreground">{step}</span>
                             {" of 3"}
@@ -75,14 +81,16 @@ def:pub SetupPage -> JsxPage {
                                     key={"seg-" + str(n)}
                                     className={"h-1.5 flex-1 rounded-full bg-primary transition-all duration-300"
                                         if n < step
-                                        else ("h-1.5 flex-1 rounded-full bg-primary ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-300"
-                                            if n == step
-                                            else "h-1.5 flex-1 rounded-full bg-muted transition-all duration-300")}
+                                        else (
+                                            "h-1.5 flex-1 rounded-full bg-primary ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-300"
+                                                if n == step
+                                                else "h-1.5 flex-1 rounded-full bg-muted transition-all duration-300"
+                                        )}
                                 />
                             }}
                         </div>
                     </div>
-                }}
+                } }
                 {if step == 0 {
                     <Card key="loading" className="w-full">
                         <CardHeader>
@@ -145,8 +153,8 @@ def:pub SetupPage -> JsxPage {
                             <Button
                                 onClick={saveProfile}
                                 disabled={busy
-                                    or not orgName.strip()
-                                    or not fullName.strip()}
+                                or not orgName.strip()
+                                or not fullName.strip()}
                             >
                                 {if busy {
                                     <Spinner key="sp"/>
@@ -240,7 +248,9 @@ def:pub SetupPage -> JsxPage {
                             {if len(added) > 0 {
                                 <div key="added" className="grid gap-2">
                                     <p className="text-xs text-muted-foreground">
-                                        <span className="font-medium tabular-nums text-foreground">
+                                        <span
+                                            className="font-medium tabular-nums text-foreground"
+                                        >
                                             {len(added)}
                                         </span>
                                         {" added"}
@@ -261,7 +271,7 @@ def:pub SetupPage -> JsxPage {
                                 <p key="hint" className="text-xs text-muted-foreground">
                                     People you add appear here.
                                 </p>
-                            }}
+                            } }
                         </CardContent>
                         <CardFooter className="justify-end">
                             <Button onClick={finish} disabled={busy or finishing}>

@@ -276,7 +276,7 @@ walker ApplyTemplate {
             raw_roles: list[dict[str, str]] = chosen["roles"];
             r_order = 1024.0;
             for rr in raw_roles {
-                if not [here-->[?:Role, name == rr["name"]]] {
+                if not [here-->[?:Role, name==rr["name"]]] {
                     fresh_role = here ++> Role(
                         name=rr["name"],
                         blurb=rr["blurb"] if "blurb" in rr else "",
@@ -429,10 +429,8 @@ walker DeleteStep(find_step) {
                     "ok": False,
                     "error": "last_of_kind",
                     "message": (
-                        "This is the only "
-                        + kind
-                        + " step. Give another step "
-                        + "that kind first, then delete this one."
+                        "This is the only " + kind + " step. Give another step "
+                        "that kind first, then delete this one."
                     )
                 };
                 disengage;
@@ -449,6 +447,35 @@ walker DeleteStep(find_step) {
         del here;
         report {"ok": True, "deleted": gone};
         disengage;
+    }
+}
+
+
+walker DeleteWorkflow {
+    """Removes every step and transition so the workflow can be designed again.
+    Walks the caller's own root (no jid input, nothing to owned()-check).
+    Tasks fall back to their status as after DeleteStep; name and roles stay;
+    the template marker is cleared so a scratch redo does not report it."""
+    has reports: list[dict[str, any]] = [];
+
+    can wipe with Root entry {
+        steps = [here-->[?:WorkflowStep]];
+        gone: list[str] = [];
+        for s in steps {
+            gone.append(jid(s));
+        }
+        for t in [here-->[?:Task]] {
+            if t.step_id and t.step_id in gone {
+                t.step_id = "";
+            }
+        }
+        for s in steps {
+            del s;
+        }
+        for meta in [here-->[?:WorkflowMeta]] {
+            meta.template_key = "";
+        }
+        report {"ok": True, "deleted": len(gone)};
     }
 }
 
