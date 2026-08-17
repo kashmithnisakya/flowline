@@ -1,7 +1,5 @@
-"""Create/edit dialog for a project.
-
-Repos are attached here: an optional repo field at creation, and the
-full chip list (remove + add) when editing. Cards stay display-only.
+"""Create/edit dialog for a project. Repos are attached here: an optional repo
+field at creation, the full chip list (remove + add) when editing.
 """
 
 import from ...models { RepoView }
@@ -13,6 +11,7 @@ import from ..ui.dialog {
 import from ..ui.input { Input }
 import from ..ui.label { Label }
 import from ..ui.textarea { Textarea }
+import from ..common.glyphs { Spinner }
 
 def:pub ProjectDialog(
     open: bool,
@@ -79,19 +78,7 @@ def:pub ProjectDialog(
                 </Button>
                 <Button onClick={onSave} disabled={saving or not name.strip()}>
                     {if saving {
-                        <svg
-                            key="sp"
-                            className="animate-spin"
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                        >
-                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                        </svg>
+                        <Spinner key="sp"/>
                     }}
                     {"Saving…" if saving else "Save"}
                 </Button>

@@ -1,21 +1,7 @@
-"""standup - Onboarding wizard: you -> project -> people -> workflow.
-
-Signup takes credentials only, so the wizard opens by naming the
-organization and its project manager, then the first project and the
-roster. Finishing hands over to the workflow designer, where the org draws
-how its work moves. Any half-typed member is saved by the finish button;
-typed input is never silently discarded.
-
-The wizard resumes where it stopped: an account with no organization name
-starts at step 1, one that has a name but no project starts at step 2.
-
-Layout: a KineticGrid + brand glow sit behind a centered column holding a
-three-segment step indicator and one keyed Card per step; the distinct
-card keys make React remount on step change, which fires the entrance
-animation. Step 0 renders a skeleton mirror of step 1 in the same slots
-so boot resolves without reflow. `finishing` exists only so the finish
-button can show its own in-flight label while `busy` is shared with Add.
-"""
+"""standup - Onboarding wizard: workspace name -> first project -> people ->
+workflow designer. Resumes where it stopped (no org name: step 1; no project:
+step 2), and the finish button saves any half-typed member. Keyed Cards remount
+per step for the entrance animation; `finishing` gives Finish its own spinner."""
 
 import from ...models { MemberView }
 import from ...walkers.projects { ListProjects, SaveProject }
@@ -35,6 +21,8 @@ import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }
 import from ...components.ui.badge { Badge }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.glyphs { Spinner }
+import from ...components.common.ErrorNote { ErrorNote }
 
 def:pub SetupPage -> JsxPage {
     has step: int = 0,
@@ -42,7 +30,6 @@ def:pub SetupPage -> JsxPage {
         fullName: str = "",
         projectName: str = "",
         mName: str = "",
-        mRole: str = "",
         added: list[MemberView] = [],
         saveError: str = "",
         busy: bool = False,
@@ -151,27 +138,7 @@ def:pub SetupPage -> JsxPage {
                                 />
                             </div>
                             {if saveError {
-                                <div
-                                    key="err"
-                                    className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-in fade-in slide-in-from-top-1"
-                                >
-                                    <svg
-                                        className="mt-0.5 shrink-0"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                        <path d="M12 9v4"/>
-                                        <path d="M12 17h.01"/>
-                                    </svg>
-                                    <span>{saveError}</span>
-                                </div>
+                                <ErrorNote key="err" message={saveError}/>
                             }}
                         </CardContent>
                         <CardFooter className="justify-end">
@@ -182,19 +149,7 @@ def:pub SetupPage -> JsxPage {
                                     or not fullName.strip()}
                             >
                                 {if busy {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Saving…" if busy else "Continue"}
                             </Button>
@@ -232,27 +187,7 @@ def:pub SetupPage -> JsxPage {
                                 />
                             </div>
                             {if saveError {
-                                <div
-                                    key="err"
-                                    className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-in fade-in slide-in-from-top-1"
-                                >
-                                    <svg
-                                        className="mt-0.5 shrink-0"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                        <path d="M12 9v4"/>
-                                        <path d="M12 17h.01"/>
-                                    </svg>
-                                    <span>{saveError}</span>
-                                </div>
+                                <ErrorNote key="err" message={saveError}/>
                             }}
                         </CardContent>
                         <CardFooter className="justify-end">
@@ -261,19 +196,7 @@ def:pub SetupPage -> JsxPage {
                                 disabled={busy or not projectName.strip()}
                             >
                                 {if busy {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Creating…" if busy else "Continue"}
                             </Button>
@@ -289,7 +212,7 @@ def:pub SetupPage -> JsxPage {
                                 Add your people
                             </CardTitle>
                             <CardDescription>
-                                Team members are roster records (no accounts). You can add more any time on the Workspace tab.
+                                Names only for now: you will pick a workflow next, and assign roles on the Workspace tab. Members are roster records (no accounts).
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
@@ -300,56 +223,19 @@ def:pub SetupPage -> JsxPage {
                                     onChange={lambda (e: ChangeEvent) { mName = e.target.value; }}
                                     autoFocus={True}
                                 />
-                                <Input
-                                    placeholder="Role (optional)"
-                                    value={mRole}
-                                    onChange={lambda (e: ChangeEvent) { mRole = e.target.value; }}
-                                />
                                 <Button
                                     variant="outline"
                                     onClick={addPerson}
                                     disabled={busy or not mName.strip()}
                                 >
                                     {if busy {
-                                        <svg
-                                            key="sp"
-                                            className="animate-spin"
-                                            width={14}
-                                            height={14}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                        >
-                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                        </svg>
+                                        <Spinner key="sp"/>
                                     }}
                                     {"Adding…" if busy else "Add"}
                                 </Button>
                             </div>
                             {if saveError {
-                                <div
-                                    key="err"
-                                    className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-in fade-in slide-in-from-top-1"
-                                >
-                                    <svg
-                                        className="mt-0.5 shrink-0"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                        <path d="M12 9v4"/>
-                                        <path d="M12 17h.01"/>
-                                    </svg>
-                                    <span>{saveError}</span>
-                                </div>
+                                <ErrorNote key="err" message={saveError}/>
                             }}
                             {if len(added) > 0 {
                                 <div key="added" className="grid gap-2">
@@ -380,19 +266,7 @@ def:pub SetupPage -> JsxPage {
                         <CardFooter className="justify-end">
                             <Button onClick={finish} disabled={busy or finishing}>
                                 {if finishing {
-                                    <svg
-                                        key="sp"
-                                        className="animate-spin"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                    >
-                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                                    </svg>
+                                    <Spinner key="sp"/>
                                 }}
                                 {"Finishing…" if finishing else "Design your workflow"}
                             </Button>

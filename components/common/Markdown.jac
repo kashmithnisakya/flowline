@@ -1,9 +1,6 @@
-"""Renders free text (task notes, blockers) as markdown.
-
-react-markdown does not render raw HTML, so whatever a person types stays
-safe to display. There is no Tailwind typography plugin here, so element
-styling rides on arbitrary child selectors off the wrapper, sized to fit
-inside a dialog or a card rather than a document.
+"""Renders free text (task notes, blockers) as markdown. react-markdown emits no
+raw HTML, so typed input stays safe; with no typography plugin, element styling
+rides on arbitrary child selectors sized for a dialog or card.
 """
 
 import from "react-markdown" { default as ReactMarkdown }

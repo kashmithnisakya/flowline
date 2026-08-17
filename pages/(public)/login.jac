@@ -1,16 +1,7 @@
-"""standup - Login / Signup, the public front door.
-
-Signing up asks for credentials and nothing else. The account IS the
-organization, but naming it (and yourself) belongs to the setup wizard,
-where there is room to explain what the names are for: a signup form is a
-door, not a questionnaire, and every field on it is a reason to leave.
-jacSignup does NOT create a session, always signup, check success, then
-login; the wizard fills the profile in afterwards.
-
-Layout follows the design: a brand panel beside a tabbed auth card, with
-Google/GitHub sign-in wired to jac-scale's /sso endpoints. There is still no
-"Forgot?" link because password reset has no flow behind it yet.
-"""
+"""standup - Login / Signup, the public front door. Signup asks for credentials
+only; naming the org and yourself belongs to the setup wizard. jacSignup does
+NOT create a session: signup, check success, then login. Brand panel beside a
+tabbed card with Google/GitHub SSO; no "Forgot?" link because there is no flow."""
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
 import from ...components.auth.AuthAside { AuthAside }
@@ -20,6 +11,8 @@ import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }
 import from ...lib.utils { cn }
+import from ...components.common.glyphs { Spinner }
+import from ...components.common.ErrorNote { ErrorNote }
 
 def:pub LoginPage() -> JsxPage {
     has mode: str = "login",
@@ -217,44 +210,11 @@ def:pub LoginPage() -> JsxPage {
                         </div>
                     </div>
                     {if error {
-                        <div
-                            key="err"
-                            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-in fade-in slide-in-from-top-1"
-                        >
-                            <svg
-                                className="mt-0.5 shrink-0"
-                                width={14}
-                                height={14}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                            >
-                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                <path d="M12 9v4"/>
-                                <path d="M12 17h.01"/>
-                            </svg>
-                            {error}
-                        </div>
+                        <ErrorNote key="err" message={error}/>
                     }}
                     <Button type="submit" className="mt-1 h-11" disabled={not ready}>
                         {if busy {
-                            <svg
-                                key="sp"
-                                className="animate-spin"
-                                width={14}
-                                height={14}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                            >
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                            </svg>
+                            <Spinner key="sp"/>
                         }}
                         {("Creating workspace…" if signup else "Signing in…")
                             if busy else ("Create workspace" if signup else "Sign in")}

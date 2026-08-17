@@ -1,9 +1,7 @@
-"""Editor panel for the step selected on the workflow canvas.
-
-No save button on purpose: the name commits on blur or Enter, kind and
-color commit on pick, SaveStep's empty-means-keep semantics make each a
-safe partial update. Connections are removable rows in both directions.
-"""
+"""Editor panel for the selected step. No save button: the name commits on
+blur/Enter, kind, colour and owner commit on pick (SaveStep's empty-means-keep
+makes each a safe partial update). The owner is a dropdown over managed roles
+plus Anyone; a legacy free-text owner stays pickable until changed."""
 
 import from ...models { StepView }
 import from ...constants { STEP_KINDS }
@@ -19,6 +17,63 @@ import from ..ui.select {
     SelectContent,
     SelectItem
 }
+import from ..common.glyphs { Spinner }
+
+
+# One connection row: the other step's name, a loop glyph on send-backs, and
+# the remove button. Shared by the Goes to and Comes from lists.
+def:pub TransitionRow(
+    label: str, back: bool, onRemove: Callable[[], None] = None
+) -> JsxElement {
+    return
+        <div
+            className={"flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs "
+                + ("border-warning/40 bg-warning/10" if back else "bg-muted/40")}
+        >
+            <span className="flex min-w-0 items-center gap-1.5">
+                {if back {
+                    <svg
+                        key="loop"
+                        className="shrink-0 text-warning"
+                        width={12}
+                        height={12}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="m17 2 4 4-4 4"/>
+                        <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                        <path d="m7 22-4-4 4-4"/>
+                        <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                    </svg>
+                }}
+                <span className="truncate">{label}</span>
+            </span>
+            <button
+                type="button"
+                title="Remove this transition"
+                className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                onClick={lambda { if onRemove { onRemove(); }}}
+            >
+                <svg
+                    width={12}
+                    height={12}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <path d="M18 6 6 18"/>
+                    <path d="m6 6 12 12"/>
+                </svg>
+            </button>
+        </div>;
+}
 
 
 def:pub StepInspector(
@@ -26,6 +81,7 @@ def:pub StepInspector(
     className: str = "",
     steps: list[StepView] = [],
     form: dict[str, str] = {},
+    roleOptions: list[str] = [],
     connecting: bool = False,
     saving: bool = False,
     confirmingDelete: bool = False,
@@ -41,6 +97,22 @@ def:pub StepInspector(
         byId[s.id] = s;
     }
 
+    # The pickable owners: the org's roles, plus whatever legacy free-text
+    # value this step already carries so it stays visible until changed.
+    # "Anyone" and "No one yet" are fixed choices rendered above these.
+    ownerChoices: list[str] = [];
+    for r in roleOptions {
+        ownerChoices.append(r);
+    }
+    currentOwner = (form["owner"] or "").strip();
+    if (
+        currentOwner
+        and currentOwner != "anyone"
+        and currentOwner not in ownerChoices
+    ) {
+        ownerChoices.append(currentOwner);
+    }
+
     def rowLabel(sid: str) -> str {
         return byId[sid].name if sid in byId else "?";
     }
@@ -51,16 +123,6 @@ def:pub StepInspector(
         }
         # Same call the canvas makes, so a row and its edge always agree.
         return isBackEdge(byId[fromId].x, byId[fromId].y, byId[toId].x, byId[toId].y);
-    }
-
-    # Back-edges (loops) get a warning-tinted row plus a loop glyph, matching
-    # what the canvas draws for the same transition.
-    def rowClass(back: bool) -> str {
-        base = "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs ";
-        if back {
-            return base + "border-warning/40 bg-warning/10";
-        }
-        return base + "bg-muted/40";
     }
 
     return
@@ -91,20 +153,25 @@ def:pub StepInspector(
                     >
                         Who holds it here
                     </div>
-                    <Input
-                        value={form["owner"] or ""}
-                        placeholder="domain expert, model, whoever raised it"
-                        onChange={lambda (e: any) { if onField {
-                            onField("owner", e.target.value);
+                    <Select
+                        value={form["owner"] or "__none"}
+                        onValueChange={lambda (v: str) { if onField {
+                            onField("owner", "" if v == "__none" else v);
                         }}}
-                        onBlur={lambda { if onNameCommit { onNameCommit(); }}}
-                        onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onNameCommit {
-                            onNameCommit();
-                        }}}
-                    />
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Pick a role"/>
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                            <SelectItem value="__none">No one yet</SelectItem>
+                            <SelectItem value="anyone">Anyone</SelectItem>
+                            {for r in ownerChoices {
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
                     <p className="text-[11px] text-muted-foreground">
-                        A role, not a person. A step that cannot say who holds it is a picture rather than a model.
+                        A role, not a person. The list is managed on the Workspace's Roles tab.
                     </p>
                 </div>
                 <div className="space-y-1.5">
@@ -171,55 +238,14 @@ def:pub StepInspector(
                     } else {
                         <div key="rows" className="flex flex-col gap-1.5">
                             {for nid in step.next_ids {
-                                <div
+                                <TransitionRow
                                     key={nid}
-                                    className={rowClass(isBack(step.id, nid))}
-                                >
-                                    <span className="flex min-w-0 items-center gap-1.5">
-                                        {if isBack(step.id, nid) {
-                                            <svg
-                                                key="loop"
-                                                className="shrink-0 text-warning"
-                                                width={12}
-                                                height={12}
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            >
-                                                <path d="m17 2 4 4-4 4"/>
-                                                <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
-                                                <path d="m7 22-4-4 4-4"/>
-                                                <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
-                                            </svg>
-                                        }}
-                                        <span className="truncate">{rowLabel(nid)}</span>
-                                    </span>
-                                    <button
-                                        type="button"
-                                        title="Remove this transition"
-                                        className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-                                        onClick={lambda { if onUnlink {
-                                            onUnlink(step.id, nid);
-                                        }}}
-                                    >
-                                        <svg
-                                            width={12}
-                                            height={12}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <path d="M18 6 6 18"/>
-                                            <path d="m6 6 12 12"/>
-                                        </svg>
-                                    </button>
-                                </div>
+                                    label={rowLabel(nid)}
+                                    back={isBack(step.id, nid)}
+                                    onRemove={lambda { if onUnlink {
+                                        onUnlink(step.id, nid);
+                                    }}}
+                                />
                             }}
                         </div>
                     } }
@@ -237,55 +263,14 @@ def:pub StepInspector(
                     } else {
                         <div key="rows" className="flex flex-col gap-1.5">
                             {for pid in step.prev_ids {
-                                <div
+                                <TransitionRow
                                     key={pid}
-                                    className={rowClass(isBack(pid, step.id))}
-                                >
-                                    <span className="flex min-w-0 items-center gap-1.5">
-                                        {if isBack(pid, step.id) {
-                                            <svg
-                                                key="loop"
-                                                className="shrink-0 text-warning"
-                                                width={12}
-                                                height={12}
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            >
-                                                <path d="m17 2 4 4-4 4"/>
-                                                <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
-                                                <path d="m7 22-4-4 4-4"/>
-                                                <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
-                                            </svg>
-                                        }}
-                                        <span className="truncate">{rowLabel(pid)}</span>
-                                    </span>
-                                    <button
-                                        type="button"
-                                        title="Remove this transition"
-                                        className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-                                        onClick={lambda { if onUnlink {
-                                            onUnlink(pid, step.id);
-                                        }}}
-                                    >
-                                        <svg
-                                            width={12}
-                                            height={12}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <path d="M18 6 6 18"/>
-                                            <path d="m6 6 12 12"/>
-                                        </svg>
-                                    </button>
-                                </div>
+                                    label={rowLabel(pid)}
+                                    back={isBack(pid, step.id)}
+                                    onRemove={lambda { if onUnlink {
+                                        onUnlink(pid, step.id);
+                                    }}}
+                                />
                             }}
                         </div>
                     } }
@@ -335,19 +320,7 @@ def:pub StepInspector(
                         onClick={lambda { if onDelete { onDelete(); }}}
                     >
                         {if saving and confirmingDelete {
-                            <svg
-                                key="sp"
-                                className="animate-spin"
-                                width={14}
-                                height={14}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                            >
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                            </svg>
+                            <Spinner key="sp"/>
                         }}
                         {"Really delete?" if confirmingDelete else "Delete step"}
                     </Button>

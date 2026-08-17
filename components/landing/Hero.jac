@@ -1,8 +1,6 @@
-"""Landing hero.
-
-Copy describes only what the app does today, a board plus a written daily
-log. No trial terms, no chat-tool integrations, no usage figures. The
-board mock below the CTAs is decorative, token-built, and aria-hidden.
+"""Landing hero. Copy describes only what the app does today (a board plus a
+written daily log): no trial terms, integrations or usage figures. The board
+mock under the CTAs is decorative and aria-hidden.
 """
 
 import from ..ui.button { Button }

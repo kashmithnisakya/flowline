@@ -165,7 +165,7 @@ impl BoardPage.saveTask -> None {
                 project_id=project
             );
         } else {
-            cResult = root spawn CreateTask(
+            root spawn CreateTask(
                 title=title,
                 category=form["category"],
                 priority=form["priority"],
@@ -305,12 +305,10 @@ impl BoardPage.columnKeyOf(t: TaskView) -> str {
 }
 
 impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
-    # Optimistic: mutate the card in state and rebind; the server computes
-    # the authoritative end-of-column order. movesRef fences the poll so a
-    # stale fetch cannot snap the card back mid-flight; on failure the board
-    # refetches server truth instead of rebinding a stale local snapshot.
-    # A column key is a workflow step jid, or a legacy status string when the
-    # org has not designed a workflow yet. Both land in the same walker.
+    # Optimistic: mutate the card in state and rebind; the server owns the
+    # end-of-column order. movesRef fences the poll so a stale fetch cannot
+    # snap the card back; on failure the board refetches server truth.
+    # A column key is a step jid, or a legacy status when there is no workflow.
     onWorkflow = len(steps) > 0;
     label = columnLabel(columnKey);
     if not label {

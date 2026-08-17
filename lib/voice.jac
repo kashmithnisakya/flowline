@@ -1,15 +1,7 @@
-"""Dictation via the browser's Web Speech API.
-
-byLLM has no audio surface at all (Text / Image / Video only), so transcription
-either happens in the browser or it means hand-rolling an OpenAI client, which
-is outside the "byLLM only" rule. This is the browser route: free, no key, no
-server round trip.
-
-It is a *progressive enhancement*. `hasVoice()` gates the mic button so Firefox
-and Safari see an ordinary composer rather than a button that does nothing.
-Two honest caveats worth surfacing in the UI: it is Chromium-only in practice,
-and Chrome ships the audio to a Google service to transcribe it.
-"""
+"""Dictation via the browser's Web Speech API (byLLM has no audio surface, and
+this route needs no key or server trip). A progressive enhancement: hasVoice()
+gates the mic button, so Firefox/Safari see a plain composer. Chromium-only in
+practice, and Chrome ships the audio to a Google service."""
 
 # Module-level mutable holder rather than a rebindable `glob`: only one
 # recogniser may run at a time, and starting a second throws InvalidStateError.

@@ -1,16 +1,7 @@
-"""The brand panel beside the auth card.
-
-Mirrors the design's split layout. The design mock filled this space with a
-customer quote and usage metrics; those were placeholders, so this states
-what the product actually does instead of inventing social proof.
-
-The panel is deliberately INVERTED, `bg-foreground` on `text-background` ,
-so it flips with the theme: ink on paper becomes paper on ink. Anything with
-a fixed colour therefore needs both variants, which is why the wordmark is
-two images. The bullet chips lean on `bg-background`/`text-background`,
-which flip with the panel, so they hold contrast on both grounds. A single
-logo here painted light ink onto the light panel and vanished.
-"""
+"""The brand panel beside the auth card, stating what the product does rather
+than invented social proof. Deliberately INVERTED (bg-foreground on
+text-background) so it flips with the theme; anything with a fixed colour
+needs both variants, which is why the wordmark is two images."""
 
 def:pub AuthAside -> JsxElement {
     return

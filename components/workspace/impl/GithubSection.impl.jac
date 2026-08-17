@@ -1,17 +1,12 @@
-"""Implementations for the GitHub page.
-
-Every walker here except GithubStatus answers with one envelope dict, so each
-handler reads `payload["ok"]` and surfaces `payload["message"]` rather than
-inventing its own wording: only the server knows whether GitHub was
-unreachable, unconfigured, or simply said no.
+"""Implementations for the GitHub page. Every walker except GithubStatus
+answers one envelope dict, so handlers read `payload["ok"]` and surface
+`payload["message"]`: only the server knows why GitHub said no.
 """
 
 impl GithubSection.boot -> None {
-    # GitHub redirects the install round trip back to this page. Finish it
-    # before anything reads status, then scrub the params: the nonce is burned
-    # server-side on first use, so a replay could only produce an error.
-    # URLSearchParams is absent from the checker's DOM typings, so it is
-    # reached through an `any` handle on window.
+    # Finish GitHub's install round trip before anything reads status, then
+    # scrub the params: the nonce burns on first use, so a replay only errors.
+    # URLSearchParams is missing from the checker's DOM typings: `any` handle.
     w: any = window;
     params: any = new(w.URLSearchParams, w.location.search);
     installation = params.get("installation_id") or "";

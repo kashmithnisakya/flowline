@@ -1,13 +1,7 @@
-"""A single kanban card.
-
-Draggable via native HTML5 DnD (custom MIME type so foreign drags are
-ignored), with arrow-button click-to-move as the no-drag/touch fallback.
-
-The chevron move row: on fine pointers it floats over the card's bottom
-corner and only appears on hover/focus (pointer-events off while hidden so
-clicks fall through to the card), keeping idle cards short; on touch, where
-hover does not exist, it keeps its in-flow spot at reduced opacity.
-"""
+"""A single kanban card. Draggable via native HTML5 DnD (custom MIME type so
+foreign drags are ignored), with arrow-button click-to-move as the touch
+fallback: the chevron row floats over the bottom corner on hover for fine
+pointers and keeps an in-flow spot at reduced opacity on touch."""
 
 import from ...models { TaskView }
 import from ..workflow.kinds { CARD_BAR, colorKey }
@@ -45,12 +39,9 @@ def:pub TaskCard(
     task: TaskView,
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
-    # The neighbouring columns, supplied by the column that renders this card:
-    # the board's columns come from the org's workflow now, so a card cannot
-    # work out where "left" and "right" go on its own.
-    # The colour of the step this card sits in, so a column reads as one
-    # block of work: every card in "Architecting" is the same, and moving it
-    # to "DOMX review" recolours it.
+    # Neighbouring columns come from the column rendering this card: the
+    # board's columns are the org's workflow, so a card cannot infer them.
+    # The step's colour, so a whole column reads as one block of work.
     color: str = "",
     prevKey: str = "",
     prevLabel: str = "",

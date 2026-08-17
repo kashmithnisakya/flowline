@@ -1,9 +1,6 @@
 """standup - GitHub page (/github): the App installation and what it reads.
-
-Stateful shell. GitHub sends the install round trip back to this very URL as
-query params, so the mount handler finishes it before anything else runs, and
-scrubs the params afterwards: the nonce is one-shot, and a refresh that
-replayed it would only ever produce an error toast.
+GitHub sends the install round trip back to this URL as query params, so the
+mount handler finishes it first and scrubs the params (the nonce is one-shot).
 """
 
 import from ...models {
@@ -119,11 +116,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
 
 
-    # The repo, the tab, the state filters and the committed search all
-    # address the same two reads, so one dependent effect covers every way
-    # of changing what is shown. Search runs through here too: runSearch
-    # only commits the query, which sidesteps the stale-snapshot trap of
-    # calling a loader right after setting state.
+    # Repo, tab, state filters and the committed search all address the same
+    # two reads, so one dependent effect covers every change. Search only
+    # commits the query here, sidestepping the stale-snapshot trap.
     async can with (repoId, tab, issueState, prState, searchQuery) entry {
         if repoId {
             if tab == "issues" {

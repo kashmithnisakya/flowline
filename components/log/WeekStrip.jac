@@ -1,8 +1,6 @@
-"""The week at a glance: one pill per weekday, click to jump to that day.
-
-Each pill shows the weekday, day-of-month and entry count; the selected
-day carries the ember accent, today wears a subtle primary ring, and
-weekends sit muted.
+"""The week at a glance: one pill per weekday (weekday, day, entry count),
+click to jump. The selected day carries the ember accent, today a subtle
+primary ring, weekends sit muted.
 """
 
 import from ...models { LogEntry }

@@ -1,8 +1,6 @@
-"""Theme preference: light, dark, or follow the system.
-
-Applied by toggling the `dark` class on <html> (the Tailwind custom
-variant). Persisted in localStorage so it survives reloads; the layout
-applies it on mount and the Settings page changes it.
+"""Theme preference: light, dark, or follow the system. Applied by toggling the
+`dark` class on <html>, persisted in localStorage; the layout applies it on
+mount and the Settings page changes it.
 """
 
 glob THEME_KEY: str = "standup-theme",

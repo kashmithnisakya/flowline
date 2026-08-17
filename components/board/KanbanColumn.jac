@@ -1,8 +1,6 @@
-"""One board column: header with live count, drop target, card list.
-
-Columns come from the org's workflow now, so a column is addressed by an
-opaque key (the step's jid, or the legacy status string when no workflow
-exists yet) and carries its own label and accent colour.
+"""One board column: header with live count, drop target, card list. Columns
+come from the org's workflow, so a column is addressed by an opaque key (step
+jid, or the legacy status when no workflow exists) with its own label and colour.
 """
 
 import from ...models { TaskView }

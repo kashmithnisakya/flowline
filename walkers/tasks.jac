@@ -232,12 +232,9 @@ walker SetMoveInfo(find_task) {
 }
 
 walker MoveTask(find_task) {
-    """The drag-drop / arrow-move endpoint. Server-authoritative ordering:
-    a move appends to the end of the target column.
-
-    `step_id` is the workflow column when the org has designed one; the
-    status it maps to is written too. Without it this falls back to the
-    legacy status-only move."""
+    """The drag-drop / arrow-move endpoint. Server-authoritative: a move appends
+    to the end of the target column. `step_id` is the workflow column and its
+    mapped status is written too; without it, the legacy status-only move."""
     has status: str = "",
         step_id: str = "",
         step_name: str = "",

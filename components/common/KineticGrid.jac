@@ -1,20 +1,7 @@
-"""Ambient kinetic dot-grid background.
-
-A canvas of low-contrast dots on a regular grid: dots lean toward the
-cursor and ripple outward from clicks, then spring back. Pure decoration.
-Pointer events pass through, the loop pauses while the tab is hidden, and
-prefers-reduced-motion gets a static grid (periodic repaint only, so theme
-flips still land). Dot color is read from the html.dark class at draw time
-so one component serves both palettes.
-
-Usage: place inside a `relative` container, before the content:
-    <div className="relative ...">
-        <KineticGrid/>
-        <div className="relative z-10">...</div>
-    </div>
-Pass className to add masks, e.g. a bottom fade:
-    <KineticGrid className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"/>
-"""
+"""Ambient kinetic dot-grid canvas: dots lean toward the cursor, ripple from
+clicks, spring back. Pointer events pass through, the loop pauses when the tab
+is hidden, reduced-motion gets a static grid. Place inside a `relative`
+container before the content; pass className for masks (e.g. a bottom fade)."""
 
 import from "react" { useEffect }
 import from ...lib.utils { cn }

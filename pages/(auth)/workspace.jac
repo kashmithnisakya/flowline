@@ -1,23 +1,16 @@
 """standup - Workspace (/workspace): everything you configure, in one place.
-
-Three tabs, all of them CRUD over settings rather than daily work: the
-organization's own name, the projects work is scoped to, and the people on
-the roster. GitHub graduated back to its own /github route (browsing and
-importing issues is daily work); old ?tab=github links and in-flight App
-install round trips redirect there with their query string intact.
-
-The page is a thin shell: each tab is a self-contained section component
-that loads and saves its own data, so switching tabs costs nothing and no
-section can break another.
-"""
+Four tabs of settings CRUD (organization, projects, people, roles); GitHub
+lives at /github and old ?tab=github links redirect there. Each tab is a
+self-contained section, so the page stays a thin shell."""
 
 import from ...models { Project, MemberView }
-import from ...walkers.roster { ListMembers, SaveMember, ArchiveMember }
+import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
 import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
+import from ...components.workspace.RolesSection { RolesSection }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
@@ -33,7 +26,8 @@ glob BLANK_MEMBER: dict[str, str] = {
      TABS: list[list[str]] = [
          ["organization", "Organization"],
          ["projects", "Projects"],
-         ["people", "People"]
+         ["people", "People"],
+         ["roles", "Roles"]
      ];
 
 def:pub WorkspacePage -> JsxPage {
@@ -47,6 +41,10 @@ def:pub WorkspacePage -> JsxPage {
         mRoles: list[str] = [],
         mTags: list[str] = [],
         mProjects: list[str] = [],
+        # The org's managed roles (Role nodes). Non-empty flips the member
+        # dialog's role input to toggle chips; empty falls back to the
+        # free-text chips.
+        roleOptions: list[str] = [],
         newCategory: str = "",
         newTag: str = "",
         # The header owns each tab's primary action, but Projects keeps its
@@ -84,6 +82,7 @@ def:pub WorkspacePage -> JsxPage {
     def setField(key: str, value: str) -> None;
     def addRole -> None;
     def addTag -> None;
+    def toggleRoleOption(role: str) -> None;
     def removeRole(role: str) -> None;
     def toggleTag(tag: str) -> None;
     def toggleProject(projectId: str) -> None;
@@ -110,11 +109,9 @@ def:pub WorkspacePage -> JsxPage {
         }
     }
 
-    # The header carries one primary action at a time, swapping with the tab.
-    # The action slot keeps a fixed height so the h1 row never shifts when a
-    # tab without an action (Organization) is selected. The nav is a vertical
-    # rail at sm+ (line variant puts the indicator on the rail edge); below sm
-    # it collapses to a horizontal segmented strip driven by the same state.
+    # The header carries one primary action, swapping with the tab; the slot
+    # keeps a fixed height so the h1 row never shifts. The nav is a vertical
+    # rail at sm+ and a horizontal segmented strip below, on the same state.
     return
         <div className="flex w-full flex-col gap-8">
             <div className="flex items-center justify-between gap-6">
@@ -233,12 +230,19 @@ def:pub WorkspacePage -> JsxPage {
                         />
                     } }
                 </TabsContent>
+                <TabsContent
+                    value="roles"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
+                    <RolesSection onChanged={loadAll}/>
+                </TabsContent>
             </Tabs>
             <MemberDialog
                 open={dialogOpen}
                 editing={bool(editingId)}
                 form={form}
                 roles={mRoles}
+                roleOptions={roleOptions}
                 memberTags={mTags}
                 allTags={allTags}
                 projects={activeProjects}
@@ -247,6 +251,7 @@ def:pub WorkspacePage -> JsxPage {
                 onField={setField}
                 onAddRole={addRole}
                 onAddTag={addTag}
+                onToggleRole={toggleRoleOption}
                 onRemoveRole={removeRole}
                 onToggleTag={toggleTag}
                 onToggleProject={toggleProject}

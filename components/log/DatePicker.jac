@@ -1,7 +1,5 @@
-"""A modern month-grid date picker.
-
-Replaces the native date input. The trigger shows the date the way a
-person says it; the dropdown is a month grid with prev/next controls.
+"""A month-grid date picker replacing the native input: the trigger shows the
+date the way a person says it, the dropdown is a grid with prev/next controls.
 """
 
 import from ..ui.button { Button }

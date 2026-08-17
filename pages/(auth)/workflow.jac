@@ -1,23 +1,12 @@
-"""standup - Workflow page (/workflow): how work moves through the org.
+"""standup - Workflow page (/workflow): three faces of one graph, the template
+picker, the designer, and a read-only diagram (Flow or Lanes). One workflow per
+org, so no project selector. Validation is advisory and never blocks saving.
+The editor floats OVER the canvas; keep notes out of JSX (a `#` there renders)."""
 
-Stateful shell over three faces of one graph: the template picker when no
-workflow exists yet, the designer when editing, and a read-only diagram the
-rest of the time. One workflow per organization, steps hang off the root
-like everything else, so there is no project selector here.
-
-Validation is advisory on purpose: the chip points out a missing start or
-done step and unreachable steps, but never blocks saving. The graph belongs
-to the org, loops and all.
-
-The editor floats OVER the canvas rather than taking a column beside it: the
-drawing is the page and the editor is a layer on top. Note that a `#` comment
-placed among JSX children is not a comment at all, it renders as visible
-text, so notes like this one stay in the docstring.
-"""
-
-import from ...models { Project, StepView, TaskView }
+import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS }
 import from ...walkers.projects { ListProjects }
+import from ...walkers.roster { ListMembers, ListRoles }
 import from ...walkers.workflow {
     GetWorkflow,
     ApplyTemplate,
@@ -32,6 +21,7 @@ import from ...walkers.workflow {
     ListStepTasks
 }
 import from ...components.workflow.FlowCanvas { FlowCanvas }
+import from ...components.workflow.lanes { laneLayout }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
 import from ...components.workflow.geometry {
@@ -58,6 +48,7 @@ import from ...components.ui.select {
 }
 import from "sonner" { toast }
 import from "react" { useEffect, useLayoutEffect }
+import from ...components.common.glyphs { WarnIcon }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -69,6 +60,14 @@ glob BLANK_STEP: dict[str, str] = {
 def:pub WorkflowPage -> JsxPage {
     has steps: list[StepView] = [],
         projects: list[Project] = [],
+        # The org's roles and roster, for the who-does-what strip the
+        # viewer shows under the kind legend and the Lane view's labels.
+        roleRows: list[RoleView] = [],
+        roleMembers: list[MemberView] = [],
+        # Viewer projection: "flow" renders the hand-drawn positions,
+        # "lanes" a computed swimlane layout (lane = owner role, column =
+        # flow depth). Persisted per browser; editing always uses flow.
+        wfView: str = "flow",
         # Shared with the board through one localStorage key, so the project
         # you are looking at follows you between the two tabs.
         projectId: str = "all",
@@ -128,16 +127,11 @@ def:pub WorkflowPage -> JsxPage {
         boot();
     }
 
-    # Fit whenever the visible area changes: first load (the viewport has no
-    # measured size until then), a template or a new step widening the graph,
-    # and entering edit mode, where the floating editor covers the right
-    # third of the canvas.
-    # Layout effect, not a plain effect: it runs after layout but BEFORE the
-    # browser paints, so the first visible frame is already fitted and
-    # centered. A plain effect fires post-paint and the canvas's transform
-    # transition animates the correction - the diagram visibly "flies" from
-    # the top-left corner on every visit to this tab.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing]);
+    # Fit whenever the visible area changes: first load, a widened graph,
+    # entering edit mode (the editor covers the right third), a view flip.
+    # A LAYOUT effect so the first frame is already fitted; a plain effect
+    # would animate the correction and the diagram would visibly fly in.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView]);
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
@@ -157,6 +151,9 @@ def:pub WorkflowPage -> JsxPage {
     async def selectProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
     async def loadMeta -> None;
+    def switchView(v: str) -> None;
+    def lanePlan -> dict[str, any];
+    def viewBounds -> list[float];
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
     def startRename -> None;
@@ -206,6 +203,47 @@ def:pub WorkflowPage -> JsxPage {
         for p in projects
         if p.active
     ];
+    # Who holds each role, for the strip under the kind legend.
+    roleHolders: dict[str, str] = {};
+    for rr in roleRows {
+        held: list[str] = [];
+        for rm in roleMembers {
+            if rm.active and rr.name in rm.roles {
+                held.append(rm.name);
+            }
+        }
+        roleHolders[rr.name] = ", ".join(held);
+    }
+    # The inspector's owner dropdown offers exactly the managed roles.
+    ownerOptions: list[str] = [];
+    for rr in roleRows {
+        ownerOptions.append(rr.name);
+    }
+    # The Lane view projection: computed fresh per render, empty in flow
+    # mode so the viewer's FlowCanvas call can pass these unconditionally.
+    laneMode = wfView == "lanes";
+    plan: dict[str, any] = {"positions": {}, "lanes": []};
+    if laneMode and not editing {
+        plan = laneLayout(steps, roleRows, roleMembers);
+    }
+    lanePose: dict[str, list[float]] = plan["positions"];
+    laneBands: list[dict[str, any]] = plan["lanes"];
+    laneOfStep: dict[str, str] = plan["laneOf"] if "laneOf" in plan else {};
+    # Roles that own no step: they get no lane (an empty lane only pushes
+    # content down), so they are named under the canvas instead.
+    owners: list[str] = [];
+    for s in steps {
+        said = s.owner.strip() if s.owner else "";
+        if said and said not in owners {
+            owners.append(said);
+        }
+    }
+    offFlow: list[str] = [];
+    for rr in roleRows {
+        if rr.name not in owners {
+            offFlow.append(rr.name);
+        }
+    }
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -413,21 +451,7 @@ def:pub WorkflowPage -> JsxPage {
                                 key="issues"
                                 className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                <svg
-                                    className="mt-0.5 shrink-0"
-                                    width={13}
-                                    height={13}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                    <path d="M12 9v4"/>
-                                    <path d="M12 17h.01"/>
-                                </svg>
+                                <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span className="tabular-nums">
                                     {issues[0]
                                         + (
@@ -587,6 +611,7 @@ def:pub WorkflowPage -> JsxPage {
                                     step={picked[0]}
                                     steps={steps}
                                     form={form}
+                                    roleOptions={ownerOptions}
                                     connecting={bool(connectFrom)}
                                     saving={saving}
                                     confirmingDelete={confirmDelete}
@@ -625,24 +650,38 @@ def:pub WorkflowPage -> JsxPage {
                                 key="issues"
                                 className="inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-2.5 py-1 text-left text-xs font-medium text-warning"
                             >
-                                <svg
-                                    className="mt-0.5 shrink-0"
-                                    width={13}
-                                    height={13}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/>
-                                    <path d="M12 9v4"/>
-                                    <path d="M12 17h.01"/>
-                                </svg>
+                                <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span>{issues[0]}</span>
                             </span>
                         }}
+                        <div
+                            className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted p-0.5"
+                        >
+                            <button
+                                type="button"
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if not laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
+                                onClick={lambda { switchView("flow"); }}
+                            >
+                                Flow
+                            </button>
+                            <button
+                                type="button"
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
+                                onClick={lambda { switchView("lanes"); }}
+                            >
+                                Lanes
+                            </button>
+                        </div>
                         <Select value={projectId} onValueChange={selectProject}>
                             <SelectTrigger className="w-44">
                                 <SelectValue placeholder="All projects"/>
@@ -656,7 +695,13 @@ def:pub WorkflowPage -> JsxPage {
                                 }}
                             </SelectContent>
                         </Select>
-                        <Button key="edit" onClick={lambda { editing = True; }}>
+                        <Button
+                            key="edit"
+                            onClick={lambda {
+                                switchView("flow");
+                                editing = True;
+                            }}
+                        >
                             Edit workflow
                         </Button>
                     </div>
@@ -674,8 +719,41 @@ def:pub WorkflowPage -> JsxPage {
                             </span>
                         }}
                     </div>
+                    {if len(roleRows) > 0 and not laneMode {
+                        <div
+                            key="rolestrip"
+                            className="flex flex-wrap items-center gap-2"
+                        >
+                            {for rr in roleRows {
+                                <span
+                                    key={rr.id}
+                                    className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                                >
+                                    <span
+                                        className={"h-2 w-2 shrink-0 rounded-full "
+                                            + DOT_FILL[colorKey(rr.color or "slate")]}
+                                    />
+                                    <span className="font-medium">{rr.name}</span>
+                                    <span className="text-muted-foreground">
+                                        {roleHolders[rr.name]
+                                            if roleHolders[rr.name]
+                                            else "no one yet"}
+                                    </span>
+                                </span>
+                            }}
+                            <a
+                                href="/workspace?tab=roles"
+                                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                            >
+                                Manage roles
+                            </a>
+                        </div>
+                    }}
                     <FlowCanvas
                         steps={steps}
+                        live={lanePose}
+                        lanes={laneBands}
+                        laneOf={laneOfStep}
                         zoom={zoom}
                         panX={panX}
                         panY={panY}
@@ -686,6 +764,15 @@ def:pub WorkflowPage -> JsxPage {
                         onZoomFit={fitZoom}
                         onSelect={peekStep}
                     />
+                    {if laneMode and len(offFlow) > 0 {
+                        <p key="offflow" className="text-xs text-muted-foreground">
+                            {"Not on the flow yet: "}
+                            <span className="font-medium text-foreground">
+                                {", ".join(offFlow)}
+                            </span>
+                            {(" · owns no step" if len(offFlow) == 1 else " · own no step")}
+                        </p>
+                    }}
                 </div>
             }   }
             <Dialog

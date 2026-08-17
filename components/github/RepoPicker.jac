@@ -1,9 +1,6 @@
 """Browse the repositories the installation was granted, and attach one.
-
-Attaching writes a Repo node on this workspace (the same one the Projects
-page manages), which is what makes the issue and pull-request tables
-addressable. Rows already attached are shown, not hidden, so the list still
-matches what GitHub reports.
+Attaching writes a Repo node on this workspace (the same one Projects manages),
+which makes the issue and PR tables addressable. Attached rows stay visible.
 """
 
 import from ...models { Project, GhRepoRow }
@@ -18,6 +15,7 @@ import from ..ui.select {
     Select, SelectTrigger, SelectValue, SelectContent, SelectItem
 }
 import from ..ui.skeleton { Skeleton }
+import from ..common.glyphs { Spinner }
 
 def:pub RepoPicker(
     open: bool,
@@ -50,19 +48,7 @@ def:pub RepoPicker(
                     />
                     <Button variant="outline" onClick={onSearch} disabled={loading}>
                         {if loading {
-                            <svg
-                                key="sp"
-                                className="animate-spin"
-                                width={14}
-                                height={14}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                            >
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                            </svg>
+                            <Spinner key="sp"/>
                         }}
                         {"Asking…" if loading else "Search"}
                     </Button>
@@ -178,19 +164,7 @@ def:pub RepoPicker(
                                         disabled={bool(attaching)}
                                     >
                                         {if attaching == r.full_name {
-                                            <svg
-                                                key="sp"
-                                                className="animate-spin"
-                                                width={14}
-                                                height={14}
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                strokeLinecap="round"
-                                            >
-                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                            </svg>
+                                            <Spinner key="sp"/>
                                         }}
                                         {"Attaching…" if attaching == r.full_name else "Attach"}
                                     </Button>

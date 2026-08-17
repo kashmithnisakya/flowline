@@ -1,8 +1,9 @@
 """Roster walkers: members and GitHub repos."""
 
 import from models {
-    Project, Member, Repo, Task, MemberView, RepoView, AssignedTo, HasRepo,
-    member_view, repo_view, resolve, on_attached, owned, valid_full_name
+    Project, Member, Repo, Task, Role, WorkflowStep, MemberView, RepoView,
+    RoleView, AssignedTo, HasRepo, member_view, repo_view, role_view,
+    resolve, on_attached, owned, valid_full_name
 }
 
 # ------------------------------------------------------------------- roster
@@ -62,6 +63,23 @@ walker SaveMember {
     }
 }
 
+walker SetMemberRoles {
+    """Overwrite ONLY the member's role list. The Roles tab toggles one
+    role at a time; routing that through SaveMember would overwrite email,
+    github_username and tags with whatever the caller happened to send."""
+    has member_id: str = "",
+        roles: list[str] = [],
+        reports: list[MemberView] = [];
+
+    can set_roles with Root entry {
+        target = resolve(self.member_id);
+        if isinstance(target, Member) and owned(here, target) {
+            target.roles = [r.strip() for r in self.roles if r.strip()];
+            report member_view(target);
+        }
+    }
+}
+
 walker ArchiveMember {
     """active=False, never delete, history edges must survive. Open
     (non-Done) tasks lose their AssignedTo edge so live work returns to
@@ -83,6 +101,124 @@ walker ArchiveMember {
             }
             report {"archived": self.member_id};
         }
+    }
+}
+
+# -------------------------------------------------------------------- roles
+# Name-centric, not jid-centric: member.roles and step owners hold role NAMES,
+# so the name is the identity to keep consistent. Everything runs on
+# [here-->] under the caller's root, so isolation needs no owned() checks.
+
+walker ListRoles {
+    has results: list[RoleView] = [],
+        reports: list[list[RoleView]] = [];
+
+    can start with Root entry {
+        visit [here-->[?:Role]];
+    }
+
+    can gather with Role entry {
+        self.results.append(role_view(here));
+    }
+
+    can deliver with Root exit {
+        self.results.sort(key=lambda (r: RoleView) { r.sort_order; });
+        report self.results;
+    }
+}
+
+walker SaveRole {
+    """Create or update the role named `name` (get-or-create, so a free-text
+    role becomes managed on first edit). `new_name` renames and propagates
+    through members and step owners; renaming onto an existing role is refused.
+    Blurb overwrite is opt-in via touch_blurb so assignment can't blank it."""
+    has name: str = "",
+        new_name: str = "",
+        blurb: str = "",
+        color: str = "",
+        touch_blurb: bool = False,
+        reports: list[dict[str, any]] = [];
+
+    can save with Root entry {
+        said = self.name.strip();
+        if not said {
+            disengage;
+        }
+        wanted = self.new_name.strip();
+        if wanted and wanted != said {
+            if [here-->[?:Role, name == wanted]] {
+                report {"ok": False, "error": "name_taken"};
+                disengage;
+            }
+        }
+        existing = [here-->[?:Role, name == said]];
+        target = existing[0] if existing else None;
+        if not target {
+            peak = 0.0;
+            for r in [here-->[?:Role]] {
+                if r.sort_order > peak {
+                    peak = r.sort_order;
+                }
+            }
+            target = here ++> Role(name=said, sort_order=peak + 1024.0);
+            on_attached(here, target);
+        }
+        if self.touch_blurb {
+            target.blurb = self.blurb.strip();
+        }
+        if self.color {
+            target.color = self.color;
+        }
+        if wanted and wanted != said {
+            target.name = wanted;
+            for m in [here-->[?:Member]] {
+                if said in m.roles {
+                    m.roles = [
+                        (wanted if r == said else r)
+                        for r in m.roles
+                    ];
+                }
+            }
+            for s in [here-->[?:WorkflowStep]] {
+                if s.owner == said {
+                    s.owner = wanted;
+                }
+            }
+        }
+        report {"ok": True, "role": role_view(target)};
+    }
+}
+
+walker DeleteRole {
+    """Deletes by name: the Role node if one exists, the name out of every
+    member's role list, and any workflow step owner naming it. Works on
+    unmanaged free-text roles too, where it is just the strip."""
+    has name: str = "",
+        reports: list[dict[str, any]] = [];
+
+    can remove with Root entry {
+        said = self.name.strip();
+        if not said {
+            disengage;
+        }
+        for r in [here-->[?:Role, name == said]] {
+            del r;
+        }
+        for m in [here-->[?:Member]] {
+            if said in m.roles {
+                m.roles = [
+                    x
+                    for x in m.roles
+                    if x != said
+                ];
+            }
+        }
+        for s in [here-->[?:WorkflowStep]] {
+            if s.owner == said {
+                s.owner = "";
+            }
+        }
+        report {"ok": True, "deleted": said};
     }
 }
 
