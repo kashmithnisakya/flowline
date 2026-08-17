@@ -4,31 +4,50 @@ per call, never reported). Every walker but GithubStatus reports ONE envelope,
 {"ok": True, ...} or {"ok": False, "error", "message"}. Nothing polls."""
 
 import from models {
-    Project, Member, Repo, Task, TaskView, WorkflowStep, GithubConnection,
-    GithubConnectionView, GhRepoRow, GhIssueRow, GhPrRow,
-    HasRepo, AssignedTo, ForProject,
-    resolve, on_attached, owned
+    Project,
+    Member,
+    Repo,
+    Task,
+    TaskView,
+    WorkflowStep,
+    GithubConnection,
+    GithubConnectionView,
+    GhRepoRow,
+    GhIssueRow,
+    GhPrRow,
+    HasRepo,
+    AssignedTo,
+    ForProject,
+    resolve,
+    on_attached,
+    owned
 }
 import from walkers.util { now_iso, minutes_since }
 import from walkers.log { record_task_event }
 import from walkers.tasks { find_task, status_for_step }
 import from walkers.ghutil {
-    missing_config, install_url, new_state, installation_token,
-    forget_installation, valid_full_name, gh_request, exchange_code,
+    missing_config,
+    install_url,
+    new_state,
+    installation_token,
+    forget_installation,
+    valid_full_name,
+    gh_request,
+    exchange_code,
     user_owns_installation
 }
 import from constants { STATUSES }
 
 # An install round trip that has sat unfinished for this long is a stale tab,
 # not a person mid-flow.
-glob INSTALL_WINDOW_MINUTES: float = 15.0;
+glob INSTALL_WINDOW_MINUTES: float = 15.0,
+     PAGE_SIZE: int = 50,
+     IMPORT_CAP: int = 25,
+     SYNC_PR_CAP: int = 20;
+
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
 # GitHub quota.
-glob PAGE_SIZE: int = 50;
-glob IMPORT_CAP: int = 25;
-glob SYNC_PR_CAP: int = 20;
-
 # --------------------------------------------------------------- connection
 
 def connection_of(holder: Root) -> any {
@@ -46,10 +65,14 @@ def connection_view(c: any) -> GithubConnectionView {
         );
     }
     return GithubConnectionView(
-        connected=True, account_login=c.account_login,
-        account_avatar=c.account_avatar, status=c.status,
-        connected_at=c.connected_at, last_sync_at=c.last_sync_at,
-        configured=configured, missing_config=gaps
+        connected=True,
+        account_login=c.account_login,
+        account_avatar=c.account_avatar,
+        status=c.status,
+        connected_at=c.connected_at,
+        last_sync_at=c.last_sync_at,
+        configured=configured,
+        missing_config=gaps
     );
 }
 
@@ -77,7 +100,8 @@ def mark_invalid(c: any, result: dict[str, any]) -> None {
 
 def not_connected -> dict[str, any] {
     return {
-        "ok": False, "error": "not_connected",
+        "ok": False,
+        "error": "not_connected",
         "message": "Connect the GitHub App first."
     };
 }
@@ -102,7 +126,8 @@ walker StartGithubInstall {
         gaps = missing_config();
         if gaps {
             report {
-                "ok": False, "error": "not_configured",
+                "ok": False,
+                "error": "not_configured",
                 "message": "The server is missing " + ", ".join(gaps) + ".",
                 "missing": gaps
             };
@@ -137,7 +162,8 @@ walker CompleteGithubInstall {
         target = existing[0] if existing else None;
         if not isinstance(target, GithubConnection) {
             report {
-                "ok": False, "error": "no_pending_install",
+                "ok": False,
+                "error": "no_pending_install",
                 "message": "Start the install from this page first."
             };
             disengage;
@@ -150,21 +176,24 @@ walker CompleteGithubInstall {
         target.pending_at = "";
         if not expected or self.state != expected {
             report {
-                "ok": False, "error": "bad_state",
+                "ok": False,
+                "error": "bad_state",
                 "message": "That install link did not come from this workspace."
             };
             disengage;
         }
         if minutes_since(stamp) > INSTALL_WINDOW_MINUTES {
             report {
-                "ok": False, "error": "expired",
+                "ok": False,
+                "error": "expired",
                 "message": "That install link expired. Try connecting again."
             };
             disengage;
         }
         if self.installation_id <= 0 {
             report {
-                "ok": False, "error": "invalid",
+                "ok": False,
+                "error": "invalid",
                 "message": "GitHub did not send an installation id."
             };
             disengage;
@@ -172,7 +201,8 @@ walker CompleteGithubInstall {
         user_token = exchange_code(self.code);
         if not user_token {
             report {
-                "ok": False, "error": "exchange_failed",
+                "ok": False,
+                "error": "exchange_failed",
                 "message": "GitHub would not confirm who authorized the install."
             };
             disengage;
@@ -180,7 +210,8 @@ walker CompleteGithubInstall {
         record = user_owns_installation(user_token, self.installation_id);
         if not record {
             report {
-                "ok": False, "error": "not_yours",
+                "ok": False,
+                "error": "not_yours",
                 "message": "That installation is not one your GitHub account can see."
             };
             disengage;
@@ -266,12 +297,14 @@ walker ListGithubRepos {
             if needle and needle not in full.lower() {
                 continue;
             }
-            rows.append(GhRepoRow(
-                full_name=full,
-                private=bool(item.get("private")),
-                description=str(item.get("description") or ""),
-                attached=full in known
-            ));
+            rows.append(
+                GhRepoRow(
+                    full_name=full,
+                    private=bool(item.get("private")),
+                    description=str(item.get("description") or ""),
+                    attached=full in known
+                )
+            );
         }
         rows.sort(key=lambda (r: GhRepoRow) { r.full_name; });
         report {"ok": True, "rows": rows};
@@ -294,7 +327,9 @@ def owned_full_name(holder: Root, repo_id: str) -> str {
 }
 
 
-def issue_row(item: dict[str, any], owned_tasks: list[Task], full_name: str) -> GhIssueRow {
+def issue_row(
+    item: dict[str, any], owned_tasks: list[Task], full_name: str
+) -> GhIssueRow {
     number = int(item.get("number") or 0);
     labels: list[str] = [];
     raw_labels = item.get("labels") or [];
@@ -317,10 +352,14 @@ def issue_row(item: dict[str, any], owned_tasks: list[Task], full_name: str) -> 
         }
     }
     return GhIssueRow(
-        number=number, title=str(item.get("title") or ""),
-        state=str(item.get("state") or ""), labels=labels, assignee=assignee,
+        number=number,
+        title=str(item.get("title") or ""),
+        state=str(item.get("state") or ""),
+        labels=labels,
+        assignee=assignee,
         html_url=str(item.get("html_url") or ""),
-        already_imported=bool(linked), imported_task_id=linked
+        already_imported=bool(linked),
+        imported_task_id=linked
     );
 }
 
@@ -400,7 +439,9 @@ walker ListRepoIssues {
         want = self.state if self.state in ["open", "closed", "all"] else "open";
         page = self.page if self.page > 0 else 1;
         result = gh_request(
-            token, "GET", "/repos/" + full_name + "/issues",
+            token,
+            "GET",
+            "/repos/" + full_name + "/issues",
             {"state": want, "per_page": PAGE_SIZE, "page": page}
         );
         if not result["ok"] {
@@ -427,7 +468,9 @@ walker ListRepoIssues {
             rows.append(issue_row(item, owned_tasks, full_name));
         }
         report {
-            "ok": True, "rows": rows, "page": page,
+            "ok": True,
+            "rows": rows,
+            "page": page,
             "has_more": len(raw) >= PAGE_SIZE
         };
     }
@@ -455,7 +498,9 @@ walker ListRepoPulls {
         want = self.state if self.state in ["open", "closed", "all"] else "open";
         page = self.page if self.page > 0 else 1;
         result = gh_request(
-            token, "GET", "/repos/" + full_name + "/pulls",
+            token,
+            "GET",
+            "/repos/" + full_name + "/pulls",
             {"state": want, "per_page": PAGE_SIZE, "page": page}
         );
         if not result["ok"] {
@@ -489,15 +534,22 @@ walker ListRepoPulls {
                     linked = jid(t);
                 }
             }
-            rows.append(GhPrRow(
-                number=number, title=str(item.get("title") or ""),
-                state=pr_state_of(item), author=author, html_url=url,
-                linked_task_id=linked,
-                updated_at=str(item.get("updated_at") or "")
-            ));
+            rows.append(
+                GhPrRow(
+                    number=number,
+                    title=str(item.get("title") or ""),
+                    state=pr_state_of(item),
+                    author=author,
+                    html_url=url,
+                    linked_task_id=linked,
+                    updated_at=str(item.get("updated_at") or "")
+                )
+            );
         }
         report {
-            "ok": True, "rows": rows, "page": page,
+            "ok": True,
+            "rows": rows,
+            "page": page,
             "has_more": len(raw) >= PAGE_SIZE
         };
     }
@@ -541,7 +593,9 @@ walker SearchRepoItems {
         q = q + " " + terms;
         page = self.page if self.page > 0 else 1;
         result = gh_request(
-            token, "GET", "/search/issues",
+            token,
+            "GET",
+            "/search/issues",
             {"q": q, "per_page": PAGE_SIZE, "page": page}
         );
         if not result["ok"] {
@@ -592,12 +646,17 @@ walker SearchRepoItems {
                 if isinstance(pr_meta, dict) {
                     flat["merged_at"] = pr_meta.get("merged_at");
                 }
-                pr_rows.append(GhPrRow(
-                    number=number, title=str(item.get("title") or ""),
-                    state=pr_state_of(flat), author=author, html_url=url,
-                    linked_task_id=linked,
-                    updated_at=str(item.get("updated_at") or "")
-                ));
+                pr_rows.append(
+                    GhPrRow(
+                        number=number,
+                        title=str(item.get("title") or ""),
+                        state=pr_state_of(flat),
+                        author=author,
+                        html_url=url,
+                        linked_task_id=linked,
+                        updated_at=str(item.get("updated_at") or "")
+                    )
+                );
             } else {
                 if item.get("pull_request") {
                     continue;
@@ -655,7 +714,7 @@ walker ImportIssues {
         # or plain "Done" for an org that has no workflow yet.
         done_step = "";
         done_sort = 0.0;
-        for s in [here-->[?:WorkflowStep, kind == "done"]] {
+        for s in [here-->[?:WorkflowStep, kind=="done"]] {
             if not done_step or s.sort_order < done_sort {
                 done_step = jid(s);
                 done_sort = s.sort_order;
@@ -679,7 +738,7 @@ walker ImportIssues {
         skipped: list[int] = [];
         failed: list[int] = [];
         peak = 0.0;
-        for t in [here-->[?:Task, status == col]] {
+        for t in [here-->[?:Task, status==col]] {
             if t.sort_order > peak {
                 peak = t.sort_order;
             }
@@ -689,14 +748,13 @@ walker ImportIssues {
             if number <= 0 {
                 continue;
             }
-            existing = [here-->[?:Task, gh_repo == full_name, gh_issue_number == number]];
+            existing = [here-->[?:Task, gh_repo==full_name, gh_issue_number==number]];
             if existing {
                 skipped.append(number);
                 continue;
             }
             result = gh_request(
-                token, "GET",
-                "/repos/" + full_name + "/issues/" + str(number)
+                token, "GET", "/repos/" + full_name + "/issues/" + str(number)
             );
             if not result["ok"] {
                 mark_invalid(c, result);
@@ -720,12 +778,19 @@ walker ImportIssues {
             peak = peak + 1024.0;
             fresh = here ++> Task(
                 title=str(item.get("title") or ("Issue #" + str(number))),
-                category="", priority="Medium", status=landing,
+                category="",
+                priority="Medium",
+                status=landing,
                 step_id=landing_step,
-                notes=body[:2000], issue_link=str(item.get("html_url") or ""),
-                created_at=stamp, updated_at=stamp, sort_order=peak,
-                gh_repo=full_name, gh_issue_number=number,
-                gh_issue_state=issue_state, gh_synced_at=stamp
+                notes=body[:2000],
+                issue_link=str(item.get("html_url") or ""),
+                created_at=stamp,
+                updated_at=stamp,
+                sort_order=peak,
+                gh_repo=full_name,
+                gh_issue_number=number,
+                gh_issue_state=issue_state,
+                gh_synced_at=stamp
             );
             on_attached(here, fresh);
             if isinstance(target_project, Project) {
@@ -748,15 +813,14 @@ walker ImportIssues {
                 }
             }
             record_task_event(
-                here, fresh,
-                "Imported from GitHub " + full_name + " #" + str(number), stamp
+                here,
+                fresh,
+                "Imported from GitHub " + full_name + " #" + str(number),
+                stamp
             );
             imported.append(fresh.to_view());
         }
-        report {
-            "ok": True, "imported": imported,
-            "skipped": skipped, "failed": failed
-        };
+        report {"ok": True, "imported": imported, "skipped": skipped, "failed": failed};
     }
 }
 
@@ -774,7 +838,8 @@ walker CreateIssueFromTask(find_task) {
         holder = owners[0];
         if here.gh_issue_number != 0 {
             report {
-                "ok": False, "error": "already_linked",
+                "ok": False,
+                "error": "already_linked",
                 "message": "This task already has a GitHub issue."
             };
             disengage;
@@ -797,8 +862,11 @@ walker CreateIssueFromTask(find_task) {
             body = "Tracked in standup.";
         }
         result = gh_request(
-            token, "POST", "/repos/" + full_name + "/issues",
-            {}, {"title": here.title, "body": body}
+            token,
+            "POST",
+            "/repos/" + full_name + "/issues",
+            {},
+            {"title": here.title, "body": body}
         );
         if not result["ok"] {
             mark_invalid(c, result);
@@ -808,7 +876,8 @@ walker CreateIssueFromTask(find_task) {
         item = result["data"];
         if not isinstance(item, dict) {
             report {
-                "ok": False, "error": "invalid",
+                "ok": False,
+                "error": "invalid",
                 "message": "GitHub did not return the new issue."
             };
             disengage;
@@ -821,7 +890,8 @@ walker CreateIssueFromTask(find_task) {
         here.issue_link = str(item.get("html_url") or "");
         here.updated_at = stamp;
         record_task_event(
-            holder, here,
+            holder,
+            here,
             "Opened GitHub issue " + full_name + " #" + str(here.gh_issue_number),
             stamp
         );
@@ -846,7 +916,8 @@ walker SyncGithub {
             disengage;
         }
         linked = [
-            t for t in [here-->[?:Task]]
+            t
+            for t in [here-->[?:Task]]
             if t.gh_repo and t.gh_issue_number > 0
         ];
         changed: list[TaskView] = [];
@@ -863,7 +934,9 @@ walker SyncGithub {
             states: dict[int, str] = {};
             for page in [1, 2] {
                 result = gh_request(
-                    token, "GET", "/repos/" + full_name + "/issues",
+                    token,
+                    "GET",
+                    "/repos/" + full_name + "/issues",
                     {"state": "all", "per_page": 100, "page": page}
                 );
                 if not result["ok"] {
@@ -917,7 +990,8 @@ walker SyncGithub {
         }
         # PRs are per-task GETs, so they are capped and the stalest go first.
         pr_tasks = [
-            t for t in [here-->[?:Task]]
+            t
+            for t in [here-->[?:Task]]
             if t.status != "Done" and t.pr_number > 0 and valid_full_name(t.gh_repo)
         ];
         pr_tasks.sort(key=lambda (t: Task) { t.gh_synced_at; });
@@ -928,8 +1002,7 @@ walker SyncGithub {
             }
             checked = checked + 1;
             result = gh_request(
-                token, "GET",
-                "/repos/" + t.gh_repo + "/pulls/" + str(t.pr_number)
+                token, "GET", "/repos/" + t.gh_repo + "/pulls/" + str(t.pr_number)
             );
             if not result["ok"] {
                 mark_invalid(c, result);
@@ -950,7 +1023,9 @@ walker SyncGithub {
             c.last_sync_at = stamp;
         }
         report {
-            "ok": True, "synced": len(linked), "changed": changed,
+            "ok": True,
+            "synced": len(linked),
+            "changed": changed,
             "last_sync_at": stamp
         };
     }

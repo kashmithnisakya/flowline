@@ -26,8 +26,9 @@ def:pub TransitionRow(
 ) -> JsxElement {
     return
         <div
-            className={"flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs "
-                + ("border-warning/40 bg-warning/10" if back else "bg-muted/40")}
+            className={"flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs " + (
+                "border-warning/40 bg-warning/10" if back else "bg-muted/40"
+            )}
         >
             <span className="flex min-w-0 items-center gap-1.5">
                 {if back {
@@ -105,9 +106,7 @@ def:pub StepInspector(
     }
     currentOwner = (form["owner"] or "").strip();
     if (
-        currentOwner
-        and currentOwner != "anyone"
-        and currentOwner not in ownerChoices
+        currentOwner and currentOwner != "anyone" and currentOwner not in ownerChoices
     ) {
         ownerChoices.append(currentOwner);
     }
@@ -155,7 +154,7 @@ def:pub StepInspector(
                         }}}
                         onBlur={lambda { if onNameCommit { onNameCommit(); }}}
                         onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onNameCommit {
+                        and onNameCommit {
                             onNameCommit();
                         }}}
                     />
@@ -226,13 +225,11 @@ def:pub StepInspector(
                                 key={c}
                                 type="button"
                                 title={c}
-                                className={"h-5 w-5 rounded-full "
-                                    + DOT_FILL[c]
-                                    + (
-                                        " ring-2 ring-ring ring-offset-2 ring-offset-card"
-                                            if colorKey(form["color"] or "") == c
-                                            else ""
-                                    )}
+                                className={"h-5 w-5 rounded-full " + DOT_FILL[c] + (
+                                    " ring-2 ring-ring ring-offset-2 ring-offset-card"
+                                        if colorKey(form["color"] or "") == c
+                                        else ""
+                                )}
                                 onClick={lambda { if onField { onField("color", c); }}}
                             />
                         }}

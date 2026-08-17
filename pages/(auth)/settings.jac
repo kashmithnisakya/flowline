@@ -15,45 +15,52 @@ glob THEME_OPTIONS: list[list[str]] = [
 # ghost text lines, in that theme's own palette.
 def ThemePreview(kind: str) -> JsxElement {
     if kind == "light" {
-        return <span className="flex h-16 w-full flex-col gap-1 overflow-hidden rounded-lg border border-[#E6DDCC] bg-[#F6F2EB] p-2.5">
-            <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#E8552F]"/>
-                <span className="h-1.5 w-10 rounded-full bg-[#14120F]/70"/>
-            </span>
-            <span className="h-1.5 w-3/4 rounded-full bg-[#14120F]/30"/>
-            <span className="h-1.5 w-1/2 rounded-full bg-[#14120F]/15"/>
-            <span className="mt-auto h-3 w-10 rounded-full bg-[#E8552F]"/>
-        </span>;
+        return
+            <span
+                className="flex h-16 w-full flex-col gap-1 overflow-hidden rounded-lg border border-[#E6DDCC] bg-[#F6F2EB] p-2.5"
+            >
+                <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#E8552F]"/>
+                    <span className="h-1.5 w-10 rounded-full bg-[#14120F]/70"/>
+                </span>
+                <span className="h-1.5 w-3/4 rounded-full bg-[#14120F]/30"/>
+                <span className="h-1.5 w-1/2 rounded-full bg-[#14120F]/15"/>
+                <span className="mt-auto h-3 w-10 rounded-full bg-[#E8552F]"/>
+            </span>;
     }
     if kind == "dark" {
-        return <span className="flex h-16 w-full flex-col gap-1 overflow-hidden rounded-lg border border-[#E6EDEB]/15 bg-[#101514] p-2.5">
-            <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2DD4BF]"/>
-                <span className="h-1.5 w-10 rounded-full bg-[#E6EDEB]/80"/>
-            </span>
-            <span className="h-1.5 w-3/4 rounded-full bg-[#E6EDEB]/35"/>
-            <span className="h-1.5 w-1/2 rounded-full bg-[#E6EDEB]/20"/>
-            <span className="mt-auto h-3 w-10 rounded-full bg-[#2DD4BF]"/>
-        </span>;
+        return
+            <span
+                className="flex h-16 w-full flex-col gap-1 overflow-hidden rounded-lg border border-[#E6EDEB]/15 bg-[#101514] p-2.5"
+            >
+                <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2DD4BF]"/>
+                    <span className="h-1.5 w-10 rounded-full bg-[#E6EDEB]/80"/>
+                </span>
+                <span className="h-1.5 w-3/4 rounded-full bg-[#E6EDEB]/35"/>
+                <span className="h-1.5 w-1/2 rounded-full bg-[#E6EDEB]/20"/>
+                <span className="mt-auto h-3 w-10 rounded-full bg-[#2DD4BF]"/>
+            </span>;
     }
-    return <span className="flex h-16 w-full overflow-hidden rounded-lg border">
-        <span className="flex flex-1 flex-col gap-1 bg-[#F6F2EB] p-2.5">
-            <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#E8552F]"/>
-                <span className="h-1.5 w-8 rounded-full bg-[#14120F]/70"/>
+    return
+        <span className="flex h-16 w-full overflow-hidden rounded-lg border">
+            <span className="flex flex-1 flex-col gap-1 bg-[#F6F2EB] p-2.5">
+                <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#E8552F]"/>
+                    <span className="h-1.5 w-8 rounded-full bg-[#14120F]/70"/>
+                </span>
+                <span className="h-1.5 w-3/4 rounded-full bg-[#14120F]/30"/>
+                <span className="mt-auto h-3 w-8 rounded-full bg-[#E8552F]"/>
             </span>
-            <span className="h-1.5 w-3/4 rounded-full bg-[#14120F]/30"/>
-            <span className="mt-auto h-3 w-8 rounded-full bg-[#E8552F]"/>
-        </span>
-        <span className="flex flex-1 flex-col gap-1 bg-[#101514] p-2.5">
-            <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2DD4BF]"/>
-                <span className="h-1.5 w-8 rounded-full bg-[#E6EDEB]/80"/>
+            <span className="flex flex-1 flex-col gap-1 bg-[#101514] p-2.5">
+                <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2DD4BF]"/>
+                    <span className="h-1.5 w-8 rounded-full bg-[#E6EDEB]/80"/>
+                </span>
+                <span className="h-1.5 w-3/4 rounded-full bg-[#E6EDEB]/35"/>
+                <span className="mt-auto h-3 w-8 rounded-full bg-[#2DD4BF]"/>
             </span>
-            <span className="h-1.5 w-3/4 rounded-full bg-[#E6EDEB]/35"/>
-            <span className="mt-auto h-3 w-8 rounded-full bg-[#2DD4BF]"/>
-        </span>
-    </span>;
+        </span>;
 }
 
 
@@ -72,20 +79,16 @@ def:pub SettingsPage -> JsxPage {
     return
         <div className="flex w-full flex-col gap-8">
             <div className="flex flex-col gap-2">
-                <h1 className="page-title">
-                    Settings
-                </h1>
-                <p className="page-subtitle">
-                    Preferences for this browser.
-                </p>
+                <h1 className="page-title">Settings</h1>
+                <p className="page-subtitle">Preferences for this browser.</p>
             </div>
-            <div className="flex flex-col gap-4 rounded-xl border bg-card p-5 animate-in fade-in slide-in-from-bottom-1 duration-200">
+            <div
+                className="flex flex-col gap-4 rounded-xl border bg-card p-5 animate-in fade-in slide-in-from-bottom-1 duration-200"
+            >
                 <div className="flex flex-col gap-1">
                     <h2 className="font-display text-base font-semibold">Appearance</h2>
                     <p className="text-sm text-muted-foreground">
-                        Light keeps the classic look; dark switches to the teal
-                        night palette. System follows your device, so the app
-                        flips when it does.
+                        Light keeps the classic look; dark switches to the teal night palette. System follows your device, so the app flips when it does.
                     </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -93,12 +96,11 @@ def:pub SettingsPage -> JsxPage {
                         <button
                             key={opt[0]}
                             type="button"
-                            className={"relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md "
-                                + (
-                                    "border-primary ring-2 ring-primary/30"
-                                        if pref == opt[0]
-                                        else ""
-                                )}
+                            className={"relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md " + (
+                                "border-primary ring-2 ring-primary/30"
+                                    if pref == opt[0]
+                                    else ""
+                            )}
                             onClick={lambda { pick(opt[0]); }}
                         >
                             {if pref == opt[0] {
@@ -129,8 +131,7 @@ def:pub SettingsPage -> JsxPage {
                     }}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Stored in this browser only. The same account on another
-                    machine keeps its own choice.
+                    Stored in this browser only. The same account on another machine keeps its own choice.
                 </p>
             </div>
         </div>;

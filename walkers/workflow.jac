@@ -276,7 +276,7 @@ walker ApplyTemplate {
             raw_roles: list[dict[str, str]] = chosen["roles"];
             r_order = 1024.0;
             for rr in raw_roles {
-                if not [here-->[?:Role, name == rr["name"]]] {
+                if not [here-->[?:Role, name==rr["name"]]] {
                     fresh_role = here ++> Role(
                         name=rr["name"],
                         blurb=rr["blurb"] if "blurb" in rr else "",
@@ -429,10 +429,7 @@ walker DeleteStep(find_step) {
                     "ok": False,
                     "error": "last_of_kind",
                     "message": (
-                        "This is the only "
-                        + kind
-                        + " step. Give another step "
-                        + "that kind first, then delete this one."
+                        "This is the only " + kind + " step. Give another step " + "that kind first, then delete this one."
                     )
                 };
                 disengage;

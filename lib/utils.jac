@@ -17,7 +17,11 @@ def:pub normalizeRepoInput(raw: str) -> str {
         cleaned = cleaned[:-4];
     }
     cleaned = cleaned.strip("/");
-    parts = [p for p in cleaned.split("/") if p];
+    parts = [
+        p
+        for p in cleaned.split("/")
+        if p
+    ];
     if len(parts) >= 2 {
         return parts[0] + "/" + parts[1];
     }

@@ -1,8 +1,18 @@
 """Daily-log walkers: day buckets and their entries."""
 
 import from models {
-    Project, Member, Task, LogDay, LogEntry,
-    Logged, By, AssignedTo, ForProject, resolve, on_attached, owned
+    Project,
+    Member,
+    Task,
+    LogDay,
+    LogEntry,
+    Logged,
+    By,
+    AssignedTo,
+    ForProject,
+    resolve,
+    on_attached,
+    owned
 }
 
 # ---------------------------------------------------------------- daily log
@@ -15,11 +25,11 @@ walker ListLogEntries {
         reports: list[list[LogEntry]] = [];
 
     can start with Root entry {
-        visit [here-->[?:LogDay, date >= self.from_date, date <= self.to_date]];
+        visit [here-->[?:LogDay, date>=self.from_date, date<=self.to_date]];
     }
 
     can descend with LogDay entry {
-        visit [here ->:Logged:->];
+        visit [here->:Logged:->];
     }
 
     can gather with LogEntry entry {
@@ -56,7 +66,7 @@ walker LogActivity {
         if not isinstance(probe, Member) or not owned(here, probe) {
             disengage;
         }
-        visit [here-->[?:LogDay, date == self.date]] else {
+        visit [here-->[?:LogDay, date==self.date]] else {
             fresh = here ++> LogDay(date=self.date);
             on_attached(here, fresh);
             visit fresh;
@@ -80,10 +90,17 @@ walker LogActivity {
             project_name = p.name;
         }
         row = here +>:Logged():+> LogEntry(
-            date=here.date, activity=self.activity, category=self.category,
-            repo=self.repo, issue_link=self.issue_link, pr_link=self.pr_link,
-            status=self.status, notes=self.notes,
-            member_name=member_name, tags=tags_snap, project_name=project_name
+            date=here.date,
+            activity=self.activity,
+            category=self.category,
+            repo=self.repo,
+            issue_link=self.issue_link,
+            pr_link=self.pr_link,
+            status=self.status,
+            notes=self.notes,
+            member_name=member_name,
+            tags=tags_snap,
+            project_name=project_name
         );
         if isinstance(m, Member) {
             row +>:By():+> m;
@@ -102,7 +119,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     # Server-side, a filtered re-query is answered from committed storage,
     # so a bucket created in this request is invisible to it. Use the
     # freshly connected node directly instead of querying it back.
-    days = [holder-->[?:LogDay, date == today]];
+    days = [holder-->[?:LogDay, date==today]];
     if days {
         day = days[0];
     } else {
@@ -111,7 +128,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     }
     names: list[str] = [];
     tag_pool: list[str] = [];
-    for a in [task ->:AssignedTo:->] {
+    for a in [task->:AssignedTo:->] {
         names.append(a.name);
         for t in a.tags {
             if t not in tag_pool {
@@ -119,13 +136,21 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
             }
         }
     }
-    projects = [task ->:ForProject:->];
+    projects = [task->:ForProject:->];
     day +>:Logged():+> LogEntry(
-        date=today, at=stamp, task_id=jid(task), task_title=task.title,
-        activity=activity, category=task.category,
-        repo="", issue_link=task.issue_link, pr_link=task.pr_link,
-        status=task.status, notes="",
-        member_name=", ".join(names), tags=", ".join(tag_pool),
+        date=today,
+        at=stamp,
+        task_id=jid(task),
+        task_title=task.title,
+        activity=activity,
+        category=task.category,
+        repo="",
+        issue_link=task.issue_link,
+        pr_link=task.pr_link,
+        status=task.status,
+        notes="",
+        member_name=", ".join(names),
+        tags=", ".join(tag_pool),
         project_name=projects[0].name if projects else ""
     );
 }
@@ -134,11 +159,15 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
 # latest row for this task today so its links and note show in the feed.
 def sync_task_links(holder: Root, task: Task, note: str) -> None {
     today = task.updated_at[:10];
-    days = [holder-->[?:LogDay, date == today]];
+    days = [holder-->[?:LogDay, date==today]];
     if not days {
         return;
     }
-    matches = [r for r in [days[0] ->:Logged:->] if r.task_id == jid(task)];
+    matches = [
+        r
+        for r in [days[0]->:Logged:->]
+        if r.task_id == jid(task)
+    ];
     if not matches {
         return;
     }

@@ -25,7 +25,11 @@ import from ...components.workflow.lanes { laneLayout }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
 import from ...components.workflow.geometry {
-    hitStep, stepXY, canvasSize, NODE_W, NODE_H
+    hitStep,
+    stepXY,
+    canvasSize,
+    NODE_W,
+    NODE_H
 }
 import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
 import from ...components.ui.button { Button }
@@ -139,9 +143,7 @@ def:pub WorkflowPage -> JsxPage {
         lambda {
             onResize = lambda { fitZoom(); };
             window.addEventListener("resize", onResize);
-            return lambda {
-                window.removeEventListener("resize", onResize);
-            };
+            return lambda { window.removeEventListener("resize", onResize); };
         },
         []
     );
@@ -330,9 +332,7 @@ def:pub WorkflowPage -> JsxPage {
             }
             if stranded > 0 {
                 issues.append(
-                    str(stranded)
-                        + (" step has" if stranded == 1 else " steps have")
-                        + " no path from a start step."
+                    str(stranded) + (" step has" if stranded == 1 else " steps have") + " no path from a start step."
                 );
             }
         }
@@ -364,9 +364,7 @@ def:pub WorkflowPage -> JsxPage {
             }
             if noPath > 0 {
                 issues.append(
-                    str(noPath)
-                        + (" step has" if noPath == 1 else " steps have")
-                        + " no path to a done step."
+                    str(noPath) + (" step has" if noPath == 1 else " steps have") + " no path to a done step."
                 );
             }
         }
@@ -378,9 +376,7 @@ def:pub WorkflowPage -> JsxPage {
         <div className="flex w-full flex-col gap-6">
             {if loading or showPicker {
                 <div key="head" className="flex flex-col gap-2">
-                    <h1 className="page-title">
-                        Workflow
-                    </h1>
+                    <h1 className="page-title">Workflow</h1>
                     <p className="page-subtitle">
                         The steps work moves through in your organization, drawn your way, branches and loops included.
                     </p>
@@ -428,12 +424,7 @@ def:pub WorkflowPage -> JsxPage {
                                 }}}
                             />
                         } else {
-                            <h1
-                                key="name"
-                                className="page-title"
-                            >
-                                {wfName}
-                            </h1>
+                            <h1 key="name" className="page-title">{wfName}</h1>
                         } }
                         {if not renaming {
                             <Button
@@ -453,12 +444,11 @@ def:pub WorkflowPage -> JsxPage {
                             >
                                 <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span className="tabular-nums">
-                                    {issues[0]
-                                        + (
-                                            " (+" + str(len(issues) - 1) + ")"
-                                                if len(issues) > 1
-                                                else ""
-                                        )}
+                                    {issues[0] + (
+                                        " (+" + str(len(issues) - 1) + ")"
+                                            if len(issues) > 1
+                                            else ""
+                                    )}
                                 </span>
                             </span>
                         }}
@@ -539,13 +529,10 @@ def:pub WorkflowPage -> JsxPage {
                                 >
                                     <p className="text-sm text-pretty">
                                         <span className="font-medium">
-                                            {"Drawing a transition out of "
-                                                + connectTitle
-                                                + "."}
+                                            {"Drawing a transition out of " + connectTitle + "."}
                                         </span>
                                         <span className="text-muted-foreground">
-                                            {" Click the step it flows into, backwards is fine,"
-                                                + " loops are the point."}
+                                            {" Click the step it flows into, backwards is fine," + " loops are the point."}
                                         </span>
                                     </p>
                                     <Button
@@ -578,8 +565,7 @@ def:pub WorkflowPage -> JsxPage {
                                         onChange={lambda (e: any) { setField(
                                             "name", e.target.value
                                         ); }}
-                                        onKeyDown={lambda (e: any) { if e.key
-                                            == "Enter" {
+                                        onKeyDown={lambda (e: any) { if e.key == "Enter" {
                                             commitName();
                                         }}}
                                     />
@@ -587,7 +573,7 @@ def:pub WorkflowPage -> JsxPage {
                                         <Button
                                             size="sm"
                                             disabled={saving
-                                                or not (form["name"] or "").strip()}
+                                            or not (form["name"] or "").strip()}
                                             onClick={commitName}
                                         >
                                             Add to canvas
@@ -629,20 +615,13 @@ def:pub WorkflowPage -> JsxPage {
             } else {
                 <div key="viewer" className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-center gap-3">
-                        <h1
-                            className="page-title"
-                        >
-                            {wfName}
-                        </h1>
+                        <h1 className="page-title">{wfName}</h1>
                         <span
                             className="rounded-full border px-3 py-1 text-xs tabular-nums text-muted-foreground"
                         >
-                            {str(len(steps))
-                                + " steps · "
-                                + str(linkCount)
-                                + " transitions · "
-                                + str(taskTotal)
-                                + (" task" if taskTotal == 1 else " tasks")}
+                            {str(len(steps)) + " steps · " + str(linkCount) + " transitions · " + str(
+                                taskTotal
+                            ) + (" task" if taskTotal == 1 else " tasks")}
                         </span>
                         <div className="flex-1"/>
                         {if len(issues) > 0 {
@@ -659,24 +638,22 @@ def:pub WorkflowPage -> JsxPage {
                         >
                             <button
                                 type="button"
-                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
-                                    + (
-                                        "bg-background text-foreground shadow-sm"
-                                            if not laneMode
-                                            else "text-muted-foreground transition-colors hover:text-foreground"
-                                    )}
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium " + (
+                                    "bg-background text-foreground shadow-sm"
+                                        if not laneMode
+                                        else "text-muted-foreground transition-colors hover:text-foreground"
+                                )}
                                 onClick={lambda { switchView("flow"); }}
                             >
                                 Flow
                             </button>
                             <button
                                 type="button"
-                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
-                                    + (
-                                        "bg-background text-foreground shadow-sm"
-                                            if laneMode
-                                            else "text-muted-foreground transition-colors hover:text-foreground"
-                                    )}
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium " + (
+                                    "bg-background text-foreground shadow-sm"
+                                        if laneMode
+                                        else "text-muted-foreground transition-colors hover:text-foreground"
+                                )}
                                 onClick={lambda { switchView("lanes"); }}
                             >
                                 Lanes
@@ -712,8 +689,9 @@ def:pub WorkflowPage -> JsxPage {
                                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
                             >
                                 <span
-                                    className={"h-2 w-2 rounded-full "
-                                        + DOT_FILL[KIND_COLORS[k]]}
+                                    className={"h-2 w-2 rounded-full " + DOT_FILL[
+                                        KIND_COLORS[k]
+                                    ]}
                                 />
                                 {KIND_LABEL[k]}
                             </span>
@@ -730,8 +708,9 @@ def:pub WorkflowPage -> JsxPage {
                                     className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
                                 >
                                     <span
-                                        className={"h-2 w-2 shrink-0 rounded-full "
-                                            + DOT_FILL[colorKey(rr.color or "slate")]}
+                                        className={"h-2 w-2 shrink-0 rounded-full " + DOT_FILL[
+                                            colorKey(rr.color or "slate")
+                                        ]}
                                     />
                                     <span className="font-medium">{rr.name}</span>
                                     <span className="text-muted-foreground">
@@ -770,7 +749,11 @@ def:pub WorkflowPage -> JsxPage {
                             <span className="font-medium text-foreground">
                                 {", ".join(offFlow)}
                             </span>
-                            {(" · owns no step" if len(offFlow) == 1 else " · own no step")}
+                            {(
+                                " · owns no step"
+                                    if len(offFlow) == 1
+                                    else " · own no step"
+                            )}
                         </p>
                     }}
                 </div>
@@ -783,8 +766,9 @@ def:pub WorkflowPage -> JsxPage {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <span
-                                className={"h-2.5 w-2.5 shrink-0 rounded-full "
-                                    + DOT_FILL[peekColor]}
+                                className={"h-2.5 w-2.5 shrink-0 rounded-full " + DOT_FILL[
+                                    peekColor
+                                ]}
                             />
                             {peekName + (" · " + peekKind if peekKind else "")}
                         </DialogTitle>
@@ -796,8 +780,9 @@ def:pub WorkflowPage -> JsxPage {
                         {if peekLoading {
                             <div key="loading" className="flex flex-col gap-2">
                                 <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
-                                        + CARD_BAR[peekColor]}
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
+                                        peekColor
+                                    ]}
                                 >
                                     <Skeleton className="h-4 w-3/5"/>
                                     <div className="flex items-center gap-1.5">
@@ -806,8 +791,9 @@ def:pub WorkflowPage -> JsxPage {
                                     </div>
                                 </div>
                                 <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
-                                        + CARD_BAR[peekColor]}
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
+                                        peekColor
+                                    ]}
                                 >
                                     <Skeleton className="h-4 w-2/5"/>
                                     <div className="flex items-center gap-1.5">
@@ -816,8 +802,9 @@ def:pub WorkflowPage -> JsxPage {
                                     </div>
                                 </div>
                                 <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
-                                        + CARD_BAR[peekColor]}
+                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
+                                        peekColor
+                                    ]}
                                 >
                                     <Skeleton className="h-4 w-1/2"/>
                                     <div className="flex items-center gap-1.5">
@@ -838,8 +825,9 @@ def:pub WorkflowPage -> JsxPage {
                                 {for t in peekTasks {
                                     <div
                                         key={t.id}
-                                        className={"flex flex-col gap-1 rounded-lg border bg-card p-3 "
-                                            + CARD_BAR[peekColor]}
+                                        className={"flex flex-col gap-1 rounded-lg border bg-card p-3 " + CARD_BAR[
+                                            peekColor
+                                        ]}
                                     >
                                         <span className="text-sm font-medium">
                                             {t.title}

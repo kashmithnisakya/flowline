@@ -156,37 +156,14 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
             a2y = ey - 4.0 * dirn;
         }
         d = (
-            "M "
-            + str(sx)
-            + " "
-            + str(sy)
-            + " C "
-            + str(h1x)
-            + " "
-            + str(h1y)
-            + ", "
-            + str(h2x)
-            + " "
-            + str(h2y)
-            + ", "
-            + str(ex)
-            + " "
-            + str(ey)
+            "M " + str(sx) + " " + str(sy) + " C " + str(h1x) + " " + str(h1y) + ", " + str(
+                h2x
+            ) + " " + str(h2y) + ", " + str(ex) + " " + str(ey)
         );
         arrow = (
-            "M "
-            + str(ex)
-            + " "
-            + str(ey)
-            + " L "
-            + str(a1x)
-            + " "
-            + str(a1y)
-            + " L "
-            + str(a2x)
-            + " "
-            + str(a2y)
-            + " Z"
+            "M " + str(ex) + " " + str(ey) + " L " + str(a1x) + " " + str(a1y) + " L " + str(
+                a2x
+            ) + " " + str(a2y) + " Z"
         );
         out.append({"key": "l" + str(i), "d": d, "arrow": arrow});
     }
@@ -218,12 +195,11 @@ def:pub TemplatePicker(
                 {for t in WORKFLOW_TEMPLATES {
                     <Card
                         key={t["key"]}
-                        className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
-                            + (
-                                " opacity-60"
-                                    if applying != "" and applying != t["key"]
-                                    else ""
-                            )}
+                        className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity" + (
+                            " opacity-60"
+                                if applying != "" and applying != t["key"]
+                                else ""
+                        )}
                     >
                         <CardContent className="flex flex-1 flex-col gap-3 py-4">
                             <div
@@ -297,8 +273,9 @@ def:pub TemplatePicker(
                 }}
                 <Card
                     key="scratch"
-                    className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
-                        + (" opacity-60" if applying != "" else "")}
+                    className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity" + (
+                        " opacity-60" if applying != "" else ""
+                    )}
                 >
                     <CardContent className="flex flex-1 flex-col gap-3 py-4">
                         <div

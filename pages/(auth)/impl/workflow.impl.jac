@@ -224,9 +224,7 @@ impl WorkflowPage.commitName -> None {
     saving = True;
     try {
         # SaveStep reads empty as "keep", so a lone space clears the owner.
-        root spawn SaveStep(
-            step_id=selectedId, name=name, owner=owner if owner else " "
-        );
+        root spawn SaveStep(step_id=selectedId, name=name, owner=owner or " ");
         await reload(projectId);
     } except Exception as e {
         toast("Failed to update the step");
@@ -328,9 +326,7 @@ impl WorkflowPage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
     # An empty `said` is a clear, not a no-op, which is why this goes
     # through LabelTransition rather than re-drawing the arrow.
     try {
-        result = root spawn LabelTransition(
-            from_id=fromId, to_id=toId, label=said
-        );
+        result = root spawn LabelTransition(from_id=fromId, to_id=toId, label=said);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             edgeDraft = payload["label"];
@@ -428,9 +424,7 @@ impl WorkflowPage.setField(key: str, value: str) -> None {
 # The diagram's true bounding box in canvas px: [minX, minY, maxX, maxY].
 # canvasSize measures from the ORIGIN plus the drag margin, so fitting against
 # it would shrink a diagram that starts away from the corner.
-def contentBounds(
-    steps: list[StepView], live: dict[str, list[float]]
-) -> list[float] {
+def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
     minX = 0.0;
     minY = 0.0;
     maxX = 0.0;

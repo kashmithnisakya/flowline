@@ -19,7 +19,9 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                     <br/>
                     do something else.
                 </h2>
-                <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
+                <div
+                    className="relative mt-8 flex flex-wrap items-center justify-center gap-3"
+                >
                     {if loggedIn {
                         <Button
                             key="app"

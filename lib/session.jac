@@ -3,7 +3,6 @@ organization, so org details live in the profile; `@jac/runtime` exports no
 /user/me helper, so these fetch by hand with the stored JWT.
 """
 
-
 def authHeaders -> dict[str, str] {
     token = localStorage.getItem("jac_token") or "";
     return {"Content-Type": "application/json", "Authorization": "Bearer " + token};
@@ -27,11 +26,14 @@ async def:pub fetchProfile -> dict[str, any] {
 # PATCH /user/me, merges the given keys into the existing profile.
 async def:pub patchProfile(changes: dict[str, any]) -> bool {
     try {
-        response = await fetch("/user/me", {
-            "method": "PATCH",
-            "headers": authHeaders(),
-            "body": JSON.stringify({"profile": changes})
-        });
+        response = await fetch(
+            "/user/me",
+            {
+                "method": "PATCH",
+                "headers": authHeaders(),
+                "body": JSON.stringify({"profile": changes})
+            }
+        );
         return response.ok;
     } except Exception as e {
         return False;

@@ -4,13 +4,19 @@ in this module: a nested walker's reports come back EMPTY and leak into the
 outer walker (jac 0.35.1). Everything traverses `[root-->]` directly."""
 
 import from models {
-    Project, Member, Task, LogDay, LogEntry,
-    AssignedTo, ForProject, Logged
+    Project,
+    Member,
+    Task,
+    LogDay,
+    LogEntry,
+    AssignedTo,
+    ForProject,
+    Logged
 }
 import from walkers.util { now_iso }
 
-glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"];
-glob STALE_AFTER_DAYS: int = 7;
+glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
+     STALE_AFTER_DAYS: int = 7;
 
 # ------------------------------------------------------------------ view objs
 
@@ -126,14 +132,14 @@ def _tasks_of(holder: Root) -> list[Task] {
 
 def _assignee_names(t: Task) -> str {
     names: list[str] = [];
-    for a in [t ->:AssignedTo:->] {
+    for a in [t->:AssignedTo:->] {
         names.append(a.name);
     }
     return ", ".join(names);
 }
 
 def _project_name(t: Task) -> str {
-    for p in [t ->:ForProject:->] {
+    for p in [t->:ForProject:->] {
         return p.name;
     }
     return "";
@@ -141,12 +147,12 @@ def _project_name(t: Task) -> str {
 
 def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
     rows: list[LogEntry] = [];
-    for day in [holder-->[?:LogDay, date >= from_date, date <= to_date]] {
-        for row in [day ->:Logged:->] {
+    for day in [holder-->[?:LogDay, date>=from_date, date<=to_date]] {
+        for row in [day->:Logged:->] {
             rows.append(row);
         }
     }
-    rows.sort(key=lambda (r: LogEntry) { r.at if r.at else r.date; });
+    rows.sort(key=lambda (r: LogEntry) { r.at or r.date; });
     return rows;
 }
 
@@ -158,7 +164,7 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple {
     for row in entries {
         if row.task_id == task_id and row.status == "Blocked" {
             reason = row.notes;
-            since = row.at if row.at else row.date;
+            since = row.at or row.date;
         }
     }
     return (reason, since);
@@ -170,13 +176,26 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple {
 def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     today = _today();
     tasks = _tasks_of(holder);
-    members = [m for m in [holder-->[?:Member]] if m.active];
-    projects = [p for p in [holder-->[?:Project]] if p.active];
+    members = [
+        m
+        for m in [holder-->[?:Member]]
+        if m.active
+    ];
+    projects = [
+        p
+        for p in [holder-->[?:Project]]
+        if p.active
+    ];
     entries = _entries_between(holder, from_date, to_date);
 
-    open_tasks = [t for t in tasks if t.status != "Done"];
+    open_tasks = [
+        t
+        for t in tasks
+        if t.status != "Done"
+    ];
     done_period = [
-        t for t in tasks
+        t
+        for t in tasks
         if t.status == "Done" and t.updated_at[:10] >= from_date
     ];
 
@@ -184,24 +203,31 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     for t in tasks {
         if t.status == "Blocked" {
             (reason, since) = _blocked_reason(entries, jid(t));
-            blocked.append(BlockedItem(
-                title=t.title, project=_project_name(t),
-                assignees=_assignee_names(t),
-                reason=reason if reason else t.notes,
-                since=since[:10] if since else t.updated_at[:10]
-            ));
+            blocked.append(
+                BlockedItem(
+                    title=t.title,
+                    project=_project_name(t),
+                    assignees=_assignee_names(t),
+                    reason=reason or t.notes,
+                    since=since[:10] if since else t.updated_at[:10]
+                )
+            );
         }
     }
 
     review_queue: list[ReviewItem] = [];
     for t in tasks {
         if t.status == "Review" {
-            review_queue.append(ReviewItem(
-                title=t.title, project=_project_name(t),
-                reviewer=t.reviewer_name, review_due=t.review_due,
-                pr_link=t.pr_link,
-                waiting_days=_days_between(t.updated_at[:10], today)
-            ));
+            review_queue.append(
+                ReviewItem(
+                    title=t.title,
+                    project=_project_name(t),
+                    reviewer=t.reviewer_name,
+                    review_due=t.review_due,
+                    pr_link=t.pr_link,
+                    waiting_days=_days_between(t.updated_at[:10], today)
+                )
+            );
         }
     }
 
@@ -213,61 +239,137 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         }
         idle = _days_between(t.updated_at[:10], today);
         if idle >= STALE_AFTER_DAYS {
-            aging.append(AgingItem(
-                title=t.title, project=_project_name(t), status=t.status,
-                assignees=_assignee_names(t), idle_days=idle
-            ));
+            aging.append(
+                AgingItem(
+                    title=t.title,
+                    project=_project_name(t),
+                    status=t.status,
+                    assignees=_assignee_names(t),
+                    idle_days=idle
+                )
+            );
         }
         if t.due_date and t.due_date < today {
-            overdue.append(OverdueItem(
-                title=t.title, project=_project_name(t),
-                assignees=_assignee_names(t), due_date=t.due_date,
-                status=t.status
-            ));
+            overdue.append(
+                OverdueItem(
+                    title=t.title,
+                    project=_project_name(t),
+                    assignees=_assignee_names(t),
+                    due_date=t.due_date,
+                    status=t.status
+                )
+            );
         }
     }
 
     people: list[PersonStat] = [];
     for m in members {
-        mine = [t for t in tasks if m.name in _assignee_names(t)];
-        people.append(PersonStat(
-            name=m.name, roles=", ".join(m.roles), tags=", ".join(m.tags),
-            open_tasks=len([t for t in mine if t.status != "Done"]),
-            done_in_period=len([
-                t for t in mine
-                if t.status == "Done" and t.updated_at[:10] >= from_date
-            ]),
-            log_entries=len([e for e in entries if m.name in e.member_name]),
-            blocked=len([t for t in mine if t.status == "Blocked"])
-        ));
+        mine = [
+            t
+            for t in tasks
+            if m.name in _assignee_names(t)
+        ];
+        people.append(
+            PersonStat(
+                name=m.name,
+                roles=", ".join(m.roles),
+                tags=", ".join(m.tags),
+                open_tasks=len(
+                    [
+                        t
+                        for t in mine
+                        if t.status != "Done"
+                    ]
+                ),
+                done_in_period=len(
+                    [
+                        t
+                        for t in mine
+                        if t.status == "Done" and t.updated_at[:10] >= from_date
+                    ]
+                ),
+                log_entries=len(
+                    [
+                        e
+                        for e in entries
+                        if m.name in e.member_name
+                    ]
+                ),
+                blocked=len(
+                    [
+                        t
+                        for t in mine
+                        if t.status == "Blocked"
+                    ]
+                )
+            )
+        );
     }
 
     project_stats: list[ProjectStat] = [];
     for p in projects {
-        owned_tasks = [t for t in tasks if _project_name(t) == p.name];
-        project_stats.append(ProjectStat(
-            name=p.name, total=len(owned_tasks),
-            done=len([t for t in owned_tasks if t.status == "Done"]),
-            active=len([t for t in owned_tasks if t.status in ACTIVE_STATUSES]),
-            blocked=len([t for t in owned_tasks if t.status == "Blocked"])
-        ));
+        owned_tasks = [
+            t
+            for t in tasks
+            if _project_name(t) == p.name
+        ];
+        project_stats.append(
+            ProjectStat(
+                name=p.name,
+                total=len(owned_tasks),
+                done=len(
+                    [
+                        t
+                        for t in owned_tasks
+                        if t.status == "Done"
+                    ]
+                ),
+                active=len(
+                    [
+                        t
+                        for t in owned_tasks
+                        if t.status in ACTIVE_STATUSES
+                    ]
+                ),
+                blocked=len(
+                    [
+                        t
+                        for t in owned_tasks
+                        if t.status == "Blocked"
+                    ]
+                )
+            )
+        );
     }
 
     activity: list[ActivityLine] = [];
     for e in entries {
-        activity.append(ActivityLine(
-            date=e.date, who=e.member_name, what=e.activity,
-            task=e.task_title, project=e.project_name
-        ));
+        activity.append(
+            ActivityLine(
+                date=e.date,
+                who=e.member_name,
+                what=e.activity,
+                task=e.task_title,
+                project=e.project_name
+            )
+        );
     }
 
     return Snapshot(
-        generated_at=now_iso(), period_from=from_date, period_to=to_date,
-        org_members=len(members), active_projects=len(projects),
-        open_tasks=len(open_tasks), done_in_period=len(done_period),
+        generated_at=now_iso(),
+        period_from=from_date,
+        period_to=to_date,
+        org_members=len(members),
+        active_projects=len(projects),
+        open_tasks=len(open_tasks),
+        done_in_period=len(done_period),
         log_entries_in_period=len(entries),
-        blocked=blocked, review_queue=review_queue, aging=aging,
-        overdue=overdue, people=people, projects=project_stats,
+        blocked=blocked,
+        review_queue=review_queue,
+        aging=aging,
+        overdue=overdue,
+        people=people,
+        projects=project_stats,
         activity=activity
     );
 }
@@ -283,8 +385,8 @@ walker Digest {
 
     can build with Root entry {
         today = _today();
-        start = self.from_date if self.from_date else today;
-        end = self.to_date if self.to_date else today;
+        start = self.from_date or today;
+        end = self.to_date or today;
         report build_snapshot(here, start, end);
     }
 }

@@ -7,7 +7,7 @@ import from "@jac/runtime" { jacSetToken }
 import from ....components.ui.button { Button }
 import from ....components.common.glyphs { WarnIcon }
 
-def:pub SsoCallbackPage() -> JsxPage {
+def:pub SsoCallbackPage -> JsxPage {
     has failure: str = "";
 
     # Reads one query-string value. URLSearchParams is untyped here, so the
@@ -36,57 +36,60 @@ def:pub SsoCallbackPage() -> JsxPage {
             localStorage.setItem("standup_session", "1");
             window.location.href = "/board";
         } else {
-            failure = problem if problem else "Sign-in was cancelled or failed.";
+            failure = problem or "Sign-in was cancelled or failed.";
         }
     }
 
-    return <div className="flex min-h-[70svh] flex-col items-center justify-center gap-4 px-6 text-center">
-        {if failure {
-            <div
-                key="failed"
-                className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
-            >
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                    <WarnIcon size={20}/>
-                </div>
-                <h1 className="font-display mt-4 text-2xl font-bold tracking-tight">
-                    Could not sign you in
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">{failure}</p>
-                <Button
-                    className="mt-5 h-11 w-full"
-                    onClick={lambda { window.location.href = "/login"; }}
+    return
+        <div
+            className="flex min-h-[70svh] flex-col items-center justify-center gap-4 px-6 text-center"
+        >
+            {if failure {
+                <div
+                    key="failed"
+                    className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
                 >
-                    Back to sign in
-                </Button>
-            </div>
-        } else {
-            <div
-                key="working"
-                className="flex flex-col items-center gap-5 animate-in fade-in duration-500"
-            >
-                <img
-                    src="/static/brand/logo-full.svg"
-                    alt="standup"
-                    width={150}
-                    height={40}
-                    className="dark:hidden"
-                />
-                <img
-                    src="/static/brand/logo-full-dark.svg"
-                    alt="standup"
-                    width={150}
-                    height={40}
-                    className="hidden dark:block"
-                />
-                <span
-                    aria-hidden="true"
-                    className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
-                ></span>
-                <p className="text-sm text-muted-foreground">
-                    Signing you in…
-                </p>
-            </div>
-        }}
-    </div>;
+                    <div
+                        className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
+                    >
+                        <WarnIcon size={20}/>
+                    </div>
+                    <h1 className="font-display mt-4 text-2xl font-bold tracking-tight">
+                        Could not sign you in
+                    </h1>
+                    <p className="mt-2 text-sm text-muted-foreground">{failure}</p>
+                    <Button
+                        className="mt-5 h-11 w-full"
+                        onClick={lambda { window.location.href = "/login"; }}
+                    >
+                        Back to sign in
+                    </Button>
+                </div>
+            } else {
+                <div
+                    key="working"
+                    className="flex flex-col items-center gap-5 animate-in fade-in duration-500"
+                >
+                    <img
+                        src="/static/brand/logo-full.svg"
+                        alt="standup"
+                        width={150}
+                        height={40}
+                        className="dark:hidden"
+                    />
+                    <img
+                        src="/static/brand/logo-full-dark.svg"
+                        alt="standup"
+                        width={150}
+                        height={40}
+                        className="hidden dark:block"
+                    />
+                    <span
+                        aria-hidden="true"
+                        className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                    ></span>
+                    <p className="text-sm text-muted-foreground">Signing you in…</p>
+                </div>
+            } }
+        </div>;
 }

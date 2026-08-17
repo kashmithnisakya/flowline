@@ -192,37 +192,14 @@ def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, 
         back = dy < 0.0;
     }
     d = (
-        "M "
-        + str(sx)
-        + " "
-        + str(sy)
-        + " C "
-        + str(h1x)
-        + " "
-        + str(h1y)
-        + ", "
-        + str(h2x)
-        + " "
-        + str(h2y)
-        + ", "
-        + str(ex)
-        + " "
-        + str(ey)
+        "M " + str(sx) + " " + str(sy) + " C " + str(h1x) + " " + str(h1y) + ", " + str(
+            h2x
+        ) + " " + str(h2y) + ", " + str(ex) + " " + str(ey)
     );
     arrow = (
-        "M "
-        + str(ex)
-        + " "
-        + str(ey)
-        + " L "
-        + str(b1x)
-        + " "
-        + str(b1y)
-        + " L "
-        + str(b2x)
-        + " "
-        + str(b2y)
-        + " Z"
+        "M " + str(ex) + " " + str(ey) + " L " + str(b1x) + " " + str(b1y) + " L " + str(
+            b2x
+        ) + " " + str(b2y) + " Z"
     );
     return {
         "d": d,

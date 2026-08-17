@@ -6,7 +6,9 @@ import datetime;
 
 
 def now_iso -> str {
-    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z";
+    return datetime.datetime.now(datetime.timezone.utc).replace(
+        tzinfo=None
+    ).isoformat() + "Z";
 }
 
 

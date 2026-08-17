@@ -1,8 +1,6 @@
 """Project walkers: CRUD plus member assignment edges."""
 
-import from models {
-    Project, Member, OnProject, resolve, on_attached, owned
-}
+import from models { Project, Member, OnProject, resolve, on_attached, owned }
 
 # ----------------------------------------------------------------- projects
 
@@ -78,7 +76,7 @@ walker AssignToProject {
         if not owned(here, m) or not owned(here, p) {
             disengage;
         }
-        if not [edge m ->:OnProject:-> p] {
+        if not [edge m->:OnProject:->p] {
             m +>:OnProject():+> p;
         }
         report {"assigned": True};
@@ -98,10 +96,9 @@ walker UnassignFromProject {
         if not owned(here, m) or not owned(here, p) {
             disengage;
         }
-        for e in [edge m ->:OnProject:-> p] {
+        for e in [edge m->:OnProject:->p] {
             del e;
         }
         report {"unassigned": True};
     }
 }
-

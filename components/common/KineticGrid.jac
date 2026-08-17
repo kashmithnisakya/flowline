@@ -15,7 +15,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
             win: any = window;
             doc: any = document;
             if not canvas {
-                return lambda {};
+                return lambda { };
             }
             ctx: any = canvas.getContext("2d");
             st: dict[str, any] = {
@@ -33,7 +33,6 @@ def:pub KineticGrid(props: any) -> JsxElement {
             };
             media = win.matchMedia("(prefers-reduced-motion: reduce)");
             st["reduced"] = bool(media.matches);
-
             resize = lambda {
                 rect: any = canvas.getBoundingClientRect();
                 dpr: float = win.devicePixelRatio or 1.0;
@@ -43,7 +42,6 @@ def:pub KineticGrid(props: any) -> JsxElement {
                 canvas.width = Math.round(rect.width * dpr);
                 canvas.height = Math.round(rect.height * dpr);
             };
-
             draw = lambda {
                 ctx.setTransform(st["dpr"], 0, 0, st["dpr"], 0, 0);
                 ctx.clearRect(0.0, 0.0, st["w"], st["h"]);
@@ -114,7 +112,6 @@ def:pub KineticGrid(props: any) -> JsxElement {
                     x = x + pitch;
                 }
             };
-
             # Self-rescheduling via the dict lookup so the lambda can reach
             # itself without a forward reference. Repaint only when something
             # changed, plus a slow cadence so theme switches repaint too.
@@ -122,9 +119,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
             holder["tick"] = lambda {
                 now: float = win.performance.now();
                 last: float = st["last"];
-                if st["dirty"]
-                    or len(st["ripples"]) > 0
-                    or (now - last) > 800.0 {
+                if st["dirty"] or len(st["ripples"]) > 0 or (now - last) > 800.0 {
                     st["dirty"] = False;
                     st["last"] = now;
                     draw();
@@ -133,17 +128,14 @@ def:pub KineticGrid(props: any) -> JsxElement {
                     st["raf"] = win.requestAnimationFrame(holder["tick"]);
                 }
             };
-            start = lambda {
-                if not st["running"] {
-                    st["running"] = True;
-                    st["raf"] = win.requestAnimationFrame(holder["tick"]);
-                }
-            };
+            start = lambda { if not st["running"] {
+                st["running"] = True;
+                st["raf"] = win.requestAnimationFrame(holder["tick"]);
+            }};
             stop = lambda {
                 st["running"] = False;
                 win.cancelAnimationFrame(st["raf"]);
             };
-
             onMove = lambda (e: any) {
                 rect: any = canvas.getBoundingClientRect();
                 st["mx"] = e.clientX - rect.left;
@@ -162,9 +154,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
                 hNow: float = st["h"];
                 if cx >= 0.0 and cx <= wNow and cy >= 0.0 and cy <= hNow {
                     grown: list = st["ripples"];
-                    grown = grown + [
-                        {"x": cx, "y": cy, "t0": win.performance.now()}
-                    ];
+                    grown = grown + [{"x": cx, "y": cy, "t0": win.performance.now()}];
                     st["ripples"] = grown;
                     st["dirty"] = True;
                 }
@@ -173,14 +163,11 @@ def:pub KineticGrid(props: any) -> JsxElement {
                 resize();
                 st["dirty"] = True;
             };
-            onVis = lambda {
-                if doc.hidden {
-                    stop();
-                } else {
-                    start();
-                }
-            };
-
+            onVis = lambda { if doc.hidden {
+                stop();
+            } else {
+                start();
+            } };
             resize();
             draw();
             if not st["reduced"] {
@@ -190,7 +177,6 @@ def:pub KineticGrid(props: any) -> JsxElement {
             win.addEventListener("resize", onResize);
             doc.addEventListener("visibilitychange", onVis);
             start();
-
             return lambda {
                 stop();
                 if not st["reduced"] {
@@ -204,12 +190,12 @@ def:pub KineticGrid(props: any) -> JsxElement {
         []
     );
 
-    return <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className={cn(
-            "pointer-events-none absolute inset-0 h-full w-full",
-            props["className"]
-        )}
-    />;
+    return
+        <canvas
+            ref={canvasRef}
+            aria-hidden="true"
+            className={cn(
+                "pointer-events-none absolute inset-0 h-full w-full", props["className"]
+            )}
+        />;
 }

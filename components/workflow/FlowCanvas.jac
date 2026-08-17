@@ -75,19 +75,18 @@ def:pub FlowCanvas(
             {
                 "key": "lane-" + lk,
                 "lane": lk,
-                "cls": "absolute left-0 transition-colors duration-150"
-                    + (
-                        " bg-primary/10"
-                            if hoverLane == lk
-                            else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
-                    )
-                    + ("" if i == 0 else " border-t border-border/60"),
+                "cls": "absolute left-0 transition-colors duration-150" + (
+                    " bg-primary/10"
+                        if hoverLane == lk
+                        else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
+                ) + ("" if i == 0 else " border-t border-border/60"),
                 "top": str(ln["y"]) + "px",
                 "h": str(ln["h"]) + "px",
                 "label": str(ln["label"]),
                 "sub": str(ln["sub"]),
-                "subCls": "mt-0.5 truncate pl-3.5 text-[10px] "
-                    + ("text-warning" if ln["warn"] else "text-muted-foreground"),
+                "subCls": "mt-0.5 truncate pl-3.5 text-[10px] " + (
+                    "text-warning" if ln["warn"] else "text-muted-foreground"
+                ),
                 "totals": str(ln["totals"]),
                 "manage": "y" if ln["manage"] else "",
                 "dot": DOT_FILL[colorKey(str(ln["color"]))]
@@ -214,15 +213,15 @@ def:pub FlowCanvas(
         >
             <div
                 ref={canvasRef}
-                className={"absolute inset-0 origin-top-left"
-                    + (
-                        " transition-transform duration-200 ease-out"
-                            if settled and animate
-                            else ""
-                    )}
+                className={"absolute inset-0 origin-top-left" + (
+                    " transition-transform duration-200 ease-out"
+                        if settled and animate
+                        else ""
+                )}
                 style={{
-                    "transform": "translate(" + str(panX) + "px, "
-                        + str(panY) + "px) scale(" + str(zoom) + ")"
+                    "transform": "translate(" + str(panX) + "px, " + str(panY) + "px) scale(" + str(
+                        zoom
+                    ) + ")"
                 }}
             >
                 {for lr in laneRects {
@@ -249,8 +248,9 @@ def:pub FlowCanvas(
                                     className="group/lane flex items-center gap-1.5 text-xs font-semibold text-foreground no-underline"
                                 >
                                     <span
-                                        className={"h-2 w-2 shrink-0 rounded-full "
-                                            + lr["dot"]}
+                                        className={"h-2 w-2 shrink-0 rounded-full " + lr[
+                                            "dot"
+                                        ]}
                                     />
                                     <span
                                         className="truncate underline-offset-2 group-hover/lane:underline"
@@ -269,8 +269,9 @@ def:pub FlowCanvas(
                                     className="flex items-center gap-1.5 text-xs font-semibold"
                                 >
                                     <span
-                                        className={"h-2 w-2 shrink-0 rounded-full "
-                                            + lr["dot"]}
+                                        className={"h-2 w-2 shrink-0 rounded-full " + lr[
+                                            "dot"
+                                        ]}
                                     />
                                     <span className="truncate" title={lr["label"]}>
                                         {lr["label"]}
@@ -311,15 +312,13 @@ def:pub FlowCanvas(
                                             if laneMode and l["back"]
                                             else "text-muted-foreground/60 hover:text-foreground/70"
                                     )
-                            )
-                                + " transition-[color,opacity] duration-150"
-                                + (
-                                    " opacity-20"
-                                        if laneMode
-                                            and dimStep(l["from"])
-                                            and dimStep(l["to"])
-                                        else ""
-                                )}
+                            ) + " transition-[color,opacity] duration-150" + (
+                                " opacity-20"
+                                    if laneMode
+                                    and dimStep(l["from"])
+                                    and dimStep(l["to"])
+                                    else ""
+                            )}
                         >
                             <path
                                 d={l["d"]}
@@ -328,7 +327,9 @@ def:pub FlowCanvas(
                                 strokeWidth={2.5 if selectedEdge == l["key"] else 2.0}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeDasharray={"6 5" if laneMode and l["back"] else ""}
+                                strokeDasharray={"6 5"
+                                    if laneMode and l["back"]
+                                    else ""}
                                 className="transition-[stroke-width] duration-150"
                             />
                             <path d={l["arrow"]} fill="currentColor" stroke="none"/>
@@ -353,33 +354,30 @@ def:pub FlowCanvas(
                         {if l["label"] and selectedEdge != l["key"] {
                             <span
                                 key="lab"
-                                className={"pointer-events-none absolute z-10 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 "
-                                    + (
-                                        "-translate-x-full"
-                                            if l["side"] == -1
-                                            else ("" if l["side"] == 1 else "-translate-x-1/2")
-                                    )
-                                    + " "
-                                    + (
-                                        "border-destructive/40 bg-background text-destructive"
-                                            if l["back"]
-                                            else "border-border bg-background text-muted-foreground"
-                                    )
-                                    + (
-                                        " opacity-20"
-                                            if laneMode
-                                                and dimStep(l["from"])
-                                                and dimStep(l["to"])
-                                            else ""
-                                    )}
+                                className={"pointer-events-none absolute z-10 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 " + (
+                                    "-translate-x-full"
+                                        if l["side"] == -1
+                                        else (
+                                            "" if l["side"] == 1 else "-translate-x-1/2"
+                                        )
+                                ) + " " + (
+                                    "border-destructive/40 bg-background text-destructive"
+                                        if l["back"]
+                                        else "border-border bg-background text-muted-foreground"
+                                ) + (
+                                    " opacity-20"
+                                        if laneMode
+                                        and dimStep(l["from"])
+                                        and dimStep(l["to"])
+                                        else ""
+                                )}
                                 style={{
                                     "left": str(
-                                        l["lx"]
-                                            + (
-                                                -8.0
-                                                    if l["side"] == -1
-                                                    else (8.0 if l["side"] == 1 else 0.0)
-                                            )
+                                        l["lx"] + (
+                                            -8.0
+                                                if l["side"] == -1
+                                                else (8.0 if l["side"] == 1 else 0.0)
+                                        )
                                     ) + "px",
                                     "top": str(l["ly"]) + "px"
                                 }}
@@ -403,29 +401,21 @@ def:pub FlowCanvas(
                     <button
                         key={s.id}
                         type="button"
-                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm hover:shadow-md "
-                            + (
-                                "transition-[left,top,box-shadow,border-color] duration-200 ease-out "
-                                    if settled
-                                    else "transition-[box-shadow,border-color] duration-150 "
-                            )
-                            + CARD_TINT[colorKey(s.color)]
-                            + (
-                                " border-primary shadow-md ring-2 ring-primary/40"
-                                    if selectedId == s.id
-                                    else ""
-                            )
-                            + (
-                                " opacity-70"
-                                    if connecting and s.id == connectFrom
-                                    else ""
-                            )
-                            + (
-                                " cursor-pointer ring-1 ring-primary/60"
-                                    if connecting and s.id != connectFrom
-                                    else ""
-                            )
-                            + (" opacity-30" if laneMode and dimStep(s.id) else "")}
+                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm hover:shadow-md " + (
+                            "transition-[left,top,box-shadow,border-color] duration-200 ease-out "
+                                if settled
+                                else "transition-[box-shadow,border-color] duration-150 "
+                        ) + CARD_TINT[colorKey(s.color)] + (
+                            " border-primary shadow-md ring-2 ring-primary/40"
+                                if selectedId == s.id
+                                else ""
+                        ) + (
+                            " opacity-70" if connecting and s.id == connectFrom else ""
+                        ) + (
+                            " cursor-pointer ring-1 ring-primary/60"
+                                if connecting and s.id != connectFrom
+                                else ""
+                        ) + (" opacity-30" if laneMode and dimStep(s.id) else "")}
                         style={{
                             "left": str(stepXY(s, live)[0]) + "px",
                             "top": str(stepXY(s, live)[1]) + "px",
@@ -441,20 +431,20 @@ def:pub FlowCanvas(
                     >
                         <div className="flex items-center gap-2 text-sm font-semibold">
                             <span
-                                className={"h-2 w-2 shrink-0 rounded-full "
-                                    + DOT_FILL[colorKey(s.color)]}
+                                className={"h-2 w-2 shrink-0 rounded-full " + DOT_FILL[
+                                    colorKey(s.color)
+                                ]}
                             />
                             <span className="truncate" title={s.name}>{s.name}</span>
                             <span
-                                className={"ml-auto shrink-0 rounded-full px-1.5 text-xs font-medium tabular-nums "
-                                    + (
-                                        "bg-foreground/10"
-                                            if s.task_count > 0
-                                            else "bg-foreground/5 text-muted-foreground"
-                                    )}
-                                title={str(s.task_count)
-                                    + (" task" if s.task_count == 1 else " tasks")
-                                    + " here"}
+                                className={"ml-auto shrink-0 rounded-full px-1.5 text-xs font-medium tabular-nums " + (
+                                    "bg-foreground/10"
+                                        if s.task_count > 0
+                                        else "bg-foreground/5 text-muted-foreground"
+                                )}
+                                title={str(s.task_count) + (
+                                    " task" if s.task_count == 1 else " tasks"
+                                ) + " here"}
                             >
                                 {str(s.task_count)}
                             </span>
@@ -559,7 +549,7 @@ def:pub FlowCanvas(
                             onEdgeDraft(e.target.value);
                         }}}
                         onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onSaveEdgeLabel {
+                        and onSaveEdgeLabel {
                             onSaveEdgeLabel(
                                 activeEdge["from"], activeEdge["to"], edgeDraft
                             );
@@ -600,9 +590,7 @@ def:pub FlowCanvas(
                                 title="Remove this transition"
                                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                                 onClick={lambda { if onDeleteEdge {
-                                    onDeleteEdge(
-                                        activeEdge["from"], activeEdge["to"]
-                                    );
+                                    onDeleteEdge(activeEdge["from"], activeEdge["to"]);
                                 }}}
                             >
                                 Delete
