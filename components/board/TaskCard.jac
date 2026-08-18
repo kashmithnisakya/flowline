@@ -1,7 +1,9 @@
 """A single kanban card. Draggable via native HTML5 DnD (custom MIME type so
 foreign drags are ignored), with arrow-button click-to-move as the touch
 fallback: the chevron row floats over the bottom corner on hover for fine
-pointers and keeps an in-flow spot at reduced opacity on touch."""
+pointers and keeps an in-flow spot at reduced opacity on touch. shrink-0
+matters: the lane's card list is a flex column that scrolls, and without it
+a full lane squashes every card to a sliver instead of scrolling."""
 
 import from ...models { TaskView }
 import from ..workflow.kinds { CARD_BAR, colorKey }
@@ -114,7 +116,7 @@ def:pub TaskCard(
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group relative cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing " + (
+            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing " + (
                 "opacity-50 " if isDragging else ""
             ) + (
                 # The COLUMN carries the step's colour; a card only
