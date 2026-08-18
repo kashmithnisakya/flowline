@@ -31,6 +31,7 @@ import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
+import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
 
 glob BLANK_TASK: dict[str, str] = {
@@ -82,6 +83,12 @@ def:pub BoardPage -> JsxPage {
         moveKind: str = "handoff",
         mForm: dict[str, str] = BLANK_MOVE,
         saving: bool = False,
+        # The last fetch failed. With nothing on screen that is a full
+        # panel; with a board already showing, a strip that names the time
+        # of the last good load (loadedAt, "10:42").
+        loadFailed: bool = False,
+        retrying: bool = False,
+        loadedAt: str = "",
         # A /board?task=<id> deep link (the overview's attention list, the
         # palette) opens that card once the first load has landed; "new"
         # opens the create dialog (/board?new=1).
@@ -163,6 +170,7 @@ def:pub BoardPage -> JsxPage {
 
     async def boot -> None;
     async def loadAll -> None;
+    async def retryLoad -> None;
     async def saveTask -> None;
     async def deleteTask -> None;
     # The columns ARE the workflow, so every column question routes through
@@ -215,7 +223,10 @@ def:pub BoardPage -> JsxPage {
     # on a workspace that has not decided what its columns are yet. A legacy
     # org that HAS tasks still gets the fallback columns, because hiding the
     # board would hide its work.
-    noWorkflow = len(steps) == 0 and len(tasks) == 0;
+    # A failed first load also has no steps and no tasks; it must not be
+    # mistaken for a workspace that has not designed its workflow yet.
+    nothingLoaded = loadFailed and len(steps) == 0 and len(tasks) == 0;
+    noWorkflow = not nothingLoaded and len(steps) == 0 and len(tasks) == 0;
 
     visible = [
         t
@@ -260,7 +271,7 @@ def:pub BoardPage -> JsxPage {
                         <Skeleton className="h-8 w-24"/>
                         <Skeleton className="h-8 w-24"/>
                     </div>
-                } elif not noWorkflow {
+                } elif not noWorkflow and not nothingLoaded {
                     <div key="tools" className="flex items-center gap-2">
                         <FilterBar
                             projects={activeProjects}
@@ -292,13 +303,26 @@ def:pub BoardPage -> JsxPage {
                     </div>
                 } }
             </div>
+            {if loadFailed and not nothingLoaded and not loading {
+                <StaleDataStrip
+                    key="stale"
+                    since={loadedAt}
+                    onRetry={retryLoad}
+                    retrying={retrying}
+                />
+            }}
             {if loading {
                 # Mirrors the loaded board: one row of column shells, each
                 # with a header (dot, label bar, count pill) and card blocks,
                 # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch [--lane-h:calc(100dvh-12.5rem)]"
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
+                        # The refresh-failed strip takes a row above the lanes.
+                        "[--lane-h:calc(100dvh-15.5rem)]"
+                            if loadFailed
+                            else "[--lane-h:calc(100dvh-12.5rem)]"
+                    )}
                     style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 20rem))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
@@ -323,6 +347,13 @@ def:pub BoardPage -> JsxPage {
                         </div>
                     }}
                 </div>
+            } elif nothingLoaded {
+                <LoadFailed
+                    key="failed"
+                    title="Could not load the board"
+                    onRetry={retryLoad}
+                    retrying={retrying}
+                />
             } elif noWorkflow {
                 <div
                     key="noworkflow"
@@ -385,7 +416,12 @@ def:pub BoardPage -> JsxPage {
                 # columns keep a 16rem minimum and the row scroll-snaps instead.
                 <div
                     key="columns"
-                    className="grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch [--lane-h:calc(100dvh-12.5rem)]"
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
+                        # The refresh-failed strip takes a row above the lanes.
+                        "[--lane-h:calc(100dvh-15.5rem)]"
+                            if loadFailed
+                            else "[--lane-h:calc(100dvh-12.5rem)]"
+                    )}
                     style={{
                         "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 20rem))"
                     }}
@@ -433,7 +469,7 @@ def:pub BoardPage -> JsxPage {
                         />
                     }}
                 </div>
-            }  }
+            }   }
             <TaskDialog
                 open={dialogOpen}
                 editing={bool(editingId)}

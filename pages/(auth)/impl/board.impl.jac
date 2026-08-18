@@ -48,6 +48,13 @@ impl BoardPage.loadAll -> None {
             steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
         }
+        loadFailed = False;
+        d = new(Date);
+        hh = str(d.getHours());
+        mm = str(d.getMinutes());
+        loadedAt = ("0" + hh if len(hh) < 2 else hh) + ":" + (
+            "0" + mm if len(mm) < 2 else mm
+        );
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
         stored = localStorage.getItem("standup_project") or "";
@@ -64,9 +71,21 @@ impl BoardPage.loadAll -> None {
             }
         }
     } except Exception as e {
-        toast("Failed to load the board");
+        # No toast: the page itself says so (full panel with nothing on
+        # screen, a strip with data still showing), and a toast per failed
+        # 60s poll would only nag.
+        loadFailed = True;
     }
     loading = False;
+    retrying = False;
+}
+
+impl BoardPage.retryLoad -> None {
+    if movesRef.current {
+        return;
+    }
+    retrying = True;
+    await loadAll();
 }
 
 impl BoardPage.setProjectFilter(v: str) -> None {

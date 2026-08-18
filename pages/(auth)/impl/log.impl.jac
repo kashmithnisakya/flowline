@@ -18,6 +18,7 @@ impl DailyLogPage.loadWeek -> None {
         if weekReqRef.current == seq {
             entries = result.reports[0] if result.reports else [];
             loadedMonday = monday;
+            loadFailed = False;
         }
         # Roster only on the first load; it does not change with the week.
         if len(memberNames) == 0 {
@@ -30,11 +31,20 @@ impl DailyLogPage.loadWeek -> None {
             ];
         }
     } except Exception as e {
-        toast("Failed to load log entries");
+        # The page says so itself (panel or strip); no toast.
+        if weekReqRef.current == seq {
+            loadFailed = True;
+        }
     }
     if weekReqRef.current == seq {
         loading = False;
+        retrying = False;
     }
+}
+
+impl DailyLogPage.retryLoad -> None {
+    retrying = True;
+    await loadWeek();
 }
 
 impl DailyLogPage.toggleSelect(entryId: str) -> None {
