@@ -150,6 +150,10 @@ File-based routing with route groups:
   (opaque canvas fill) in `styles/global.css` for both palettes; the tables
   in `components/workflow/kinds.jac` only name them (`bg-step-sky`). A new
   colour key needs tokens in both palettes, and its key is what persists.
+- **The workflow page's step panel opens the board's dialog.** Clicking a step
+  in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
+  and a row opens `components/board/TaskDialog` on the same form dict and the
+  same `UpdateTask` / `DeleteTask` walkers the board drives it with.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   create dialog; an already mounted board listens for `standup:open-task` /
   `standup:new-task` instead (the palette uses both paths).
@@ -212,6 +216,10 @@ File-based routing with route groups:
   emptiness with a separate `bool` field. `len()` on a list is fine.
 - **A name first assigned inside an `if` is block-scoped in the compiled JS**
   and is `ReferenceError` after the branch. Initialise it before the branch.
+- **A `has` flag cannot arbitrate a shared Escape.** A Radix dialog flips its
+  own open state during the same keydown that reaches a page-level listener, so
+  the listener reads the flag as already closed and dismisses its own surface
+  too. Ask the DOM instead (`[role=dialog][data-state=open]`).
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating; a `has` read after `await` is a stale
   render-time snapshot. That last one bites hardest when a handler appends to

@@ -4,8 +4,9 @@ org, so no project selector. Validation is advisory and never blocks saving.
 The editor floats OVER the canvas; keep notes out of JSX (a `#` there renders)."""
 
 import from ...models { Project, StepView, TaskView, MemberView, RoleView }
-import from ...constants { STEP_KINDS, KIND_COLORS }
-import from ...walkers.projects { ListProjects }
+import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
+import from ...walkers.projects { ListProjects, AssignToProject }
+import from ...walkers.tasks { UpdateTask, DeleteTask }
 import from ...walkers.roster { ListMembers, ListRoles }
 import from ...walkers.workflow {
     GetWorkflow,
@@ -25,6 +26,8 @@ import from ...components.workflow.FlowCanvas { FlowCanvas }
 import from ...components.workflow.lanes { laneLayout }
 import from ...components.workflow.TemplatePicker { TemplatePicker }
 import from ...components.workflow.StepInspector { StepInspector }
+import from ...components.workflow.StepTasksPanel { StepTasksPanel }
+import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.workflow.geometry {
     hitStep,
     stepXY,
@@ -32,7 +35,7 @@ import from ...components.workflow.geometry {
     NODE_W,
     NODE_H
 }
-import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, CARD_BAR, colorKey }
+import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
@@ -44,7 +47,6 @@ import from ...components.ui.dialog {
     DialogDescription,
     DialogFooter
 }
-import from ...components.ui.badge { Badge }
 import from ...components.ui.select {
     Select,
     SelectTrigger,
@@ -60,7 +62,24 @@ glob BLANK_STEP: dict[str, str] = {
          "name": "",
          "kind": "active",
          "color": "indigo"
-     };
+     },
+     # The board's task form, so the dialog opened from the panel is the
+     # board's dialog with the board's fields, not a second shape of task.
+     BLANK_TASK: dict[str, str] = {
+         "title": "",
+         "category": "",
+         "project": "none",
+         "priority": "Medium",
+         "status": "Backlog",
+         "due_date": "",
+         "notes": "",
+         "issue": "",
+         "pr": "",
+         "reviewer": "none",
+         "review_due": ""
+     },
+     # Step kinds whose task dialog offers the reviewer fields, as on the board.
+     HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
 
 
 def:pub WorkflowPage -> JsxPage {
@@ -109,6 +128,13 @@ def:pub WorkflowPage -> JsxPage {
         peekId: str = "",
         peekTasks: list[TaskView] = [],
         peekLoading: bool = False,
+        # A row in that panel opens the BOARD's task dialog, driven from
+        # here: same form dict, same walkers, so the two never drift.
+        taskOpen: bool = False,
+        editTaskId: str = "",
+        taskForm: dict[str, str] = BLANK_TASK,
+        taskAssignees: list[str] = [],
+        taskSaving: bool = False,
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
         # Screen-px offset that centers the diagram in the viewport. Applied
@@ -141,7 +167,9 @@ def:pub WorkflowPage -> JsxPage {
     # entering edit mode (the editor covers the right third), a view flip.
     # A LAYOUT effect so the first frame is already fitted; a plain effect
     # would animate the correction and the diagram would visibly fly in.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView]);
+    # The task panel covers the same right-hand strip the editor does, so
+    # opening or closing it changes the space the diagram has to fit into.
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView, peekId]);
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
@@ -154,10 +182,42 @@ def:pub WorkflowPage -> JsxPage {
         []
     );
 
+    # Esc closes the task panel, but an open dialog owns the key first. On the
+    # CAPTURE phase and asking the DOM, because by the bubble phase Radix has
+    # closed its dialog and flipped the state this would have keyed on: one
+    # press would then close the panel too.
+    useEffect(
+        lambda {
+            onKey = lambda (e: any) {
+                if e.key != "Escape" or not peekId {
+                    return;
+                }
+                w: any = window;
+                if w.document.querySelector("[role=dialog][data-state=open]") {
+                    return;
+                }
+                closePeek();
+            };
+            window.addEventListener("keydown", onKey, True);
+            return lambda { window.removeEventListener("keydown", onKey, True); };
+        },
+        [peekId]
+    );
+
     async def boot -> None;
     async def reload(pid: str) -> None;
     async def selectProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
+    async def refreshPeek(stepId: str, pid: str) -> None;
+    def closePeek -> None;
+    def openTask(tid: str) -> None;
+    def setTaskField(key: str, value: str) -> None;
+    def toggleTaskAssignee(memberId: str) -> None;
+    async def saveTask -> None;
+    async def deleteTask -> None;
+    def stepName(key: str) -> str;
+    def mappedStatus(key: str) -> str;
+    def dockWidth -> float;
     async def loadMeta -> None;
     def switchView(v: str) -> None;
     def lanePlan -> dict[str, any];
@@ -190,27 +250,24 @@ def:pub WorkflowPage -> JsxPage {
     stepsRef.current = steps;
     liveRef.current = live;
 
+    # Guarded with len() everywhere it is read: `peeked and ...` compiles to
+    # a bare JS `&&`, and an empty array is truthy there.
     peeked = [
         s
         for s in steps
         if s.id == peekId
     ];
-    # len(), not truthiness: `peeked and ...` compiles to a bare JS `&&`, and
-    # an empty array is truthy there, so the guard passed and the index threw.
-    peekName = peeked[0].name if len(peeked) > 0 else "";
-    peekKind = "";
-    peekColor = "slate";
-    if len(peeked) > 0 {
-        peekColor = colorKey(peeked[0].color);
-        if peeked[0].kind in KIND_LABEL {
-            peekKind = KIND_LABEL[peeked[0].kind];
-        }
-    }
-
     activeProjects = [
         p
         for p in projects
         if p.active
+    ];
+    # The task dialog's assignee picker and reviewer list, from the roster
+    # already loaded for the who-does-what strip.
+    activeMembers = [
+        m
+        for m in roleMembers
+        if m.active
     ];
     # Who holds each role, for the strip under the kind legend.
     roleHolders: dict[str, str] = {};
@@ -267,7 +324,29 @@ def:pub WorkflowPage -> JsxPage {
             peekScope = "in " + p.name;
         }
     }
-    peekNoun = "task" if len(peekTasks) == 1 else "tasks";
+    # The task dialog offers exactly the steps the canvas shows, left to
+    # right, which is the order the board builds its columns in too.
+    stepOrder = [st for st in steps];
+    stepOrder.sort(key=lambda (st: StepView) { st.sort_order; });
+    stepOrder.sort(key=lambda (st: StepView) { st.x; });
+    colKeys: list[str] = [];
+    colLabels: list[str] = [];
+    handoffKeys: list[str] = [];
+    for st in stepOrder {
+        colKeys.append(st.id);
+        colLabels.append(st.name);
+        if st.kind in HANDOFF_KINDS {
+            handoffKeys.append(st.id);
+        }
+    }
+    # Category suggestions from what is on this step; the board's full list
+    # would cost a second fetch for a datalist.
+    taskCategories: list[str] = [];
+    for t in peekTasks {
+        if t.category and t.category not in taskCategories {
+            taskCategories.append(t.category);
+        }
+    }
 
     byId: dict[str, StepView] = {};
     for s in steps {
@@ -754,21 +833,40 @@ def:pub WorkflowPage -> JsxPage {
                             </a>
                         </div>
                     }}
-                    <FlowCanvas
-                        steps={steps}
-                        live={lanePose}
-                        lanes={laneBands}
-                        laneOf={laneOfStep}
-                        zoom={zoom}
-                        panX={panX}
-                        panY={panY}
-                        animate={placed}
-                        showGrid={False}
-                        viewportRef={viewportRef}
-                        onZoomBy={zoomBy}
-                        onZoomFit={fitZoom}
-                        onSelect={peekStep}
-                    />
+                    <div className="relative">
+                        <FlowCanvas
+                            steps={steps}
+                            live={lanePose}
+                            lanes={laneBands}
+                            laneOf={laneOfStep}
+                            selectedId={peekId}
+                            zoom={zoom}
+                            panX={panX}
+                            panY={panY}
+                            animate={placed}
+                            showGrid={False}
+                            viewportRef={viewportRef}
+                            onZoomBy={zoomBy}
+                            onZoomFit={fitZoom}
+                            onSelect={peekStep}
+                            onCanvasClick={closePeek}
+                        />
+                        {if len(peeked) > 0 {
+                            <div
+                                key="peekdock"
+                                className="mt-3 flex flex-col sm:pointer-events-none sm:absolute sm:inset-y-0 sm:right-0 sm:z-30 sm:mt-0 sm:w-[21rem] sm:max-w-[calc(100%-1rem)] sm:p-4"
+                            >
+                                <StepTasksPanel
+                                    step={peeked[0]}
+                                    tasks={peekTasks}
+                                    loading={peekLoading}
+                                    scope={peekScope}
+                                    onOpenTask={openTask}
+                                    onClose={closePeek}
+                                />
+                            </div>
+                        }}
+                    </div>
                     {if laneMode and len(offFlow) > 0 {
                         <p key="offflow" className="text-xs text-muted-foreground">
                             {"Not on the flow yet: "}
@@ -819,111 +917,23 @@ def:pub WorkflowPage -> JsxPage {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            <Dialog
-                open={bool(peekId)}
-                onOpenChange={lambda (o: bool) { if not o { peekId = ""; }}}
-            >
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <span
-                                className={"h-2.5 w-2.5 shrink-0 rounded-full " + DOT_FILL[
-                                    peekColor
-                                ]}
-                            />
-                            {peekName + (" · " + peekKind if peekKind else "")}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {str(len(peekTasks)) + " " + peekNoun + " " + peekScope}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="max-h-[60vh] overflow-y-auto">
-                        {if peekLoading {
-                            <div key="loading" className="flex flex-col gap-2">
-                                <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                        peekColor
-                                    ]}
-                                >
-                                    <Skeleton className="h-4 w-3/5"/>
-                                    <div className="flex items-center gap-1.5">
-                                        <Skeleton className="h-5 w-20 rounded-full"/>
-                                        <Skeleton className="h-5 w-14 rounded-full"/>
-                                    </div>
-                                </div>
-                                <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                        peekColor
-                                    ]}
-                                >
-                                    <Skeleton className="h-4 w-2/5"/>
-                                    <div className="flex items-center gap-1.5">
-                                        <Skeleton className="h-5 w-16 rounded-full"/>
-                                        <Skeleton className="h-5 w-12 rounded-full"/>
-                                    </div>
-                                </div>
-                                <div
-                                    className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                        peekColor
-                                    ]}
-                                >
-                                    <Skeleton className="h-4 w-1/2"/>
-                                    <div className="flex items-center gap-1.5">
-                                        <Skeleton className="h-5 w-24 rounded-full"/>
-                                        <Skeleton className="h-5 w-14 rounded-full"/>
-                                    </div>
-                                </div>
-                            </div>
-                        } elif len(peekTasks) == 0 {
-                            <p
-                                key="empty"
-                                className="py-6 text-center text-sm text-muted-foreground"
-                            >
-                                Nothing is sitting on this step.
-                            </p>
-                        } else {
-                            <div key="rows" className="flex flex-col gap-2">
-                                {for t in peekTasks {
-                                    <div
-                                        key={t.id}
-                                        className={"flex flex-col gap-1 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                            peekColor
-                                        ]}
-                                    >
-                                        <span className="text-sm font-medium">
-                                            {t.title}
-                                        </span>
-                                        <div
-                                            className="flex flex-wrap items-center gap-1.5"
-                                        >
-                                            {if t.project_name {
-                                                <Badge key="p" variant="secondary">
-                                                    {t.project_name}
-                                                </Badge>
-                                            }}
-                                            {if t.priority {
-                                                <Badge key="pr" variant="outline">
-                                                    {t.priority}
-                                                </Badge>
-                                            }}
-                                            {if len(t.assignee_names) > 0 {
-                                                <span
-                                                    key="who"
-                                                    className="text-xs text-muted-foreground"
-                                                >
-                                                    {", ".join(t.assignee_names)}
-                                                </span>
-                                            }}
-                                        </div>
-                                    </div>
-                                }}
-                            </div>
-                        }  }
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Open the Board to move or edit any of these.
-                    </p>
-                </DialogContent>
-            </Dialog>
+            <TaskDialog
+                open={taskOpen}
+                editing={True}
+                form={taskForm}
+                projects={activeProjects}
+                members={activeMembers}
+                saving={taskSaving}
+                onField={setTaskField}
+                onOpenChange={lambda (o: bool) { taskOpen = o; }}
+                onSave={saveTask}
+                onDelete={deleteTask}
+                categories={taskCategories}
+                columnKeys={colKeys}
+                columnLabels={colLabels}
+                handoffKeys={handoffKeys}
+                assignees={taskAssignees}
+                onToggleAssignee={toggleTaskAssignee}
+            />
         </div>;
 }
