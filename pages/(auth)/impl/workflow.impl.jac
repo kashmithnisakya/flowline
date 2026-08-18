@@ -49,13 +49,27 @@ impl WorkflowPage.reload(pid: str) -> None {
 }
 
 impl WorkflowPage.peekStep(stepId: str) -> None {
-    # Fetching per click rather than holding every task in page state: the
-    # server already owns the placement rule, and a workspace can have far
-    # more tasks than the panel will ever show.
+    # Clicking the open step again closes the panel, so one control both
+    # opens and dismisses it.
+    if peekId == stepId {
+        closePeek();
+        return;
+    }
     peekId = stepId;
     peekTasks = [];
     peekLoading = True;
-    pid = projectId;
+    await refreshPeek(stepId, projectId);
+    peekLoading = False;
+}
+
+impl WorkflowPage.refreshPeek(stepId: str, pid: str) -> None {
+    # Fetching per click rather than holding every task in page state: the
+    # server already owns the placement rule, and a workspace can have far
+    # more tasks than the panel will ever show. Quiet on purpose: a save
+    # refetches through here without flashing the skeletons again.
+    if not stepId {
+        return;
+    }
     try {
         result = root spawn ListStepTasks(
             step_id=stepId, project_id=pid if pid and pid != "all" else ""
@@ -64,13 +78,177 @@ impl WorkflowPage.peekStep(stepId: str) -> None {
     } except Exception as e {
         toast("Could not load the work on that step");
     }
+}
+
+impl WorkflowPage.closePeek -> None {
+    peekId = "";
+    peekTasks = [];
     peekLoading = False;
 }
 
+impl WorkflowPage.stepName(key: str) -> str {
+    for st in steps {
+        if st.id == key {
+            return st.name;
+        }
+    }
+    return "";
+}
+
+impl WorkflowPage.mappedStatus(key: str) -> str {
+    # Nothing here learns what a step is: the kind maps to the legacy status
+    # every other surface still keys on.
+    for st in steps {
+        if st.id == key {
+            return KIND_STATUS[st.kind] if st.kind in KIND_STATUS else "In Progress";
+        }
+    }
+    return "In Progress";
+}
+
+impl WorkflowPage.openTask(tid: str) -> None {
+    found = [
+        t
+        for t in peekTasks
+        if t.id == tid
+    ];
+    if len(found) == 0 {
+        return;
+    }
+    picked = found[0];
+    # A task with no step of its own landed here by kind, so the panel's
+    # step is the honest answer for the dialog's Step select.
+    key = peekId;
+    for st in steps {
+        if st.id == picked.step_id {
+            key = st.id;
+        }
+    }
+    editTaskId = picked.id;
+    taskForm = {
+        "title": picked.title,
+        "category": picked.category,
+        "project": picked.project_id or "none",
+        "priority": picked.priority,
+        "status": key,
+        "due_date": picked.due_date,
+        "notes": picked.notes,
+        "issue": picked.issue_link,
+        "pr": picked.pr_link,
+        "reviewer": picked.reviewer_id or "none",
+        "review_due": picked.review_due
+    };
+    taskAssignees = picked.assignee_ids;
+    taskOpen = True;
+}
+
+impl WorkflowPage.setTaskField(key: str, value: str) -> None {
+    # A computed key does not survive a dict-literal spread: `{**taskForm,
+    # key: value}` writes a literal "key" property and the input freezes.
+    updated = {** taskForm};
+    updated[key] = value;
+    taskForm = updated;
+}
+
+impl WorkflowPage.toggleTaskAssignee(memberId: str) -> None {
+    if memberId in taskAssignees {
+        taskAssignees = [
+            a
+            for a in taskAssignees
+            if a != memberId
+        ];
+    } else {
+        taskAssignees = taskAssignees + [memberId];
+    }
+}
+
+impl WorkflowPage.saveTask -> None {
+    title = taskForm["title"].strip();
+    if not title or not editTaskId {
+        return;
+    }
+    taskSaving = True;
+    project = taskForm["project"] if taskForm["project"] != "none" else "";
+    reviewer = taskForm["reviewer"] if taskForm["reviewer"] != "none" else "";
+    landing = taskForm["status"];
+    # Read before any await: where the task was, and where it is going.
+    fromStep = peekId;
+    landedName = stepName(landing);
+    pid = projectId;
+    try {
+        if project {
+            added = 0;
+            for aid in taskAssignees {
+                onProject = False;
+                for m in roleMembers {
+                    if m.id == aid and project in m.project_ids {
+                        onProject = True;
+                    }
+                }
+                if not onProject {
+                    root spawn AssignToProject(member_id=aid, project_id=project);
+                    added = added + 1;
+                }
+            }
+            if added > 0 {
+                toast("Added " + str(added) + " assignee(s) to the project");
+            }
+        }
+        root spawn UpdateTask(
+            task_id=editTaskId,
+            title=title,
+            category=taskForm["category"],
+            priority=taskForm["priority"],
+            status=mappedStatus(landing),
+            step_id=landing,
+            due_date=taskForm["due_date"],
+            notes=taskForm["notes"],
+            issue_link=taskForm["issue"].strip(),
+            pr_link=taskForm["pr"].strip(),
+            reviewer_id=reviewer,
+            review_due=taskForm["review_due"],
+            assignee_ids=taskAssignees,
+            project_id=project
+        );
+        taskOpen = False;
+        # The counts on the cards come from GetWorkflow, the panel from
+        # ListStepTasks, so a save has to refresh both.
+        await reload(pid);
+        await refreshPeek(fromStep, pid);
+        if landing != fromStep and landedName {
+            toast("Saved · moved to " + landedName);
+        }
+    } except Exception as e {
+        toast("Failed to save task");
+    }
+    taskSaving = False;
+}
+
+impl WorkflowPage.deleteTask -> None {
+    if not editTaskId {
+        return;
+    }
+    taskSaving = True;
+    fromStep = peekId;
+    pid = projectId;
+    try {
+        root spawn DeleteTask(task_id=editTaskId);
+        taskOpen = False;
+        await reload(pid);
+        await refreshPeek(fromStep, pid);
+    } except Exception as e {
+        toast("Failed to delete task");
+    }
+    taskSaving = False;
+}
+
 impl WorkflowPage.selectProject(v: str) -> None {
+    openStep = peekId;
     projectId = v;
     localStorage.setItem("standup_project", v);
     await reload(v);
+    # The panel obeys the filter too, so it reloads with the diagram.
+    await refreshPeek(openStep, v);
 }
 
 impl WorkflowPage.loadMeta -> None {
@@ -536,12 +714,7 @@ impl WorkflowPage.fitZoom -> None {
     bounds = viewBounds();
     spanW = bounds[2] - bounds[0];
     spanH = bounds[3] - bounds[1];
-    # The editor floats over the canvas, so the space it covers is not space
-    # a card can use: fit into what is actually visible.
-    # Reserved for the whole of edit mode, not per selection: re-fitting
-    # every time a card is clicked would make the zoom jump under the cursor.
-    panel = 336.0 if editing else 0.0;
-    boxW = float(view.clientWidth) - 48.0 - panel;
+    boxW = float(view.clientWidth) - 48.0 - dockWidth();
     boxH = float(view.clientHeight) - 48.0;
     if spanW <= 0.0 or spanH <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
         zoomRef.current = 1.0;
@@ -569,6 +742,22 @@ impl WorkflowPage.fitZoom -> None {
     }
 }
 
+impl WorkflowPage.dockWidth -> float {
+    # Both right-hand panels float OVER the canvas, so the space they cover
+    # is not space a card can use. Edit mode reserves it for the whole
+    # session (re-fitting per selection would make the zoom jump under the
+    # cursor); the task panel reserves it only while it is open, and not at
+    # all below sm, where it stacks under the diagram instead.
+    if editing {
+        return 336.0;
+    }
+    view: any = viewportRef.current;
+    if peekId and view and float(view.clientWidth) >= 640.0 {
+        return 336.0;
+    }
+    return 0.0;
+}
+
 impl WorkflowPage.recenterPan -> None {
     # Center the diagram's bounding box in the visible part of the viewport.
     # Screen-px offsets applied before the scale, so pointerXY (which reads
@@ -585,8 +774,7 @@ impl WorkflowPage.recenterPan -> None {
     minY = bounds[1];
     maxX = bounds[2];
     maxY = bounds[3];
-    panel = 336.0 if editing else 0.0;
-    availW = float(view.clientWidth) - panel;
+    availW = float(view.clientWidth) - dockWidth();
     availH = float(view.clientHeight);
     # Clamp the content's visible EDGE, not the raw offset: the offset goes
     # negative for content whose coordinates start away from the origin. Only

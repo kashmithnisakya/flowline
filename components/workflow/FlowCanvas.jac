@@ -1,7 +1,8 @@
 """The workflow as a diagram: step cards over SVG transitions, purely
 presentational (positions come in as data, every interaction is a callback).
 Edges travel any direction and loops are legal. The viewport never scrolls: it
-zooms to fit, and the control sends a DELTA so two quick clicks both count."""
+zooms to fit, and the control sends a DELTA so two quick clicks both count.
+A selected step lights the transitions on both of its ends."""
 
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
@@ -161,6 +162,13 @@ def:pub FlowCanvas(
         }
     }
 
+    # A selected step lights the transitions on both of its ends, so what the
+    # panel (or the inspector) is talking about is visible on the diagram.
+    for l in links {
+        l["lit"] = bool(selectedId)
+        and (l["from"] == selectedId or l["to"] == selectedId);
+    }
+
     # The selected transition, so its label editor can be drawn in screen
     # space OUTSIDE the zoom transform (an input inside it scales with the
     # drawing). Tracked with a bool: len() on a dict is undefined in JS.
@@ -306,7 +314,7 @@ def:pub FlowCanvas(
                             key={l["key"]}
                             className={(
                                 "text-primary"
-                                    if selectedEdge == l["key"]
+                                    if selectedEdge == l["key"] or l["lit"]
                                     else (
                                         "text-destructive/70"
                                             if laneMode and l["back"]
@@ -324,7 +332,9 @@ def:pub FlowCanvas(
                                 d={l["d"]}
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth={2.5 if selectedEdge == l["key"] else 2.0}
+                                strokeWidth={2.5
+                                    if selectedEdge == l["key"] or l["lit"]
+                                    else 2.0}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 strokeDasharray={"6 5"
