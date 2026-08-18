@@ -14,6 +14,7 @@ import from ...components.log.WeekMatrix { WeekMatrix }
 import from ...components.ui.button { Button }
 import from ...components.ui.card { Card, CardContent }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from "sonner" { toast }
 
 def localIso(d: any) -> str {
@@ -47,6 +48,10 @@ def:pub DailyLogPage -> JsxPage {
         selectedDate: str = "",
         viewMode: str = "day",
         loading: bool = True,
+        # The last week fetch failed: a full panel when nothing is showing,
+        # a strip over the table when a hop or refresh failed.
+        loadFailed: bool = False,
+        retrying: bool = False,
         loadedMonday: str = "",
         weekReqRef: Ref[any] = Ref();
 
@@ -61,6 +66,7 @@ def:pub DailyLogPage -> JsxPage {
     }
 
     async def loadWeek -> None;
+    async def retryLoad -> None;
     async def deleteSelected -> None;
     def toggleSelect(entryId: str) -> None;
 
@@ -216,6 +222,9 @@ def:pub DailyLogPage -> JsxPage {
                     }}
                 />
             } }
+            {if loadFailed and not loading and len(entries) > 0 {
+                <StaleDataStrip key="stale" onRetry={retryLoad} retrying={retrying}/>
+            }}
             {if loading {
                 <Card key="sk">
                     <CardContent className="pt-4">
@@ -248,6 +257,13 @@ def:pub DailyLogPage -> JsxPage {
                         }}
                     </CardContent>
                 </Card>
+            } elif loadFailed and len(entries) == 0 {
+                <LoadFailed
+                    key="failed"
+                    title="Could not load the log"
+                    onRetry={retryLoad}
+                    retrying={retrying}
+                />
             } elif viewMode == "week" and not selecting and len(entries) > 0 {
                 <div
                     key="matrix"
@@ -283,6 +299,6 @@ def:pub DailyLogPage -> JsxPage {
                         showDate={viewMode == "week"}
                     />
                 </div>
-            }  }
+            }   }
         </div>;
 }
