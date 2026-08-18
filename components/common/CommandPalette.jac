@@ -104,11 +104,14 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
     # cache makes repeats free.
     useEffect(
         lambda {
-            if len(q) < 2 {
-                return None;
+            # Always return a cleanup FUNCTION: React only skips a destroy
+            # that is `undefined`, so an effect that returns None (which is
+            # `null` in the emitted JS) gets called and throws.
+            timer: any = 0;
+            if len(q) >= 2 {
+                timer = window.setTimeout(lambda { fetchTasks(q); }, 180);
             }
-            timer = window.setTimeout(lambda { fetchTasks(q); }, 180);
-            return lambda { window.clearTimeout(timer); };
+            return lambda { if timer { window.clearTimeout(timer); }};
         },
         [q]
     );
