@@ -27,7 +27,7 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "Specify, triage, design, build, review, de-slop. Four roles, loops included.",
+             "description": "Specify, triage, architect, build, review, de-slop. Four roles, loops included.",
              # The four Jaseci roles. ApplyTemplate seeds these as Role
              # nodes (editable org data from then on); colors match the
              # step each role owns so the Roles tab echoes the canvas.
@@ -74,7 +74,7 @@ glob STATUSES: list[str] = [
                      "y": 260.0
                  },
                  {
-                     "name": "Design",
+                     "name": "Architecture",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
@@ -133,7 +133,7 @@ glob STATUSES: list[str] = [
              "link_labels": [
                  "to PE first",
                  "PE too",
-                 "needs design",
+                 "needs architecture",
                  "small, straight to build",
                  "approach agreed",
                  "ready and tested",
