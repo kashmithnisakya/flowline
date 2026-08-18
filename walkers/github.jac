@@ -252,9 +252,12 @@ walker DisconnectGithub {
 # ---------------------------------------------------------------- reads
 
 walker ListGithubRepos {
-    """The repos this installation was granted, filtered client-side by
-    `query`. `attached` marks the ones already tracked in the workspace."""
+    """One GitHub page (100) of the repos this installation was granted,
+    filtered by `query` after the fetch, so a page under a query can run
+    short. `attached` marks the ones already tracked in the workspace;
+    `has_more` says whether GitHub holds another page."""
     has query: str = "",
+        page: int = 1,
         reports: list[dict[str, any]] = [];
 
     can browse with Root entry {
@@ -264,8 +267,9 @@ walker ListGithubRepos {
             report not_connected();
             disengage;
         }
+        page = self.page if self.page > 0 else 1;
         result = gh_request(
-            token, "GET", "/installation/repositories", {"per_page": 100}
+            token, "GET", "/installation/repositories", {"per_page": 100, "page": page}
         );
         if not result["ok"] {
             mark_invalid(c, result);
@@ -274,11 +278,13 @@ walker ListGithubRepos {
         }
         data = result["data"];
         raw: list[any] = [];
+        total = 0;
         if isinstance(data, dict) {
             got = data.get("repositories") or [];
             if isinstance(got, list) {
                 raw = got;
             }
+            total = int(data.get("total_count") or 0);
         }
         known: list[str] = [];
         for r in [here-->[?:Repo]] {
@@ -307,7 +313,7 @@ walker ListGithubRepos {
             );
         }
         rows.sort(key=lambda (r: GhRepoRow) { r.full_name; });
-        report {"ok": True, "rows": rows};
+        report {"ok": True, "rows": rows, "page": page, "has_more": total > page * 100};
     }
 }
 

@@ -39,6 +39,8 @@ import from walkers.roster {
 }
 import from walkers.tasks {
     ListTasks,
+    TaskCounts,
+    GetTask,
     CreateTask,
     UpdateTask,
     MoveTask,
@@ -47,6 +49,7 @@ import from walkers.tasks {
 }
 import from walkers.log {
     ListLogEntries,
+    LogCounts,
     LogActivity,
     UpdateLogEntry,
     DeleteLogEntries

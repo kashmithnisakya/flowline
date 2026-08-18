@@ -13,12 +13,41 @@ impl DailyLogPage.loadWeek -> None {
     if monday != loadedMonday {
         loading = True;
     }
+    weekStreaming = True;
     try {
-        result = root spawn ListLogEntries(from_date=monday, to_date=sunday);
-        if weekReqRef.current == seq {
-            entries = result.reports[0] if result.reports else [];
-            loadedMonday = monday;
-            loadFailed = False;
+        # Page 1 lands and paints; a week that outgrew a page (a bulk import
+        # writes a row per issue) streams the rest in behind it. Bounded:
+        # ten pages of 500 is more week than anyone reads.
+        gathered: list[LogEntry] = [];
+        pageNo = 1;
+        more = True;
+        while more and pageNo <= 10 {
+            result = root spawn ListLogEntries(
+                from_date=monday, to_date=sunday, page=pageNo, page_size=500
+            );
+            got = result.reports[0] if result.reports else None;
+            if not got {
+                more = False;
+            } else {
+                gathered = gathered + got.rows;
+                more = got.has_more;
+                if weekReqRef.current == seq {
+                    # The wire order is newest day first (so page 1 is the
+                    # end of the week); the table reads chronologically, so
+                    # the assembled week is sorted back before it renders.
+                    shownRows = [r for r in gathered];
+                    shownRows.sort(
+                        key=lambda (r: LogEntry) { r.date + r.member_name; }
+                    );
+                    entries = shownRows;
+                    weekTotal = got.total;
+                    weekLoaded = len(shownRows);
+                    loadedMonday = monday;
+                    loadFailed = False;
+                    loading = False;
+                }
+            }
+            pageNo = pageNo + 1;
         }
         # Roster only on the first load; it does not change with the week.
         if len(memberNames) == 0 {
@@ -39,6 +68,7 @@ impl DailyLogPage.loadWeek -> None {
     if weekReqRef.current == seq {
         loading = False;
         retrying = False;
+        weekStreaming = False;
     }
 }
 

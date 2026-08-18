@@ -15,6 +15,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.card { Card, CardContent }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
+import from ...components.common.glyphs { Spinner }
 import from "sonner" { toast }
 
 def localIso(d: any) -> str {
@@ -53,6 +54,15 @@ def:pub DailyLogPage -> JsxPage {
         loadFailed: bool = False,
         retrying: bool = False,
         loadedMonday: str = "",
+        # The week arrives in pages of 500, newest day first: the first page
+        # paints, the rest stream in behind it. `weekTotal` is the whole
+        # week, `weekLoaded` how much of it is on screen.
+        weekTotal: int = 0,
+        weekLoaded: int = 0,
+        # The week is still streaming (a page is in flight). Separate from
+        # weekLoaded < weekTotal, which also holds when the fetch stopped
+        # early: then the strip says so instead of spinning forever.
+        weekStreaming: bool = False,
         weekReqRef: Ref[any] = Ref();
 
     async can with entry {
@@ -224,6 +234,34 @@ def:pub DailyLogPage -> JsxPage {
             } }
             {if loadFailed and not loading and len(entries) > 0 {
                 <StaleDataStrip key="stale" onRetry={retryLoad} retrying={retrying}/>
+            }}
+            {if not loading and weekStreaming {
+                <div
+                    key="partial"
+                    className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs tabular-nums text-muted-foreground"
+                    role="status"
+                >
+                    <Spinner/>
+                    {"Loading the rest of the week (" + str(weekLoaded) + " of " + str(
+                        weekTotal
+                    ) + " entries)"}
+                </div>
+            }}
+            {if not loading and not weekStreaming and weekLoaded < weekTotal {
+                <div
+                    key="partialstop"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs tabular-nums text-warning"
+                    role="status"
+                >
+                    {"Showing " + str(weekLoaded) + " of " + str(weekTotal) + " entries for this week."}
+                    <button
+                        type="button"
+                        className="font-medium underline-offset-2 hover:underline"
+                        onClick={retryLoad}
+                    >
+                        Load again
+                    </button>
+                </div>
             }}
             {if loading {
                 <Card key="sk">

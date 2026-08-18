@@ -65,25 +65,82 @@ impl FlowLinePage.peekStep(stepId: str) -> None {
 impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
     # Fetching per click rather than holding every task in page state: the
     # server already owns the placement rule, and a workspace can have far
-    # more tasks than the panel will ever show. Quiet on purpose: a save
-    # refetches through here without flashing the skeletons again.
+    # more tasks than the panel will ever show, so it comes a page at a
+    # time. Quiet on purpose: a save refetches through here without
+    # flashing the skeletons again.
     if not stepId {
         return;
     }
+    # Reload as many pages as were open, so a save does not collapse rows
+    # the user had already paged through.
+    wanted = peekPage if peekPage > 1 else 1;
+    rows: list[TaskView] = [];
     try {
-        result = root spawn ListStepTasks(
-            step_id=stepId, project_id=pid if pid and pid != "all" else ""
-        );
-        peekTasks = result.reports[0] if result.reports else [];
+        step = 1;
+        while step <= wanted and step <= 20 {
+            result = root spawn ListStepTasks(
+                step_id=stepId,
+                project_id=pid if pid and pid != "all" else "",
+                page=step,
+                page_size=50
+            );
+            got = result.reports[0] if result.reports else None;
+            if not got {
+                break;
+            }
+            rows = rows + got.rows;
+            peekTotal = got.total;
+            peekMore = got.has_more;
+            peekPage = step;
+            if not got.has_more {
+                break;
+            }
+            step = step + 1;
+        }
+        peekTasks = rows;
     } except Exception as e {
         toast("Could not load the work on that step");
     }
+}
+
+impl FlowLinePage.morePeek -> None {
+    # The next page appends; the id and project are read before the await
+    # so a step change mid-flight cannot mix two steps' rows.
+    stepId = peekId;
+    pid = projectId;
+    wanted = peekPage + 1;
+    if not stepId or peekLoadingMore {
+        return;
+    }
+    peekLoadingMore = True;
+    have = [t for t in peekTasks];
+    try {
+        result = root spawn ListStepTasks(
+            step_id=stepId,
+            project_id=pid if pid and pid != "all" else "",
+            page=wanted,
+            page_size=50
+        );
+        got = result.reports[0] if result.reports else None;
+        if got and peekRef.current == stepId {
+            peekTasks = have + got.rows;
+            peekTotal = got.total;
+            peekMore = got.has_more;
+            peekPage = wanted;
+        }
+    } except Exception as e {
+        toast("Could not load more of that step");
+    }
+    peekLoadingMore = False;
 }
 
 impl FlowLinePage.closePeek -> None {
     peekId = "";
     peekTasks = [];
     peekLoading = False;
+    peekTotal = 0;
+    peekMore = False;
+    peekPage = 0;
 }
 
 impl FlowLinePage.stepName(key: str) -> str {

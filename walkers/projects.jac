@@ -5,20 +5,15 @@ import from models { Project, Member, OnProject, resolve, on_attached, owned }
 # ----------------------------------------------------------------- projects
 
 walker ListProjects {
-    has results: list[Project] = [],
-        reports: list[list[Project]] = [];
+    has reports: list[list[Project]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:Project]];
-    }
-
-    can gather with Project entry {
-        self.results.append(here);
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (p: Project) { p.name; });
-        report self.results;
+    # Rows live in a local, never a `has` field: a walker's public fields
+    # are serialised into the response beside the report, so an accumulator
+    # field would ship the whole list twice.
+    can gather with Root entry {
+        rows = [here-->[?:Project]];
+        rows.sort(key=lambda (p: Project) { p.name; });
+        report rows;
     }
 }
 

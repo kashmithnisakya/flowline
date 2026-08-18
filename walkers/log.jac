@@ -6,6 +6,9 @@ import from models {
     Task,
     LogDay,
     LogEntry,
+    LogPage,
+    LogTotals,
+    MemberDays,
     Logged,
     By,
     AssignedTo,
@@ -14,31 +17,101 @@ import from models {
     on_attached,
     owned
 }
+import from walkers.util { today_iso, shift_day, page_bounds }
 
 # ---------------------------------------------------------------- daily log
 
 walker ListLogEntries {
-    """Entries whose LogDay date falls in [from_date, to_date], ISO strings."""
+    """One page of entries whose LogDay date falls in [from_date, to_date],
+    ISO strings, newest day first. `total` counts the whole range so a page
+    can say how much of the week it is."""
     has from_date: str,
         to_date: str,
-        results: list[LogEntry] = [],
-        reports: list[list[LogEntry]] = [];
+        page: int = 1,
+        page_size: int = 0,
+        reports: list[LogPage] = [];
 
-    can start with Root entry {
-        visit [here-->[?:LogDay, date>=self.from_date, date<=self.to_date]];
+    can gather with Root entry {
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
+        found: list[LogEntry] = [];
+        for day in [here-->[?:LogDay, date>=self.from_date, date<=self.to_date]] {
+            for row in [day->:Logged:->] {
+                found.append(row);
+            }
+        }
+        # Newest day first so page 1 is the end of the week; the jid pass
+        # underneath keeps rows that tie on day and name in one order
+        # across pages (sorts are stable).
+        found.sort(key=lambda (r: LogEntry) { jid(r); });
+        found.sort(key=lambda (r: LogEntry) { r.member_name; });
+        found.sort(key=lambda (r: LogEntry) { r.date; }, reverse=True);
+        report LogPage(
+            rows=found[start:end],
+            page=p,
+            page_size=size,
+            has_more=len(found) > end,
+            total=len(found)
+        );
     }
+}
 
-    can descend with LogDay entry {
-        visit [here->:Logged:->];
-    }
+walker LogCounts {
+    """The Overview's log numbers: entries per week for the four weeks ending
+    in `monday`'s week (oldest first), per weekday of that week, and which
+    days each person logged on. Reads node fields only, so a week with two
+    thousand rows costs the same as one with twenty."""
+    has monday: str = "",
+        reports: list[LogTotals] = [];
 
-    can gather with LogEntry entry {
-        self.results.append(here);
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (r: LogEntry) { r.date + r.member_name; });
-        report self.results;
+    can count with Root entry {
+        week0 = self.monday if len(self.monday) >= 10 else today_iso();
+        starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
+        since = starts[0];
+        until = shift_day(week0, 6);
+        week_days = [shift_day(week0, i) for i in range(7)];
+        # Week bounds up front, for the same reason as TaskCounts.
+        ends = [shift_day(starts[i], 7) for i in range(4)];
+        by_week = [0, 0, 0, 0];
+        by_day = [0, 0, 0, 0, 0, 0, 0];
+        per_person: dict[str, list[int]] = {};
+        for day in [here-->[?:LogDay, date>=since, date<=until]] {
+            for row in [day->:Logged:->] {
+                for i in range(4) {
+                    if row.date >= starts[i] and row.date < ends[i] {
+                        by_week[i] = by_week[i] + 1;
+                    }
+                }
+                if row.date < week0 {
+                    continue;
+                }
+                slot = -1;
+                for i in range(7) {
+                    if row.date == week_days[i] {
+                        slot = i;
+                    }
+                }
+                if slot < 0 {
+                    continue;
+                }
+                by_day[slot] = by_day[slot] + 1;
+                for who in row.member_name.split(",") {
+                    name = who.strip();
+                    if not name {
+                        continue;
+                    }
+                    if name not in per_person {
+                        per_person[name] = [0, 0, 0, 0, 0, 0, 0];
+                    }
+                    per_person[name][slot] = per_person[name][slot] + 1;
+                }
+            }
+        }
+        people: list[MemberDays] = [];
+        for name in per_person {
+            counts = per_person[name];
+            people.append(MemberDays(name=name, by_day=counts, total=sum(counts)));
+        }
+        report LogTotals(by_week=by_week, by_day=by_day, members=people);
     }
 }
 

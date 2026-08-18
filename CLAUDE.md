@@ -65,6 +65,22 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
   Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+- **List walkers page, and build their rows in a local.** A walker's public
+  `has` fields are serialised into the response beside `reports`, so an
+  accumulator field (`has results`) ships every row a second time; the
+  runtime already ships `walker.reports` a third. Rows go in a local and
+  are reported once. Anything that grows with history (`ListTasks`,
+  `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
+  `page_size` (1-based, clamped by `page_bounds` in `walkers/util.jac`) and
+  reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
+  `rows`, `has_more` and `total`. Filter and sort on node fields first, run
+  `to_view()` (three edge hops) for the page alone. Roster-sized lists
+  (members, projects, roles, repos, steps) stay whole. `ListTasks` has a
+  `scope`: `working` (open plus Done in the last `done_days`, what the board
+  renders, `older` counting what the cutoff left out), `older`, `done`,
+  `all`; `q` is a server-side title search ranked exact, prefix, contains.
+  The Overview adds up history through `TaskCounts` / `LogCounts` rather
+  than loading it.
 - **`constants.jac`** — `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
   `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
@@ -244,7 +260,11 @@ File-based routing with route groups:
 accounts and asserts CRUD plus tenant isolation: cross-account reads return
 nothing, and foreign-jid `UpdateTask` / `MoveTask` / `DeleteTask` /
 `AssignToProject` / `UpdateLogEntry` / `SaveProject` / `ArchiveMember` are all
-no-ops. Re-run something equivalent after touching walkers or `owned()`.
+no-ops, and every list filter (`project_id`, `assignee_id`, `step_id`,
+`task_id`) yields nothing for a foreign id. Paging gates: pages partition
+the set with no repeats, `total` is stable across pages, a page past the end
+is empty, `page_size` clamps. Re-run something equivalent after touching
+walkers or `owned()`.
 
 **Browser QA** — use `agent-browser`, and note that **`agent-browser type` does
 not reliably trigger React onChange** (it sets the value in a way React's

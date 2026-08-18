@@ -33,12 +33,35 @@ impl BoardPage.loadAll -> None {
         return;
     }
     try {
-        tResult = root spawn ListTasks();
+        # The working set comes in pages of 500 so a big board still paints
+        # after the first. The loop is bounded; if the server still has more
+        # at the bound the board says so rather than quietly showing part of
+        # the workspace. Filters stay client-side (instant to flip), so
+        # `older` here is the unfiltered count of what the cutoff left out.
+        fetchedTasks: list[TaskView] = [];
+        olderUnfiltered = 0;
+        pageNo = 1;
+        more = True;
+        while more and pageNo <= 20 {
+            tResult = root spawn ListTasks(scope="working", page=pageNo, page_size=500);
+            tPage = tResult.reports[0] if tResult.reports else None;
+            if not tPage {
+                more = False;
+            } else {
+                fetchedTasks = fetchedTasks + tPage.rows;
+                more = tPage.has_more;
+                olderUnfiltered = tPage.older;
+            }
+            pageNo = pageNo + 1;
+        }
+        truncated = more;
+        cResult = root spawn TaskCounts();
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        sResult = root spawn GetFlowLine();
+        # The board counts its own columns; skipping the server's per-step
+        # count spares a walk over every task on each poll.
+        sResult = root spawn GetFlowLine(with_counts=False);
         rResult = root spawn ListRepos();
-        fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
@@ -47,6 +70,18 @@ impl BoardPage.loadAll -> None {
             projects = fetchedProjects;
             steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
+            workingTruncated = truncated;
+            cPayload = cResult.reports[0] if cResult.reports else None;
+            if cPayload {
+                knownCategories = cPayload.categories;
+            }
+            # A filtered fetch owns the count while filters are on; the poll
+            # only refreshes the unfiltered one. The stamp, not the `has`
+            # fields, says which filters are live: on the boot path the
+            # entry ability set them in this same tick.
+            if not filterRef.current or filterRef.current == "all|All|All" {
+                olderTotal = olderUnfiltered;
+            }
         }
         loadFailed = False;
         d = new(Date);
@@ -88,9 +123,122 @@ impl BoardPage.retryLoad -> None {
     await loadAll();
 }
 
+impl BoardPage.filtersOn(pid: str, who: str, cat: str) -> bool {
+    return pid != "all" or who != "All" or cat != "All";
+}
+
 impl BoardPage.setProjectFilter(v: str) -> None {
+    # The new value is handed to refreshOlder rather than read back: a
+    # `has` assigned here is still the old value for the rest of this call.
     fProject = v;
     localStorage.setItem("standup_project", v);
+    refreshOlder(v, fAssignee, fCategory);
+}
+
+impl BoardPage.setAssigneeFilter(v: str) -> None {
+    fAssignee = v;
+    refreshOlder(fProject, v, fCategory);
+}
+
+impl BoardPage.setCategoryFilter(v: str) -> None {
+    fCategory = v;
+    refreshOlder(fProject, fAssignee, v);
+}
+
+impl BoardPage.toggleOlder -> None {
+    opening = not showAllDone;
+    showAllDone = opening;
+    if opening and len(olderDone) == 0 {
+        loadOlder(1, fProject, fAssignee, fCategory);
+    }
+}
+
+impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
+    # Filters go to the server here (unlike the working set) because the
+    # history is paged: a page filtered on the client would run short and
+    # its total would lie.
+    if olderRef.current {
+        return;
+    }
+    olderRef.current = True;
+    loadingOlder = True;
+    # What this request is for. A filter change bumps the stamp, and a late
+    # answer to the previous filters is dropped instead of mixed in.
+    stamp = pid + "|" + who + "|" + cat;
+    filterRef.current = stamp;
+    # Rows already on screen come from the ref: `olderDone` read after the
+    # await is the value from the render that started this call.
+    have: list[TaskView] = rowsRef.current or [];
+    try {
+        result = root spawn ListTasks(
+            scope="older",
+            project_id=pid if pid != "all" else "",
+            assignee_id=who if who != "All" else "",
+            category=cat if cat != "All" else "",
+            page=page,
+            page_size=50
+        );
+        got = result.reports[0] if result.reports else None;
+        if got and filterRef.current == stamp {
+            merged = (have + got.rows) if page > 1 else got.rows;
+            rowsRef.current = merged;
+            olderDone = merged;
+            olderPage = got.page;
+            olderMore = got.has_more;
+            olderTotal = got.total;
+        }
+    } except Exception as e {
+        toast("Could not load older completed tasks");
+    }
+    olderRef.current = False;
+    loadingOlder = False;
+}
+
+impl BoardPage.refreshOlder(pid: str, who: str, cat: str) -> None {
+    # A filter change or a task write invalidates the loaded history. With
+    # filters on the count is unknown until a page says so (-1 keeps the
+    # toggle visible without a number); with them off the poll's count stands.
+    wanted = olderPage;
+    olderDone = [];
+    rowsRef.current = [];
+    olderPage = 0;
+    olderMore = False;
+    filterRef.current = pid + "|" + who + "|" + cat;
+    if filtersOn(pid, who, cat) {
+        olderTotal = -1;
+    }
+    if showAllDone {
+        # Reload as many pages as were open, so a save does not collapse
+        # history the user had already paged through.
+        step = 1;
+        while step == 1 or step <= wanted {
+            await loadOlder(step, pid, who, cat);
+            if step >= 20 {
+                break;
+            }
+            step = step + 1;
+        }
+    }
+}
+
+impl BoardPage.openById(taskId: str) -> None {
+    for t in tasks + olderDone {
+        if t.id == taskId {
+            openEdit(t);
+            return;
+        }
+    }
+    # A card outside the working set (older history, a palette hit): one
+    # owner-checked fetch rather than loading everything to find it.
+    try {
+        result = root spawn GetTask(task_id=taskId);
+        found = result.reports[0] if result.reports else None;
+        if found {
+            openEdit(found);
+        }
+    } except Exception as e {
+        toast("Could not open that task");
+    }
 }
 
 impl BoardPage.setField(key: str, value: str) -> None {
@@ -201,6 +349,7 @@ impl BoardPage.saveTask -> None {
         }
         dialogOpen = False;
         await loadAll();
+        await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
         toast("Failed to save task");
     }
@@ -216,6 +365,7 @@ impl BoardPage.deleteTask -> None {
         root spawn DeleteTask(task_id=editingId);
         dialogOpen = False;
         await loadAll();
+        await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
         toast("Failed to delete task");
     }
@@ -335,10 +485,20 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     if not label {
         return;
     }
+    # A card dragged out of the older history joins the working set here;
+    # its old row is dropped so it cannot render twice.
+    working = [t for t in tasks];
+    cameFromHistory = False;
+    for t in olderDone {
+        if t.id == taskId {
+            working.append(t);
+            cameFromHistory = True;
+        }
+    }
     oldKey = "";
     oldLabel = "";
     peak = 0.0;
-    for t in tasks {
+    for t in working {
         if t.id == taskId {
             oldKey = columnKeyOf(t);
             oldLabel = columnLabel(oldKey);
@@ -351,14 +511,19 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         return;
     }
     landing = mappedStatus(columnKey);
-    for t in tasks {
+    for t in working {
         if t.id == taskId {
             t.status = landing;
             t.step_id = columnKey if onFlowLine else "";
             t.sort_order = peak + 1024.0;
         }
     }
-    tasks = [t for t in tasks];
+    tasks = working;
+    olderDone = [
+        t
+        for t in olderDone
+        if t.id != taskId
+    ];
     movesRef.current = (movesRef.current or 0) + 1;
     failed = False;
     try {
@@ -380,6 +545,7 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     if failed {
         toast("Move failed. Restoring the board.");
         await loadAll();
+        await refreshOlder(fProject, fAssignee, fCategory);
         return;
     }
     # Every successful move confirms itself and offers the undo: a card can
@@ -392,6 +558,9 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
             "action": {"label": "Undo", "onClick": lambda { moveTo(taskId, oldKey); }}
         }
     );
+    if cameFromHistory {
+        await refreshOlder(fProject, fAssignee, fCategory);
+    }
     if columnKind(columnKey) in HANDOFF_KINDS {
         # A handoff or a stop also asks for the optional detail.
         mForm = BLANK_MOVE;
