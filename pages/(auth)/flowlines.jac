@@ -1,5 +1,5 @@
-"""standup - Workflow page (/workflow): three faces of one graph, the template
-picker, the designer, and a read-only diagram (Flow or Lanes). One workflow per
+"""standup - Flow line page (/flowlines): three faces of one graph, the template
+picker, the designer, and a read-only diagram (Flow or Lanes). One flow line per
 org, so no project selector. Validation is advisory and never blocks saving.
 The editor floats OVER the canvas; keep notes out of JSX (a `#` there renders)."""
 
@@ -8,34 +8,34 @@ import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
 import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.tasks { UpdateTask, DeleteTask }
 import from ...walkers.roster { ListMembers, ListRoles }
-import from ...walkers.workflow {
-    GetWorkflow,
+import from ...walkers.flowlines {
+    GetFlowLine,
     ApplyTemplate,
     SaveStep,
     MoveStep,
     DeleteStep,
-    DeleteWorkflow,
+    DeleteFlowLine,
     LinkTransition,
     LabelTransition,
     UnlinkTransition,
-    GetWorkflowMeta,
-    RenameWorkflow,
+    GetFlowLineMeta,
+    RenameFlowLine,
     ListStepTasks
 }
-import from ...components.workflow.FlowCanvas { FlowCanvas }
-import from ...components.workflow.lanes { laneLayout }
-import from ...components.workflow.TemplatePicker { TemplatePicker }
-import from ...components.workflow.StepInspector { StepInspector }
-import from ...components.workflow.StepTasksPanel { StepTasksPanel }
+import from ...components.flowlines.FlowCanvas { FlowCanvas }
+import from ...components.flowlines.lanes { laneLayout }
+import from ...components.flowlines.TemplatePicker { TemplatePicker }
+import from ...components.flowlines.StepInspector { StepInspector }
+import from ...components.flowlines.StepTasksPanel { StepTasksPanel }
 import from ...components.board.TaskDialog { TaskDialog }
-import from ...components.workflow.geometry {
+import from ...components.flowlines.geometry {
     hitStep,
     stepXY,
     canvasSize,
     NODE_W,
     NODE_H
 }
-import from ...components.workflow.kinds { KIND_LABEL, DOT_FILL, colorKey }
+import from ...components.flowlines.kinds { KIND_LABEL, DOT_FILL, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
@@ -82,7 +82,7 @@ glob BLANK_STEP: dict[str, str] = {
      HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
 
 
-def:pub WorkflowPage -> JsxPage {
+def:pub FlowLinePage -> JsxPage {
     has steps: list[StepView] = [],
         projects: list[Project] = [],
         # The org's roles and roster, for the who-does-what strip the
@@ -92,7 +92,7 @@ def:pub WorkflowPage -> JsxPage {
         # Viewer projection: "flow" renders the hand-drawn positions,
         # "lanes" a computed swimlane layout (lane = owner role, column =
         # flow depth). Persisted per browser; editing always uses flow.
-        wfView: str = "flow",
+        lineView: str = "flow",
         # Shared with the board through one localStorage key, so the project
         # you are looking at follows you between the two tabs.
         projectId: str = "all",
@@ -100,7 +100,7 @@ def:pub WorkflowPage -> JsxPage {
         editing: bool = False,
         scratch: bool = False,
         applying: str = "",
-        wfName: str = "Workflow",
+        lineName: str = "Flow line",
         renaming: bool = False,
         nameDraft: str = "",
         selectedId: str = "",
@@ -113,8 +113,8 @@ def:pub WorkflowPage -> JsxPage {
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
-        # Whole-workflow delete confirms in a dialog, not by re-clicking: it
-        # takes every step, so it spells out what goes and what stays first.
+        # Deleting the whole flow line confirms in a dialog, not by re-clicking:
+        # it takes every step, so it spells out what goes and what stays first.
         confirmWipe: bool = False,
         wiping: bool = False,
         # Add step opens a naming panel first: the step only exists once the
@@ -169,7 +169,7 @@ def:pub WorkflowPage -> JsxPage {
     # would animate the correction and the diagram would visibly fly in.
     # The task panel covers the same right-hand strip the editor does, so
     # opening or closing it changes the space the diagram has to fit into.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, wfView, peekId]);
+    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, lineView, peekId]);
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
@@ -230,7 +230,7 @@ def:pub WorkflowPage -> JsxPage {
     async def commitName -> None;
     async def commitField(key: str, value: str) -> None;
     async def deleteStep -> None;
-    async def deleteWorkflow -> None;
+    async def deleteFlowLine -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
     def selectEdge(key: str, said: str) -> None;
@@ -287,7 +287,7 @@ def:pub WorkflowPage -> JsxPage {
     }
     # The Lane view projection: computed fresh per render, empty in flow
     # mode so the viewer's FlowCanvas call can pass these unconditionally.
-    laneMode = wfView == "lanes";
+    laneMode = lineView == "lanes";
     plan: dict[str, any] = {"positions": {}, "lanes": []};
     if laneMode and not editing {
         plan = laneLayout(steps, roleRows, roleMembers);
@@ -469,7 +469,7 @@ def:pub WorkflowPage -> JsxPage {
         <div className="flex w-full flex-col gap-6">
             {if loading or showPicker {
                 <div key="head" className="flex flex-col gap-2">
-                    <h1 className="page-title">Workflow</h1>
+                    <h1 className="page-title">Flow line</h1>
                     <p className="page-subtitle">
                         The steps work moves through in your organization, drawn your way, branches and loops included.
                     </p>
@@ -517,7 +517,7 @@ def:pub WorkflowPage -> JsxPage {
                                 }}}
                             />
                         } else {
-                            <h1 key="name" className="page-title">{wfName}</h1>
+                            <h1 key="name" className="page-title">{lineName}</h1>
                         } }
                         {if not renaming {
                             <Button
@@ -537,7 +537,7 @@ def:pub WorkflowPage -> JsxPage {
                                 className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 onClick={lambda { confirmWipe = True; }}
                             >
-                                Delete workflow
+                                Delete flow line
                             </Button>
                         }}
                         <div className="flex-1"/>
@@ -720,7 +720,7 @@ def:pub WorkflowPage -> JsxPage {
             } else {
                 <div key="viewer" className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-center gap-3">
-                        <h1 className="page-title">{wfName}</h1>
+                        <h1 className="page-title">{lineName}</h1>
                         <span
                             className="rounded-full border px-3 py-1 text-xs tabular-nums text-muted-foreground"
                         >
@@ -784,7 +784,7 @@ def:pub WorkflowPage -> JsxPage {
                                 editing = True;
                             }}
                         >
-                            Edit workflow
+                            Edit flow line
                         </Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -890,11 +890,11 @@ def:pub WorkflowPage -> JsxPage {
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Delete this workflow?</DialogTitle>
+                        <DialogTitle>Delete this flow line?</DialogTitle>
                         <DialogDescription>{wipeSummary}</DialogDescription>
                     </DialogHeader>
                     <p className="text-sm text-muted-foreground">
-                        Tasks keep their status and land by kind on whatever you design next. Roles and the workflow name stay. You start again from the template picker.
+                        Tasks keep their status and land by kind on whatever you design next. Roles and the flow line name stay. You start again from the template picker.
                     </p>
                     <DialogFooter>
                         <Button
@@ -907,12 +907,12 @@ def:pub WorkflowPage -> JsxPage {
                         <Button
                             variant="destructive"
                             disabled={wiping}
-                            onClick={deleteWorkflow}
+                            onClick={deleteFlowLine}
                         >
                             {if wiping {
                                 <Spinner key="sp"/>
                             }}
-                            {"Deleting…" if wiping else "Delete workflow"}
+                            {"Deleting…" if wiping else "Delete flow line"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

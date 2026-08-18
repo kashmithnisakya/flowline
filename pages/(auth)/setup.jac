@@ -1,5 +1,5 @@
 """standup - Onboarding wizard: workspace name -> first project -> people ->
-workflow designer. Resumes where it stopped (no org name: step 1; no project:
+flow line designer. Resumes where it stopped (no org name: step 1; no project:
 step 2), and the finish button saves any half-typed member. Keyed Cards remount
 per step for the entrance animation; `finishing` gives Finish its own spinner."""
 
@@ -220,7 +220,7 @@ def:pub SetupPage -> JsxPage {
                                 Add your people
                             </CardTitle>
                             <CardDescription>
-                                Names only for now: you will pick a workflow next, and assign roles on the Workspace tab. Members are roster records (no accounts).
+                                Names only for now: you will pick a flow line next, and assign roles on the Workspace tab. Members are roster records (no accounts).
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
@@ -278,7 +278,7 @@ def:pub SetupPage -> JsxPage {
                                 {if finishing {
                                     <Spinner key="sp"/>
                                 }}
-                                {"Finishing…" if finishing else "Design your workflow"}
+                                {"Finishing…" if finishing else "Design your flow line"}
                             </Button>
                         </CardFooter>
                     </Card>

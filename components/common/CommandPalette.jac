@@ -16,15 +16,15 @@ import from .Avatar { AvatarStack, dotFor }
 glob PAGES: list[dict[str, str]] = [
          {
              "kind": "page",
-             "label": "Workflow",
-             "to": "/workflow",
+             "label": "Flow line",
+             "to": "/flowlines",
              "hint": "Design the steps"
          },
          {
              "kind": "page",
              "label": "Board",
              "to": "/board",
-             "hint": "Kanban of the workflow"
+             "hint": "Kanban of the flow line"
          },
          {
              "kind": "page",

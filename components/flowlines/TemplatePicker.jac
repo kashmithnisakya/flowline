@@ -1,9 +1,9 @@
 """First-run gallery: pick how the team moves work. Previews render from
-WORKFLOW_TEMPLATES itself, so they cannot drift from what ApplyTemplate seeds.
+FLOW_LINE_TEMPLATES itself, so they cannot drift from what ApplyTemplate seeds.
 Each thumbnail's viewBox comes from its own step extents, and the curve math is
 a thumb-scale copy of geometry.wire() so previews read like the real canvas."""
 
-import from ...constants { WORKFLOW_TEMPLATES }
+import from ...constants { FLOW_LINE_TEMPLATES }
 import from .geometry { NODE_W, NODE_H }
 import from .kinds { TEXT_FILL, colorKey }
 import from ..ui.button { Button }
@@ -192,7 +192,7 @@ def:pub TemplatePicker(
                     "gridTemplateColumns": "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))"
                 }}
             >
-                {for t in WORKFLOW_TEMPLATES {
+                {for t in FLOW_LINE_TEMPLATES {
                     <Card
                         key={t["key"]}
                         className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity" + (

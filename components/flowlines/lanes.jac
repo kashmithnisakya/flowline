@@ -1,4 +1,4 @@
-"""Computed swimlane layout for the workflow viewer. Nothing is persisted: lane
+"""Computed swimlane layout for the flow line viewer. Nothing is persisted: lane
 = owner role, column = longest forward path (send-backs ignored, which makes
 loops terminate), so it recomputes from live data and cannot drift. Wires are
 elbows in the column gaps; cards are shorter because the owner line is gone."""

@@ -233,7 +233,7 @@ walker SetMoveInfo(find_task) {
 
 walker MoveTask(find_task) {
     """The drag-drop / arrow-move endpoint. Server-authoritative: a move appends
-    to the end of the target column. `step_id` is the workflow column and its
+    to the end of the target column. `step_id` is the flow line column and its
     mapped status is written too; without it, the legacy status-only move."""
     has status: str = "",
         step_id: str = "",
@@ -258,7 +258,7 @@ walker MoveTask(find_task) {
             label = self.step_name or mapped;
         } else {
             # A status-only move (the assistant, a merged PR, an org with no
-            # workflow) must drop whatever step the task was on, or the board
+            # flow line) must drop whatever step the task was on, or the board
             # keeps drawing it in the old column while the status says
             # otherwise.
             here.step_id = "";

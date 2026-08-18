@@ -81,7 +81,7 @@ node Task {
         category: str,
         priority: str,
         # The board column this task sits in, as a WorkflowStep jid. Empty on
-        # every task written before workflows existed, and on any task whose
+        # every task written before flow lines existed, and on any task whose
         # step was deleted; the board falls back to `status` for those, so
         # this is additive and old rows keep working.
         step_id: str = "",
@@ -232,7 +232,10 @@ node Role {
         sort_order: float = 0.0;
 }
 
-# One step of the org's workflow: a named column with a semantic `kind`
+# `WorkflowStep` and `WorkflowMeta` keep their pre-rename names: an
+# archetype's name is its identity, so renaming them orphans persisted data.
+
+# One step of the org's flow line: a named column with a semantic `kind`
 # behind the user's label. The kind, not the name, is what the app keys
 # behaviour on, so renaming never breaks anything. Position is the
 # designer's canvas placement in px, persisted because it is drawn by hand.
@@ -249,12 +252,12 @@ node WorkflowStep {
         updated_at: str = "";
 }
 
-# The workflow's own record: singleton per root, get-or-created. Steps stay
+# The flow line's own record: singleton per root, get-or-created. Steps stay
 # flat off the root; this carries only what the graph itself cannot — the
 # display name.
 node WorkflowMeta {
-    has name: str = "Workflow",
-        # Which template seeded this workflow; "" means drawn from scratch
+    has name: str = "Flow line",
+        # Which template seeded this flow line; "" means drawn from scratch
         # (or seeded before this field existed). The Roles tab keys on it: a
         # template with a `roles` list brings fixed roles, "" means
         # free-text roles.
@@ -273,7 +276,7 @@ edge InMilestone: Task --> Milestone {}
 # acyclic (LinkSteps refuses anything that would close a loop), because both
 # the layout and the "ready to start" signal are derived from depth.
 edge LeadsTo: Milestone --> Milestone {}
-# A workflow transition. Cycles are ALLOWED by design (review looping back
+# A flow line transition. Cycles are ALLOWED by design (review looping back
 # to development is the point); only self-loops are refused, at link time.
 # `label` is what has to be true to cross; empty on older transitions.
 edge FlowsTo: WorkflowStep --> WorkflowStep {
@@ -358,7 +361,7 @@ obj StepView {
         next_ids: list[str] = [],
         # Index-aligned with next_ids: same FlowsTo traversal builds both.
         next_labels: list[str] = [],
-        # How much work is sitting here, counted per request in GetWorkflow
+        # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0;
 }

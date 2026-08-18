@@ -1,4 +1,4 @@
-"""The workflow as a diagram: step cards over SVG transitions, purely
+"""The flow line as a diagram: step cards over SVG transitions, purely
 presentational (positions come in as data, every interaction is a callback).
 Edges travel any direction and loops are legal. The viewport never scrolls: it
 zooms to fit, and the control sends a DELTA so two quick clicks both count.
@@ -125,7 +125,7 @@ def:pub FlowCanvas(
             curve = wire(pos[0], pos[1], tpos[0], tpos[1], twoWay);
             said = s.next_labels[i] if i < len(s.next_labels) else "";
             # A send-back is an arrow to an EARLIER step, not one that happens
-            # to point left: curve["back"] is geometry, this is the workflow.
+            # to point left: curve["back"] is geometry, this is the flow line.
             isReturn = target.sort_order < s.sort_order;
             lx = curve["mx"];
             ly = curve["my"];
@@ -634,7 +634,7 @@ def:pub FlowCanvas(
                 </button>
                 <button
                     type="button"
-                    title="Fit the whole workflow"
+                    title="Fit the whole flow line"
                     className="min-w-14 rounded-full px-2 text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={lambda { if onZoomFit { onZoomFit(); }}}
                 >

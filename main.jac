@@ -51,18 +51,18 @@ import from walkers.log {
     UpdateLogEntry,
     DeleteLogEntries
 }
-import from walkers.workflow {
-    GetWorkflow,
+import from walkers.flowlines {
+    GetFlowLine,
     ApplyTemplate,
     SaveStep,
     MoveStep,
     DeleteStep,
-    DeleteWorkflow,
+    DeleteFlowLine,
     LinkTransition,
     LabelTransition,
     UnlinkTransition,
-    GetWorkflowMeta,
-    RenameWorkflow,
+    GetFlowLineMeta,
+    RenameFlowLine,
     ListStepTasks
 }
 import from walkers.github {

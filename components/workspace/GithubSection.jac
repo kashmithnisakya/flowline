@@ -24,7 +24,7 @@ import from ...walkers.github {
     ImportIssues
 }
 import from ...components.ui.input { Input }
-import from ...walkers.workflow { GetWorkflow }
+import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListRepos, AddRepo }
 import from ...components.github.ConnectCard { ConnectCard }

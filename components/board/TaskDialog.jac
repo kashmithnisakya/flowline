@@ -65,7 +65,7 @@ def:pub TaskDialog(
     onDelete: Callable[[], None],
     categories: list[str] = [],
     # The board's columns, as parallel key/label lists: a column is a
-    # workflow step (keyed by its jid) or a legacy status (keyed by itself),
+    # flow line step (keyed by its jid) or a legacy status (keyed by itself),
     # so the dialog always offers exactly what the board shows.
     columnKeys: list[str] = [],
     columnLabels: list[str] = [],

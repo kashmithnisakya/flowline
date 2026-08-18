@@ -23,7 +23,7 @@ glob STATUSES: list[str] = [
      # The one prebuilt flow. The picker offers exactly this or a blank
      # canvas; the removed Kanban/Software/Support entries only ever seeded
      # steps, so workspaces created from them keep working untouched.
-     WORKFLOW_TEMPLATES: list[dict[str, any]] = [
+     FLOW_LINE_TEMPLATES: list[dict[str, any]] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
