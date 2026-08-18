@@ -63,20 +63,24 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   roadmap and vocabulary features were removed: deleting an archetype
   orphans whatever production still has.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
-  `tasks`, `log`, `workflow`) plus `util.jac` for server-only helpers.
+  `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
   Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
 - **`constants.jac`** — `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
-  `KIND_STATUS`, `STATUS_KIND` and `WORKFLOW_TEMPLATES` as `glob`s shared by
+  `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
 - **`main.jac`** — entry point. **A walker missing from its import list 404s**,
   and the entry module cannot use relative imports (`import from models {…}`,
   not `.models`); modules under `walkers/` likewise import bare.
 
-### The workflow drives the board
+### The flow line drives the board
 
-An org designs its own steps on `/workflow` (`WorkflowStep` nodes, `FlowsTo`
+An org designs its own steps on `/flowlines` (`WorkflowStep` nodes, `FlowsTo`
 edges, cycles allowed on purpose). **The board's columns ARE those steps**, in
-`sort_order`, so the two views cannot disagree.
+`sort_order`, so the two views cannot disagree. The feature was called
+"workflow" until Aug 2026; `WorkflowStep` / `WorkflowMeta` keep that name
+because renaming an archetype orphans persisted data, and `GetFlowLineMeta`
+reads the old default name `"Workflow"` as `"Flow line"` for the same reason.
+`/workflow` redirects to `/flowlines` for old links.
 
 Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 `blocked` / `done`) behind the user's chosen name. **Roughly thirty places key
@@ -86,9 +90,9 @@ the mapped legacy `status` via `KIND_STATUS`. Insights, GitHub sync, the
 assistant and the log therefore never learn what a step is — keep it that way
 rather than teaching them.
 
-Tasks with an empty `step_id` (written before workflows existed, or whose step
+Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
-of that kind; an org with no workflow at all falls back to `STATUSES`. Both
+of that kind; an org with no flow line at all falls back to `STATUSES`. Both
 fallbacks are load-bearing — do not assume a task has a step.
 
 ### Security model — the one thing not to regress
@@ -121,7 +125,7 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/workflow`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
@@ -129,7 +133,7 @@ File-based routing with route groups:
   collides with the root layout.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
-  components from `components/{workflow,board,log,roster,projects,auth,landing}/`.
+  components from `components/{flowlines,board,log,roster,projects,auth,landing}/`.
 - Form-heavy dialogs take a `dict` plus one `onField(key, value)` callback
   rather than a dozen props.
 - **`components/ui/`** is jac-shadcn — import only, never edit. When a
@@ -148,9 +152,9 @@ File-based routing with route groups:
   `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`, `KineticGrid`.
 - **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
   (opaque canvas fill) in `styles/global.css` for both palettes; the tables
-  in `components/workflow/kinds.jac` only name them (`bg-step-sky`). A new
+  in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
   colour key needs tokens in both palettes, and its key is what persists.
-- **The workflow page's step panel opens the board's dialog.** Clicking a step
+- **The flow line page's step panel opens the board's dialog.** Clicking a step
   in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
   and a row opens `components/board/TaskDialog` on the same form dict and the
   same `UpdateTask` / `DeleteTask` walkers the board drives it with.
@@ -205,6 +209,13 @@ File-based routing with route groups:
 - **A `has` list read after `await` is stale, and so is a `has` read inside a
   `setInterval` callback**: re-arm a `setTimeout` from an effect keyed on the
   value instead (see `HeroBoard`).
+- **On jac 0.34.x a pure module imported by both sides can compile to an
+  empty client file** (`"KIND_COLORS" is not exported by compiled/constants.js`).
+  Each page's pre-scan reloads `constants.jac` when a component in its
+  closure imports it, dropping the client stamps; only a page importing it
+  directly re-stamps. `pages/layout.jac` is scanned last and imports
+  `constants` for exactly that reason (`vocabPin`); before it existed the
+  build only survived because `workflow.jac` sorted after `log.jac`.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.

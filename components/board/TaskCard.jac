@@ -6,7 +6,7 @@ matters: the lane's card list is a flex column that scrolls, and without it
 a full lane squashes every card to a sliver instead of scrolling."""
 
 import from ...models { TaskView }
-import from ..workflow.kinds { CARD_BAR, colorKey }
+import from ..flowlines.kinds { CARD_BAR, colorKey }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
 import from ..common.Avatar { AvatarStack, dotFor }
 import from ..common.Markdown { Markdown }
@@ -65,7 +65,7 @@ def:pub TaskCard(
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
     # Neighbouring columns come from the column rendering this card: the
-    # board's columns are the org's workflow, so a card cannot infer them.
+    # board's columns are the org's flow line, so a card cannot infer them.
     # The step's colour, so a whole column reads as one block of work.
     color: str = "",
     prevKey: str = "",

@@ -1,6 +1,6 @@
-"""standup - Board page (/board): the org's workflow as a kanban. The columns
-ARE the workflow steps in designed order, so board and Workflow tab cannot
-disagree; with no workflow yet it falls back to the six statuses. Stateful
+"""standup - Board page (/board): the org's flow line as a kanban. The columns
+ARE the flow line steps in designed order, so board and Flow line tab cannot
+disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
 import from ...models { Project, MemberView, TaskView, StepView, RepoView }
@@ -19,7 +19,7 @@ import from ...walkers.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.workflow { GetWorkflow }
+import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
@@ -173,7 +173,7 @@ def:pub BoardPage -> JsxPage {
     async def retryLoad -> None;
     async def saveTask -> None;
     async def deleteTask -> None;
-    # The columns ARE the workflow, so every column question routes through
+    # The columns ARE the flow line, so every column question routes through
     # these rather than a status literal. Page methods, not module defs,
     # because they all read `steps`.
     def columnKeys -> list[str];
@@ -219,14 +219,14 @@ def:pub BoardPage -> JsxPage {
     colKeys = columnKeys();
     doneKey = doneColumnKey();
     today = todayIso();
-    # No workflow AND nothing to show: six empty placeholder columns are noise
+    # No flow line AND nothing to show: six empty placeholder columns are noise
     # on a workspace that has not decided what its columns are yet. A legacy
     # org that HAS tasks still gets the fallback columns, because hiding the
     # board would hide its work.
     # A failed first load also has no steps and no tasks; it must not be
-    # mistaken for a workspace that has not designed its workflow yet.
+    # mistaken for a workspace that has not designed its flow line yet.
     nothingLoaded = loadFailed and len(steps) == 0 and len(tasks) == 0;
-    noWorkflow = not nothingLoaded and len(steps) == 0 and len(tasks) == 0;
+    noFlowLine = not nothingLoaded and len(steps) == 0 and len(tasks) == 0;
 
     visible = [
         t
@@ -271,7 +271,7 @@ def:pub BoardPage -> JsxPage {
                         <Skeleton className="h-8 w-24"/>
                         <Skeleton className="h-8 w-24"/>
                     </div>
-                } elif not noWorkflow and not nothingLoaded {
+                } elif not noFlowLine and not nothingLoaded {
                     <div key="tools" className="flex items-center gap-2">
                         <FilterBar
                             projects={activeProjects}
@@ -354,9 +354,9 @@ def:pub BoardPage -> JsxPage {
                     onRetry={retryLoad}
                     retrying={retrying}
                 />
-            } elif noWorkflow {
+            } elif noFlowLine {
                 <div
-                    key="noworkflow"
+                    key="noflowline"
                     className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
                 >
                     <KineticGrid
@@ -383,7 +383,7 @@ def:pub BoardPage -> JsxPage {
                             <path d="m7.3 13.2 9.4 4.6"/>
                         </svg>
                         <h2 className="font-display text-lg font-semibold">
-                            Your board is the workflow you design
+                            Your board is the flow line you design
                         </h2>
                         <p
                             className="max-w-md text-sm text-pretty text-muted-foreground"
@@ -391,9 +391,9 @@ def:pub BoardPage -> JsxPage {
                             Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
                         </p>
                         <Button
-                            onClick={lambda { window.location.href = "/workflow"; }}
+                            onClick={lambda { window.location.href = "/flowlines"; }}
                         >
-                            Design your workflow
+                            Design your flow line
                             <svg
                                 width={16}
                                 height={16}
@@ -412,7 +412,7 @@ def:pub BoardPage -> JsxPage {
                 </div>
             } else {
                 # ONE row, always: columns divide the width between them, since
-                # a wrapping workflow stops reading as a pipeline. Below md the
+                # a wrapping flow line stops reading as a pipeline. Below md the
                 # columns keep a 16rem minimum and the row scroll-snaps instead.
                 <div
                     key="columns"

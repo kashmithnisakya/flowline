@@ -36,7 +36,7 @@ impl BoardPage.loadAll -> None {
         tResult = root spawn ListTasks();
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        sResult = root spawn GetWorkflow();
+        sResult = root spawn GetFlowLine();
         rResult = root spawn ListRepos();
         fetchedTasks = tResult.reports[0] if tResult.reports else [];
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
@@ -107,7 +107,7 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
     d = new(Date);
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
     # A lane's add row names its own column; otherwise a new task lands in
-    # the first column of the workflow (or the first legacy status), never a
+    # the first column of the flow line (or the first legacy status), never a
     # hardcoded "Backlog" that may not exist.
     keys = columnKeys();
     landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
@@ -223,7 +223,7 @@ impl BoardPage.deleteTask -> None {
 }
 
 # ------------------------------------------------------------------ columns
-# The board's columns are the org's workflow steps. Until an org designs one,
+# The board's columns are the org's flow line steps. Until an org designs one,
 # the classic six statuses stand in, so a brand-new workspace still has a
 # board. Every helper works in both modes.
 
@@ -231,7 +231,7 @@ impl BoardPage.columnKeys -> list[str] {
     keys: list[str] = [];
     if len(steps) > 0 {
         # Left-to-right on the canvas, so the board reads in the order the
-        # org DREW its workflow rather than the order the steps happened to
+        # org DREW its flow line rather than the order the steps happened to
         # be created in. Ties (a vertical branch) fall back to sort_order,
         # which keeps the result stable.
         ordered = [st for st in steps];
@@ -287,7 +287,7 @@ impl BoardPage.doneColumnKey -> str {
 # The legacy status a column stands for. Written alongside step_id on every
 # move so insights, GitHub sync and the assistant keep reading `status`.
 impl BoardPage.mappedStatus(key: str) -> str {
-    # Without a workflow the key already IS the status; routing it through
+    # Without a flow line the key already IS the status; routing it through
     # kind would collapse "Changes Requested" into "In Progress".
     if len(steps) == 0 {
         return key if key in STATUSES else "Backlog";
@@ -296,7 +296,7 @@ impl BoardPage.mappedStatus(key: str) -> str {
     return KIND_STATUS[kind] if kind in KIND_STATUS else "In Progress";
 }
 
-# Which column a task is drawn in. A task written before workflows existed
+# Which column a task is drawn in. A task written before flow lines existed
 # (or whose step was deleted) has no step_id, so its status decides: it lands
 # in the first column of the matching kind.
 impl BoardPage.columnKeyOf(t: TaskView) -> str {
@@ -329,8 +329,8 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     # Optimistic: mutate the card in state and rebind; the server owns the
     # end-of-column order. movesRef fences the poll so a stale fetch cannot
     # snap the card back; on failure the board refetches server truth.
-    # A column key is a step jid, or a legacy status when there is no workflow.
-    onWorkflow = len(steps) > 0;
+    # A column key is a step jid, or a legacy status when there is no flow line.
+    onFlowLine = len(steps) > 0;
     label = columnLabel(columnKey);
     if not label {
         return;
@@ -354,7 +354,7 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     for t in tasks {
         if t.id == taskId {
             t.status = landing;
-            t.step_id = columnKey if onWorkflow else "";
+            t.step_id = columnKey if onFlowLine else "";
             t.sort_order = peak + 1024.0;
         }
     }
@@ -362,7 +362,7 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     movesRef.current = (movesRef.current or 0) + 1;
     failed = False;
     try {
-        if onWorkflow {
+        if onFlowLine {
             root spawn MoveTask(task_id=taskId, step_id=columnKey, step_name=label);
         } else {
             root spawn MoveTask(task_id=taskId, status=columnKey);

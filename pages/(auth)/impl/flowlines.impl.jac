@@ -1,9 +1,9 @@
-"""Implementations for the Workflow page. Loaders and mutations reload through
-GetWorkflow rather than patching local state: the walker is the only place the
+"""Implementations for the Flow line page. Loaders and mutations reload through
+GetFlowLine rather than patching local state: the walker is the only place the
 prev/next truth lives. Locals are read before any await (stale-snapshot rule).
 """
 
-impl WorkflowPage.boot -> None {
+impl FlowLinePage.boot -> None {
     loadMeta();
     # The board persists its project filter under the same key, so the two
     # tabs stay on the same project rather than each keeping a private idea
@@ -15,7 +15,7 @@ impl WorkflowPage.boot -> None {
     # filter does. Anything but the exact "lanes" token means flow.
     storedView = localStorage.getItem("standup_wf_view") or "";
     if storedView == "lanes" {
-        wfView = "lanes";
+        lineView = "lanes";
     }
     try {
         result = root spawn ListProjects();
@@ -36,19 +36,19 @@ impl WorkflowPage.boot -> None {
     await reload(picked);
 }
 
-impl WorkflowPage.reload(pid: str) -> None {
+impl FlowLinePage.reload(pid: str) -> None {
     try {
-        result = root spawn GetWorkflow(project_id=pid if pid and pid != "all" else "");
+        result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
     } except Exception as e {
-        toast("Failed to load your workflow");
+        toast("Failed to load your flow line");
     }
     loading = False;
     # Open showing the whole graph rather than a corner of it.
     fitZoom();
 }
 
-impl WorkflowPage.peekStep(stepId: str) -> None {
+impl FlowLinePage.peekStep(stepId: str) -> None {
     # Clicking the open step again closes the panel, so one control both
     # opens and dismisses it.
     if peekId == stepId {
@@ -62,7 +62,7 @@ impl WorkflowPage.peekStep(stepId: str) -> None {
     peekLoading = False;
 }
 
-impl WorkflowPage.refreshPeek(stepId: str, pid: str) -> None {
+impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
     # Fetching per click rather than holding every task in page state: the
     # server already owns the placement rule, and a workspace can have far
     # more tasks than the panel will ever show. Quiet on purpose: a save
@@ -80,13 +80,13 @@ impl WorkflowPage.refreshPeek(stepId: str, pid: str) -> None {
     }
 }
 
-impl WorkflowPage.closePeek -> None {
+impl FlowLinePage.closePeek -> None {
     peekId = "";
     peekTasks = [];
     peekLoading = False;
 }
 
-impl WorkflowPage.stepName(key: str) -> str {
+impl FlowLinePage.stepName(key: str) -> str {
     for st in steps {
         if st.id == key {
             return st.name;
@@ -95,7 +95,7 @@ impl WorkflowPage.stepName(key: str) -> str {
     return "";
 }
 
-impl WorkflowPage.mappedStatus(key: str) -> str {
+impl FlowLinePage.mappedStatus(key: str) -> str {
     # Nothing here learns what a step is: the kind maps to the legacy status
     # every other surface still keys on.
     for st in steps {
@@ -106,7 +106,7 @@ impl WorkflowPage.mappedStatus(key: str) -> str {
     return "In Progress";
 }
 
-impl WorkflowPage.openTask(tid: str) -> None {
+impl FlowLinePage.openTask(tid: str) -> None {
     found = [
         t
         for t in peekTasks
@@ -142,7 +142,7 @@ impl WorkflowPage.openTask(tid: str) -> None {
     taskOpen = True;
 }
 
-impl WorkflowPage.setTaskField(key: str, value: str) -> None {
+impl FlowLinePage.setTaskField(key: str, value: str) -> None {
     # A computed key does not survive a dict-literal spread: `{**taskForm,
     # key: value}` writes a literal "key" property and the input freezes.
     updated = {** taskForm};
@@ -150,7 +150,7 @@ impl WorkflowPage.setTaskField(key: str, value: str) -> None {
     taskForm = updated;
 }
 
-impl WorkflowPage.toggleTaskAssignee(memberId: str) -> None {
+impl FlowLinePage.toggleTaskAssignee(memberId: str) -> None {
     if memberId in taskAssignees {
         taskAssignees = [
             a
@@ -162,7 +162,7 @@ impl WorkflowPage.toggleTaskAssignee(memberId: str) -> None {
     }
 }
 
-impl WorkflowPage.saveTask -> None {
+impl FlowLinePage.saveTask -> None {
     title = taskForm["title"].strip();
     if not title or not editTaskId {
         return;
@@ -211,7 +211,7 @@ impl WorkflowPage.saveTask -> None {
             project_id=project
         );
         taskOpen = False;
-        # The counts on the cards come from GetWorkflow, the panel from
+        # The counts on the cards come from GetFlowLine, the panel from
         # ListStepTasks, so a save has to refresh both.
         await reload(pid);
         await refreshPeek(fromStep, pid);
@@ -224,7 +224,7 @@ impl WorkflowPage.saveTask -> None {
     taskSaving = False;
 }
 
-impl WorkflowPage.deleteTask -> None {
+impl FlowLinePage.deleteTask -> None {
     if not editTaskId {
         return;
     }
@@ -242,7 +242,7 @@ impl WorkflowPage.deleteTask -> None {
     taskSaving = False;
 }
 
-impl WorkflowPage.selectProject(v: str) -> None {
+impl FlowLinePage.selectProject(v: str) -> None {
     openStep = peekId;
     projectId = v;
     localStorage.setItem("standup_project", v);
@@ -251,35 +251,35 @@ impl WorkflowPage.selectProject(v: str) -> None {
     await refreshPeek(openStep, v);
 }
 
-impl WorkflowPage.loadMeta -> None {
+impl FlowLinePage.loadMeta -> None {
     try {
-        result = root spawn GetWorkflowMeta();
+        result = root spawn GetFlowLineMeta();
         payload = result.reports[0] if result.reports else None;
         if payload and payload["name"] {
-            wfName = payload["name"];
+            lineName = payload["name"];
         }
     } except Exception as e {
-        wfName = wfName;
+        lineName = lineName;
     }
 }
 
-impl WorkflowPage.switchView(v: str) -> None {
+impl FlowLinePage.switchView(v: str) -> None {
     chosen = "lanes" if v == "lanes" else "flow";
-    wfView = chosen;
+    lineView = chosen;
     localStorage.setItem("standup_wf_view", chosen);
 }
 
-impl WorkflowPage.lanePlan -> dict[str, any] {
+impl FlowLinePage.lanePlan -> dict[str, any] {
     # The Lane view projection, recomputed on demand so the fit math and
     # the render can never disagree. Editing always measures the freeform
     # drawing, so the plan is empty there.
-    if wfView != "lanes" or editing or len(steps) == 0 {
+    if lineView != "lanes" or editing or len(steps) == 0 {
         return {"positions": {}, "lanes": []};
     }
     return laneLayout(steps, roleRows, roleMembers);
 }
 
-impl WorkflowPage.pickTemplate(key: str) -> None {
+impl FlowLinePage.pickTemplate(key: str) -> None {
     applying = key;
     try {
         result = root spawn ApplyTemplate(template_key=key);
@@ -287,44 +287,44 @@ impl WorkflowPage.pickTemplate(key: str) -> None {
         if len(fresh) > 0 {
             steps = fresh;
             editing = True;
-            toast("Your workflow is in, drag anything to make it yours");
+            toast("Your flow line is in, drag anything to make it yours");
         } else {
             toast("That template could not be applied");
         }
     } except Exception as e {
-        toast("Failed to set up the workflow");
+        toast("Failed to set up the flow line");
     }
     applying = "";
 }
 
-impl WorkflowPage.startScratch -> None {
+impl FlowLinePage.startScratch -> None {
     scratch = True;
     editing = True;
 }
 
-impl WorkflowPage.startRename -> None {
-    nameDraft = wfName;
+impl FlowLinePage.startRename -> None {
+    nameDraft = lineName;
     renaming = True;
 }
 
-impl WorkflowPage.saveRename -> None {
+impl FlowLinePage.saveRename -> None {
     value = nameDraft.strip();
     renaming = False;
-    if not value or value == wfName {
+    if not value or value == lineName {
         return;
     }
     try {
-        result = root spawn RenameWorkflow(name=value);
+        result = root spawn RenameFlowLine(name=value);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["name"] {
-            wfName = payload["name"];
+            lineName = payload["name"];
         }
     } except Exception as e {
-        toast("Failed to rename the workflow");
+        toast("Failed to rename the flow line");
     }
 }
 
-impl WorkflowPage.addStep -> None {
+impl FlowLinePage.addStep -> None {
     # Open the naming panel; nothing is created until the user commits a
     # name of their own. No placeholder steps.
     creatingStep = True;
@@ -334,7 +334,7 @@ impl WorkflowPage.addStep -> None {
     form = {"name": "", "kind": "active", "color": "indigo", "owner": ""};
 }
 
-impl WorkflowPage.commitName -> None {
+impl FlowLinePage.commitName -> None {
     name = (form["name"] or "").strip();
     if not name {
         return;
@@ -411,7 +411,7 @@ impl WorkflowPage.commitName -> None {
     busyRef.current = False;
 }
 
-impl WorkflowPage.commitField(key: str, value: str) -> None {
+impl FlowLinePage.commitField(key: str, value: str) -> None {
     if not selectedId {
         return;
     }
@@ -432,7 +432,7 @@ impl WorkflowPage.commitField(key: str, value: str) -> None {
     }
 }
 
-impl WorkflowPage.deleteStep -> None {
+impl FlowLinePage.deleteStep -> None {
     if not selectedId {
         return;
     }
@@ -467,13 +467,13 @@ impl WorkflowPage.deleteStep -> None {
     saving = False;
 }
 
-impl WorkflowPage.deleteWorkflow -> None {
+impl FlowLinePage.deleteFlowLine -> None {
     wiping = True;
     try {
-        result = root spawn DeleteWorkflow();
+        result = root spawn DeleteFlowLine();
         payload = result.reports[0] if result.reports else None;
         if not payload or not payload["ok"] {
-            toast("The workflow could not be deleted");
+            toast("The flow line could not be deleted");
             wiping = False;
             return;
         }
@@ -491,14 +491,14 @@ impl WorkflowPage.deleteWorkflow -> None {
         peekId = "";
         confirmWipe = False;
         await reload(projectId);
-        toast("Workflow deleted, pick a template or start from scratch");
+        toast("Flow line deleted, pick a template or start from scratch");
     } except Exception as e {
-        toast("Failed to delete the workflow");
+        toast("Failed to delete the flow line");
     }
     wiping = False;
 }
 
-impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
+impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
     try {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);
         payload = result.reports[0] if result.reports else None;
@@ -523,7 +523,7 @@ impl WorkflowPage.linkSteps(fromId: str, toId: str) -> None {
     }
 }
 
-impl WorkflowPage.selectEdge(key: str, said: str) -> None {
+impl FlowLinePage.selectEdge(key: str, said: str) -> None {
     # Seeding the draft from the edge itself is what makes the editor an
     # edit rather than a retype, and it is why nothing has to clear the
     # draft when the selection moves.
@@ -531,7 +531,7 @@ impl WorkflowPage.selectEdge(key: str, said: str) -> None {
     edgeDraft = said;
 }
 
-impl WorkflowPage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
+impl FlowLinePage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
     # An empty `said` is a clear, not a no-op, which is why this goes
     # through LabelTransition rather than re-drawing the arrow.
     try {
@@ -550,7 +550,7 @@ impl WorkflowPage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
     }
 }
 
-impl WorkflowPage.deleteEdge(fromId: str, toId: str) -> None {
+impl FlowLinePage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
@@ -560,7 +560,7 @@ impl WorkflowPage.deleteEdge(fromId: str, toId: str) -> None {
     }
 }
 
-impl WorkflowPage.selectStep(stepId: str) -> None {
+impl FlowLinePage.selectStep(stepId: str) -> None {
     # A drag ends with a click on the node it started from, so the drag marks
     # that one click to be ignored; without this, moving a step also selects
     # it and finishing a wire also re-fires the connect.
@@ -594,14 +594,14 @@ impl WorkflowPage.selectStep(stepId: str) -> None {
     }
 }
 
-impl WorkflowPage.armConnect -> None {
+impl FlowLinePage.armConnect -> None {
     if selectedId {
         connectFrom = selectedId;
         selectedEdge = "";
     }
 }
 
-impl WorkflowPage.clearCanvas -> None {
+impl FlowLinePage.clearCanvas -> None {
     # A drag whose mousedown and mouseup land on different elements fires the
     # click on their common ancestor, the canvas, so the swallow flag must be
     # consumable here too or finishing a wire wipes the selection it just made.
@@ -616,7 +616,7 @@ impl WorkflowPage.clearCanvas -> None {
     creatingStep = False;
 }
 
-impl WorkflowPage.setField(key: str, value: str) -> None {
+impl FlowLinePage.setField(key: str, value: str) -> None {
     # NOTE: `{**form, key: value}` compiles to a JS object literal with a
     # LITERAL "key" property, which freezes every bound input. Copy, then
     # subscript.
@@ -670,7 +670,7 @@ def clampZoom(v: float) -> float {
     return v;
 }
 
-impl WorkflowPage.zoomBy(delta: float) -> None {
+impl FlowLinePage.zoomBy(delta: float) -> None {
     current = float(zoomRef.current) if zoomRef.current else zoom;
     z = clampZoom(current + delta);
     zoomRef.current = z;
@@ -678,7 +678,7 @@ impl WorkflowPage.zoomBy(delta: float) -> None {
     recenterPan();
 }
 
-impl WorkflowPage.viewBounds -> list[float] {
+impl FlowLinePage.viewBounds -> list[float] {
     # What the fit and the centering measure: the drawn diagram in Flow view,
     # the computed lane layout in Lane view. Lane mode includes the label
     # gutter and the last band, or the fit centers the labels off-screen.
@@ -704,7 +704,7 @@ impl WorkflowPage.viewBounds -> list[float] {
     return bounds;
 }
 
-impl WorkflowPage.fitZoom -> None {
+impl FlowLinePage.fitZoom -> None {
     view: any = viewportRef.current;
     if not view {
         zoomRef.current = 1.0;
@@ -742,7 +742,7 @@ impl WorkflowPage.fitZoom -> None {
     }
 }
 
-impl WorkflowPage.dockWidth -> float {
+impl FlowLinePage.dockWidth -> float {
     # Both right-hand panels float OVER the canvas, so the space they cover
     # is not space a card can use. Edit mode reserves it for the whole
     # session (re-fitting per selection would make the zoom jump under the
@@ -758,7 +758,7 @@ impl WorkflowPage.dockWidth -> float {
     return 0.0;
 }
 
-impl WorkflowPage.recenterPan -> None {
+impl FlowLinePage.recenterPan -> None {
     # Center the diagram's bounding box in the visible part of the viewport.
     # Screen-px offsets applied before the scale, so pointerXY (which reads
     # the translated surface's own rect) needs no changes.
@@ -791,7 +791,7 @@ impl WorkflowPage.recenterPan -> None {
     panY = edgeY - minY * z;
 }
 
-impl WorkflowPage.pointerXY(e: MouseEvent) -> list[float] {
+impl FlowLinePage.pointerXY(e: MouseEvent) -> list[float] {
     surface: any = canvasRef.current;
     if not surface or not surface.getBoundingClientRect {
         return [-1.0, -1.0];
@@ -807,7 +807,7 @@ impl WorkflowPage.pointerXY(e: MouseEvent) -> list[float] {
     ];
 }
 
-impl WorkflowPage.beginDrag(e: MouseEvent) -> None {
+impl FlowLinePage.beginDrag(e: MouseEvent) -> None {
     if connectFrom {
         return;
     }
@@ -852,7 +852,7 @@ impl WorkflowPage.beginDrag(e: MouseEvent) -> None {
     };
 }
 
-impl WorkflowPage.moveDrag(e: MouseEvent) -> None {
+impl FlowLinePage.moveDrag(e: MouseEvent) -> None {
     surface: any = e.currentTarget;
     drag = dragRef.current;
     if surface {
@@ -897,7 +897,7 @@ impl WorkflowPage.moveDrag(e: MouseEvent) -> None {
     live = updated;
 }
 
-impl WorkflowPage.endDrag(e: MouseEvent) -> None {
+impl FlowLinePage.endDrag(e: MouseEvent) -> None {
     wiring = wireRef.current;
     if wiring {
         wireRef.current = None;

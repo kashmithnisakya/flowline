@@ -31,7 +31,7 @@
     --ring: #E8552F;
     --success: #2C5545;             /* pine */
     --warning: #8F6314;             /* amber dark enough for small text on paper (4.7:1) */
-    /* Workflow step colours (keys in components/workflow/kinds.jac). Warmer,
+    /* Flow line step colours (keys in components/flowlines/kinds.jac). Warmer,
        lower-chroma neighbours of Tailwind's sky/indigo/amber/rose/emerald/slate
        so six lanes sit in one family with ember and paper. -ink is the text
        weight (>= 4.5:1 on paper); -wash is an opaque pale fill for cards that

@@ -224,7 +224,7 @@ walker SaveRole {
 
 walker DeleteRole {
     """Deletes by name: the Role node if one exists, the name out of every
-    member's role list, and any workflow step owner naming it. Works on
+    member's role list, and any flow line step owner naming it. Works on
     unmanaged free-text roles too, where it is just the strip."""
     has name: str = "",
         reports: list[dict[str, any]] = [];

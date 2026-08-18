@@ -679,7 +679,7 @@ walker SearchRepoItems {
 walker ImportIssues {
     """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
     the identity. Closed issues land on the done step, the rest on the chosen
-    step; `step_id` wins over `status`, which only applies with no workflow."""
+    step; `step_id` wins over `status`, which only applies with no flow line."""
     has repo_id: str = "",
         numbers: list[int] = [],
         project_id: str = "",
@@ -711,7 +711,7 @@ walker ImportIssues {
             }
         }
         # Closed issues always land on the done step (first by sort order),
-        # or plain "Done" for an org that has no workflow yet.
+        # or plain "Done" for an org that has no flow line yet.
         done_step = "";
         done_sort = 0.0;
         for s in [here-->[?:WorkflowStep, kind=="done"]] {

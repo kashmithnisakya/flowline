@@ -11,7 +11,7 @@ import from ...walkers.roster {
     SaveRole,
     DeleteRole
 }
-import from ..workflow.kinds { DOT_FILL, colorKey }
+import from ..flowlines.kinds { DOT_FILL, colorKey }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
 import from ..ui.input { Input }
@@ -101,14 +101,14 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
             } else {
                 <div key="body" className="flex flex-col gap-4">
                     <p className="text-sm text-muted-foreground">
-                        Roles are shared by the whole workspace: workflow steps name their owner role, and a person can hold several. Click a name on a card to toggle it.
+                        Roles are shared by the whole workspace: flow line steps name their owner role, and a person can hold several. Click a name on a card to toggle it.
                     </p>
                     {if len(cards) == 0 {
                         <div
                             key="empty"
                             className="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground"
                         >
-                            No roles yet. Add the first one below, or apply a workflow template that brings its own.
+                            No roles yet. Add the first one below, or apply a flow line template that brings its own.
                         </div>
                     } else {
                         <div key="cards" className="grid gap-3 sm:grid-cols-2">

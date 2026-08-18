@@ -6,6 +6,10 @@ the six links collapse into a dropdown menu.
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from "react" { useEffect }
+# jac 0.34.x compiler pin, not a nav dependency: the last-scanned page must
+# import constants directly or the client copy is emitted empty once a
+# component in a later page's closure imports it (see CLAUDE.md gotchas).
+import from ..constants { STATUSES }
 import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
@@ -34,7 +38,7 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
          {"value": "system", "label": "System"}
      ],
      NAV_ITEMS: list[dict[str, str]] = [
-         {"to": "/workflow", "label": "Workflow"},
+         {"to": "/flowlines", "label": "Flow line"},
          {"to": "/board", "label": "Board"},
          {"to": "/overview", "label": "Overview"},
          {"to": "/log", "label": "Log"},
@@ -46,6 +50,8 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
 # and the palette button; the text row is pages only.
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
+        # Only referenced so the constants pin above counts as client code.
+        vocabPin: int = len(STATUSES),
         orgName: str = "",
         fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
