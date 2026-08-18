@@ -714,7 +714,7 @@ impl FlowLinePage.fitZoom -> None {
     bounds = viewBounds();
     spanW = bounds[2] - bounds[0];
     spanH = bounds[3] - bounds[1];
-    boxW = float(view.clientWidth) - 48.0 - dockWidth();
+    boxW = float(view.clientWidth) - 48.0;
     boxH = float(view.clientHeight) - 48.0;
     if spanW <= 0.0 or spanH <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
         zoomRef.current = 1.0;
@@ -742,22 +742,6 @@ impl FlowLinePage.fitZoom -> None {
     }
 }
 
-impl FlowLinePage.dockWidth -> float {
-    # Both right-hand panels float OVER the canvas, so the space they cover
-    # is not space a card can use. Edit mode reserves it for the whole
-    # session (re-fitting per selection would make the zoom jump under the
-    # cursor); the task panel reserves it only while it is open, and not at
-    # all below sm, where it stacks under the diagram instead.
-    if editing {
-        return 336.0;
-    }
-    view: any = viewportRef.current;
-    if peekId and view and float(view.clientWidth) >= 640.0 {
-        return 336.0;
-    }
-    return 0.0;
-}
-
 impl FlowLinePage.recenterPan -> None {
     # Center the diagram's bounding box in the visible part of the viewport.
     # Screen-px offsets applied before the scale, so pointerXY (which reads
@@ -774,7 +758,7 @@ impl FlowLinePage.recenterPan -> None {
     minY = bounds[1];
     maxX = bounds[2];
     maxY = bounds[3];
-    availW = float(view.clientWidth) - dockWidth();
+    availW = float(view.clientWidth);
     availH = float(view.clientHeight);
     # Clamp the content's visible EDGE, not the raw offset: the offset goes
     # negative for content whose coordinates start away from the origin. Only

@@ -199,9 +199,9 @@ def:pub FlowCanvas(
     gridPitch = 22.0 * zoom;
 
     # The grid is an editing affordance (something to drag against); the
-    # read-only view skips it. Height fills what the viewport leaves under
-    # ~15rem of chrome, with a floor for short windows.
-    boxStyle: dict[str, str] = {"height": "max(26rem, calc(100dvh - 15rem))"};
+    # read-only view skips it. Height comes from --canvas-h so the panel
+    # docked beside the canvas can claim the same one.
+    boxStyle: dict[str, str] = {"height": "var(--canvas-h)"};
     if showGrid {
         boxStyle["backgroundImage"] = "radial-gradient(color-mix(in oklab, var(--color-muted-foreground) 20%, transparent) 1px, transparent 1px)";
         boxStyle["backgroundSize"] = str(gridPitch) + "px " + str(gridPitch) + "px";

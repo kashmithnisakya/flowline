@@ -54,6 +54,9 @@
     --chart-4: #8A8275;
     --chart-5: #5E574B;
     --radius: 0.75rem;              /* 12px — design uses 11-13px controls */
+    /* Flow line canvas height. The diagram and the panel beside it are flex
+       siblings, so both need the same height from one place. */
+    --canvas-h: max(26rem, calc(100dvh - 15rem));
     --sidebar: #FFFDFA;
     --sidebar-foreground: #14120F;
     --sidebar-primary: #E8552F;

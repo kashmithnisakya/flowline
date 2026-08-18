@@ -1,7 +1,8 @@
 """standup - Flow line page (/flowlines): three faces of one graph, the template
 picker, the designer, and a read-only diagram (Flow or Lanes). One flow line per
 org, so no project selector. Validation is advisory and never blocks saving.
-The editor floats OVER the canvas; keep notes out of JSX (a `#` there renders)."""
+The editor and the task panel dock BESIDE the canvas as flex siblings; keep
+notes out of JSX (a `#` there renders)."""
 
 import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
@@ -164,11 +165,9 @@ def:pub FlowLinePage -> JsxPage {
     }
 
     # Fit whenever the visible area changes: first load, a widened graph,
-    # entering edit mode (the editor covers the right third), a view flip.
-    # A LAYOUT effect so the first frame is already fitted; a plain effect
-    # would animate the correction and the diagram would visibly fly in.
-    # The task panel covers the same right-hand strip the editor does, so
-    # opening or closing it changes the space the diagram has to fit into.
+    # a view flip, or either right-hand column appearing. Those columns are
+    # flex siblings of the canvas, so a LAYOUT effect reads the width they
+    # already took; a plain effect would animate the correction instead.
     useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, lineView, peekId]);
 
     # Refit when the window itself changes size: the canvas tracks the
@@ -217,7 +216,6 @@ def:pub FlowLinePage -> JsxPage {
     async def deleteTask -> None;
     def stepName(key: str) -> str;
     def mappedStatus(key: str) -> str;
-    def dockWidth -> float;
     async def loadMeta -> None;
     def switchView(v: str) -> None;
     def lanePlan -> dict[str, any];
@@ -592,71 +590,73 @@ def:pub FlowLinePage -> JsxPage {
                             Done editing
                         </Button>
                     </div>
-                    <div className="relative">
-                        <div
-                            onMouseDown={beginDrag}
-                            onMouseMove={moveDrag}
-                            onMouseUp={endDrag}
-                            onMouseLeave={endDrag}
-                        >
-                            <FlowCanvas
-                                steps={steps}
-                                live={live}
-                                selectedId={selectedId}
-                                connectFrom={connectFrom}
-                                selectedEdge={selectedEdge}
-                                zoom={zoom}
-                                panX={panX}
-                                panY={panY}
-                                animate={placed}
-                                canvasRef={canvasRef}
-                                viewportRef={viewportRef}
-                                onZoomBy={zoomBy}
-                                onZoomFit={fitZoom}
-                                onSelect={selectStep}
-                                edgeDraft={edgeDraft}
-                                onSelectEdge={selectEdge}
-                                onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
-                                onSaveEdgeLabel={commitEdgeLabel}
-                                onDeleteEdge={deleteEdge}
-                                onCanvasClick={clearCanvas}
-                                onAddStep={addStep}
-                            />
-                        </div>
-                        {if connectFrom {
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        <div className="relative min-w-0 flex-1">
                             <div
-                                key="connecting"
-                                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3"
+                                onMouseDown={beginDrag}
+                                onMouseMove={moveDrag}
+                                onMouseUp={endDrag}
+                                onMouseLeave={endDrag}
                             >
-                                <div
-                                    className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-dashed bg-background/95 px-4 py-2 shadow-md backdrop-blur animate-in fade-in slide-in-from-top-2 duration-200"
-                                >
-                                    <p className="text-sm text-pretty">
-                                        <span className="font-medium">
-                                            {"Drawing a transition out of " + connectTitle + "."}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                            {" Click the step it flows into, backwards is fine,"
-                                            " loops are the point."}
-                                        </span>
-                                    </p>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={lambda { connectFrom = ""; }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
+                                <FlowCanvas
+                                    steps={steps}
+                                    live={live}
+                                    selectedId={selectedId}
+                                    connectFrom={connectFrom}
+                                    selectedEdge={selectedEdge}
+                                    zoom={zoom}
+                                    panX={panX}
+                                    panY={panY}
+                                    animate={placed}
+                                    canvasRef={canvasRef}
+                                    viewportRef={viewportRef}
+                                    onZoomBy={zoomBy}
+                                    onZoomFit={fitZoom}
+                                    onSelect={selectStep}
+                                    edgeDraft={edgeDraft}
+                                    onSelectEdge={selectEdge}
+                                    onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
+                                    onSaveEdgeLabel={commitEdgeLabel}
+                                    onDeleteEdge={deleteEdge}
+                                    onCanvasClick={clearCanvas}
+                                    onAddStep={addStep}
+                                />
                             </div>
-                        }}
+                            {if connectFrom {
+                                <div
+                                    key="connecting"
+                                    className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3"
+                                >
+                                    <div
+                                        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-dashed bg-background/95 px-4 py-2 shadow-md backdrop-blur animate-in fade-in slide-in-from-top-2 duration-200"
+                                    >
+                                        <p className="text-sm text-pretty">
+                                            <span className="font-medium">
+                                                {"Drawing a transition out of " + connectTitle + "."}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {" Click the step it flows into, backwards is fine,"
+                                                " loops are the point."}
+                                            </span>
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={lambda { connectFrom = ""; }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            }}
+                        </div>
                         <div
-                            className="pointer-events-none absolute inset-y-0 right-0 flex w-[21rem] max-w-[calc(100%-1rem)] flex-col gap-4 overflow-y-auto p-4"
+                            className="flex flex-col gap-4 overflow-y-auto sm:h-[var(--canvas-h)] sm:w-[21rem] sm:shrink-0"
                         >
                             {if creatingStep {
                                 <div
                                     key="create"
-                                    className="pointer-events-auto flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                                    className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
                                 >
                                     <div
                                         className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
@@ -697,7 +697,7 @@ def:pub FlowLinePage -> JsxPage {
                                 </div>
                             } elif len(picked) > 0 {
                                 <StepInspector
-                                    className="pointer-events-auto shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                                    className="shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
                                     key={picked[0].id}
                                     step={picked[0]}
                                     steps={steps}
@@ -833,28 +833,30 @@ def:pub FlowLinePage -> JsxPage {
                             </a>
                         </div>
                     }}
-                    <div className="relative">
-                        <FlowCanvas
-                            steps={steps}
-                            live={lanePose}
-                            lanes={laneBands}
-                            laneOf={laneOfStep}
-                            selectedId={peekId}
-                            zoom={zoom}
-                            panX={panX}
-                            panY={panY}
-                            animate={placed}
-                            showGrid={False}
-                            viewportRef={viewportRef}
-                            onZoomBy={zoomBy}
-                            onZoomFit={fitZoom}
-                            onSelect={peekStep}
-                            onCanvasClick={closePeek}
-                        />
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        <div className="relative min-w-0 flex-1">
+                            <FlowCanvas
+                                steps={steps}
+                                live={lanePose}
+                                lanes={laneBands}
+                                laneOf={laneOfStep}
+                                selectedId={peekId}
+                                zoom={zoom}
+                                panX={panX}
+                                panY={panY}
+                                animate={placed}
+                                showGrid={False}
+                                viewportRef={viewportRef}
+                                onZoomBy={zoomBy}
+                                onZoomFit={fitZoom}
+                                onSelect={peekStep}
+                                onCanvasClick={closePeek}
+                            />
+                        </div>
                         {if len(peeked) > 0 {
                             <div
                                 key="peekdock"
-                                className="mt-3 flex flex-col sm:pointer-events-none sm:absolute sm:inset-y-0 sm:right-0 sm:z-30 sm:mt-0 sm:w-[21rem] sm:max-w-[calc(100%-1rem)] sm:p-4"
+                                className="flex flex-col sm:h-[var(--canvas-h)] sm:w-[21rem] sm:shrink-0"
                             >
                                 <StepTasksPanel
                                     step={peeked[0]}
