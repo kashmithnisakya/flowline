@@ -258,13 +258,19 @@ File-based routing with route groups:
   own open state during the same keydown that reaches a page-level listener, so
   the listener reads the flag as already closed and dismisses its own surface
   too. Ask the DOM instead (`[role=dialog][data-state=open]`).
-- **A `useEffect` lambda must never `return None`.** React skips a cleanup
-  that is `undefined`, but `None` compiles to `null`, which it happily calls:
-  the page dies with "w is not a function" on the effect's next run. Give the
-  early-exit path a real no-op cleanup (`timer = 0;` … `return lambda { if
-  timer { window.clearTimeout(timer); }};`). `jac check` cannot see this and
-  it only fires on the SECOND run, so it hides behind whatever condition
-  takes the early exit.
+- **Nothing reachable from a `useEffect` body may `return None`.** React
+  skips a cleanup that is `undefined`, but `None` compiles to `null`, which
+  it happily calls: the page dies with "w is not a function" on the effect's
+  NEXT run, so it hides behind whatever condition takes the early exit and
+  `jac check` never sees it. Give an early exit a real no-op cleanup
+  (`timer: any = 0;` … `return lambda { if timer { window.clearTimeout(timer);
+  }};`). The trap is that this is not only about `return` written inside the
+  effect: a ONE-STATEMENT effect lambda compiles to an expression-bodied
+  arrow (`useLayoutEffect(lambda { fitZoom(); }, …)` emits `() => fitZoom()`),
+  which is transparent to its callee's return value. `fitZoom` is safe today
+  only because its own returns are bare; a `return None` added anywhere in a
+  function an effect calls turns into that effect's cleanup, with no `return`
+  visible at the effect at all.
 - **A `has` you just assigned is still the OLD value for the rest of that
   handler.** Under the pinned 0.34.14 runtime `has fProject` compiles to
   `const [fProject, setFProject] = useState(...)`, so `fProject = v;
