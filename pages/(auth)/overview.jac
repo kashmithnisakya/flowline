@@ -20,8 +20,7 @@ import from ...components.ui.badge { Badge }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from "@jac/runtime" { Link }
-import from "sonner" { toast }
-import from ...components.common.glyphs { WarnIcon }
+import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.Avatar { Avatar, AvatarStack }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
 
@@ -325,23 +324,11 @@ def:pub OverviewPage -> JsxPage {
                     </Card>
                 </div>
             } elif failed {
-                <div
+                <LoadFailed
                     key="failed"
-                    className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/10 px-6 py-12 text-center animate-in fade-in slide-in-from-top-1"
-                >
-                    <WarnIcon size={28} className="text-destructive"/>
-                    <div>
-                        <p className="text-sm font-semibold">
-                            Could not load the overview.
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Something went wrong while fetching your workspace data.
-                        </p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={loadAll}>
-                        Try again
-                    </Button>
-                </div>
+                    title="Could not load the overview"
+                    onRetry={loadAll}
+                />
             } else {
                 <div key="body" className="space-y-8">
                     <div

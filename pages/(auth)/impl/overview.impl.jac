@@ -28,7 +28,7 @@ impl OverviewPage.loadAll -> None {
             if e.date < monday
         ];
     } except Exception as e {
-        toast("Failed to load the overview");
+        # The page shows the failure panel itself; no toast on top of it.
         failed = True;
     }
     loading = False;
