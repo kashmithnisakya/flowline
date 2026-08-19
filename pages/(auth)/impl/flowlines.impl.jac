@@ -333,7 +333,7 @@ impl FlowLinePage.lanePlan -> dict[str, any] {
     if lineView != "lanes" or editing or len(steps) == 0 {
         return {"positions": {}, "lanes": []};
     }
-    return laneLayout(steps, roleRows, roleMembers);
+    return laneLayout(steps, roleRows, roleMembers, boxW, boxH);
 }
 
 impl FlowLinePage.pickTemplate(key: str) -> None {
@@ -769,6 +769,9 @@ impl FlowLinePage.viewBounds -> list[float] {
     if laneFit {
         bounds[0] = 0.0;
         bounds[1] = 0.0;
+        # The band stack IS the vertical extent: a lane card is shorter than
+        # NODE_H, so contentBounds would measure it too tall and the fit
+        # would leave a margin the layout already grew to fill.
         deepest = 0.0;
         for b in laneBands {
             bandEdge = float(b["y"]) + float(b["h"]);
@@ -776,11 +779,27 @@ impl FlowLinePage.viewBounds -> list[float] {
                 deepest = bandEdge;
             }
         }
-        if deepest > bounds[3] {
-            bounds[3] = deepest;
-        }
+        bounds[3] = deepest;
     }
     return bounds;
+}
+
+impl FlowLinePage.measureBox -> None {
+    view: any = viewportRef.current;
+    if not view {
+        return;
+    }
+    # The fit's inner box, the same margin fitZoom takes off. Assigned only
+    # on a real change: this runs in a layout effect keyed on these two, so
+    # an unconditional write would never settle.
+    w = float(view.clientWidth) - 48.0;
+    h = float(view.clientHeight) - 48.0;
+    if w != boxW {
+        boxW = w;
+    }
+    if h != boxH {
+        boxH = h;
+    }
 }
 
 impl FlowLinePage.fitZoom -> None {
@@ -803,11 +822,17 @@ impl FlowLinePage.fitZoom -> None {
     byW = boxW / spanW;
     byH = boxH / spanH;
     best = byW if byW < byH else byH;
-    # The viewer fills the box: a diagram drawn small should read large on a
-    # large screen, within reason (1.25x, past that cards look inflated, not
-    # close). The editor stays at 1:1 so drawing coordinates match what the
+    # The viewer fills the box. The lane view is generated for the box it is
+    # drawn in, so it scales all the way to the canvas clamp; the hand-drawn
+    # canvas stops at 1.25x, past which its cards look inflated rather than
+    # close. The editor stays at 1:1 so drawing coordinates match what the
     # author placed.
-    cap = 1.0 if editing else 1.25;
+    cap = 1.25;
+    if editing {
+        cap = 1.0;
+    } elif lineView == "lanes" {
+        cap = LANE_ZOOM_CAP;
+    }
     if best > cap {
         best = cap;
     }

@@ -372,7 +372,7 @@ def:pub BoardPage -> JsxPage {
                             if loadFailed
                             else "[--lane-h:calc(100dvh-12.5rem)]"
                     )}
-                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 20rem))"}}
+                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 1fr))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
                         <div
@@ -461,8 +461,9 @@ def:pub BoardPage -> JsxPage {
                 </div>
             } else {
                 # ONE row, always: columns divide the width between them, since
-                # a wrapping flow line stops reading as a pipeline. Below md the
-                # columns keep a 16rem minimum and the row scroll-snaps instead.
+                # a wrapping flow line stops reading as a pipeline. No cap on a
+                # column: a wide screen is more room for cards, not a margin.
+                # Below the 17rem minimum the row scroll-snaps instead.
                 <div
                     key="columns"
                     className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
@@ -472,7 +473,7 @@ def:pub BoardPage -> JsxPage {
                             else "[--lane-h:calc(100dvh-12.5rem)]"
                     )}
                     style={{
-                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 20rem))"
+                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {
