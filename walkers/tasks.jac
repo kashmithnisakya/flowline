@@ -12,6 +12,7 @@ import from models {
     WorkflowStep,
     AssignedTo,
     ForProject,
+    OnProject,
     hydrate_views,
     resolve,
     on_attached,
@@ -30,6 +31,32 @@ def status_for_step(holder: Root, step_id: str) -> str {
         return "";
     }
     return KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
+}
+
+# The step's owner role is a hand-off: moving a task onto a step hands it to
+# whoever holds that role ON THE TASK'S PROJECT. Returns that one member, or
+# an empty list when the answer is ambiguous: no owner, "anyone", no project,
+# or any count of holders but one. The caller leaves assignees alone on empty.
+def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member] {
+    role = step.owner.strip() if step.owner else "";
+    if not role or role == "anyone" {
+        return [];
+    }
+    owning = [task->:ForProject:->];
+    if not owning {
+        return [];
+    }
+    project = owning[0];
+    holders: list[Member] = [];
+    for m in [holder-->[?:Member]] {
+        if m.active and role in m.roles and [edge m->:OnProject:->project] {
+            holders.append(m);
+        }
+    }
+    if len(holders) != 1 {
+        return [];
+    }
+    return holders;
 }
 
 # -------------------------------------------------------------------- tasks
@@ -478,6 +505,10 @@ walker MoveTask(find_task) {
         holder = owners[0];
         landing = self.status;
         label = self.status;
+        # Who the move hands the task to: one member, or empty. A list, not
+        # an Optional: the checker does not narrow `Member | None` through
+        # `if`, so the connect and the `.name` read would not type.
+        handed: list[Member] = [];
         if self.step_id {
             mapped = status_for_step(holder, self.step_id);
             # An unknown or foreign step id is a no-op, not a silent move to
@@ -486,6 +517,14 @@ walker MoveTask(find_task) {
                 disengage;
             }
             landing = mapped;
+            # Only a CHANGE of step is a hand-off. Re-dropping a card in its
+            # own column (a reorder) must not reassign it.
+            if self.step_id != here.step_id {
+                step = resolve(self.step_id);
+                if isinstance(step, WorkflowStep) {
+                    handed = handoff_target(holder, here, step);
+                }
+            }
             here.step_id = self.step_id;
             label = self.step_name or mapped;
         } else {
@@ -513,8 +552,24 @@ walker MoveTask(find_task) {
         here.status = landing;
         here.sort_order = peak + 1024.0;
         here.updated_at = now_iso();
-        if landing != was {
-            record_task_event(holder, here, "Moved to " + label, here.updated_at);
+        # A hand-off replaces the assignees: the card changes hands, it does
+        # not gain a hand. The log line names who it went to.
+        note = "Moved to " + label;
+        took = False;
+        if handed {
+            target = handed[0];
+            already = [here->:AssignedTo:->];
+            if len(already) != 1 or jid(already[0]) != jid(target) {
+                for e in [edge here->:AssignedTo:->] {
+                    del e;
+                }
+                here +>:AssignedTo():+> target;
+                note = note + " · " + target.name;
+                took = True;
+            }
+        }
+        if landing != was or took {
+            record_task_event(holder, here, note, here.updated_at);
         }
         report here.to_view();
         disengage;
