@@ -24,7 +24,7 @@ import from ...walkers.flowlines {
     ListStepTasks
 }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
-import from ...components.flowlines.lanes { laneLayout }
+import from ...components.flowlines.lanes { laneLayout, LANE_ZOOM_CAP }
 import from ...components.flowlines.TemplatePicker { TemplatePicker }
 import from ...components.flowlines.StepInspector { StepInspector }
 import from ...components.flowlines.StepTasksPanel { StepTasksPanel }
@@ -36,13 +36,7 @@ import from ...components.flowlines.geometry {
     NODE_W,
     NODE_H
 }
-import from ...components.flowlines.kinds {
-    KIND_LABEL,
-    DOT_FILL,
-    CARRY_LABEL,
-    CARRY_TINT,
-    colorKey
-}
+import from ...components.flowlines.kinds { KIND_LABEL, DOT_FILL, colorKey }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
@@ -167,6 +161,11 @@ def:pub FlowLinePage -> JsxPage {
         # with transitions live the browser animates the correction even when
         # both commits land before first paint - the corner-to-center flight.
         placed: bool = False,
+        # The canvas viewport, measured in the same layout effect that fits.
+        # The lane layout grows its bands into the spare height, so it has to
+        # know how much box there is.
+        boxW: float = 0.0,
+        boxH: float = 0.0,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -187,13 +186,22 @@ def:pub FlowLinePage -> JsxPage {
     # a view flip, or either right-hand column appearing. Those columns are
     # flex siblings of the canvas, so a LAYOUT effect reads the width they
     # already took; a plain effect would animate the correction instead.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, lineView, peekId]);
+    useLayoutEffect(
+        lambda {
+            measureBox();
+            fitZoom();
+        },
+        [len(steps), editing, lineView, peekId, boxW, boxH]
+    );
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
     useEffect(
         lambda {
-            onResize = lambda { fitZoom(); };
+            onResize = lambda {
+                measureBox();
+                fitZoom();
+            };
             window.addEventListener("resize", onResize);
             return lambda { window.removeEventListener("resize", onResize); };
         },
@@ -258,6 +266,7 @@ def:pub FlowLinePage -> JsxPage {
     def clearCanvas -> None;
     def setField(key: str, value: str) -> None;
     def zoomBy(delta: float) -> None;
+    def measureBox -> None;
     def fitZoom -> None;
     def recenterPan -> None;
     def pointerXY(e: MouseEvent) -> list[float];
@@ -307,12 +316,6 @@ def:pub FlowLinePage -> JsxPage {
     # The Lane view projection: computed fresh per render, empty in flow
     # mode so the viewer's FlowCanvas call can pass these unconditionally.
     laneMode = lineView == "lanes";
-    # The wire legend's rows, materialised: the JSX cannot iterate a literal,
-    # and len() on a dict is undefined in JS so CARRY_LABEL cannot drive it.
-    carryLegend: list[dict[str, str]] = [
-        {"key": "issue", "text": "no code yet"},
-        {"key": "pr", "text": "code, waiting on a person"}
-    ];
     plan: dict[str, any] = {"positions": {}, "lanes": []};
     if laneMode and not editing {
         plan = laneLayout(steps, roleRows, roleMembers);
@@ -320,21 +323,6 @@ def:pub FlowLinePage -> JsxPage {
     lanePose: dict[str, list[float]] = plan["positions"];
     laneBands: list[dict[str, any]] = plan["lanes"];
     laneOfStep: dict[str, str] = plan["laneOf"] if "laneOf" in plan else {};
-    # Roles that own no step: they get no lane (an empty lane only pushes
-    # content down), so they are named under the canvas instead.
-    owners: list[str] = [];
-    for s in steps {
-        said = s.owner.strip() if s.owner else "";
-        if said and said not in owners {
-            owners.append(said);
-        }
-    }
-    offFlow: list[str] = [];
-    for rr in roleRows {
-        if rr.name not in owners {
-            offFlow.append(rr.name);
-        }
-    }
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -902,62 +890,6 @@ def:pub FlowLinePage -> JsxPage {
                             </div>
                         }}
                     </div>
-                    {if laneMode {
-                        <div
-                            key="wirelegend"
-                            className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground"
-                        >
-                            {for cl in carryLegend {
-                                <span
-                                    key={cl["key"]}
-                                    className="inline-flex items-center gap-1.5"
-                                >
-                                    <span
-                                        className={"rounded-sm border px-1 py-px text-[9px] font-semibold tracking-wider " + CARRY_TINT[
-                                            cl["key"]
-                                        ]}
-                                    >
-                                        {CARRY_LABEL[cl["key"]]}
-                                    </span>
-                                    {cl["text"]}
-                                </span>
-                            }}
-                            <span className="inline-flex items-center gap-1.5">
-                                <svg
-                                    width={26}
-                                    height={6}
-                                    viewBox="0 0 26 6"
-                                    className="text-destructive/70"
-                                    aria-hidden="true"
-                                >
-                                    <path
-                                        d="M0 3 H26"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeDasharray="6 5"
-                                        strokeLinecap="round"
-                                    />
-                                </svg>
-                                sent back for changes
-                            </span>
-                            <span>
-                                Every arrow wears the colour of the step it leaves.
-                            </span>
-                        </div>
-                    }}
-                    {if laneMode and len(offFlow) > 0 {
-                        <p key="offflow" className="text-xs text-muted-foreground">
-                            {"Not on the flow yet: "}
-                            <span className="font-medium text-foreground">
-                                {", ".join(offFlow)}
-                            </span>
-                            {(
-                                " · owns no step"
-                                    if len(offFlow) == 1
-                                    else " · own no step"
-                            )}
-                        </p>
-                    }}
                 </div>
             }   }
             <Dialog
