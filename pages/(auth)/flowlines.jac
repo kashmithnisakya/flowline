@@ -24,7 +24,7 @@ import from ...walkers.flowlines {
     ListStepTasks
 }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
-import from ...components.flowlines.lanes { laneLayout }
+import from ...components.flowlines.lanes { laneLayout, LANE_ZOOM_CAP }
 import from ...components.flowlines.TemplatePicker { TemplatePicker }
 import from ...components.flowlines.StepInspector { StepInspector }
 import from ...components.flowlines.StepTasksPanel { StepTasksPanel }
@@ -62,7 +62,8 @@ import from ...components.common.glyphs { Spinner, WarnIcon }
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
          "kind": "active",
-         "color": "indigo"
+         "color": "indigo",
+         "blurb": ""
      },
      # The board's task form, so the dialog opened from the panel is the
      # board's dialog with the board's fields, not a second shape of task.
@@ -111,6 +112,8 @@ def:pub FlowLinePage -> JsxPage {
         # Re-seeded from the edge on every selection, so it never has to be
         # cleared when the selection moves.
         edgeDraft: str = "",
+        # And what it carries while it is being picked, same lifecycle.
+        edgeCarry: str = "",
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
@@ -158,6 +161,11 @@ def:pub FlowLinePage -> JsxPage {
         # with transitions live the browser animates the correction even when
         # both commits land before first paint - the corner-to-center flight.
         placed: bool = False,
+        # The canvas viewport, measured in the same layout effect that fits.
+        # The lane layout grows its bands into the spare height, so it has to
+        # know how much box there is.
+        boxW: float = 0.0,
+        boxH: float = 0.0,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors `zoom` for handlers: a render-time read would make two
@@ -178,13 +186,22 @@ def:pub FlowLinePage -> JsxPage {
     # a view flip, or either right-hand column appearing. Those columns are
     # flex siblings of the canvas, so a LAYOUT effect reads the width they
     # already took; a plain effect would animate the correction instead.
-    useLayoutEffect(lambda { fitZoom(); }, [len(steps), editing, lineView, peekId]);
+    useLayoutEffect(
+        lambda {
+            measureBox();
+            fitZoom();
+        },
+        [len(steps), editing, lineView, peekId, boxW, boxH]
+    );
 
     # Refit when the window itself changes size: the canvas tracks the
     # viewport height, so a resize moves the centering target.
     useEffect(
         lambda {
-            onResize = lambda { fitZoom(); };
+            onResize = lambda {
+                measureBox();
+                fitZoom();
+            };
             window.addEventListener("resize", onResize);
             return lambda { window.removeEventListener("resize", onResize); };
         },
@@ -242,13 +259,14 @@ def:pub FlowLinePage -> JsxPage {
     async def deleteFlowLine -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
-    def selectEdge(key: str, said: str) -> None;
-    async def commitEdgeLabel(fromId: str, toId: str, said: str) -> None;
+    def selectEdge(key: str, said: str, carried: str) -> None;
+    async def commitEdgeLabel(fromId: str, toId: str, said: str, carried: str) -> None;
     def selectStep(stepId: str) -> None;
     def armConnect -> None;
     def clearCanvas -> None;
     def setField(key: str, value: str) -> None;
     def zoomBy(delta: float) -> None;
+    def measureBox -> None;
     def fitZoom -> None;
     def recenterPan -> None;
     def pointerXY(e: MouseEvent) -> list[float];
@@ -305,21 +323,6 @@ def:pub FlowLinePage -> JsxPage {
     lanePose: dict[str, list[float]] = plan["positions"];
     laneBands: list[dict[str, any]] = plan["lanes"];
     laneOfStep: dict[str, str] = plan["laneOf"] if "laneOf" in plan else {};
-    # Roles that own no step: they get no lane (an empty lane only pushes
-    # content down), so they are named under the canvas instead.
-    owners: list[str] = [];
-    for s in steps {
-        said = s.owner.strip() if s.owner else "";
-        if said and said not in owners {
-            owners.append(said);
-        }
-    }
-    offFlow: list[str] = [];
-    for rr in roleRows {
-        if rr.name not in owners {
-            offFlow.append(rr.name);
-        }
-    }
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
@@ -626,8 +629,10 @@ def:pub FlowLinePage -> JsxPage {
                                     onZoomFit={fitZoom}
                                     onSelect={selectStep}
                                     edgeDraft={edgeDraft}
+                                    edgeCarry={edgeCarry}
                                     onSelectEdge={selectEdge}
                                     onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
+                                    onEdgeCarry={lambda (v: str) { edgeCarry = v; }}
                                     onSaveEdgeLabel={commitEdgeLabel}
                                     onDeleteEdge={deleteEdge}
                                     onCanvasClick={clearCanvas}
@@ -885,19 +890,6 @@ def:pub FlowLinePage -> JsxPage {
                             </div>
                         }}
                     </div>
-                    {if laneMode and len(offFlow) > 0 {
-                        <p key="offflow" className="text-xs text-muted-foreground">
-                            {"Not on the flow yet: "}
-                            <span className="font-medium text-foreground">
-                                {", ".join(offFlow)}
-                            </span>
-                            {(
-                                " · owns no step"
-                                    if len(offFlow) == 1
-                                    else " · own no step"
-                            )}
-                        </p>
-                    }}
                 </div>
             }   }
             <Dialog
@@ -952,6 +944,8 @@ def:pub FlowLinePage -> JsxPage {
                 handoffKeys={handoffKeys}
                 assignees={taskAssignees}
                 onToggleAssignee={toggleTaskAssignee}
+                steps={steps}
+                roles={roleRows}
             />
         </div>;
 }

@@ -23,6 +23,9 @@ glob STATUSES: list[str] = [
          "blocked": "rose",
          "done": "emerald"
      },
+     # What a transition carries: an issue (no code yet) or a PR (code,
+     # waiting on a person). Empty is fine and means untagged.
+     CARRY_KINDS: list[str] = ["issue", "pr"],
      # The one prebuilt flow. The picker offers exactly this or a blank
      # canvas; the removed Kanban/Software/Support entries only ever seeded
      # steps, so workspaces created from them keep working untouched.
@@ -37,7 +40,7 @@ glob STATUSES: list[str] = [
              "roles": [
                  {
                      "name": "Product Engineer",
-                     "blurb": "Triages, reviews, merges, closes.",
+                     "blurb": "Triages, reviews, merges.",
                      "color": "indigo"
                  },
                  {
@@ -51,8 +54,8 @@ glob STATUSES: list[str] = [
                      "color": "slate"
                  },
                  {
-                     "name": "De-slop Engineer",
-                     "blurb": "Small fixes and flagged rewrites.",
+                     "name": "De-slop",
+                     "blurb": "Final pass. Decides done.",
                      "color": "rose"
                  }
              ],
@@ -65,6 +68,7 @@ glob STATUSES: list[str] = [
                      "kind": "start",
                      "color": "sky",
                      "owner": "anyone",
+                     "blurb": "write the issue, anyone",
                      "x": 60.0,
                      "y": 40.0
                  },
@@ -73,14 +77,16 @@ glob STATUSES: list[str] = [
                      "kind": "start",
                      "color": "indigo",
                      "owner": "Product Engineer",
+                     "blurb": "sets priority, nothing skips this",
                      "x": 60.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Architecture",
+                     "name": "Architecturing",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
+                     "blurb": "big changes only",
                      "x": 400.0,
                      "y": 430.0
                  },
@@ -89,6 +95,7 @@ glob STATUSES: list[str] = [
                      "kind": "active",
                      "color": "amber",
                      "owner": "Builder",
+                     "blurb": "drive the model, add tests",
                      "x": 740.0,
                      "y": 560.0
                  },
@@ -97,6 +104,7 @@ glob STATUSES: list[str] = [
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "Product Engineer",
+                     "blurb": "nothing passes without this",
                      "x": 860.0,
                      "y": 260.0
                  },
@@ -104,7 +112,8 @@ glob STATUSES: list[str] = [
                      "name": "Refactor",
                      "kind": "active",
                      "color": "rose",
-                     "owner": "De-slop Engineer",
+                     "owner": "De-slop",
+                     "blurb": "decides done",
                      "x": 1210.0,
                      "y": 560.0
                  },
@@ -112,13 +121,15 @@ glob STATUSES: list[str] = [
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
-                     "owner": "Product Engineer",
-                     "x": 1330.0,
-                     "y": 260.0
+                     "owner": "De-slop",
+                     "blurb": "terminal",
+                     "x": 1560.0,
+                     "y": 560.0
                  }
              ],
              # Forward first, then the send-back: review that can only
-             # approve is a review nobody needs.
+             # approve is a review nobody needs. Merged work has no direct
+             # road to Done - it goes through De-slop, which is what marks it.
              "links": [
                  [0, 1],
                  [1, 0],
@@ -126,24 +137,35 @@ glob STATUSES: list[str] = [
                  [1, 3],
                  [2, 3],
                  [3, 4],
-                 [4, 6],
                  [4, 3],
                  [4, 5],
                  [5, 6]
              ],
              # Kept short: two of these share a pair of steps, and long chips
-             # collide.
+             # collide. Index-aligned with `links`, as is `link_carries`.
              "link_labels": [
                  "to PE first",
                  "PE too",
-                 "needs architecture",
+                 "needs architecturing",
                  "small, straight to build",
                  "approach agreed",
                  "ready and tested",
-                 "merged, clean",
                  "big changes, back to builder",
-                 "brittle, small changes",
-                 "rewritten, merged"
+                 "merged",
+                 "decides & marks done"
+             ],
+             # What crosses each arrow: an issue until there is code, a PR
+             # after. Read the legend under the canvas.
+             "link_carries": [
+                 "issue",
+                 "issue",
+                 "issue",
+                 "issue",
+                 "issue",
+                 "pr",
+                 "pr",
+                 "pr",
+                 "pr"
              ]
          }
      ],

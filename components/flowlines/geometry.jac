@@ -6,8 +6,9 @@ the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
 import from ...models { StepView }
 
 glob NODE_W: float = 176.0,
-     # Three lines: name, kind, and who holds work here.
-     NODE_H: float = 82.0,
+     # Four lines: name, the blurb, kind, and who holds work here. Uniform
+     # whether or not a step has a blurb - the geometry is one constant.
+     NODE_H: float = 96.0,
      EDGE_ZONE: float = 12.0,
      # Working room kept beyond the furthest step, so there is always
      # somewhere to drag to without the canvas jumping.

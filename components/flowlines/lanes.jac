@@ -16,11 +16,25 @@ glob LANE_GUTTER: float = 176.0,
      # Fan spacing for ports sharing a card side, and the part of the gap
      # trunks may occupy (the rest keeps them off the card borders).
      PORT_STEP: float = 12.0,
-     TRUNK_INSET: float = 6.0;
+     TRUNK_INSET: float = 6.0,
+     # How far the viewer may scale the lane view up. The layout is generated
+     # to fill the box, so it goes as far as the canvas clamp allows rather
+     # than sitting small in the middle of a wide screen. Shared with the
+     # page's fit, and with the growth target below, so the two agree.
+     LANE_ZOOM_CAP: float = 2.0;
 
 
+# `boxW`/`boxH` are the fit's inner box in screen px (viewport minus its
+# margin), 0 when nothing has been measured yet. The lane view is width-bound
+# on any normal screen, so the spare height is dead canvas: the bands grow
+# into it and the card rows centre inside them. At this target the fit's two
+# axes tie, so the zoom, and the card size with it, does not change.
 def:pub laneLayout(
-    steps: list[StepView], roles: list[RoleView], members: list[MemberView]
+    steps: list[StepView],
+    roles: list[RoleView],
+    members: list[MemberView],
+    boxW: float = 0.0,
+    boxH: float = 0.0
 ) -> dict[str, any] {
     # Column = longest forward path. sort_order is a topological order for
     # forward edges by construction, so one relaxation pass in that order
@@ -93,8 +107,13 @@ def:pub laneLayout(
 
     positions: dict[str, list[float]] = {};
     laneOf: dict[str, str] = {};
+    # The grid behind the px: column and row slot per step, reported so a
+    # smaller rendering (the task dialog's) can lay the same grid out at its
+    # own size rather than inferring it back from the canvas positions.
+    slotOf: dict[str, int] = {};
     lanes: list[dict[str, any]] = [];
-    top = 0.0;
+    maxCol = 0;
+    naturalH = 0.0;
     for key in allKeys {
         mine: list[StepView] = [];
         for s in steps {
@@ -115,10 +134,10 @@ def:pub laneLayout(
             if slot + 1 > peakRows {
                 peakRows = slot + 1;
             }
-            positions[s.id] = [
-                LANE_GUTTER + float(col) * LANE_COL_W,
-                top + LANE_PAD + float(slot) * (LANE_NODE_H + LANE_ROW_GAP)
-            ];
+            if col > maxCol {
+                maxCol = col;
+            }
+            slotOf[s.id] = slot;
             laneOf[s.id] = key;
             taskTotal = taskTotal + s.task_count;
         }
@@ -153,20 +172,71 @@ def:pub laneLayout(
                 "totals": str(len(mine)) + stepNoun + " · " + str(taskTotal) + taskNoun,
                 "manage": isRole,
                 "color": colorOf[key] if isRole else "slate",
-                "y": top,
+                "y": 0.0,
                 "h": height
             }
         );
-        top = top + height;
+        naturalH = naturalH + height;
     }
-    return {"positions": positions, "lanes": lanes, "laneOf": laneOf};
+
+    # Pass two places the cards, because a band's height is only known once
+    # the whole stack has been measured against the box.
+    contentW = LANE_GUTTER + float(maxCol) * LANE_COL_W + NODE_W;
+    scale = 1.0;
+    if boxW > 0.0 and boxH > 0.0 and naturalH > 0.0 {
+        # The zoom the fit will land on, so the bands grow to exactly the
+        # height that zoom draws into the box.
+        z = boxW / contentW;
+        if z > LANE_ZOOM_CAP {
+            z = LANE_ZOOM_CAP;
+        }
+        target = boxH / z;
+        if target > naturalH {
+            scale = target / naturalH;
+        }
+    }
+    top = 0.0;
+    for ln in lanes {
+        natural = float(ln["h"]);
+        grown = natural * scale;
+        ln["y"] = top;
+        ln["h"] = grown;
+        # The card block keeps its own height and sits in the middle of
+        # whatever the band grew to.
+        lead = (grown - (natural - LANE_PAD * 2.0)) / 2.0;
+        for s in steps {
+            if s.id in slotOf and laneOf[s.id] == str(ln["key"]) {
+                positions[s.id] = [
+                    LANE_GUTTER + float(depth[s.id]) * LANE_COL_W,
+                    top + lead + float(slotOf[s.id]) * (LANE_NODE_H + LANE_ROW_GAP)
+                ];
+            }
+        }
+        top = top + grown;
+    }
+    return {
+        "positions": positions,
+        "lanes": lanes,
+        "laneOf": laneOf,
+        "colOf": depth,
+        "slotOf": slotOf,
+        "cols": maxCol + 1
+    };
+}
+
+
+# Roughly how wide a label chip renders, in canvas px: the wording plus the
+# tag, the border and the padding. Only used to decide whether a chip fits on
+# its wire, so an estimate is enough.
+def chipWidth(said: str, carried: str) -> float {
+    return float(len(said)) * 5.4 + (36.0 if carried else 16.0);
 }
 
 
 # One elbow per transition, in canvas px. Each entry carries the same keys
-# FlowCanvas reads off wire() (d, arrow, mx/my, lx/ly, back, label) plus
-# `side`: -1 puts the label chip to the left of its anchor, 1 to the right,
-# 0 centers it above.
+# FlowCanvas reads off wire() (d, arrow, mx/my, lx/ly, back, label, carries)
+# plus `side`: -1 puts the label chip to the left of its anchor, 1 to the
+# right, 0 centers it above.
 def:pub laneWires(
     steps: list[StepView], positions: dict[str, list[float]]
 ) -> list[dict[str, any]] {
@@ -192,6 +262,7 @@ def:pub laneWires(
             tp = positions[nid];
             target = byId[nid];
             said = s.next_labels[i] if i < len(s.next_labels) else "";
+            carried = s.next_carries[i] if i < len(s.next_carries) else "";
             twoWay = s.id in target.next_ids;
             isReturn = target.sort_order < s.sort_order;
             # Travel direction decides the sides, not send-back-ness: a
@@ -220,6 +291,7 @@ def:pub laneWires(
                     "twoWay": twoWay,
                     "back": isReturn,
                     "label": said,
+                    "carries": carried,
                     "outOff": 0.0,
                     "inOff": 0.0,
                     "trunkX": 0.0
@@ -369,6 +441,16 @@ def:pub laneWires(
                 lx = (ex + ix) / 2.0;
                 ly = (ey + iy) / 2.0 - 13.0;
                 side = 0;
+                # Two cards in the same row sit one column gap apart, which
+                # is narrower than most chips: a chip wider than its run
+                # would hide behind the cards, so lift it clear of both.
+                runW = ix - ex;
+                if runW < 0.0 {
+                    runW = 0.0 - runW;
+                }
+                if chipWidth(str(e["label"]), str(e["carries"])) > runW {
+                    ly = (sy if sy < ty else ty) - 9.0;
+                }
             } else {
                 # Beside the trunk at its midpoint: rightward wires keep the
                 # chip on the source side, leftward on the other, so a
@@ -414,7 +496,8 @@ def:pub laneWires(
                 "ly": ly,
                 "side": side,
                 "back": e["back"],
-                "label": e["label"]
+                "label": e["label"],
+                "carries": e["carries"]
             }
         );
     }

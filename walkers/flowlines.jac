@@ -25,6 +25,7 @@ import from constants {
     KIND_COLORS,
     KIND_STATUS,
     STATUS_KIND,
+    CARRY_KINDS,
     FLOW_LINE_TEMPLATES
 }
 
@@ -269,6 +270,7 @@ walker ApplyTemplate {
                 kind=kind,
                 color=s["color"],
                 owner=str(s["owner"]) if "owner" in s else "",
+                blurb=str(s["blurb"]) if "blurb" in s else "",
                 x=s["x"],
                 y=s["y"],
                 sort_order=order,
@@ -279,17 +281,25 @@ walker ApplyTemplate {
             made.append(fresh);
             order = order + 1024.0;
         }
-        # Parallel list, so templates without wording keep working.
+        # Parallel lists, so templates without wording or tags keep working.
         wording: list[str] = [];
         if "link_labels" in chosen {
             wording = chosen["link_labels"];
+        }
+        cargo: list[str] = [];
+        if "link_carries" in chosen {
+            cargo = chosen["link_carries"];
         }
         raw_links: list[list[int]] = chosen["links"];
         for (i, pair) in enumerate(raw_links) {
             source = made[pair[0]];
             target = made[pair[1]];
             said = wording[i] if i < len(wording) else "";
-            source +>:FlowsTo(label=said):+> target;
+            carried = cargo[i] if i < len(cargo) else "";
+            if carried not in CARRY_KINDS {
+                carried = "";
+            }
+            source +>:FlowsTo(label=said, carries=carried):+> target;
         }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
@@ -348,6 +358,7 @@ walker SaveStep {
         color: str = "",
         # Empty means "keep", like every field here; a space clears it.
         owner: str = "",
+        blurb: str = "",
         x: float = 0.0,
         y: float = 0.0,
         reports: list[StepView] = [];
@@ -380,6 +391,9 @@ walker SaveStep {
             if self.owner {
                 target.owner = self.owner.strip();
             }
+            if self.blurb {
+                target.blurb = self.blurb.strip();
+            }
             target.updated_at = stamp;
             report step_view(target);
             disengage;
@@ -400,6 +414,7 @@ walker SaveStep {
             kind=kind,
             color=color,
             owner=self.owner.strip(),
+            blurb=self.blurb.strip(),
             x=self.x,
             y=self.y,
             sort_order=peak + 1024.0,
@@ -513,6 +528,8 @@ walker LinkTransition {
         to_id: str = "",
         # What has to be true to cross. Optional.
         label: str = "",
+        # "issue" or "pr" (CARRY_KINDS); anything else is stored as untagged.
+        carries: str = "",
         reports: list[dict[str, any]] = [];
 
     can link with Root entry {
@@ -534,30 +551,36 @@ walker LinkTransition {
             };
             disengage;
         }
+        carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
         # Re-drawing an arrow is how its label gets edited.
         existing = [edge source->:FlowsTo:->target];
         if existing {
-            if self.label.strip() {
-                for e in existing {
+            for e in existing {
+                if self.label.strip() {
                     e.label = self.label.strip();
+                }
+                if carried {
+                    e.carries = carried;
                 }
             }
             report {"ok": True, "linked": True, "duplicate": True};
             disengage;
         }
-        source +>:FlowsTo(label=self.label.strip()):+> target;
+        source +>:FlowsTo(label=self.label.strip(), carries=carried):+> target;
         report {"ok": True, "linked": True, "duplicate": False};
     }
 }
 
 
 walker LabelTransition {
-    """Set or clear what has to be true to cross an existing transition. Unlike
-    LinkTransition, an empty label here means CLEAR, the only way to take the
-    wording off an arrow without deleting it."""
+    """Set or clear what has to be true to cross an existing transition, and
+    what it carries. Unlike LinkTransition, empty here means CLEAR, the only
+    way to take the wording off an arrow without deleting it. The editor
+    saves both fields together, so both are always sent."""
     has from_id: str = "",
         to_id: str = "",
         label: str = "",
+        carries: str = "",
         reports: list[dict[str, any]] = [];
 
     can relabel with Root entry {
@@ -572,16 +595,18 @@ walker LabelTransition {
             disengage;
         }
         said = self.label.strip();
+        carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
         found = False;
         for e in [edge source->:FlowsTo:->target] {
             e.label = said;
+            e.carries = carried;
             found = True;
         }
         if not found {
             report {"ok": False, "error": "not_found"};
             disengage;
         }
-        report {"ok": True, "label": said};
+        report {"ok": True, "label": said, "carries": carried};
     }
 }
 

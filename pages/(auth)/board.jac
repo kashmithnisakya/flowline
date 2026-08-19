@@ -3,14 +3,14 @@ ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
-import from ...models { Project, MemberView, TaskView, StepView, RepoView }
+import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleView }
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
 import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers, ListRepos }
+import from ...walkers.roster { ListMembers, ListRepos, ListRoles }
 import from ...walkers.tasks {
     ListTasks,
     TaskCounts,
@@ -85,6 +85,9 @@ def:pub BoardPage -> JsxPage {
         # Distinct categories over the whole history, from TaskCounts.
         knownCategories: list[str] = [],
         members: list[MemberView] = [],
+        # The org's roles, for the lane order and colours in the task
+        # dialog's flow line picture.
+        roleRows: list[RoleView] = [],
         projects: list[Project] = [],
         steps: list[StepView] = [],
         repos: list[RepoView] = [],
@@ -372,7 +375,7 @@ def:pub BoardPage -> JsxPage {
                             if loadFailed
                             else "[--lane-h:calc(100dvh-12.5rem)]"
                     )}
-                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 20rem))"}}
+                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 1fr))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
                         <div
@@ -461,8 +464,9 @@ def:pub BoardPage -> JsxPage {
                 </div>
             } else {
                 # ONE row, always: columns divide the width between them, since
-                # a wrapping flow line stops reading as a pipeline. Below md the
-                # columns keep a 16rem minimum and the row scroll-snaps instead.
+                # a wrapping flow line stops reading as a pipeline. No cap on a
+                # column: a wide screen is more room for cards, not a margin.
+                # Below the 17rem minimum the row scroll-snaps instead.
                 <div
                     key="columns"
                     className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
@@ -472,7 +476,7 @@ def:pub BoardPage -> JsxPage {
                             else "[--lane-h:calc(100dvh-12.5rem)]"
                     )}
                     style={{
-                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 20rem))"
+                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {
@@ -552,6 +556,8 @@ def:pub BoardPage -> JsxPage {
                 ghConnected={ghConnected}
                 ghIssueNumber={editingIssueNumber}
                 onCreateIssue={createIssue}
+                steps={steps}
+                roles={roleRows}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

@@ -1,5 +1,5 @@
 """standup - Workspace (/workspace): everything you configure, in one place.
-Four tabs of settings CRUD (organization, projects, people, roles); GitHub
+Four tabs of settings CRUD (organization, projects, roles, people); GitHub
 lives at /github and old ?tab=github links redirect there. Each tab is a
 self-contained section, so the page stays a thin shell."""
 
@@ -23,11 +23,13 @@ glob BLANK_MEMBER: dict[str, str] = {
          "roleDraft": "",
          "tagDraft": ""
      },
+     # Roles before People: a role is what the flow line names, so it reads
+     # as the thing you set up first and People assigns into.
      TABS: list[list[str]] = [
          ["organization", "Organization"],
          ["projects", "Projects"],
-         ["people", "People"],
-         ["roles", "Roles"]
+         ["roles", "Roles"],
+         ["people", "People"]
      ];
 
 def:pub WorkspacePage -> JsxPage {
@@ -184,6 +186,12 @@ def:pub WorkspacePage -> JsxPage {
                     <ProjectsSection openNonce={projectsNonce}/>
                 </TabsContent>
                 <TabsContent
+                    value="roles"
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                >
+                    <RolesSection onChanged={loadAll}/>
+                </TabsContent>
+                <TabsContent
                     value="people"
                     className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-1 duration-200"
                 >
@@ -236,12 +244,6 @@ def:pub WorkspacePage -> JsxPage {
                             onCreate={openCreate}
                         />
                     } }
-                </TabsContent>
-                <TabsContent
-                    value="roles"
-                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
-                >
-                    <RolesSection onChanged={loadAll}/>
                 </TabsContent>
             </Tabs>
             <MemberDialog

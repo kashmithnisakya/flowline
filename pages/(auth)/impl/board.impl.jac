@@ -62,6 +62,7 @@ impl BoardPage.loadAll -> None {
         # count spares a walk over every task on each poll.
         sResult = root spawn GetFlowLine(with_counts=False);
         rResult = root spawn ListRepos();
+        roResult = root spawn ListRoles();
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
@@ -70,6 +71,7 @@ impl BoardPage.loadAll -> None {
             projects = fetchedProjects;
             steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
+            roleRows = roResult.reports[0] if roResult.reports else [];
             workingTruncated = truncated;
             cPayload = cResult.reports[0] if cResult.reports else None;
             if cPayload {
@@ -526,12 +528,19 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     ];
     movesRef.current = (movesRef.current or 0) + 1;
     failed = False;
+    # The walker's view of the card after the move. A step change can hand
+    # the task to the step's owner, so the optimistic patch above is not the
+    # whole story: the reported row replaces it.
+    landed: list[TaskView] = [];
     try {
         if onFlowLine {
-            root spawn MoveTask(task_id=taskId, step_id=columnKey, step_name=label);
+            result = root spawn MoveTask(
+                task_id=taskId, step_id=columnKey, step_name=label
+            );
         } else {
-            root spawn MoveTask(task_id=taskId, status=columnKey);
+            result = root spawn MoveTask(task_id=taskId, status=columnKey);
         }
+        landed = result.reports or [];
     } except Exception as e {
         failed = True;
     }
@@ -548,11 +557,37 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         await refreshOlder(fProject, fAssignee, fCategory);
         return;
     }
+    # Who the card went to, when the move handed it over. Read off the
+    # reported row against the pre-move one; same names means no hand-off.
+    handedTo = "";
+    if len(landed) > 0 {
+        before: list[str] = [];
+        for t in tasks {
+            if t.id == taskId {
+                before = t.assignee_names;
+            }
+        }
+        after = landed[0].assignee_names;
+        if len(after) == 1 and (len(before) != 1 or before[0] != after[0]) {
+            handedTo = after[0];
+        }
+        # `tasks` read after the await is the pre-call snapshot, which is
+        # exactly the list the optimistic patch produced; swap the row in.
+        swapped: list[TaskView] = [];
+        for t in tasks {
+            if t.id == taskId {
+                swapped.append(landed[0]);
+            } else {
+                swapped.append(t);
+            }
+        }
+        tasks = swapped;
+    }
     # Every successful move confirms itself and offers the undo: a card can
     # land out of sight (Hide Done, or a column below the fold), and the
     # handoff dialog is skippable, so it cannot be the only feedback.
     toast(
-        "Moved to " + label,
+        "Moved to " + label + (" · " + handedTo if handedTo else ""),
         {
             "description": title,
             "action": {"label": "Undo", "onClick": lambda { moveTo(taskId, oldKey); }}

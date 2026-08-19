@@ -107,3 +107,24 @@ def colorKey(raw: str) -> str {
     # Default to slate
     return "slate";
 }
+
+
+# What a transition carries, as a chip on its label: an issue (no code yet)
+# or a PR (code, waiting on a person). Empty carries no chip, which is what
+# every transition drawn before this existed reads as.
+glob CARRY_LABEL: dict[str, str] = {"issue": "ISSUE", "pr": "PR"},
+     CARRY_TINT: dict[str, str] = {
+         "issue": "border-step-sky/50 bg-step-sky/10 text-step-sky-ink",
+         "pr": "border-step-amber/50 bg-step-amber/10 text-step-amber-ink"
+     };
+
+# Lane-view wire colour: a transition wears the colour of the step it leaves,
+# so the lane that owns a hand-off is readable without following the arrow.
+glob WIRE_TINT: dict[str, str] = {
+         "sky": "text-step-sky/75",
+         "indigo": "text-step-indigo/75",
+         "amber": "text-step-amber/75",
+         "rose": "text-step-rose/75",
+         "emerald": "text-step-emerald/75",
+         "slate": "text-step-slate/75"
+     };

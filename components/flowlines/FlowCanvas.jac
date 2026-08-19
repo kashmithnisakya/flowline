@@ -7,7 +7,15 @@ A selected step lights the transitions on both of its ends."""
 import from ...models { StepView }
 import from .geometry { NODE_W, NODE_H, stepXY, canvasSize, wire }
 import from .lanes { LANE_NODE_H, laneWires }
-import from .kinds { KIND_LABEL, DOT_FILL, CARD_TINT, colorKey }
+import from .kinds {
+    KIND_LABEL,
+    DOT_FILL,
+    CARD_TINT,
+    CARRY_LABEL,
+    CARRY_TINT,
+    WIRE_TINT,
+    colorKey
+}
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 
@@ -19,6 +27,7 @@ def:pub FlowCanvas(
     connectFrom: str = "",
     selectedEdge: str = "",
     edgeDraft: str = "",
+    edgeCarry: str = "",
     zoom: float = 1.0,
     panX: float = 0.0,
     panY: float = 0.0,
@@ -33,9 +42,10 @@ def:pub FlowCanvas(
     canvasRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
-    onSelectEdge: Callable[[str, str], None] = None,
+    onSelectEdge: Callable[[str, str, str], None] = None,
     onEdgeDraft: Callable[[str], None] = None,
-    onSaveEdgeLabel: Callable[[str, str, str], None] = None,
+    onEdgeCarry: Callable[[str], None] = None,
+    onSaveEdgeLabel: Callable[[str, str, str, str], None] = None,
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None,
     onZoomBy: Callable[[float], None] = None,
@@ -124,6 +134,7 @@ def:pub FlowCanvas(
             twoWay = s.id in target.next_ids;
             curve = wire(pos[0], pos[1], tpos[0], tpos[1], twoWay);
             said = s.next_labels[i] if i < len(s.next_labels) else "";
+            carried = s.next_carries[i] if i < len(s.next_carries) else "";
             # A send-back is an arrow to an EARLIER step, not one that happens
             # to point left: curve["back"] is geometry, this is the flow line.
             isReturn = target.sort_order < s.sort_order;
@@ -156,6 +167,7 @@ def:pub FlowCanvas(
                     "ly": ly,
                     "back": isReturn,
                     "label": said,
+                    "carries": carried,
                     "side": 0
                 }
             );
@@ -164,9 +176,11 @@ def:pub FlowCanvas(
 
     # A selected step lights the transitions on both of its ends, so what the
     # panel (or the inspector) is talking about is visible on the diagram.
+    # `tone` is the colour of the step the wire leaves, used in lane view.
     for l in links {
         l["lit"] = bool(selectedId)
         and (l["from"] == selectedId or l["to"] == selectedId);
+        l["tone"] = WIRE_TINT[colorKey(byId[l["from"]].color)];
     }
 
     # The selected transition, so its label editor can be drawn in screen
@@ -185,13 +199,23 @@ def:pub FlowCanvas(
     edgeFromName = "";
     edgeToName = "";
     edgeSaid = "";
+    edgeHad = "";
     if activeFound {
         # Both ends are on the canvas by construction, links are only built
         # when byId holds each end.
         edgeFromName = byId[activeEdge["from"]].name;
         edgeToName = byId[activeEdge["to"]].name;
         edgeSaid = activeEdge["label"];
+        edgeHad = str(activeEdge["carries"]);
     }
+
+    # The tag picker's rows. Materialised here: the JSX cannot iterate a
+    # literal, and "" is a real choice (untagged), not a missing one.
+    carryPicks: list[dict[str, str]] = [
+        {"key": "", "text": "NONE"},
+        {"key": "issue", "text": "ISSUE"},
+        {"key": "pr", "text": "PR"}
+    ];
 
     connecting = bool(connectFrom);
     # The grid scales with the drawing, so zooming reads as moving away from
@@ -318,7 +342,11 @@ def:pub FlowCanvas(
                                     else (
                                         "text-destructive/70"
                                             if laneMode and l["back"]
-                                            else "text-muted-foreground/60 hover:text-foreground/70"
+                                            else (
+                                                str(l["tone"])
+                                                    if laneMode
+                                                    else "text-muted-foreground/60 hover:text-foreground/70"
+                                            )
                                     )
                             ) + " transition-[color,opacity] duration-150" + (
                                 " opacity-20"
@@ -352,7 +380,9 @@ def:pub FlowCanvas(
                                 onClick={lambda (e: MouseEvent) {
                                     e.stopPropagation();
                                     if onSelectEdge {
-                                        onSelectEdge(l["key"], l["label"]);
+                                        onSelectEdge(
+                                            l["key"], l["label"], str(l["carries"])
+                                        );
                                     }
                                 }}
                             />
@@ -361,10 +391,10 @@ def:pub FlowCanvas(
                 </svg>
                 {for l in links {
                     <div key={"chip-" + l["key"]}>
-                        {if l["label"] and selectedEdge != l["key"] {
+                        {if (l["label"] or l["carries"]) and selectedEdge != l["key"] {
                             <span
                                 key="lab"
-                                className={"pointer-events-none absolute z-10 -translate-y-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 " + (
+                                className={"pointer-events-none absolute z-10 inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 " + (
                                     "-translate-x-full"
                                         if l["side"] == -1
                                         else (
@@ -392,6 +422,16 @@ def:pub FlowCanvas(
                                     "top": str(l["ly"]) + "px"
                                 }}
                             >
+                                {if str(l["carries"]) in CARRY_LABEL {
+                                    <span
+                                        key="tag"
+                                        className={"rounded-sm border px-1 py-px text-[9px] font-semibold leading-none tracking-wider " + CARRY_TINT[
+                                            str(l["carries"])
+                                        ]}
+                                    >
+                                        {CARRY_LABEL[str(l["carries"])]}
+                                    </span>
+                                }}
                                 {l["label"]}
                             </span>
                         }}
@@ -459,11 +499,23 @@ def:pub FlowCanvas(
                                 {str(s.task_count)}
                             </span>
                         </div>
-                        <div
-                            className="mt-0.5 pl-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
-                        >
-                            {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
-                        </div>
+                        {if s.blurb {
+                            <div
+                                key="blurb"
+                                className="mt-0.5 truncate pl-4 text-[11px] text-muted-foreground"
+                                title={s.blurb}
+                            >
+                                {s.blurb}
+                            </div>
+                        }}
+                        {if not (laneMode and s.blurb) {
+                            <div
+                                key="kind"
+                                className="mt-0.5 pl-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                            >
+                                {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
+                            </div>
+                        }}
                         {if s.owner and not laneMode {
                             <div
                                 key="owner"
@@ -561,33 +613,62 @@ def:pub FlowCanvas(
                         onKeyDown={lambda (e: any) { if e.key == "Enter"
                         and onSaveEdgeLabel {
                             onSaveEdgeLabel(
-                                activeEdge["from"], activeEdge["to"], edgeDraft
+                                activeEdge["from"],
+                                activeEdge["to"],
+                                edgeDraft,
+                                edgeCarry
                             );
                         }}}
                     />
+                    <div className="mt-2 flex items-center gap-1">
+                        <span
+                            className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground"
+                        >
+                            Carries
+                        </span>
+                        {for pick in carryPicks {
+                            <button
+                                key={pick["text"]}
+                                type="button"
+                                className={"rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-wider transition-colors " + (
+                                    ("border-primary bg-primary/10 text-primary")
+                                        if edgeCarry == pick["key"]
+                                        else "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={lambda { if onEdgeCarry {
+                                    onEdgeCarry(pick["key"]);
+                                }}}
+                            >
+                                {pick["text"]}
+                            </button>
+                        }}
+                    </div>
                     <div className="mt-2 flex items-center justify-between gap-1">
                         <Button
                             size="sm"
                             className="h-7 px-2.5 text-xs"
                             onClick={lambda { if onSaveEdgeLabel {
                                 onSaveEdgeLabel(
-                                    activeEdge["from"], activeEdge["to"], edgeDraft
+                                    activeEdge["from"],
+                                    activeEdge["to"],
+                                    edgeDraft,
+                                    edgeCarry
                                 );
                             }}}
                         >
                             Save
                         </Button>
                         <div className="flex items-center gap-1">
-                            {if edgeSaid {
+                            {if edgeSaid or edgeHad {
                                 <Button
                                     key="clear"
                                     size="sm"
                                     variant="ghost"
-                                    title="Take the wording off this arrow, keep the arrow"
+                                    title="Take the wording and the tag off this arrow, keep the arrow"
                                     className="h-7 px-2 text-xs text-muted-foreground"
                                     onClick={lambda { if onSaveEdgeLabel {
                                         onSaveEdgeLabel(
-                                            activeEdge["from"], activeEdge["to"], ""
+                                            activeEdge["from"], activeEdge["to"], "", ""
                                         );
                                     }}}
                                 >
