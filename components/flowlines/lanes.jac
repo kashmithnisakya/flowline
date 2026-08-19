@@ -107,6 +107,9 @@ def:pub laneLayout(
 
     positions: dict[str, list[float]] = {};
     laneOf: dict[str, str] = {};
+    # The grid behind the px: column and row slot per step, reported so a
+    # smaller rendering (the task dialog's) can lay the same grid out at its
+    # own size rather than inferring it back from the canvas positions.
     slotOf: dict[str, int] = {};
     lanes: list[dict[str, any]] = [];
     maxCol = 0;
@@ -211,7 +214,14 @@ def:pub laneLayout(
         }
         top = top + grown;
     }
-    return {"positions": positions, "lanes": lanes, "laneOf": laneOf};
+    return {
+        "positions": positions,
+        "lanes": lanes,
+        "laneOf": laneOf,
+        "colOf": depth,
+        "slotOf": slotOf,
+        "cols": maxCol + 1
+    };
 }
 
 

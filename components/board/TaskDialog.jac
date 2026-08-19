@@ -14,9 +14,9 @@ glob STATUSES: list[str] = [
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"];
 
-import from ...models { Project, MemberView, RepoView, StepView }
+import from ...models { Project, MemberView, RepoView, StepView, RoleView }
 import from ..common.Markdown { Markdown }
-import from .FlowStrip { FlowStrip }
+import from .MiniLanes { MiniLanes }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -77,9 +77,10 @@ def:pub TaskDialog(
     ghConnected: bool = False,
     ghIssueNumber: int = 0,
     onCreateIssue: Callable[[str], None] = None,
-    # The flow line, for the "where is this task" strip above the notes.
+    # The flow line, for the "where is this task" picture above the notes.
     # Empty (no flow line, or a new task with no position yet) draws nothing.
-    steps: list[StepView] = []
+    steps: list[StepView] = [],
+    roles: list[RoleView] = []
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -493,7 +494,14 @@ def:pub TaskDialog(
                                     {whereLine}
                                 </span>
                             </div>
-                            <FlowStrip steps={steps} currentKey={form["status"]}/>
+                            <MiniLanes
+                                steps={steps}
+                                roles={roles}
+                                members={inProject
+                                    if selectedProject != "none"
+                                    else members}
+                                currentKey={form["status"]}
+                            />
                         </div>
                     }}
                     <div className="grid gap-2">

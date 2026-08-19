@@ -945,6 +945,7 @@ def:pub FlowLinePage -> JsxPage {
                 assignees={taskAssignees}
                 onToggleAssignee={toggleTaskAssignee}
                 steps={steps}
+                roles={roleRows}
             />
         </div>;
 }
