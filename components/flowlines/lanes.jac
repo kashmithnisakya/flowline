@@ -163,10 +163,18 @@ def:pub laneLayout(
 }
 
 
+# Roughly how wide a label chip renders, in canvas px: the wording plus the
+# tag, the border and the padding. Only used to decide whether a chip fits on
+# its wire, so an estimate is enough.
+def chipWidth(said: str, carried: str) -> float {
+    return float(len(said)) * 5.4 + (36.0 if carried else 16.0);
+}
+
+
 # One elbow per transition, in canvas px. Each entry carries the same keys
-# FlowCanvas reads off wire() (d, arrow, mx/my, lx/ly, back, label) plus
-# `side`: -1 puts the label chip to the left of its anchor, 1 to the right,
-# 0 centers it above.
+# FlowCanvas reads off wire() (d, arrow, mx/my, lx/ly, back, label, carries)
+# plus `side`: -1 puts the label chip to the left of its anchor, 1 to the
+# right, 0 centers it above.
 def:pub laneWires(
     steps: list[StepView], positions: dict[str, list[float]]
 ) -> list[dict[str, any]] {
@@ -192,6 +200,7 @@ def:pub laneWires(
             tp = positions[nid];
             target = byId[nid];
             said = s.next_labels[i] if i < len(s.next_labels) else "";
+            carried = s.next_carries[i] if i < len(s.next_carries) else "";
             twoWay = s.id in target.next_ids;
             isReturn = target.sort_order < s.sort_order;
             # Travel direction decides the sides, not send-back-ness: a
@@ -220,6 +229,7 @@ def:pub laneWires(
                     "twoWay": twoWay,
                     "back": isReturn,
                     "label": said,
+                    "carries": carried,
                     "outOff": 0.0,
                     "inOff": 0.0,
                     "trunkX": 0.0
@@ -369,6 +379,16 @@ def:pub laneWires(
                 lx = (ex + ix) / 2.0;
                 ly = (ey + iy) / 2.0 - 13.0;
                 side = 0;
+                # Two cards in the same row sit one column gap apart, which
+                # is narrower than most chips: a chip wider than its run
+                # would hide behind the cards, so lift it clear of both.
+                runW = ix - ex;
+                if runW < 0.0 {
+                    runW = 0.0 - runW;
+                }
+                if chipWidth(str(e["label"]), str(e["carries"])) > runW {
+                    ly = (sy if sy < ty else ty) - 9.0;
+                }
             } else {
                 # Beside the trunk at its midpoint: rightward wires keep the
                 # chip on the source side, leftward on the other, so a
@@ -414,7 +434,8 @@ def:pub laneWires(
                 "ly": ly,
                 "side": side,
                 "back": e["back"],
-                "label": e["label"]
+                "label": e["label"],
+                "carries": e["carries"]
             }
         );
     }

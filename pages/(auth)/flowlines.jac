@@ -36,7 +36,13 @@ import from ...components.flowlines.geometry {
     NODE_W,
     NODE_H
 }
-import from ...components.flowlines.kinds { KIND_LABEL, DOT_FILL, colorKey }
+import from ...components.flowlines.kinds {
+    KIND_LABEL,
+    DOT_FILL,
+    CARRY_LABEL,
+    CARRY_TINT,
+    colorKey
+}
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
@@ -62,7 +68,8 @@ import from ...components.common.glyphs { Spinner, WarnIcon }
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
          "kind": "active",
-         "color": "indigo"
+         "color": "indigo",
+         "blurb": ""
      },
      # The board's task form, so the dialog opened from the panel is the
      # board's dialog with the board's fields, not a second shape of task.
@@ -111,6 +118,8 @@ def:pub FlowLinePage -> JsxPage {
         # Re-seeded from the edge on every selection, so it never has to be
         # cleared when the selection moves.
         edgeDraft: str = "",
+        # And what it carries while it is being picked, same lifecycle.
+        edgeCarry: str = "",
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
@@ -242,8 +251,8 @@ def:pub FlowLinePage -> JsxPage {
     async def deleteFlowLine -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
-    def selectEdge(key: str, said: str) -> None;
-    async def commitEdgeLabel(fromId: str, toId: str, said: str) -> None;
+    def selectEdge(key: str, said: str, carried: str) -> None;
+    async def commitEdgeLabel(fromId: str, toId: str, said: str, carried: str) -> None;
     def selectStep(stepId: str) -> None;
     def armConnect -> None;
     def clearCanvas -> None;
@@ -298,6 +307,12 @@ def:pub FlowLinePage -> JsxPage {
     # The Lane view projection: computed fresh per render, empty in flow
     # mode so the viewer's FlowCanvas call can pass these unconditionally.
     laneMode = lineView == "lanes";
+    # The wire legend's rows, materialised: the JSX cannot iterate a literal,
+    # and len() on a dict is undefined in JS so CARRY_LABEL cannot drive it.
+    carryLegend: list[dict[str, str]] = [
+        {"key": "issue", "text": "no code yet"},
+        {"key": "pr", "text": "code, waiting on a person"}
+    ];
     plan: dict[str, any] = {"positions": {}, "lanes": []};
     if laneMode and not editing {
         plan = laneLayout(steps, roleRows, roleMembers);
@@ -626,8 +641,10 @@ def:pub FlowLinePage -> JsxPage {
                                     onZoomFit={fitZoom}
                                     onSelect={selectStep}
                                     edgeDraft={edgeDraft}
+                                    edgeCarry={edgeCarry}
                                     onSelectEdge={selectEdge}
                                     onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
+                                    onEdgeCarry={lambda (v: str) { edgeCarry = v; }}
                                     onSaveEdgeLabel={commitEdgeLabel}
                                     onDeleteEdge={deleteEdge}
                                     onCanvasClick={clearCanvas}
@@ -885,6 +902,49 @@ def:pub FlowLinePage -> JsxPage {
                             </div>
                         }}
                     </div>
+                    {if laneMode {
+                        <div
+                            key="wirelegend"
+                            className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground"
+                        >
+                            {for cl in carryLegend {
+                                <span
+                                    key={cl["key"]}
+                                    className="inline-flex items-center gap-1.5"
+                                >
+                                    <span
+                                        className={"rounded-sm border px-1 py-px text-[9px] font-semibold tracking-wider " + CARRY_TINT[
+                                            cl["key"]
+                                        ]}
+                                    >
+                                        {CARRY_LABEL[cl["key"]]}
+                                    </span>
+                                    {cl["text"]}
+                                </span>
+                            }}
+                            <span className="inline-flex items-center gap-1.5">
+                                <svg
+                                    width={26}
+                                    height={6}
+                                    viewBox="0 0 26 6"
+                                    className="text-destructive/70"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M0 3 H26"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeDasharray="6 5"
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                sent back for changes
+                            </span>
+                            <span>
+                                Every arrow wears the colour of the step it leaves.
+                            </span>
+                        </div>
+                    }}
                     {if laneMode and len(offFlow) > 0 {
                         <p key="offflow" className="text-xs text-muted-foreground">
                             {"Not on the flow yet: "}
