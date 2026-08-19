@@ -944,6 +944,8 @@ def:pub FlowLinePage -> JsxPage {
                 handoffKeys={handoffKeys}
                 assignees={taskAssignees}
                 onToggleAssignee={toggleTaskAssignee}
+                steps={steps}
+                roles={roleRows}
             />
         </div>;
 }

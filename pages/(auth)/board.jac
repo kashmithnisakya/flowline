@@ -3,14 +3,14 @@ ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
-import from ...models { Project, MemberView, TaskView, StepView, RepoView }
+import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleView }
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
 import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers, ListRepos }
+import from ...walkers.roster { ListMembers, ListRepos, ListRoles }
 import from ...walkers.tasks {
     ListTasks,
     TaskCounts,
@@ -85,6 +85,9 @@ def:pub BoardPage -> JsxPage {
         # Distinct categories over the whole history, from TaskCounts.
         knownCategories: list[str] = [],
         members: list[MemberView] = [],
+        # The org's roles, for the lane order and colours in the task
+        # dialog's flow line picture.
+        roleRows: list[RoleView] = [],
         projects: list[Project] = [],
         steps: list[StepView] = [],
         repos: list[RepoView] = [],
@@ -553,6 +556,8 @@ def:pub BoardPage -> JsxPage {
                 ghConnected={ghConnected}
                 ghIssueNumber={editingIssueNumber}
                 onCreateIssue={createIssue}
+                steps={steps}
+                roles={roleRows}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

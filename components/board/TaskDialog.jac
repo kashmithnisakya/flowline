@@ -14,8 +14,9 @@ glob STATUSES: list[str] = [
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"];
 
-import from ...models { Project, MemberView, RepoView }
+import from ...models { Project, MemberView, RepoView, StepView, RoleView }
 import from ..common.Markdown { Markdown }
+import from .MiniLanes { MiniLanes }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -75,7 +76,11 @@ def:pub TaskDialog(
     repos: list[RepoView] = [],
     ghConnected: bool = False,
     ghIssueNumber: int = 0,
-    onCreateIssue: Callable[[str], None] = None
+    onCreateIssue: Callable[[str], None] = None,
+    # The flow line, for the "where is this task" picture above the notes.
+    # Empty (no flow line, or a new task with no position yet) draws nothing.
+    steps: list[StepView] = [],
+    roles: list[RoleView] = []
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -123,6 +128,49 @@ def:pub TaskDialog(
     canCreateIssue = (
         editing and ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0
     );
+
+    # The picture's caption: which step of how many, who owns it, and who on
+    # this project holds that role (the person a save would hand it to).
+    # Only an existing task on a flow line has a position to show.
+    showLanes = editing and len(steps) > 0;
+    hereStep: list[StepView] = [
+        s
+        for s in steps
+        if s.id == form["status"]
+    ];
+    herePos = 0;
+    for (si, s) in enumerate(steps) {
+        if s.id == form["status"] {
+            herePos = si + 1;
+        }
+    }
+    hereOwner = "";
+    hereHolders = "";
+    if len(hereStep) > 0 {
+        hereOwner = (hereStep[0].owner or "").strip();
+        held: list[str] = [];
+        # Scoped to the project when there is one, like the hand-off rule.
+        pool = inProject if selectedProject != "none" else members;
+        for m in pool {
+            if hereOwner and hereOwner in m.roles {
+                held.append(m.name);
+            }
+        }
+        hereHolders = ", ".join(held);
+    }
+    whereLine = "";
+    if len(hereStep) > 0 {
+        whereLine = "step " + str(herePos) + " of " + str(len(steps)) + " · " + hereStep[
+            0
+        ].name;
+        if hereOwner == "anyone" {
+            whereLine = whereLine + " · anyone";
+        } elif hereOwner {
+            whereLine = whereLine + " · " + hereOwner + (
+                " · " + hereHolders if hereHolders else " · no one on this project"
+            );
+        }
+    }
 
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -433,6 +481,27 @@ def:pub TaskDialog(
                                     />
                                 </div>
                             </div>
+                        </div>
+                    }}
+                    {if showLanes {
+                        <div key="lanes" className="grid gap-2">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <Label>On the flow line</Label>
+                                <span
+                                    className="truncate text-xs text-muted-foreground"
+                                    title={whereLine}
+                                >
+                                    {whereLine}
+                                </span>
+                            </div>
+                            <MiniLanes
+                                steps={steps}
+                                roles={roles}
+                                members={inProject
+                                    if selectedProject != "none"
+                                    else members}
+                                currentKey={form["status"]}
+                            />
                         </div>
                     }}
                     <div className="grid gap-2">
