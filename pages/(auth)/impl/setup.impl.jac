@@ -66,7 +66,7 @@ impl SetupPage.createProject -> None {
 
 
 impl SetupPage.addPerson -> None {
-    # Names only: roles are assigned on the Workspace tab once a workflow
+    # Names only: roles are assigned on the Workspace tab once a flow line
     # exists to define them, so the wizard never invents role vocabulary.
     captured = mName.strip();
     if not captured {
@@ -95,7 +95,7 @@ impl SetupPage.finish -> None {
     if mName.strip() {
         await addPerson();
     }
-    # New orgs land on the workflow picker: choosing how work moves is the
+    # New orgs land on the flow line picker: choosing how work moves is the
     # last piece of setup, and the board reads better once it exists.
-    window.location.href = "/workflow";
+    window.location.href = "/flowlines";
 }

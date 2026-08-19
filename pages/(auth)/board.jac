@@ -1,6 +1,6 @@
-"""standup - Board page (/board): the org's workflow as a kanban. The columns
-ARE the workflow steps in designed order, so board and Workflow tab cannot
-disagree; with no workflow yet it falls back to the six statuses. Stateful
+"""standup - Board page (/board): the org's flow line as a kanban. The columns
+ARE the flow line steps in designed order, so board and Flow line tab cannot
+disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
 import from ...models { Project, MemberView, TaskView, StepView, RepoView }
@@ -13,13 +13,15 @@ import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.roster { ListMembers, ListRepos }
 import from ...walkers.tasks {
     ListTasks,
+    TaskCounts,
+    GetTask,
     CreateTask,
     UpdateTask,
     MoveTask,
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.workflow { GetWorkflow }
+import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
@@ -60,7 +62,28 @@ glob BLANK_TASK: dict[str, str] = {
 
 def:pub BoardPage -> JsxPage {
     has showAllDone: bool = False,
+        # The working set: open tasks plus Done touched in the last week,
+        # which is everything the board renders until "completed earlier"
+        # is opened. Older Done history pages in on demand below.
         tasks: list[TaskView] = [],
+        olderDone: list[TaskView] = [],
+        # How many older Done rows exist under the current filters (-1
+        # until the first filtered fetch says), how many pages are in, and
+        # whether the server holds more.
+        olderTotal: int = 0,
+        olderPage: int = 0,
+        olderMore: bool = False,
+        loadingOlder: bool = False,
+        # A `has` read after an await is the render-time value, so the
+        # in-flight latch and the newest filters live on refs instead.
+        olderRef: Ref[any] = Ref(),
+        rowsRef: Ref[any] = Ref(),
+        filterRef: Ref[any] = Ref(),
+        # The working set is fetched in pages; past the bound the board
+        # says so rather than quietly showing part of the workspace.
+        workingTruncated: bool = False,
+        # Distinct categories over the whole history, from TaskCounts.
+        knownCategories: list[str] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
         steps: list[StepView] = [],
@@ -99,6 +122,9 @@ def:pub BoardPage -> JsxPage {
         stored = localStorage.getItem("standup_project") or "";
         if stored {
             fProject = stored;
+            # boot() runs in this same tick, where `fProject` still reads
+            # "all"; the ref carries the effective filter across.
+            filterRef.current = stored + "|All|All";
         }
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
@@ -120,11 +146,7 @@ def:pub BoardPage -> JsxPage {
             if pendingTaskId == "new" {
                 openCreate("");
             } else {
-                for t in tasks {
-                    if t.id == pendingTaskId {
-                        openEdit(t);
-                    }
-                }
+                openById(pendingTaskId);
             }
             pendingTaskId = "";
             # Consume the param only now: on a full load the page mounts
@@ -171,9 +193,17 @@ def:pub BoardPage -> JsxPage {
     async def boot -> None;
     async def loadAll -> None;
     async def retryLoad -> None;
+    # Older Done history: page 1 replaces, later pages append; any filter
+    # change or task write starts over so the rows never go stale.
+    # `pid`/`who`/`cat` are passed, never read from state: a setter's new
+    # value is not visible to the same handler that set it.
+    async def loadOlder(page: int, pid: str, who: str, cat: str) -> None;
+    async def refreshOlder(pid: str, who: str, cat: str) -> None;
+    def toggleOlder -> None;
+    async def openById(taskId: str) -> None;
     async def saveTask -> None;
     async def deleteTask -> None;
-    # The columns ARE the workflow, so every column question routes through
+    # The columns ARE the flow line, so every column question routes through
     # these rather than a status literal. Page methods, not module defs,
     # because they all read `steps`.
     def columnKeys -> list[str];
@@ -186,6 +216,9 @@ def:pub BoardPage -> JsxPage {
     async def moveTo(taskId: str, columnKey: str) -> None;
     def arrowMove(t: TaskView, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
+    def setAssigneeFilter(v: str) -> None;
+    def setCategoryFilter(v: str) -> None;
+    def filtersOn(pid: str, who: str, cat: str) -> bool;
     def setField(key: str, value: str) -> None;
     def setMoveField(key: str, value: str) -> None;
     def toggleAssignee(memberId: str) -> None;
@@ -208,8 +241,11 @@ def:pub BoardPage -> JsxPage {
         if p.active
     ];
     # Categories are whatever the org has actually typed on its tasks.
-    allCategories: list[str] = [];
-    for t in tasks {
+    # Every category the workspace uses, counted server-side: built from the
+    # working set alone it would lose the ones only old Done tasks carry,
+    # and then you could not filter by them.
+    allCategories: list[str] = [c for c in knownCategories];
+    for t in tasks + olderDone {
         if t.category and t.category not in allCategories {
             allCategories.append(t.category);
         }
@@ -219,14 +255,14 @@ def:pub BoardPage -> JsxPage {
     colKeys = columnKeys();
     doneKey = doneColumnKey();
     today = todayIso();
-    # No workflow AND nothing to show: six empty placeholder columns are noise
+    # No flow line AND nothing to show: six empty placeholder columns are noise
     # on a workspace that has not decided what its columns are yet. A legacy
     # org that HAS tasks still gets the fallback columns, because hiding the
     # board would hide its work.
     # A failed first load also has no steps and no tasks; it must not be
-    # mistaken for a workspace that has not designed its workflow yet.
+    # mistaken for a workspace that has not designed its flow line yet.
     nothingLoaded = loadFailed and len(steps) == 0 and len(tasks) == 0;
-    noWorkflow = not nothingLoaded and len(steps) == 0 and len(tasks) == 0;
+    noFlowLine = not nothingLoaded and len(steps) == 0 and len(tasks) == 0;
 
     visible = [
         t
@@ -236,24 +272,28 @@ def:pub BoardPage -> JsxPage {
         and (fCategory == "All" or t.category == fCategory)
         and (not hideDone or t.status != "Done")
     ];
-    weekAgoDate = new(Date);
-    weekAgoDate.setDate(weekAgoDate.getDate() - 7);
-    weekAgo = weekAgoDate.toISOString()[:10];
-    doneVisible = [
+    # Everything Done in the working set is recent by construction (the
+    # server's cutoff); older history is its own list, fetched under the
+    # same filters, so the client filter here only guards a filter that
+    # changed while a page was in flight.
+    recentDone = [
         t
         for t in visible
         if doneKey and columnKeyOf(t) == doneKey
     ];
-    recentDone = [
+    olderShown = [
         t
-        for t in doneVisible
-        if t.updated_at[:10] >= weekAgo
+        for t in olderDone
+        if showAllDone
+        and not hideDone
+        and (fProject == "all" or t.project_id == fProject)
+        and (fAssignee == "All" or fAssignee in t.assignee_ids)
+        and (fCategory == "All" or t.category == fCategory)
     ];
-    olderDoneCount = len(doneVisible) - len(recentDone);
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
     editingIssueNumber = 0;
-    for t in tasks {
+    for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
         }
@@ -271,7 +311,7 @@ def:pub BoardPage -> JsxPage {
                         <Skeleton className="h-8 w-24"/>
                         <Skeleton className="h-8 w-24"/>
                     </div>
-                } elif not noWorkflow and not nothingLoaded {
+                } elif not noFlowLine and not nothingLoaded {
                     <div key="tools" className="flex items-center gap-2">
                         <FilterBar
                             projects={activeProjects}
@@ -281,8 +321,8 @@ def:pub BoardPage -> JsxPage {
                             category={fCategory}
                             hideDone={hideDone}
                             onProject={setProjectFilter}
-                            onAssignee={lambda (v: str) { fAssignee = v; }}
-                            onCategory={lambda (v: str) { fCategory = v; }}
+                            onAssignee={setAssigneeFilter}
+                            onCategory={setCategoryFilter}
                             onHideDone={lambda { hideDone = not hideDone; }}
                             categories={allCategories}
                         />
@@ -303,6 +343,15 @@ def:pub BoardPage -> JsxPage {
                     </div>
                 } }
             </div>
+            {if workingTruncated and not loading {
+                <div
+                    key="truncated"
+                    className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning"
+                    role="status"
+                >
+                    More open work than the board loads at once, so some cards are missing. Narrow the filters, or archive what is finished.
+                </div>
+            }}
             {if loadFailed and not nothingLoaded and not loading {
                 <StaleDataStrip
                     key="stale"
@@ -354,9 +403,9 @@ def:pub BoardPage -> JsxPage {
                     onRetry={retryLoad}
                     retrying={retrying}
                 />
-            } elif noWorkflow {
+            } elif noFlowLine {
                 <div
-                    key="noworkflow"
+                    key="noflowline"
                     className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
                 >
                     <KineticGrid
@@ -383,7 +432,7 @@ def:pub BoardPage -> JsxPage {
                             <path d="m7.3 13.2 9.4 4.6"/>
                         </svg>
                         <h2 className="font-display text-lg font-semibold">
-                            Your board is the workflow you design
+                            Your board is the flow line you design
                         </h2>
                         <p
                             className="max-w-md text-sm text-pretty text-muted-foreground"
@@ -391,9 +440,9 @@ def:pub BoardPage -> JsxPage {
                             Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
                         </p>
                         <Button
-                            onClick={lambda { window.location.href = "/workflow"; }}
+                            onClick={lambda { window.location.href = "/flowlines"; }}
                         >
-                            Design your workflow
+                            Design your flow line
                             <svg
                                 width={16}
                                 height={16}
@@ -412,7 +461,7 @@ def:pub BoardPage -> JsxPage {
                 </div>
             } else {
                 # ONE row, always: columns divide the width between them, since
-                # a wrapping workflow stops reading as a pipeline. Below md the
+                # a wrapping flow line stops reading as a pipeline. Below md the
                 # columns keep a 16rem minimum and the row scroll-snaps instead.
                 <div
                     key="columns"
@@ -433,7 +482,7 @@ def:pub BoardPage -> JsxPage {
                             label={columnLabel(key)}
                             kind={columnKind(key)}
                             color={columnColor(key)}
-                            tasks={(doneVisible if showAllDone else recentDone)
+                            tasks={(recentDone + olderShown)
                                 if key == doneKey
                                 else [
                                     t
@@ -450,11 +499,19 @@ def:pub BoardPage -> JsxPage {
                                 if ci < len(colKeys) - 1
                                 else ""}
                             doneKey={doneKey}
-                            extraCount={olderDoneCount
-                                if key == doneKey and not showAllDone
+                            extraCount={olderTotal
+                                if key == doneKey and not hideDone
                                 else 0}
-                            showingAll={showAllDone if key == doneKey else False}
-                            onToggleOlder={lambda { showAllDone = not showAllDone; }}
+                            showingAll={showAllDone
+                                if key == doneKey and not hideDone
+                                else False}
+                            onToggleOlder={toggleOlder}
+                            moreOlder={olderMore if key == doneKey else False}
+                            loadingOlder={loadingOlder if key == doneKey else False}
+                            olderShown={len(olderShown) if key == doneKey else 0}
+                            onMoreOlder={lambda { loadOlder(
+                                olderPage + 1, fProject, fAssignee, fCategory
+                            ); }}
                             onAddTask={openCreate}
                             overdueCount={0
                                 if key == doneKey

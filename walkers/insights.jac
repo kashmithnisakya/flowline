@@ -130,19 +130,29 @@ def _tasks_of(holder: Root) -> list[Task] {
     return [holder-->[?:Task]];
 }
 
-def _assignee_names(t: Task) -> str {
-    names: list[str] = [];
-    for a in [t->:AssignedTo:->] {
-        names.append(a.name);
+# Assignee names and project name per task jid, gathered by walking IN from
+# each Member and Project. Two hops per person or project instead of two per
+# task: at 2,000 tasks that is a dozen edge reads, not four thousand.
+def _hydrate(holder: Root) -> tuple[dict[str, str], dict[str, str]] {
+    who: dict[str, str] = {};
+    for m in [holder-->[?:Member]] {
+        for t in [m<-:AssignedTo:<-] {
+            key = jid(t);
+            who[key] = (who[key] + ", " + m.name) if key in who else m.name;
+        }
     }
-    return ", ".join(names);
+    proj: dict[str, str] = {};
+    for p in [holder-->[?:Project]] {
+        for t in [p<-:ForProject:<-] {
+            proj[jid(t)] = p.name;
+        }
+    }
+    return (who, proj);
 }
 
-def _project_name(t: Task) -> str {
-    for p in [t->:ForProject:->] {
-        return p.name;
-    }
-    return "";
+def _named(who: dict[str, str], t: Task) -> str {
+    key = jid(t);
+    return who[key] if key in who else "";
 }
 
 def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
@@ -187,6 +197,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if p.active
     ];
     entries = _entries_between(holder, from_date, to_date);
+    (who, proj) = _hydrate(holder);
 
     open_tasks = [
         t
@@ -206,8 +217,8 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             blocked.append(
                 BlockedItem(
                     title=t.title,
-                    project=_project_name(t),
-                    assignees=_assignee_names(t),
+                    project=_named(proj, t),
+                    assignees=_named(who, t),
                     reason=reason or t.notes,
                     since=since[:10] if since else t.updated_at[:10]
                 )
@@ -221,7 +232,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             review_queue.append(
                 ReviewItem(
                     title=t.title,
-                    project=_project_name(t),
+                    project=_named(proj, t),
                     reviewer=t.reviewer_name,
                     review_due=t.review_due,
                     pr_link=t.pr_link,
@@ -242,9 +253,9 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             aging.append(
                 AgingItem(
                     title=t.title,
-                    project=_project_name(t),
+                    project=_named(proj, t),
                     status=t.status,
-                    assignees=_assignee_names(t),
+                    assignees=_named(who, t),
                     idle_days=idle
                 )
             );
@@ -253,8 +264,8 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             overdue.append(
                 OverdueItem(
                     title=t.title,
-                    project=_project_name(t),
-                    assignees=_assignee_names(t),
+                    project=_named(proj, t),
+                    assignees=_named(who, t),
                     due_date=t.due_date,
                     status=t.status
                 )
@@ -267,7 +278,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         mine = [
             t
             for t in tasks
-            if m.name in _assignee_names(t)
+            if m.name in _named(who, t)
         ];
         people.append(
             PersonStat(
@@ -311,7 +322,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         owned_tasks = [
             t
             for t in tasks
-            if _project_name(t) == p.name
+            if _named(proj, t) == p.name
         ];
         project_stats.append(
             ProjectStat(

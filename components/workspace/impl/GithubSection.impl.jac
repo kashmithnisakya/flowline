@@ -73,13 +73,13 @@ impl GithubSection.loadWorkspace -> None {
     try {
         rResult = root spawn ListRepos();
         pResult = root spawn ListProjects();
-        sResult = root spawn GetWorkflow();
+        sResult = root spawn GetFlowLine();
         fetched = rResult.reports[0] if rResult.reports else [];
         repos = fetched;
         projects = pResult.reports[0] if pResult.reports else [];
-        # The "as" picker offers the org's own workflow steps; imports land on
+        # The "as" picker offers the org's own flow line steps; imports land on
         # the start step by default (where new work lands). An org with no
-        # workflow keeps the legacy status list instead.
+        # flow line keeps the legacy status list instead.
         stepRows: list[StepView] = sResult.reports[0] if sResult.reports else [];
         steps = stepRows;
         if not importStep and len(stepRows) > 0 {
@@ -159,18 +159,54 @@ impl GithubSection.searchRepos -> None {
     pickerLoading = True;
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListGithubRepos(query=pickerQuery.strip());
+        needle = pickerQuery.strip();
+        pickerRef.current = needle;
+        result = root spawn ListGithubRepos(query=needle, page=1);
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
             pickerRows = payload["rows"] or [];
+            pickerPage = 1;
+            pickerMore = bool(payload["has_more"]);
         } else {
             pickerRows = [];
+            pickerMore = False;
             toast(payload["message"] or "GitHub would not list your repositories");
         }
     } except Exception as e {
         toast("Could not reach GitHub");
     }
     pickerLoading = False;
+}
+
+impl GithubSection.moreRepos -> None {
+    # The query and page are read before the await; a page filtered by
+    # name can come back short or empty and still have more behind it.
+    if pickerLoadingMore {
+        return;
+    }
+    wanted = pickerPage + 1;
+    needle = pickerQuery.strip();
+    have = [r for r in pickerRows];
+    pickerLoadingMore = True;
+    blank: dict[str, any] = {};
+    try {
+        result = root spawn ListGithubRepos(query=needle, page=wanted);
+        payload = result.reports[0] if result.reports else blank;
+        if payload["ok"] and pickerRef.current == needle {
+            # Sort the merged list: each page arrives sorted on its own, so
+            # concatenating them would interleave two alphabets.
+            merged = have + (payload["rows"] or []);
+            merged.sort(key=lambda (r: GhRepoRow) { r.full_name; });
+            pickerRows = merged;
+            pickerPage = wanted;
+            pickerMore = bool(payload["has_more"]);
+        } else {
+            toast(payload["message"] or "GitHub would not list your repositories");
+        }
+    } except Exception as e {
+        toast("Could not reach GitHub");
+    }
+    pickerLoadingMore = False;
 }
 
 impl GithubSection.attachRepo(fullName: str) -> None {

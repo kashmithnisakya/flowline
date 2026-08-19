@@ -1,6 +1,6 @@
 # standup
 
-A board that follows the workflow your team actually uses, and a written daily
+A board that follows the flow line your team actually uses, and a written daily
 log it fills in for you. For teams that hate status meetings.
 
 Built entirely in [Jac](https://www.jaseci.org/) (graph-native backend plus a
@@ -8,7 +8,7 @@ JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 
 https://github.com/user-attachments/assets/80ab532f-0515-4312-8362-c8f526fad165
 
-## Design your workflow, get your board
+## Design your flow line, get your board
 
 Most tools hand every team the same columns. Here you draw the steps your team
 really uses, connect them however work moves (loops and branches included), and
@@ -26,7 +26,7 @@ is why renaming a step never changes how anything behaves.
 
 ## What it does
 
-- **A workflow per organization** and a board built from it: your steps, your
+- **A flow line per organization** and a board built from it: your steps, your
   order, your colours, all on one row however many there are
 - **The board writes the log**: creating a task and every move land in the
   activity feed automatically, with timestamps, issue/PR links and who was involved

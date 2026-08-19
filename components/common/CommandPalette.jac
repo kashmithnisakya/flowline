@@ -1,6 +1,7 @@
 """⌘K palette: jump to a page, run an action, or open a task by title. Tasks
-load when the palette opens (one ListTasks call) and match once the query
-has two characters, so the empty palette stays a short list of places.
+are searched on the server (ListTasks with `q`) once the query has two
+characters, debounced a beat, so the empty palette stays a short list of
+places and a big workspace never loads its history to open one card.
 Navigation goes through the runtime's navigate(); the board reacts to
 `standup:new-task` / `standup:open-task` when it is already mounted.
 """
@@ -16,15 +17,15 @@ import from .Avatar { AvatarStack, dotFor }
 glob PAGES: list[dict[str, str]] = [
          {
              "kind": "page",
-             "label": "Workflow",
-             "to": "/workflow",
+             "label": "Flow line",
+             "to": "/flowlines",
              "hint": "Design the steps"
          },
          {
              "kind": "page",
              "label": "Board",
              "to": "/board",
-             "hint": "Kanban of the workflow"
+             "hint": "Kanban of the flow line"
          },
          {
              "kind": "page",
@@ -77,32 +78,59 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
     has query: str = "",
         active: int = 0,
         tasks: list[TaskView] = [],
-        loadedTasks: bool = False;
+        # The query the loaded rows answer; the list shows "Searching…"
+        # while it lags the box. A ref carries the latest query into the
+        # timer so a slow answer to an old query cannot overwrite a newer one.
+        searched: str = "",
+        latestRef: Ref[any] = Ref();
 
     location = useLocation();
 
-    # Load tasks once per opening; reset the query and cursor each time.
+    # Reset the query and cursor each time the palette opens.
     useEffect(
         lambda { if open {
             query = "";
             active = 0;
-            loadedTasks = False;
-            fetchTasks();
+            tasks = [];
+            searched = "";
         }},
         [open]
     );
 
-    async def fetchTasks {
+    q = query.strip().lower();
+    latestRef.current = q;
+
+    # Search the server a beat after typing stops; the runtime's short read
+    # cache makes repeats free.
+    useEffect(
+        lambda {
+            # Always return a cleanup FUNCTION: React only skips a destroy
+            # that is `undefined`, so an effect that returns None (which is
+            # `null` in the emitted JS) gets called and throws.
+            timer: any = 0;
+            if len(q) >= 2 {
+                timer = window.setTimeout(lambda { fetchTasks(q); }, 180);
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [q]
+    );
+
+    async def fetchTasks(wanted: str) {
+        rows: list[TaskView] = [];
         try {
-            result = root spawn ListTasks();
-            tasks = result.reports[0] if result.reports else [];
+            result = root spawn ListTasks(scope="all", q=wanted, page_size=MAX_TASKS);
+            page = result.reports[0] if result.reports else None;
+            rows = page.rows if page else [];
         } except Exception as e {
-            tasks = [];
+            rows = [];
         }
-        loadedTasks = True;
+        if latestRef.current == wanted {
+            tasks = rows;
+            searched = wanted;
+        }
     }
 
-    q = query.strip().lower();
     pageItems = [
         p
         for p in PAGES
@@ -113,13 +141,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
         for a in ACTIONS
         if matches(a["label"], q)
     ];
-    taskItems = [
-        t
-        for t in tasks
-        if q in t.title.lower()
-    ][:MAX_TASKS]
-        if len(q) >= 2
-        else [];
+    taskItems = tasks if len(q) >= 2 and searched == q else [];
     # One flat list for the cursor: pages, then actions, then tasks.
     total = len(pageItems) + len(actionItems) + len(taskItems);
 
@@ -238,7 +260,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                             className="px-3 py-8 text-center text-sm text-muted-foreground"
                         >
                             {"Nothing matches “" + query + "”"
-                                if loadedTasks or len(q) < 2
+                                if searched == q or len(q) < 2
                                 else "Searching…"}
                         </div>
                     }}

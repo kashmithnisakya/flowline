@@ -9,6 +9,9 @@ glob STATUSES: list[str] = [
          "Blocked"
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"],
+     # Open work that someone has actually picked up, as opposed to Backlog
+     # (not started) or Blocked (stopped). The Overview reads it as "active".
+     ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
      # What a step MEANS independent of its name; the app keys behaviour on
      # the kind, so renaming a step is always safe.
      STEP_KINDS: list[str] = ["start", "active", "handoff", "blocked", "done"],
@@ -23,11 +26,11 @@ glob STATUSES: list[str] = [
      # The one prebuilt flow. The picker offers exactly this or a blank
      # canvas; the removed Kanban/Software/Support entries only ever seeded
      # steps, so workspaces created from them keep working untouched.
-     WORKFLOW_TEMPLATES: list[dict[str, any]] = [
+     FLOW_LINE_TEMPLATES: list[dict[str, any]] = [
          {
              "key": "jaseci",
              "name": "Jaseci flow",
-             "description": "Specify, triage, design, build, review, de-slop. Four roles, loops included.",
+             "description": "Specify, triage, architect, build, review, de-slop. Four roles, loops included.",
              # The four Jaseci roles. ApplyTemplate seeds these as Role
              # nodes (editable org data from then on); colors match the
              # step each role owns so the Roles tab echoes the canvas.
@@ -74,7 +77,7 @@ glob STATUSES: list[str] = [
                      "y": 260.0
                  },
                  {
-                     "name": "Design",
+                     "name": "Architecture",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
@@ -133,7 +136,7 @@ glob STATUSES: list[str] = [
              "link_labels": [
                  "to PE first",
                  "PE too",
-                 "needs design",
+                 "needs architecture",
                  "small, straight to build",
                  "approach agreed",
                  "ready and tested",

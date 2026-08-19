@@ -1,4 +1,4 @@
-"""Workflow walkers: the org's step-graph API. One workflow per organization,
+"""Flow line walkers: the org's step-graph API. One flow line per organization,
 steps hanging off the caller's root so the one-hop ownership check works.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
@@ -10,20 +10,22 @@ import from models {
     Role,
     StepView,
     TaskView,
+    TaskPage,
     FlowsTo,
     ForProject,
+    hydrate_views,
     step_view,
     resolve,
     on_attached,
     owned
 }
-import from walkers.util { now_iso }
+import from walkers.util { now_iso, page_bounds }
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
     KIND_STATUS,
     STATUS_KIND,
-    WORKFLOW_TEMPLATES
+    FLOW_LINE_TEMPLATES
 }
 
 
@@ -84,22 +86,28 @@ def get_meta(holder: Root) -> WorkflowMeta {
 }
 
 
-walker GetWorkflowMeta {
+walker GetFlowLineMeta {
     """Read-only: a GET must not write, so an org that has never renamed
-    its workflow reports the default without creating the node."""
+    its flow line reports the default without creating the node."""
     has reports: list[dict[str, str]] = [];
 
     can read with Root entry {
         existing = [here-->[?:WorkflowMeta]];
+        name = existing[0].name if existing else "";
+        # "Workflow" was the default before the rename, and ApplyTemplate
+        # persisted it for every templated org, so it reads as the new one.
+        if not name or name == "Workflow" {
+            name = "Flow line";
+        }
         report {
-            "name": existing[0].name if existing else "Workflow",
+            "name": name,
             "template_key": existing[0].template_key if existing else ""
         };
     }
 }
 
 
-walker RenameWorkflow {
+walker RenameFlowLine {
     has name: str = "",
         reports: list[dict[str, str]] = [];
 
@@ -113,30 +121,32 @@ walker RenameWorkflow {
 }
 
 
-walker GetWorkflow {
+walker GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
-    the legacy status fallback) has one implementation for board and view."""
+    the legacy status fallback) has one implementation for board and view.
+    `with_counts=False` skips the walk over every task: the board counts the
+    rows it already holds, so its 60 s poll need not pay for it."""
     has project_id: str = "",
-        results: list[StepView] = [],
+        with_counts: bool = True,
         reports: list[list[StepView]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:WorkflowStep]];
-    }
-
-    can gather with WorkflowStep entry {
-        self.results.append(step_view(here));
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (s: StepView) { s.sort_order; });
+    can gather with Root entry {
+        views: list[StepView] = [];
+        for st in [here-->[?:WorkflowStep]] {
+            views.append(step_view(st));
+        }
+        views.sort(key=lambda (s: StepView) { s.sort_order; });
+        if not self.with_counts {
+            report views;
+            disengage;
+        }
         # Count into a plain map first, then stamp the views: mutating a
         # view through a dict lookup is more than the checker can follow.
         counts: dict[str, int] = {};
         known: list[str] = [];
         first_of_kind: dict[str, str] = {};
-        for v in self.results {
+        for v in views {
             counts[v.id] = 0;
             known.append(v.id);
             if v.kind not in first_of_kind {
@@ -155,26 +165,31 @@ walker GetWorkflow {
                 counts[landing] = int(counts[landing]) + 1;
             }
         }
-        for v in self.results {
+        for v in views {
             v.task_count = counts[v.id];
         }
-        report self.results;
+        report views;
     }
 }
 
 
 walker ListStepTasks {
-    """The work sitting on one step, for the panel the workflow view opens.
-    Placement reuses GetWorkflow's rule so list and count never disagree."""
+    """One page of the work sitting on one step, for the panel the flow line
+    view opens. Placement reuses GetFlowLine's rule so list and count never
+    disagree; the walk touches node fields only and `to_view()` runs for the
+    page. `total` is the whole step, so the header can keep counting."""
     has step_id: str = "",
         project_id: str = "",
-        results: list[TaskView] = [],
-        reports: list[list[TaskView]] = [];
+        page: int = 1,
+        page_size: int = 0,
+        reports: list[TaskPage] = [];
 
     can gather with Root entry {
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
+        empty = TaskPage(rows=[], page=p, page_size=size, has_more=False, total=0);
         target = resolve(self.step_id);
         if not isinstance(target, WorkflowStep) or not owned(here, target) {
-            report self.results;
+            report empty;
             disengage;
         }
         wanted = jid(target);
@@ -186,27 +201,38 @@ walker ListStepTasks {
                 first_of_kind[st.kind] = jid(st);
             }
         }
+        picked: list[Task] = [];
         for t in [here-->[?:Task]] {
+            if landing_step(t, known, first_of_kind) != wanted {
+                continue;
+            }
             if self.project_id {
                 owning = [t->:ForProject:->];
                 if not owning or jid(owning[0]) != self.project_id {
                     continue;
                 }
             }
-            if landing_step(t, known, first_of_kind) == wanted {
-                self.results.append(t.to_view());
-            }
+            picked.append(t);
         }
-        self.results.sort(key=lambda (t: TaskView) { t.sort_order; });
-        report self.results;
+        # jid first, then the real key: sorts are stable, so equal
+        # sort_orders keep one order across pages instead of swapping.
+        picked.sort(key=lambda (t: Task) { jid(t); });
+        picked.sort(key=lambda (t: Task) { t.sort_order; });
+        report TaskPage(
+            rows=hydrate_views(here, picked[start:end]),
+            page=p,
+            page_size=size,
+            has_more=len(picked) > end,
+            total=len(picked)
+        );
     }
 }
 
 
 walker ApplyTemplate {
-    """Seed the org's workflow from one template, atomically. Idempotent by
-    refusal: with any step already present the existing workflow is reported
-    instead, so a double-click cannot overlay two workflows."""
+    """Seed the org's flow line from one template, atomically. Idempotent by
+    refusal: with any step already present the existing flow line is reported
+    instead, so a double-click cannot overlay two flow lines."""
     has template_key: str = "",
         reports: list[list[StepView]] = [];
 
@@ -222,7 +248,7 @@ walker ApplyTemplate {
             disengage;
         }
         chosen: dict[str, any] = {};
-        for t in WORKFLOW_TEMPLATES {
+        for t in FLOW_LINE_TEMPLATES {
             if t["key"] == self.template_key {
                 chosen = t;
             }
@@ -265,7 +291,7 @@ walker ApplyTemplate {
             said = wording[i] if i < len(wording) else "";
             source +>:FlowsTo(label=said):+> target;
         }
-        # Remember which template this was. Scratch workflows never come
+        # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
         meta = get_meta(here);
         meta.template_key = self.template_key;
@@ -451,8 +477,8 @@ walker DeleteStep(find_step) {
 }
 
 
-walker DeleteWorkflow {
-    """Removes every step and transition so the workflow can be designed again.
+walker DeleteFlowLine {
+    """Removes every step and transition so the flow line can be designed again.
     Walks the caller's own root (no jid input, nothing to owned()-check).
     Tasks fall back to their status as after DeleteStep; name and roles stay;
     the template marker is cleared so a scratch redo does not report it."""

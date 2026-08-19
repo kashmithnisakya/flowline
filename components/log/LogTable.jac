@@ -3,7 +3,7 @@
 import from "@jac/runtime" { Link }
 import from ...models { LogEntry }
 import from ...constants { STATUS_KIND, KIND_COLORS }
-import from ..workflow.kinds { COUNT_TINT }
+import from ..flowlines.kinds { COUNT_TINT }
 import from ..ui.card { Card, CardContent }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }

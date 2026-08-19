@@ -46,7 +46,7 @@ def:pub MemberDialog(
         for t in allTags
         if t not in memberTags
     ];
-    # Held roles the workflow does not define (free-text from before a
+    # Held roles the flow line does not define (free-text from before a
     # template was applied). Shown as removable chips beside the options.
     extraRoles = [
         r
@@ -105,7 +105,7 @@ def:pub MemberDialog(
                                         key={"x-" + extra}
                                         variant="secondary"
                                         className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
-                                        title="Not one of this workflow's roles. Click to remove"
+                                        title="Not one of this flow line's roles. Click to remove"
                                         onClick={lambda { if onToggleRole {
                                             onToggleRole(extra);
                                         }}}

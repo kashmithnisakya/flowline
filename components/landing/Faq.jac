@@ -42,7 +42,7 @@ glob FAQS: list[QA] = [
          ),
          QA(
              q="Do we have to use the same columns as everyone else?",
-             a="No. You design the workflow: name the steps your team actually "
+             a="No. You design the flow line: name the steps your team actually "
              "uses and connect them however work moves, loops included. The "
              "board is those steps, so the two can never disagree. Start from "
              "a template if you would rather not draw one."

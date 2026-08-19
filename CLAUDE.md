@@ -63,20 +63,51 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   roadmap and vocabulary features were removed: deleting an archetype
   orphans whatever production still has.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
-  `tasks`, `log`, `workflow`) plus `util.jac` for server-only helpers.
+  `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
   Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+- **A per-task edge hop is a separate traversal; one traversal yielding many
+  edges is not.** `Task.to_view()` hops three times (assignees, project,
+  milestone), and at 2,000 tasks on the pinned runtime that measured ~113ms
+  PER ROW: a 500-row page took 56s. Walking IN from each Member and Project
+  once costs a handful of traversals no matter how long the page is, and the
+  same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
+  is that path and is what every list walker uses; `to_view()` is for a
+  single task. `walkers/insights.jac` does the same thing for the snapshot
+  (`_hydrate`). Never build a list by calling `to_view()` in a loop.
+- **List walkers page, and build their rows in a local.** A walker's public
+  `has` fields are serialised into the response beside `reports`, so an
+  accumulator field (`has results`) ships every row a second time; the
+  runtime already ships `walker.reports` a third. Rows go in a local and
+  are reported once. Anything that grows with history (`ListTasks`,
+  `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
+  `page_size` (1-based, clamped by `page_bounds` in `walkers/util.jac`) and
+  reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
+  `rows`, `has_more` and `total`. Filter and sort on node fields first, run
+  `to_view()` (three edge hops) for the page alone. Roster-sized lists
+  (members, projects, roles, repos, steps) stay whole. `ListTasks` has a
+  `scope`: `working` (open plus Done in the last `done_days`, what the board
+  renders, `older` counting what the cutoff left out), `older`, `done`,
+  `all`; `q` is a server-side title search ranked exact, prefix, contains.
+  The Overview adds up history through `TaskCounts` / `LogCounts` rather
+  than loading it. Every ordering ends in the jid, so a row cannot swap
+  pages between two requests (sorts are stable, so a `jid` pass first and
+  the real key second gives a deterministic tiebreak).
 - **`constants.jac`** — `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
-  `KIND_STATUS`, `STATUS_KIND` and `WORKFLOW_TEMPLATES` as `glob`s shared by
+  `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
 - **`main.jac`** — entry point. **A walker missing from its import list 404s**,
   and the entry module cannot use relative imports (`import from models {…}`,
   not `.models`); modules under `walkers/` likewise import bare.
 
-### The workflow drives the board
+### The flow line drives the board
 
-An org designs its own steps on `/workflow` (`WorkflowStep` nodes, `FlowsTo`
+An org designs its own steps on `/flowlines` (`WorkflowStep` nodes, `FlowsTo`
 edges, cycles allowed on purpose). **The board's columns ARE those steps**, in
-`sort_order`, so the two views cannot disagree.
+`sort_order`, so the two views cannot disagree. The feature was called
+"workflow" until Aug 2026; `WorkflowStep` / `WorkflowMeta` keep that name
+because renaming an archetype orphans persisted data, and `GetFlowLineMeta`
+reads the old default name `"Workflow"` as `"Flow line"` for the same reason.
+`/workflow` redirects to `/flowlines` for old links.
 
 Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 `blocked` / `done`) behind the user's chosen name. **Roughly thirty places key
@@ -86,9 +117,9 @@ the mapped legacy `status` via `KIND_STATUS`. Insights, GitHub sync, the
 assistant and the log therefore never learn what a step is — keep it that way
 rather than teaching them.
 
-Tasks with an empty `step_id` (written before workflows existed, or whose step
+Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
-of that kind; an org with no workflow at all falls back to `STATUSES`. Both
+of that kind; an org with no flow line at all falls back to `STATUSES`. Both
 fallbacks are load-bearing — do not assume a task has a step.
 
 ### Security model — the one thing not to regress
@@ -121,7 +152,7 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/workflow`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
@@ -129,7 +160,7 @@ File-based routing with route groups:
   collides with the root layout.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
-  components from `components/{workflow,board,log,roster,projects,auth,landing}/`.
+  components from `components/{flowlines,board,log,roster,projects,auth,landing}/`.
 - Form-heavy dialogs take a `dict` plus one `onField(key, value)` callback
   rather than a dozen props.
 - **`components/ui/`** is jac-shadcn — import only, never edit. When a
@@ -148,9 +179,9 @@ File-based routing with route groups:
   `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`, `KineticGrid`.
 - **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
   (opaque canvas fill) in `styles/global.css` for both palettes; the tables
-  in `components/workflow/kinds.jac` only name them (`bg-step-sky`). A new
+  in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
   colour key needs tokens in both palettes, and its key is what persists.
-- **The workflow page's step panel opens the board's dialog.** Clicking a step
+- **The flow line page's step panel opens the board's dialog.** Clicking a step
   in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
   and a row opens `components/board/TaskDialog` on the same form dict and the
   same `UpdateTask` / `DeleteTask` walkers the board drives it with.
@@ -205,6 +236,13 @@ File-based routing with route groups:
 - **A `has` list read after `await` is stale, and so is a `has` read inside a
   `setInterval` callback**: re-arm a `setTimeout` from an effect keyed on the
   value instead (see `HeroBoard`).
+- **On jac 0.34.x a pure module imported by both sides can compile to an
+  empty client file** (`"KIND_COLORS" is not exported by compiled/constants.js`).
+  Each page's pre-scan reloads `constants.jac` when a component in its
+  closure imports it, dropping the client stamps; only a page importing it
+  directly re-stamps. `pages/layout.jac` is scanned last and imports
+  `constants` for exactly that reason (`vocabPin`); before it existed the
+  build only survived because `workflow.jac` sorted after `log.jac`.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.
@@ -220,6 +258,27 @@ File-based routing with route groups:
   own open state during the same keydown that reaches a page-level listener, so
   the listener reads the flag as already closed and dismisses its own surface
   too. Ask the DOM instead (`[role=dialog][data-state=open]`).
+- **Nothing reachable from a `useEffect` body may `return None`.** React
+  skips a cleanup that is `undefined`, but `None` compiles to `null`, which
+  it happily calls: the page dies with "w is not a function" on the effect's
+  NEXT run, so it hides behind whatever condition takes the early exit and
+  `jac check` never sees it. Give an early exit a real no-op cleanup
+  (`timer: any = 0;` … `return lambda { if timer { window.clearTimeout(timer);
+  }};`). The trap is that this is not only about `return` written inside the
+  effect: a ONE-STATEMENT effect lambda compiles to an expression-bodied
+  arrow (`useLayoutEffect(lambda { fitZoom(); }, …)` emits `() => fitZoom()`),
+  which is transparent to its callee's return value. `fitZoom` is safe today
+  only because its own returns are bare; a `return None` added anywhere in a
+  function an effect calls turns into that effect's cleanup, with no `return`
+  visible at the effect at all.
+- **A `has` you just assigned is still the OLD value for the rest of that
+  handler.** Under the pinned 0.34.14 runtime `has fProject` compiles to
+  `const [fProject, setFProject] = useState(...)`, so `fProject = v;
+  refreshOlder();` sends the PREVIOUS filter — this is not only an
+  after-`await` problem. Pass the new value as an argument, or keep it on a
+  `Ref` (refs are live). Worth knowing: the 0.36.x dev build compiles `has`
+  to a live external-store cell instead, so the same code behaves
+  differently on the two binaries; write for the pinned one.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating; a `has` read after `await` is a stale
   render-time snapshot. That last one bites hardest when a handler appends to
@@ -233,7 +292,11 @@ File-based routing with route groups:
 accounts and asserts CRUD plus tenant isolation: cross-account reads return
 nothing, and foreign-jid `UpdateTask` / `MoveTask` / `DeleteTask` /
 `AssignToProject` / `UpdateLogEntry` / `SaveProject` / `ArchiveMember` are all
-no-ops. Re-run something equivalent after touching walkers or `owned()`.
+no-ops, and every list filter (`project_id`, `assignee_id`, `step_id`,
+`task_id`) yields nothing for a foreign id. Paging gates: pages partition
+the set with no repeats, `total` is stable across pages, a page past the end
+is empty, `page_size` clamps. Re-run something equivalent after touching
+walkers or `owned()`.
 
 **Browser QA** — use `agent-browser`, and note that **`agent-browser type` does
 not reliably trigger React onChange** (it sets the value in a way React's

@@ -1,4 +1,4 @@
-"""Canvas geometry shared by FlowCanvas and the workflow page impl, in ONE
+"""Canvas geometry shared by FlowCanvas and the flow line page impl, in ONE
 module so hit-testing and drawing cannot drift apart. Positions are free-form
 px, so an edge can travel any direction; control handles are axis-aligned along
 the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
@@ -44,7 +44,7 @@ def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
 def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
     # Content plus a margin to drag into, NOT padded to a minimum: CSS
     # min-width/height stretches the surface to the viewport, so a fitting
-    # workflow shows no scrollbars and scrolling starts only past the edge.
+    # flow line shows no scrollbars and scrolling starts only past the edge.
     # A blank canvas keeps a surface for the empty state the same way.
     w = 320.0;
     h = 240.0;

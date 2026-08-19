@@ -31,7 +31,12 @@ def:pub RepoPicker(
     onSearch: Callable[[], None],
     onProject: Callable[[str], None],
     onAttach: Callable[[str], None],
-    onOpenChange: Callable[[bool], None]
+    onOpenChange: Callable[[bool], None],
+    # GitHub hands installations their repos 100 at a time; past the first
+    # hundred the list ends in a row that asks for the next page.
+    hasMore: bool = False,
+    loadingMore: bool = False,
+    onMore: Callable[[], None] = None
 ) -> JsxElement {
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,6 +200,19 @@ def:pub RepoPicker(
                                         </Button>
                                     } }
                                 </div>
+                            }}
+                            {if hasMore or loadingMore {
+                                <button
+                                    key="more"
+                                    type="button"
+                                    disabled={loadingMore}
+                                    className="w-full rounded-lg border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+                                    onClick={lambda { if onMore { onMore(); }}}
+                                >
+                                    {"Loading…"
+                                        if loadingMore
+                                        else "More repositories from GitHub"}
+                                </button>
                             }}
                         </div>
                     } }

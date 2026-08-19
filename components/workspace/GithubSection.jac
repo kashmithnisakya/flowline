@@ -24,7 +24,7 @@ import from ...walkers.github {
     ImportIssues
 }
 import from ...components.ui.input { Input }
-import from ...walkers.workflow { GetWorkflow }
+import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListRepos, AddRepo }
 import from ...components.github.ConnectCard { ConnectCard }
@@ -103,6 +103,12 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         pickerQuery: str = "",
         pickerRows: list[GhRepoRow] = [],
         pickerLoading: bool = False,
+        pickerPage: int = 1,
+        # The query the loaded rows answer, live across awaits: a new search
+        # must win over a "more" page that started before it.
+        pickerRef: Ref[any] = Ref(),
+        pickerMore: bool = False,
+        pickerLoadingMore: bool = False,
         pickerProject: str = "none",
         attaching: str = "",
         issues: list[GhIssueRow] = [],
@@ -163,6 +169,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def disconnect -> None;
     async def openPicker -> None;
     async def searchRepos -> None;
+    async def moreRepos -> None;
     async def attachRepo(fullName: str) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
@@ -514,6 +521,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                 onProject={lambda (v: str) { pickerProject = v; }}
                 onAttach={attachRepo}
                 onOpenChange={lambda (o: bool) { pickerOpen = o; }}
+                hasMore={pickerMore}
+                loadingMore={pickerLoadingMore}
+                onMore={moreRepos}
             />
         </div>;
 }

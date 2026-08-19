@@ -252,9 +252,12 @@ walker DisconnectGithub {
 # ---------------------------------------------------------------- reads
 
 walker ListGithubRepos {
-    """The repos this installation was granted, filtered client-side by
-    `query`. `attached` marks the ones already tracked in the workspace."""
+    """One GitHub page (100) of the repos this installation was granted,
+    filtered by `query` after the fetch, so a page under a query can run
+    short. `attached` marks the ones already tracked in the workspace;
+    `has_more` says whether GitHub holds another page."""
     has query: str = "",
+        page: int = 1,
         reports: list[dict[str, any]] = [];
 
     can browse with Root entry {
@@ -264,8 +267,9 @@ walker ListGithubRepos {
             report not_connected();
             disengage;
         }
+        page = self.page if self.page > 0 else 1;
         result = gh_request(
-            token, "GET", "/installation/repositories", {"per_page": 100}
+            token, "GET", "/installation/repositories", {"per_page": 100, "page": page}
         );
         if not result["ok"] {
             mark_invalid(c, result);
@@ -274,11 +278,13 @@ walker ListGithubRepos {
         }
         data = result["data"];
         raw: list[any] = [];
+        total = 0;
         if isinstance(data, dict) {
             got = data.get("repositories") or [];
             if isinstance(got, list) {
                 raw = got;
             }
+            total = int(data.get("total_count") or 0);
         }
         known: list[str] = [];
         for r in [here-->[?:Repo]] {
@@ -307,7 +313,7 @@ walker ListGithubRepos {
             );
         }
         rows.sort(key=lambda (r: GhRepoRow) { r.full_name; });
-        report {"ok": True, "rows": rows};
+        report {"ok": True, "rows": rows, "page": page, "has_more": total > page * 100};
     }
 }
 
@@ -679,7 +685,7 @@ walker SearchRepoItems {
 walker ImportIssues {
     """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
     the identity. Closed issues land on the done step, the rest on the chosen
-    step; `step_id` wins over `status`, which only applies with no workflow."""
+    step; `step_id` wins over `status`, which only applies with no flow line."""
     has repo_id: str = "",
         numbers: list[int] = [],
         project_id: str = "",
@@ -711,7 +717,7 @@ walker ImportIssues {
             }
         }
         # Closed issues always land on the done step (first by sort order),
-        # or plain "Done" for an org that has no workflow yet.
+        # or plain "Done" for an org that has no flow line yet.
         done_step = "";
         done_sort = 0.0;
         for s in [here-->[?:WorkflowStep, kind=="done"]] {

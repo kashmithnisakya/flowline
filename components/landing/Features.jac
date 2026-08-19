@@ -12,11 +12,11 @@ obj Feature {
 glob FEATURES: list[Feature] = [
          Feature(
              n="01",
-             title="A workflow you design",
+             title="A flow line you design",
              body="Name the steps your team actually uses and connect them however "
              "work moves, loops included. The board is those steps, with "
              "drag-and-drop between them and filters by project and assignee.",
-             tag="Workflow"
+             tag="Flow line"
          ),
          Feature(
              n="02",

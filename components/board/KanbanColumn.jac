@@ -1,6 +1,6 @@
 """One board column: header with live count, drop target, card list, add row.
-Columns come from the org's workflow, so a column is addressed by an opaque
-key (step jid, or the legacy status when no workflow exists) with its own
+Columns come from the org's flow line, so a column is addressed by an opaque
+key (step jid, or the legacy status when no flow line exists) with its own
 label and colour. On md+ the lane is viewport-high (--lane-h, set by the
 board) and the card list scrolls inside it, so header and add row stay put.
 """
@@ -9,11 +9,11 @@ import from ...models { TaskView }
 import from ...constants { KIND_COLORS }
 import from .TaskCard { TaskCard }
 import from ..ui.badge { Badge }
-import from ..workflow.kinds { DOT_VAR, LANE_BAR, RING_TINT, COUNT_TINT, colorKey }
+import from ..flowlines.kinds { DOT_VAR, LANE_BAR, RING_TINT, COUNT_TINT, colorKey }
 
 
 # A legacy status column has no step colour of its own; it borrows the
-# kind's default so it reads the same as the workflow legend in both themes
+# kind's default so it reads the same as the flow line legend in both themes
 # (the old chart-4 fallback was grey in light and sky blue in dark).
 def kindDot(kind: str) -> str {
     return DOT_VAR[colorKey(KIND_COLORS[kind] if kind in KIND_COLORS else "slate")];
@@ -34,9 +34,16 @@ def:pub KanbanColumn(
     nextKey: str = "",
     nextLabel: str = "",
     doneKey: str = "",
+    # Older Done history for the Done lane: how many rows exist (-1 while
+    # unknown under a filter), whether they are shown, how many are in,
+    # whether the server holds more, and the two ways to ask for them.
     extraCount: int = 0,
     showingAll: bool = False,
     onToggleOlder: Callable[[], None] = None,
+    olderShown: int = 0,
+    moreOlder: bool = False,
+    loadingOlder: bool = False,
+    onMoreOlder: Callable[[], None] = None,
     # Opens the task dialog with this column preselected.
     onAddTask: Callable[[str], None] = None,
     # Overdue cards in this column, for the header signal.
@@ -157,14 +164,35 @@ def:pub KanbanColumn(
                         {"Nothing here yet" if onAddTask else "Drop a task here"}
                     </div>
                 }}
-                {if extraCount > 0 or showingAll {
+                {if showingAll and (moreOlder or loadingOlder) {
+                    <button
+                        key="more"
+                        type="button"
+                        disabled={loadingOlder}
+                        className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+                        onClick={lambda { if onMoreOlder { onMoreOlder(); }}}
+                    >
+                        {"Loading…"
+                            if loadingOlder
+                            else "Show more" + (
+                                " (" + str(olderShown) + " of " + str(extraCount) + ")"
+                                    if extraCount > 0
+                                    else ""
+                            )}
+                    </button>
+                }}
+                {if extraCount != 0 or showingAll {
                     <button
                         key="older"
                         type="button"
                         className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         onClick={lambda { if onToggleOlder { onToggleOlder(); }}}
                     >
-                        {("Show " + str(extraCount) + " completed earlier")
+                        {(
+                            ("Show " + str(extraCount) + " completed earlier")
+                                if extraCount > 0
+                                else "Show completed earlier"
+                        )
                             if not showingAll
                             else "Show recent only"}
                     </button>
