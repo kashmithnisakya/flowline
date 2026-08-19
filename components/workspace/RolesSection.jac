@@ -1,16 +1,10 @@
-"""Manage the org's roles and who holds them. Roles are Role nodes (seeded by
-the template, editable here): add creates, edit renames through every member
-and step owner, delete strips from everyone. Assignment goes through
-SetMemberRoles, which touches only the role list. Any number of roles per person."""
+"""Manage the org's roles: add creates, edit renames through every member and
+step owner, delete strips from everyone. Who holds a role is shown here but
+set on the People tab, so there is one place a person's roles are edited and
+this stays about the roles themselves."""
 
 import from ...models { MemberView, RoleView }
-import from ...walkers.roster {
-    ListMembers,
-    SetMemberRoles,
-    ListRoles,
-    SaveRole,
-    DeleteRole
-}
+import from ...walkers.roster { ListMembers, ListRoles, SaveRole, DeleteRole }
 import from ..flowlines.kinds { DOT_FILL, colorKey }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }
@@ -24,6 +18,7 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
     has members: list[MemberView] = [],
         roles: list[RoleView] = [],
         newRole: str = "",
+        newBlurb: str = "",
         # Name of the role whose card is in edit mode, with the drafts the
         # inputs bind to. Empty means nothing is being edited.
         editingRole: str = "",
@@ -39,7 +34,6 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
     }
 
     async def load -> None;
-    async def toggleRole(memberId: str, role: str) -> None;
     async def addRole -> None;
     def startEdit(name: str, blurb: str) -> None;
     async def saveEdit -> None;
@@ -68,6 +62,19 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                 cards.append({"name": held, "blurb": "", "color": "", "managed": ""});
             }
         }
+    }
+
+    # Who holds each card's role. Keyed by name for every card, so the JSX
+    # can look one up without guarding.
+    holdersOf: dict[str, list[str]] = {};
+    for card in cards {
+        held: list[str] = [];
+        for m in active {
+            if card["name"] in m.roles {
+                held.append(m.name);
+            }
+        }
+        holdersOf[card["name"]] = held;
     }
 
     unassigned = [
@@ -101,7 +108,7 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
             } else {
                 <div key="body" className="flex flex-col gap-4">
                     <p className="text-sm text-muted-foreground">
-                        Roles are shared by the whole workspace: flow line steps name their owner role, and a person can hold several. Click a name on a card to toggle it.
+                        Roles are shared by the whole workspace: flow line steps name their owner role, and a person can hold several. Who holds one is set on the People tab.
                     </p>
                     {if len(cards) == 0 {
                         <div
@@ -245,30 +252,23 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                         <div
                                             className="flex flex-wrap items-center gap-1.5"
                                         >
-                                            {for m in active {
-                                                <Badge
-                                                    key={m.id}
-                                                    variant={"default"
-                                                        if card["name"] in m.roles
-                                                        else "outline"}
-                                                    className={"cursor-pointer " + (
-                                                        ""
-                                                            if card["name"] in m.roles
-                                                            else "hover:bg-accent hover:text-accent-foreground"
-                                                    )}
-                                                    onClick={lambda { toggleRole(
-                                                        m.id, card["name"]
-                                                    ); }}
-                                                >
-                                                    {m.name}
+                                            {for who in holdersOf[card["name"]] {
+                                                <Badge key={who} variant="secondary">
+                                                    {who}
                                                 </Badge>
                                             }}
-                                            {if len(active) == 0 {
+                                            {if len(holdersOf[card["name"]]) == 0 {
                                                 <span
                                                     key="noone"
                                                     className="text-xs text-muted-foreground"
                                                 >
-                                                    No one on the roster yet. Add people on the People tab.
+                                                    {"No one holds this yet."}
+                                                    <a
+                                                        href="/workspace?tab=people"
+                                                        className="ml-1 underline-offset-2 hover:underline"
+                                                    >
+                                                        Assign on People
+                                                    </a>
                                                 </span>
                                             }}
                                         </div>
@@ -277,12 +277,22 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                             }}
                         </div>
                     } }
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Input
                             className="h-8 w-56"
                             placeholder="New role"
                             value={newRole}
                             onChange={lambda (e: ChangeEvent) { newRole = e.target.value; }}
+                            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
+                                e.preventDefault();
+                                addRole();
+                            }}}
+                        />
+                        <Input
+                            className="h-8 w-72 max-w-full"
+                            placeholder="What this role does (optional)"
+                            value={newBlurb}
+                            onChange={lambda (e: ChangeEvent) { newBlurb = e.target.value; }}
                             onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
                                 e.preventDefault();
                                 addRole();
