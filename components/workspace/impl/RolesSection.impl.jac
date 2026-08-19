@@ -12,65 +12,26 @@ impl RolesSection.load -> None {
     loading = False;
 }
 
-impl RolesSection.toggleRole(memberId: str, role: str) -> None {
-    if saving {
-        return;
-    }
-    current: list[str] = [];
-    for m in members {
-        if m.id == memberId {
-            current = m.roles;
-        }
-    }
-    updated: list[str] = [];
-    if role in current {
-        updated = [
-            r
-            for r in current
-            if r != role
-        ];
-    } else {
-        updated = current + [role];
-    }
-    saving = True;
-    try {
-        result = root spawn SetMemberRoles(member_id=memberId, roles=updated);
-        fresh = result.reports[0] if result.reports else None;
-        if fresh {
-            # Rebind rather than mutate: swap the reported view in so the
-            # chips flip without a full reload.
-            swapped: list[MemberView] = [];
-            for m in members {
-                if m.id == memberId {
-                    swapped.append(fresh);
-                } else {
-                    swapped.append(m);
-                }
-            }
-            members = swapped;
-            # The People tab and member dialog render roles too; let the
-            # host page refresh.
-            if onChanged {
-                onChanged();
-            }
-        }
-    } except Exception as e {
-        toast("Could not update roles");
-    }
-    saving = False;
-}
-
 impl RolesSection.addRole -> None {
+    # Both drafts read before the walker call: a `has` read after an await is
+    # a stale render-time snapshot.
     draft = newRole.strip();
+    said = newBlurb.strip();
     if not draft or saving {
         return;
     }
     saving = True;
     try {
         # SaveRole is get-or-create by name, so adding a duplicate is a
-        # harmless no-op rather than a second card.
-        root spawn SaveRole(name=draft);
+        # harmless no-op rather than a second card. touch_blurb only when
+        # something was typed, or re-adding a name would blank its wording.
+        if said {
+            root spawn SaveRole(name=draft, blurb=said, touch_blurb=True);
+        } else {
+            root spawn SaveRole(name=draft);
+        }
         newRole = "";
+        newBlurb = "";
         await load();
         if onChanged {
             onChanged();
