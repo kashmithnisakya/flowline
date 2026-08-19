@@ -10,14 +10,16 @@ import from models {
     Role,
     StepView,
     TaskView,
+    TaskPage,
     FlowsTo,
     ForProject,
+    hydrate_views,
     step_view,
     resolve,
     on_attached,
     owned
 }
-import from walkers.util { now_iso }
+import from walkers.util { now_iso, page_bounds }
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
@@ -122,27 +124,29 @@ walker RenameFlowLine {
 walker GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
-    the legacy status fallback) has one implementation for board and view."""
+    the legacy status fallback) has one implementation for board and view.
+    `with_counts=False` skips the walk over every task: the board counts the
+    rows it already holds, so its 60 s poll need not pay for it."""
     has project_id: str = "",
-        results: list[StepView] = [],
+        with_counts: bool = True,
         reports: list[list[StepView]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:WorkflowStep]];
-    }
-
-    can gather with WorkflowStep entry {
-        self.results.append(step_view(here));
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (s: StepView) { s.sort_order; });
+    can gather with Root entry {
+        views: list[StepView] = [];
+        for st in [here-->[?:WorkflowStep]] {
+            views.append(step_view(st));
+        }
+        views.sort(key=lambda (s: StepView) { s.sort_order; });
+        if not self.with_counts {
+            report views;
+            disengage;
+        }
         # Count into a plain map first, then stamp the views: mutating a
         # view through a dict lookup is more than the checker can follow.
         counts: dict[str, int] = {};
         known: list[str] = [];
         first_of_kind: dict[str, str] = {};
-        for v in self.results {
+        for v in views {
             counts[v.id] = 0;
             known.append(v.id);
             if v.kind not in first_of_kind {
@@ -161,26 +165,31 @@ walker GetFlowLine {
                 counts[landing] = int(counts[landing]) + 1;
             }
         }
-        for v in self.results {
+        for v in views {
             v.task_count = counts[v.id];
         }
-        report self.results;
+        report views;
     }
 }
 
 
 walker ListStepTasks {
-    """The work sitting on one step, for the panel the flow line view opens.
-    Placement reuses GetFlowLine's rule so list and count never disagree."""
+    """One page of the work sitting on one step, for the panel the flow line
+    view opens. Placement reuses GetFlowLine's rule so list and count never
+    disagree; the walk touches node fields only and `to_view()` runs for the
+    page. `total` is the whole step, so the header can keep counting."""
     has step_id: str = "",
         project_id: str = "",
-        results: list[TaskView] = [],
-        reports: list[list[TaskView]] = [];
+        page: int = 1,
+        page_size: int = 0,
+        reports: list[TaskPage] = [];
 
     can gather with Root entry {
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
+        empty = TaskPage(rows=[], page=p, page_size=size, has_more=False, total=0);
         target = resolve(self.step_id);
         if not isinstance(target, WorkflowStep) or not owned(here, target) {
-            report self.results;
+            report empty;
             disengage;
         }
         wanted = jid(target);
@@ -192,19 +201,30 @@ walker ListStepTasks {
                 first_of_kind[st.kind] = jid(st);
             }
         }
+        picked: list[Task] = [];
         for t in [here-->[?:Task]] {
+            if landing_step(t, known, first_of_kind) != wanted {
+                continue;
+            }
             if self.project_id {
                 owning = [t->:ForProject:->];
                 if not owning or jid(owning[0]) != self.project_id {
                     continue;
                 }
             }
-            if landing_step(t, known, first_of_kind) == wanted {
-                self.results.append(t.to_view());
-            }
+            picked.append(t);
         }
-        self.results.sort(key=lambda (t: TaskView) { t.sort_order; });
-        report self.results;
+        # jid first, then the real key: sorts are stable, so equal
+        # sort_orders keep one order across pages instead of swapping.
+        picked.sort(key=lambda (t: Task) { jid(t); });
+        picked.sort(key=lambda (t: Task) { t.sort_order; });
+        report TaskPage(
+            rows=hydrate_views(here, picked[start:end]),
+            page=p,
+            page_size=size,
+            has_more=len(picked) > end,
+            total=len(picked)
+        );
     }
 }
 

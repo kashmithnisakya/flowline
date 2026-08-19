@@ -65,6 +65,33 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
   Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+- **A per-task edge hop is a separate traversal; one traversal yielding many
+  edges is not.** `Task.to_view()` hops three times (assignees, project,
+  milestone), and at 2,000 tasks on the pinned runtime that measured ~113ms
+  PER ROW: a 500-row page took 56s. Walking IN from each Member and Project
+  once costs a handful of traversals no matter how long the page is, and the
+  same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
+  is that path and is what every list walker uses; `to_view()` is for a
+  single task. `walkers/insights.jac` does the same thing for the snapshot
+  (`_hydrate`). Never build a list by calling `to_view()` in a loop.
+- **List walkers page, and build their rows in a local.** A walker's public
+  `has` fields are serialised into the response beside `reports`, so an
+  accumulator field (`has results`) ships every row a second time; the
+  runtime already ships `walker.reports` a third. Rows go in a local and
+  are reported once. Anything that grows with history (`ListTasks`,
+  `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
+  `page_size` (1-based, clamped by `page_bounds` in `walkers/util.jac`) and
+  reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
+  `rows`, `has_more` and `total`. Filter and sort on node fields first, run
+  `to_view()` (three edge hops) for the page alone. Roster-sized lists
+  (members, projects, roles, repos, steps) stay whole. `ListTasks` has a
+  `scope`: `working` (open plus Done in the last `done_days`, what the board
+  renders, `older` counting what the cutoff left out), `older`, `done`,
+  `all`; `q` is a server-side title search ranked exact, prefix, contains.
+  The Overview adds up history through `TaskCounts` / `LogCounts` rather
+  than loading it. Every ordering ends in the jid, so a row cannot swap
+  pages between two requests (sorts are stable, so a `jid` pass first and
+  the real key second gives a deterministic tiebreak).
 - **`constants.jac`** — `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
   `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
@@ -231,6 +258,27 @@ File-based routing with route groups:
   own open state during the same keydown that reaches a page-level listener, so
   the listener reads the flag as already closed and dismisses its own surface
   too. Ask the DOM instead (`[role=dialog][data-state=open]`).
+- **Nothing reachable from a `useEffect` body may `return None`.** React
+  skips a cleanup that is `undefined`, but `None` compiles to `null`, which
+  it happily calls: the page dies with "w is not a function" on the effect's
+  NEXT run, so it hides behind whatever condition takes the early exit and
+  `jac check` never sees it. Give an early exit a real no-op cleanup
+  (`timer: any = 0;` … `return lambda { if timer { window.clearTimeout(timer);
+  }};`). The trap is that this is not only about `return` written inside the
+  effect: a ONE-STATEMENT effect lambda compiles to an expression-bodied
+  arrow (`useLayoutEffect(lambda { fitZoom(); }, …)` emits `() => fitZoom()`),
+  which is transparent to its callee's return value. `fitZoom` is safe today
+  only because its own returns are bare; a `return None` added anywhere in a
+  function an effect calls turns into that effect's cleanup, with no `return`
+  visible at the effect at all.
+- **A `has` you just assigned is still the OLD value for the rest of that
+  handler.** Under the pinned 0.34.14 runtime `has fProject` compiles to
+  `const [fProject, setFProject] = useState(...)`, so `fProject = v;
+  refreshOlder();` sends the PREVIOUS filter — this is not only an
+  after-`await` problem. Pass the new value as an argument, or keep it on a
+  `Ref` (refs are live). Worth knowing: the 0.36.x dev build compiles `has`
+  to a live external-store cell instead, so the same code behaves
+  differently on the two binaries; write for the pinned one.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating; a `has` read after `await` is a stale
   render-time snapshot. That last one bites hardest when a handler appends to
@@ -244,7 +292,11 @@ File-based routing with route groups:
 accounts and asserts CRUD plus tenant isolation: cross-account reads return
 nothing, and foreign-jid `UpdateTask` / `MoveTask` / `DeleteTask` /
 `AssignToProject` / `UpdateLogEntry` / `SaveProject` / `ArchiveMember` are all
-no-ops. Re-run something equivalent after touching walkers or `owned()`.
+no-ops, and every list filter (`project_id`, `assignee_id`, `step_id`,
+`task_id`) yields nothing for a foreign id. Paging gates: pages partition
+the set with no repeats, `total` is stable across pages, a page past the end
+is empty, `page_size` clamps. Re-run something equivalent after touching
+walkers or `owned()`.
 
 **Browser QA** — use `agent-browser`, and note that **`agent-browser type` does
 not reliably trigger React onChange** (it sets the value in a way React's

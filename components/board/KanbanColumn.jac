@@ -34,9 +34,16 @@ def:pub KanbanColumn(
     nextKey: str = "",
     nextLabel: str = "",
     doneKey: str = "",
+    # Older Done history for the Done lane: how many rows exist (-1 while
+    # unknown under a filter), whether they are shown, how many are in,
+    # whether the server holds more, and the two ways to ask for them.
     extraCount: int = 0,
     showingAll: bool = False,
     onToggleOlder: Callable[[], None] = None,
+    olderShown: int = 0,
+    moreOlder: bool = False,
+    loadingOlder: bool = False,
+    onMoreOlder: Callable[[], None] = None,
     # Opens the task dialog with this column preselected.
     onAddTask: Callable[[str], None] = None,
     # Overdue cards in this column, for the header signal.
@@ -157,14 +164,35 @@ def:pub KanbanColumn(
                         {"Nothing here yet" if onAddTask else "Drop a task here"}
                     </div>
                 }}
-                {if extraCount > 0 or showingAll {
+                {if showingAll and (moreOlder or loadingOlder) {
+                    <button
+                        key="more"
+                        type="button"
+                        disabled={loadingOlder}
+                        className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+                        onClick={lambda { if onMoreOlder { onMoreOlder(); }}}
+                    >
+                        {"Loading…"
+                            if loadingOlder
+                            else "Show more" + (
+                                " (" + str(olderShown) + " of " + str(extraCount) + ")"
+                                    if extraCount > 0
+                                    else ""
+                            )}
+                    </button>
+                }}
+                {if extraCount != 0 or showingAll {
                     <button
                         key="older"
                         type="button"
                         className="rounded-lg py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         onClick={lambda { if onToggleOlder { onToggleOlder(); }}}
                     >
-                        {("Show " + str(extraCount) + " completed earlier")
+                        {(
+                            ("Show " + str(extraCount) + " completed earlier")
+                                if extraCount > 0
+                                else "Show completed earlier"
+                        )
                             if not showingAll
                             else "Show recent only"}
                     </button>

@@ -1,13 +1,25 @@
-"""standup - Overview: org-wide summary, progress and activity metrics,
-aggregated client-side over the existing walkers. Charts are plain marks:
-Done (pine) and Active (ember) fills over a muted Backlog track, counts
-labelled so nothing is colour-alone."""
+"""standup - Overview: org-wide summary, progress and activity metrics.
+Every number here is counted server-side over the whole history (TaskCounts
+and LogCounts); the one list, needs-attention, is a page of eight from
+ListTasks(scope="attention") with the full count beside it. The page never
+loads the workspace to add it up. Charts are plain marks: Done (pine) and
+Active (ember) fills over a muted Backlog track, counts labelled so nothing
+is colour-alone."""
 
-import from ...models { Project, MemberView, TaskView, LogEntry, VocabTerm }
-import from ...walkers.tasks { ListTasks }
+import from ...models {
+    Project,
+    MemberView,
+    TaskView,
+    TaskTotals,
+    ProjectTally,
+    LogTotals,
+    MemberDays,
+    VocabTerm
+}
+import from ...walkers.tasks { ListTasks, TaskCounts }
 import from ...walkers.roster { ListMembers }
 import from ...walkers.projects { ListProjects }
-import from ...walkers.log { ListLogEntries }
+import from ...walkers.log { LogCounts }
 import from ...components.dashboard.StatTile { StatTile }
 import from ...components.ui.card {
     Card,
@@ -70,11 +82,6 @@ def fmtDay(iso: str) -> str {
 
 # An entry's member_name is every assignee, comma-joined, so a plain
 # equality misses shared tasks.
-def logged(e: LogEntry, name: str) -> bool {
-    return name in e.member_name.split(", ");
-}
-
-
 def pct(part: int, whole: int) -> str {
     if whole == 0 {
         return "0%";
@@ -91,12 +98,13 @@ def scaled(part: int, whole: int, cap: int) -> str {
 }
 
 def:pub OverviewPage -> JsxPage {
-    has tasks: list[TaskView] = [],
+    has attention: list[TaskView] = [],
+        attentionTotal: int = 0,
         members: list[MemberView] = [],
         projects: list[Project] = [],
-        entries: list[LogEntry] = [],
-        # The three weeks before this one, for deltas and sparklines.
-        pastEntries: list[LogEntry] = [],
+        # Every number on the page, counted over the whole history.
+        counts: TaskTotals = TaskTotals(),
+        logs: LogTotals = LogTotals(),
         loading: bool = True,
         failed: bool = False;
 
@@ -118,83 +126,44 @@ def:pub OverviewPage -> JsxPage {
         for p in projects
         if p.active
     ];
-    openTasks = [
-        t
-        for t in tasks
-        if t.status != "Done"
-    ];
-    doneWeek = [
-        t
-        for t in tasks
-        if t.status == "Done" and t.updated_at[:10] >= monday
-    ];
-    lastMonday = shiftDay(monday, -7);
-    doneLastWeek = [
-        t
-        for t in tasks
-        if t.status == "Done"
-        and t.updated_at[:10] >= lastMonday
-        and t.updated_at[:10] < monday
-    ];
-    entriesLastWeek = [
-        e
-        for e in pastEntries
-        if e.date >= lastMonday
-    ];
-    today = todayIso();
-    overdueTasks = [
-        t
-        for t in tasks
-        if dueTone(t.due_date, t.status, today) == "overdue"
-    ];
-    blockedTasks = [
-        t
-        for t in tasks
-        if t.status == "Blocked"
-    ];
-    # Weekly counts for the last four weeks, oldest first. A Done task only
-    # remembers its last update, the same approximation doneWeek makes.
-    doneSpark: list[int] = [];
-    entrySpark: list[int] = [];
-    for wi in range(4) {
-        wStart = shiftDay(monday, -7 * (3 - wi));
-        wEnd = shiftDay(wStart, 7);
-        doneSpark.append(
-            len(
-                [
-                    t
-                    for t in tasks
-                    if t.status == "Done"
-                    and t.updated_at[:10] >= wStart
-                    and t.updated_at[:10] < wEnd
-                ]
-            )
-        );
-        entrySpark.append(
-            len(
-                [
-                    e
-                    for e in (pastEntries + entries)
-                    if e.date >= wStart and e.date < wEnd
-                ]
-            )
-        );
+    # Weekly counts, oldest first, four weeks ending in this one. Guarded
+    # with len(): both lists are empty until the counts land.
+    doneSpark = counts.done_by_week if len(counts.done_by_week) == 4 else [0, 0, 0, 0];
+    entrySpark = logs.by_week if len(logs.by_week) == 4 else [0, 0, 0, 0];
+    doneWeekCount = doneSpark[3];
+    doneLastWeekCount = doneSpark[2];
+    entriesWeekCount = entrySpark[3];
+    entriesLastWeekCount = entrySpark[2];
+    dayCounts = logs.by_day if len(logs.by_day) == 7 else [0, 0, 0, 0, 0, 0, 0];
+    # Per project over the whole history (server), and over the working set
+    # for the two states that only open work can be in.
+    projTotal: dict[str, int] = {};
+    projDone: dict[str, int] = {};
+    for tally in counts.projects {
+        projTotal[tally.project_id] = tally.total;
+        projDone[tally.project_id] = tally.done;
     }
-    # Blocked first, then the most overdue; a task can be both.
-    attention = blockedTasks + [
-        t
-        for t in overdueTasks
-        if t.status != "Blocked"
-    ];
-    dayCounts = [
-        len(
-            [
-                e
-                for e in entries
-                if e.date == d
-            ]
-        ) for d in weekDays
-    ];
+    projBlocked: dict[str, int] = {};
+    projActive: dict[str, int] = {};
+    for tally in counts.projects {
+        projBlocked[tally.project_id] = tally.blocked;
+        projActive[tally.project_id] = tally.active;
+    }
+    # Per person, by member jid, over the whole history.
+    personOpen: dict[str, int] = {};
+    personDone: dict[str, int] = {};
+    for mt in counts.members {
+        personOpen[mt.member_id] = mt.open;
+        personDone[mt.member_id] = mt.done_in_week;
+    }
+    # Per person this week: a count per weekday and the total, by name.
+    personDays: dict[str, list[int]] = {};
+    personTotal: dict[str, int] = {};
+    for md in logs.members {
+        personDays[md.name] = md.by_day;
+        personTotal[md.name] = md.total;
+    }
+    today = todayIso();
     # NOTE: max(list) compiles to JS Math.max(array) which is NaN; loop instead.
     maxDay = 1;
     for c in dayCounts {
@@ -334,35 +303,35 @@ def:pub OverviewPage -> JsxPage {
                     <div
                         className="anim-fade-up anim-d1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
                     >
-                        <StatTile label="Open" value={str(len(openTasks))}/>
+                        <StatTile label="Open" value={str(counts.open)}/>
                         <StatTile
                             label="Done this week"
-                            value={str(len(doneWeek))}
+                            value={str(doneWeekCount)}
                             accent="text-success"
-                            delta={len(doneWeek) - len(doneLastWeek)}
+                            delta={doneWeekCount - doneLastWeekCount}
                             showDelta={True}
                             spark={doneSpark}
                         />
                         <StatTile
                             label="Overdue"
-                            value={str(len(overdueTasks))}
-                            accent={"text-destructive" if len(overdueTasks) > 0 else ""}
+                            value={str(counts.overdue)}
+                            accent={"text-destructive" if counts.overdue > 0 else ""}
                             hint={"all clear"
-                                if len(overdueTasks) == 0
+                                if counts.overdue == 0
                                 else "past due, still open"}
                         />
                         <StatTile
                             label="Blocked"
-                            value={str(len(blockedTasks))}
-                            accent={"text-destructive" if len(blockedTasks) > 0 else ""}
+                            value={str(counts.blocked)}
+                            accent={"text-destructive" if counts.blocked > 0 else ""}
                             hint={"all clear"
-                                if len(blockedTasks) == 0
+                                if counts.blocked == 0
                                 else "needs a decision"}
                         />
                         <StatTile
                             label="Log entries"
-                            value={str(len(entries))}
-                            delta={len(entries) - len(entriesLastWeek)}
+                            value={str(entriesWeekCount)}
+                            delta={entriesWeekCount - entriesLastWeekCount}
                             showDelta={True}
                             spark={entrySpark}
                         />
@@ -375,7 +344,7 @@ def:pub OverviewPage -> JsxPage {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-1">
-                            {for t in attention[:8] {
+                            {for t in attention {
                                 <Link
                                     key={t.id}
                                     to={"/board?task=" + t.id}
@@ -417,13 +386,13 @@ def:pub OverviewPage -> JsxPage {
                                     </span>
                                 </Link>
                             }}
-                            {if len(attention) > 8 {
+                            {if attentionTotal > len(attention) {
                                 <Link
                                     key="more"
                                     to="/board"
                                     className="block px-2 pt-2 text-xs font-medium text-primary hover:underline"
                                 >
-                                    {"+" + str(len(attention) - 8) + " more on the board"}
+                                    {"+" + str(attentionTotal - len(attention)) + " more on the board"}
                                 </Link>
                             }}
                             {if len(attention) == 0 {
@@ -549,49 +518,32 @@ def:pub OverviewPage -> JsxPage {
                                             >
                                                 <span>
                                                     {str(
-                                                        len(
-                                                            [
-                                                                t
-                                                                for t in tasks
-                                                                if t.project_id == jid(
-                                                                    p
-                                                                )
-                                                                and t.status == "Done"
-                                                            ]
+                                                        (
+                                                            projDone[jid(p)]
+                                                                if jid(p) in projDone
+                                                                else 0
                                                         )
                                                     )}/{str(
-                                                        len(
-                                                            [
-                                                                t
-                                                                for t in tasks
-                                                                if t.project_id == jid(
-                                                                    p
-                                                                )
-                                                            ]
+                                                        (
+                                                            projTotal[jid(p)]
+                                                                if jid(p) in projTotal
+                                                                else 0
                                                         )
                                                     )} done
                                                 </span>
-                                                {if len(
-                                                    [
-                                                        t
-                                                        for t in tasks
-                                                        if t.project_id == jid(p)
-                                                        and t.status == "Blocked"
-                                                    ]
+                                                {if (
+                                                    projBlocked[jid(p)]
+                                                        if jid(p) in projBlocked
+                                                        else 0
                                                 ) > 0 {
                                                     <Badge
                                                         key="blocked"
                                                         variant="destructive"
                                                     >
-                                                        {len(
-                                                            [
-                                                                t
-                                                                for t in tasks
-                                                                if t.project_id == jid(
-                                                                    p
-                                                                )
-                                                                and t.status == "Blocked"
-                                                            ]
+                                                        {(
+                                                            projBlocked[jid(p)]
+                                                                if jid(p) in projBlocked
+                                                                else 0
                                                         )} blocked
                                                     </Badge>
                                                 }}
@@ -601,74 +553,58 @@ def:pub OverviewPage -> JsxPage {
                                             className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted"
                                             title={p.name}
                                         >
-                                            {if len(
-                                                [
-                                                    t
-                                                    for t in tasks
-                                                    if t.project_id == jid(p)
-                                                    and t.status == "Done"
-                                                ]
+                                            {if (
+                                                projDone[jid(p)]
+                                                    if jid(p) in projDone
+                                                    else 0
                                             ) > 0 {
                                                 <div
                                                     key="done"
                                                     className="transition-[width] duration-500 ease-out"
                                                     style={{
                                                         "width": pct(
-                                                            len(
-                                                                [
-                                                                    t
-                                                                    for t in tasks
-                                                                    if t.project_id == jid(
+                                                            (
+                                                                projDone[jid(p)]
+                                                                    if jid(
                                                                         p
-                                                                    )
-                                                                    and t.status == "Done"
-                                                                ]
+                                                                    ) in projDone
+                                                                    else 0
                                                             ),
-                                                            len(
-                                                                [
-                                                                    t
-                                                                    for t in tasks
-                                                                    if t.project_id == jid(
+                                                            (
+                                                                projTotal[jid(p)]
+                                                                    if jid(
                                                                         p
-                                                                    )
-                                                                ]
+                                                                    ) in projTotal
+                                                                    else 0
                                                             )
                                                         ),
                                                         "background": "var(--success)"
                                                     }}
                                                 />
                                             }}
-                                            {if len(
-                                                [
-                                                    t
-                                                    for t in tasks
-                                                    if t.project_id == jid(p)
-                                                    and t.status in ACTIVE_STATUSES
-                                                ]
+                                            {if (
+                                                projActive[jid(p)]
+                                                    if jid(p) in projActive
+                                                    else 0
                                             ) > 0 {
                                                 <div
                                                     key="active"
                                                     className="transition-[width] duration-500 ease-out"
                                                     style={{
                                                         "width": pct(
-                                                            len(
-                                                                [
-                                                                    t
-                                                                    for t in tasks
-                                                                    if t.project_id == jid(
+                                                            (
+                                                                projActive[jid(p)]
+                                                                    if jid(
                                                                         p
-                                                                    )
-                                                                    and t.status in ACTIVE_STATUSES
-                                                                ]
+                                                                    ) in projActive
+                                                                    else 0
                                                             ),
-                                                            len(
-                                                                [
-                                                                    t
-                                                                    for t in tasks
-                                                                    if t.project_id == jid(
+                                                            (
+                                                                projTotal[jid(p)]
+                                                                    if jid(
                                                                         p
-                                                                    )
-                                                                ]
+                                                                    ) in projTotal
+                                                                    else 0
                                                             )
                                                         ),
                                                         "background": "var(--primary)"
@@ -754,21 +690,13 @@ def:pub OverviewPage -> JsxPage {
                                                 className="text-xs tabular-nums text-muted-foreground"
                                             >
                                                 {str(
-                                                    len(
-                                                        [
-                                                            t
-                                                            for t in openTasks
-                                                            if m.id in t.assignee_ids
-                                                        ]
-                                                    )
+                                                    personOpen[m.id]
+                                                        if m.id in personOpen
+                                                        else 0
                                                 )} open ·{" " + str(
-                                                    len(
-                                                        [
-                                                            t
-                                                            for t in doneWeek
-                                                            if m.id in t.assignee_ids
-                                                        ]
-                                                    )
+                                                    personDone[m.id]
+                                                        if m.id in personDone
+                                                        else 0
                                                 )} done this week
                                             </div>
                                         </div>
@@ -782,16 +710,13 @@ def:pub OverviewPage -> JsxPage {
                                             aria-label={m.name + ": logged on " + str(
                                                 len(
                                                     [
-                                                        d
-                                                        for d in weekDays
-                                                        if len(
-                                                            [
-                                                                e
-                                                                for e in entries
-                                                                if logged(e, m.name)
-                                                                and e.date == d
-                                                            ]
-                                                        ) > 0
+                                                        c
+                                                        for c in (
+                                                            personDays[m.name]
+                                                                if m.name in personDays
+                                                                else []
+                                                        )
+                                                        if c > 0
                                                     ]
                                                 )
                                             ) + " of 7 days"}
@@ -800,24 +725,18 @@ def:pub OverviewPage -> JsxPage {
                                                 <span
                                                     key={d}
                                                     title={DAY_LABELS[di] + ": " + str(
-                                                        len(
-                                                            [
-                                                                e
-                                                                for e in entries
-                                                                if logged(e, m.name)
-                                                                and e.date == d
-                                                            ]
+                                                        (
+                                                            personDays[m.name][di]
+                                                                if m.name in personDays
+                                                                else 0
                                                         )
                                                     ) + " entries"}
                                                     className={"h-3.5 w-3.5 rounded-[4px] " + (
                                                         "bg-primary"
-                                                            if len(
-                                                                [
-                                                                    e
-                                                                    for e in entries
-                                                                    if logged(e, m.name)
-                                                                    and e.date == d
-                                                                ]
+                                                            if (
+                                                                personDays[m.name][di]
+                                                                    if m.name in personDays
+                                                                    else 0
                                                             ) > 0
                                                             else "bg-muted"
                                                     ) + (
@@ -832,20 +751,16 @@ def:pub OverviewPage -> JsxPage {
                                             className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
                                         >
                                             {str(
-                                                len(
-                                                    [
-                                                        e
-                                                        for e in entries
-                                                        if logged(e, m.name)
-                                                    ]
+                                                (
+                                                    personTotal[m.name]
+                                                        if m.name in personTotal
+                                                        else 0
                                                 )
                                             )}{" entry"
-                                                if len(
-                                                    [
-                                                        e
-                                                        for e in entries
-                                                        if logged(e, m.name)
-                                                    ]
+                                                if (
+                                                    personTotal[m.name]
+                                                        if m.name in personTotal
+                                                        else 0
                                                 ) == 1
                                                 else " entries"}
                                         </span>

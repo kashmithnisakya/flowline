@@ -129,6 +129,16 @@ def:pub FlowLinePage -> JsxPage {
         peekId: str = "",
         peekTasks: list[TaskView] = [],
         peekLoading: bool = False,
+        # The panel pages: how many rows the step holds in all, whether the
+        # server has more, and the last page in.
+        peekTotal: int = 0,
+        peekMore: bool = False,
+        peekPage: int = 0,
+        peekLoadingMore: bool = False,
+        # Which step the panel is on, live: `peekId` read after an await is
+        # the value from the render that started the call, so it cannot tell
+        # whether the user has moved on.
+        peekRef: Ref[any] = Ref(),
         # A row in that panel opens the BOARD's task dialog, driven from
         # here: same form dict, same walkers, so the two never drift.
         taskOpen: bool = False,
@@ -208,6 +218,7 @@ def:pub FlowLinePage -> JsxPage {
     async def selectProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
     async def refreshPeek(stepId: str, pid: str) -> None;
+    async def morePeek -> None;
     def closePeek -> None;
     def openTask(tid: str) -> None;
     def setTaskField(key: str, value: str) -> None;
@@ -245,6 +256,7 @@ def:pub FlowLinePage -> JsxPage {
     def moveDrag(e: MouseEvent) -> None;
     async def endDrag(e: MouseEvent) -> None;
 
+    peekRef.current = peekId;
     stepsRef.current = steps;
     liveRef.current = live;
 
@@ -862,6 +874,10 @@ def:pub FlowLinePage -> JsxPage {
                                     step={peeked[0]}
                                     tasks={peekTasks}
                                     loading={peekLoading}
+                                    total={peekTotal}
+                                    hasMore={peekMore}
+                                    loadingMore={peekLoadingMore}
+                                    onMore={morePeek}
                                     scope={peekScope}
                                     onOpenTask={openTask}
                                     onClose={closePeek}

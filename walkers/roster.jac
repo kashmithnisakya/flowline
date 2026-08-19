@@ -24,20 +24,16 @@ import from models {
 # ------------------------------------------------------------------- roster
 
 walker ListMembers {
-    has results: list[MemberView] = [],
-        reports: list[list[MemberView]] = [];
+    has reports: list[list[MemberView]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:Member]];
-    }
-
-    can gather with Member entry {
-        self.results.append(member_view(here));
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (m: MemberView) { m.name; });
-        report self.results;
+    # Rows in a local, not a `has` field, or the response carries them twice.
+    can gather with Root entry {
+        rows: list[MemberView] = [];
+        for m in [here-->[?:Member]] {
+            rows.append(member_view(m));
+        }
+        rows.sort(key=lambda (m: MemberView) { m.name; });
+        report rows;
     }
 }
 
@@ -146,20 +142,15 @@ walker ArchiveMember {
 # [here-->] under the caller's root, so isolation needs no owned() checks.
 
 walker ListRoles {
-    has results: list[RoleView] = [],
-        reports: list[list[RoleView]] = [];
+    has reports: list[list[RoleView]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:Role]];
-    }
-
-    can gather with Role entry {
-        self.results.append(role_view(here));
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (r: RoleView) { r.sort_order; });
-        report self.results;
+    can gather with Root entry {
+        rows: list[RoleView] = [];
+        for r in [here-->[?:Role]] {
+            rows.append(role_view(r));
+        }
+        rows.sort(key=lambda (r: RoleView) { r.sort_order; });
+        report rows;
     }
 }
 
@@ -256,20 +247,15 @@ walker DeleteRole {
 }
 
 walker ListRepos {
-    has results: list[RepoView] = [],
-        reports: list[list[RepoView]] = [];
+    has reports: list[list[RepoView]] = [];
 
-    can start with Root entry {
-        visit [here-->[?:Repo]];
-    }
-
-    can gather with Repo entry {
-        self.results.append(repo_view(here));
-    }
-
-    can deliver with Root exit {
-        self.results.sort(key=lambda (r: RepoView) { r.full_name; });
-        report self.results;
+    can gather with Root entry {
+        rows: list[RepoView] = [];
+        for r in [here-->[?:Repo]] {
+            rows.append(repo_view(r));
+        }
+        rows.sort(key=lambda (r: RepoView) { r.full_name; });
+        report rows;
     }
 }
 

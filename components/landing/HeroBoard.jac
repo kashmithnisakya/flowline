@@ -83,13 +83,16 @@ def:pub HeroBoard -> JsxElement {
     # setInterval closure would be stuck on the first render's stage).
     useEffect(
         lambda {
-            if still {
-                return None;
+            # The early exit returns a no-op cleanup rather than None: React
+            # calls back anything that is not `undefined`, so returning null
+            # crashes the page on the next run of this effect.
+            timer: any = 0;
+            if not still {
+                timer = window.setTimeout(
+                    lambda { stage = (stage + 1) % STAGES; }, TICK_MS
+                );
             }
-            timer = window.setTimeout(
-                lambda { stage = (stage + 1) % STAGES; }, TICK_MS
-            );
-            return lambda { window.clearTimeout(timer); };
+            return lambda { if timer { window.clearTimeout(timer); }};
         },
         [stage, still]
     );

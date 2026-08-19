@@ -110,22 +110,14 @@ impl AssistantDock.applyProposal(index: int) -> None {
     busy = True;
     try {
         if p.kind == "move_task" {
-            found = root spawn ListTasks();
-            all = found.reports[0] if found.reports else [];
-            # The model returns a title, never a jid. Exact match first, then a
-            # containment pass, so "the onboarding flow" finds the real card.
-            taskId = "";
+            # The model returns a title, never a jid. The server ranks an
+            # exact title first, then a prefix, then a containment match, so
+            # the first row is the card "the onboarding flow" meant.
             wanted = p.title.lower().strip();
-            for t in all {
-                if not taskId and t.title.lower().strip() == wanted {
-                    taskId = t.id;
-                }
-            }
-            for t in all {
-                if not taskId and wanted and wanted in t.title.lower() {
-                    taskId = t.id;
-                }
-            }
+            found = root spawn ListTasks(scope="all", q=wanted, page_size=5);
+            page = found.reports[0] if found.reports else None;
+            hits = page.rows if page else [];
+            taskId = hits[0].id if len(hits) > 0 and wanted else "";
             if not taskId {
                 toast("No task called \"" + p.title + "\" on the board");
                 busy = False;

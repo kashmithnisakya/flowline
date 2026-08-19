@@ -2,31 +2,24 @@
 
 impl OverviewPage.loadAll -> None {
     monday = mondayOf(localIso(new(Date)));
-    sunday = shiftDay(monday, 6);
-    # Four weeks of log entries in one call: this week feeds the page, the
-    # three before it feed the deltas and sparklines.
-    since = shiftDay(monday, -21);
     loading = True;
     failed = False;
     try {
-        tResult = root spawn ListTasks();
+        # Numbers first: both counts walkers read node fields over the whole
+        # history, so the page is correct on a workspace of any size. The one
+        # list is a page of eight, with its own total beside it.
+        cResult = root spawn TaskCounts(monday=monday);
+        lResult = root spawn LogCounts(monday=monday);
+        aResult = root spawn ListTasks(scope="attention", page_size=8);
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
-        lResult = root spawn ListLogEntries(from_date=since, to_date=sunday);
-        tasks = tResult.reports[0] if tResult.reports else [];
+        counts = cResult.reports[0] if cResult.reports else TaskTotals();
+        logs = lResult.reports[0] if lResult.reports else LogTotals();
+        aPage = aResult.reports[0] if aResult.reports else None;
+        attention = aPage.rows if aPage else [];
+        attentionTotal = aPage.total if aPage else 0;
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
-        fetched = lResult.reports[0] if lResult.reports else [];
-        entries = [
-            e
-            for e in fetched
-            if e.date >= monday
-        ];
-        pastEntries = [
-            e
-            for e in fetched
-            if e.date < monday
-        ];
     } except Exception as e {
         # The page shows the failure panel itself; no toast on top of it.
         failed = True;

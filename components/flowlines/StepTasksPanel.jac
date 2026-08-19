@@ -22,12 +22,19 @@ def:pub StepTasksPanel(
     loading: bool,
     scope: str,
     className: str = "",
+    # The rows are one page of the step; `total` is the whole step, so the
+    # header keeps counting all of it while the list grows on demand.
+    total: int = 0,
+    hasMore: bool = False,
+    loadingMore: bool = False,
+    onMore: Callable[[], None] = None,
     onOpenTask: Callable[[str], None] = None,
     onClose: Callable[[], None] = None
 ) -> JsxElement {
     tone = colorKey(step.color);
     kindLabel = KIND_LABEL[step.kind] if step.kind in KIND_LABEL else step.kind;
-    noun = "task" if len(tasks) == 1 else "tasks";
+    count = total if total > len(tasks) else len(tasks);
+    noun = "task" if count == 1 else "tasks";
     today = todayIso();
 
     return
@@ -51,7 +58,7 @@ def:pub StepTasksPanel(
                     <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                         {"Loading…"
                             if loading
-                            else str(len(tasks)) + " " + noun + " " + scope}
+                            else str(count) + " " + noun + " " + scope}
                     </div>
                 </div>
                 <button
@@ -168,6 +175,21 @@ def:pub StepTasksPanel(
                                         </span>
                                     }}
                                 </span>
+                            </button>
+                        }}
+                        {if hasMore or loadingMore {
+                            <button
+                                key="more"
+                                type="button"
+                                disabled={loadingMore}
+                                className="rounded-lg border border-dashed py-2 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+                                onClick={lambda { if onMore { onMore(); }}}
+                            >
+                                {"Loading…"
+                                    if loadingMore
+                                    else "Show more (" + str(len(tasks)) + " of " + str(
+                                        count
+                                    ) + ")"}
                             </button>
                         }}
                     </div>

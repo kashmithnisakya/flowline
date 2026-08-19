@@ -110,6 +110,9 @@ node Task {
         pr_number: int = 0,
         pr_state: str = "";
 
+    # One task's view, hopping its own edges. Fine for a single task; for a
+    # list use hydrate_views, which gets the same links in a few traversals
+    # instead of three per row.
     def to_view -> TaskView {
         assignee_ids: list[str] = [];
         assignee_names: list[str] = [];
@@ -131,6 +134,26 @@ node Task {
             milestone_id = jid(stones[0]);
             milestone_name = stones[0].title;
         }
+        return self.view_with(
+            assignee_ids,
+            assignee_names,
+            project_id,
+            project_name,
+            milestone_id,
+            milestone_name
+        );
+    }
+
+    # The view given links the caller already has. The field list lives here
+    # once, so to_view and hydrate_views cannot drift apart.
+    def view_with(
+        assignee_ids: list[str],
+        assignee_names: list[str],
+        project_id: str,
+        project_name: str,
+        milestone_id: str,
+        milestone_name: str
+    ) -> TaskView {
         return TaskView(
             id=jid(self),
             title=self.title,
@@ -314,6 +337,71 @@ obj TaskView {
         pr_state: str = "";
 }
 
+# One page of tasks. `total` counts every row that matched the filters, not
+# just this page, so a caller can say "50 of 1,417" without a second call.
+obj TaskPage {
+    has rows: list[TaskView] = [],
+        page: int = 1,
+        page_size: int = 50,
+        has_more: bool = False,
+        total: int = 0,
+        # Working scope only: Done rows older than the cutoff, same filters.
+        older: int = 0;
+}
+
+obj LogPage {
+    has rows: list[LogEntry] = [],
+        page: int = 1,
+        page_size: int = 200,
+        has_more: bool = False,
+        total: int = 0;
+}
+
+# The Overview's numbers, computed where the tasks live so the page never
+# has to load the whole history to count it.
+obj ProjectTally {
+    has project_id: str,
+        total: int = 0,
+        done: int = 0,
+        blocked: int = 0,
+        active: int = 0;
+}
+
+obj MemberTally {
+    has member_id: str,
+        open: int = 0,
+        done_in_week: int = 0;
+}
+
+obj TaskTotals {
+    has open: int = 0,
+        overdue: int = 0,
+        blocked: int = 0,
+        # Done per week for the four weeks ending on the given Monday's week,
+        # oldest first. A Done task only remembers its last update.
+        done_by_week: list[int] = [],
+        projects: list[ProjectTally] = [],
+        members: list[MemberTally] = [],
+        # Every category in use, so a filter built from the working set
+        # alone does not lose the ones only old Done tasks carry.
+        categories: list[str] = [];
+}
+
+# One person's entries this week, by roster name (a log row's member_name is
+# every assignee comma-joined, split server-side): a count per weekday,
+# Monday first, and the week's total.
+obj MemberDays {
+    has name: str,
+        by_day: list[int] = [],
+        total: int = 0;
+}
+
+obj LogTotals {
+    has by_week: list[int] = [],
+        by_day: list[int] = [],
+        members: list[MemberDays] = [];
+}
+
 obj MemberView {
     has id: str,
         name: str,
@@ -423,6 +511,68 @@ def repo_view(r: Repo) -> RepoView {
         project_id=project_id,
         project_name=project_name
     );
+}
+
+
+# Views for a page of tasks, with the assignee and project links gathered by
+# walking IN from each Member and Project once. A per-task hop is a separate
+# traversal and they dominate everything at list sizes: 50 rows cost three
+# traversals each, while this costs one per member plus one per project no
+# matter how long the page is.
+def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
+    wanted: list[str] = [];
+    for t in rows {
+        wanted.append(jid(t));
+    }
+    ids: dict[str, list[str]] = {};
+    names: dict[str, list[str]] = {};
+    for m in [holder-->[?:Member]] {
+        who = jid(m);
+        for t in [m<-:AssignedTo:<-] {
+            key = jid(t);
+            if key not in ids {
+                ids[key] = [];
+                names[key] = [];
+            }
+            ids[key].append(who);
+            names[key].append(m.name);
+        }
+    }
+    proj_id: dict[str, str] = {};
+    proj_name: dict[str, str] = {};
+    for p in [holder-->[?:Project]] {
+        pid = jid(p);
+        for t in [p<-:ForProject:<-] {
+            key = jid(t);
+            proj_id[key] = pid;
+            proj_name[key] = p.name;
+        }
+    }
+    stone_id: dict[str, str] = {};
+    stone_name: dict[str, str] = {};
+    for ms in [holder-->[?:Milestone]] {
+        sid = jid(ms);
+        for t in [ms<-:InMilestone:<-] {
+            key = jid(t);
+            stone_id[key] = sid;
+            stone_name[key] = ms.title;
+        }
+    }
+    views: list[TaskView] = [];
+    for t in rows {
+        key = jid(t);
+        views.append(
+            t.view_with(
+                ids[key] if key in ids else [],
+                names[key] if key in names else [],
+                proj_id[key] if key in proj_id else "",
+                proj_name[key] if key in proj_name else "",
+                stone_id[key] if key in stone_id else "",
+                stone_name[key] if key in stone_name else ""
+            )
+        );
+    }
+    return views;
 }
 
 
