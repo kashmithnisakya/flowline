@@ -62,7 +62,6 @@ impl BoardPage.loadAll -> None {
         # count spares a walk over every task on each poll.
         sResult = root spawn GetFlowLine(with_counts=False);
         rResult = root spawn ListRepos();
-        roResult = root spawn ListRoles();
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
@@ -71,7 +70,6 @@ impl BoardPage.loadAll -> None {
             projects = fetchedProjects;
             steps = sResult.reports[0] if sResult.reports else [];
             repos = rResult.reports[0] if rResult.reports else [];
-            roleRows = roResult.reports[0] if roResult.reports else [];
             workingTruncated = truncated;
             cPayload = cResult.reports[0] if cResult.reports else None;
             if cPayload {

@@ -118,6 +118,16 @@ glob CARRY_LABEL: dict[str, str] = {"issue": "ISSUE", "pr": "PR"},
          "pr": "border-step-amber/50 bg-step-amber/10 text-step-amber-ink"
      };
 
+# An outlined pip in the step's colour, for the task dialog's flow strip.
+glob PIP_EDGE: dict[str, str] = {
+         "sky": "border-step-sky",
+         "indigo": "border-step-indigo",
+         "amber": "border-step-amber",
+         "rose": "border-step-rose",
+         "emerald": "border-step-emerald",
+         "slate": "border-step-slate"
+     };
+
 # Lane-view wire colour: a transition wears the colour of the step it leaves,
 # so the lane that owns a hand-off is readable without following the arrow.
 glob WIRE_TINT: dict[str, str] = {
