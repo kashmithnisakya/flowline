@@ -1,5 +1,5 @@
-"""Editor panel for the selected step. No save button: the name commits on
-blur/Enter, kind, colour and owner commit on pick (SaveStep's empty-means-keep
+"""Editor panel for the selected step. No save button: name and blurb commit
+on blur/Enter, kind, colour and owner on pick (SaveStep's empty-means-keep
 makes each a safe partial update). The owner is a dropdown over managed roles
 plus Anyone; a legacy free-text owner stays pickable until changed."""
 
@@ -158,6 +158,28 @@ def:pub StepInspector(
                             onNameCommit();
                         }}}
                     />
+                </div>
+                <div className="space-y-1.5">
+                    <div
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                        What happens here
+                    </div>
+                    <Input
+                        value={form["blurb"] or ""}
+                        placeholder="one line, in your words"
+                        onChange={lambda (e: any) { if onField {
+                            onField("blurb", e.target.value);
+                        }}}
+                        onBlur={lambda { if onNameCommit { onNameCommit(); }}}
+                        onKeyDown={lambda (e: any) { if e.key == "Enter"
+                        and onNameCommit {
+                            onNameCommit();
+                        }}}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                        Shown under the name on the card in the Lane view.
+                    </p>
                 </div>
                 <div className="space-y-1.5">
                     <div

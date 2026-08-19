@@ -388,7 +388,7 @@ impl FlowLinePage.addStep -> None {
     selectedId = "";
     selectedEdge = "";
     confirmDelete = False;
-    form = {"name": "", "kind": "active", "color": "indigo", "owner": ""};
+    form = {"name": "", "kind": "active", "color": "indigo", "owner": "", "blurb": ""};
 }
 
 impl FlowLinePage.commitName -> None {
@@ -419,6 +419,7 @@ impl FlowLinePage.commitName -> None {
                 kind=form["kind"] or "active",
                 color=form["color"] or "",
                 owner=form["owner"] or "",
+                blurb=form["blurb"] or "",
                 x=40.0,
                 y=ny
             );
@@ -431,7 +432,8 @@ impl FlowLinePage.commitName -> None {
                     "name": made.name,
                     "kind": made.kind,
                     "color": made.color,
-                    "owner": made.owner
+                    "owner": made.owner,
+                    "blurb": made.blurb
                 };
             }
         } except Exception as e {
@@ -452,14 +454,22 @@ impl FlowLinePage.commitName -> None {
         if s.id == selectedId
     ];
     owner = (form["owner"] or "").strip();
-    if current and current[0].name == name and current[0].owner == owner {
+    blurb = (form["blurb"] or "").strip();
+    if (
+        current
+        and current[0].name == name
+        and current[0].owner == owner
+        and current[0].blurb == blurb
+    ) {
         busyRef.current = False;
         return;
     }
     saving = True;
     try {
-        # SaveStep reads empty as "keep", so a lone space clears the owner.
-        root spawn SaveStep(step_id=selectedId, name=name, owner=owner or " ");
+        # SaveStep reads empty as "keep", so a lone space clears the field.
+        root spawn SaveStep(
+            step_id=selectedId, name=name, owner=owner or " ", blurb=blurb or " "
+        );
         await reload(projectId);
     } except Exception as e {
         toast("Failed to update the step");
@@ -580,25 +590,36 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
     }
 }
 
-impl FlowLinePage.selectEdge(key: str, said: str) -> None {
+impl FlowLinePage.selectEdge(key: str, said: str, carried: str) -> None {
     # Seeding the draft from the edge itself is what makes the editor an
     # edit rather than a retype, and it is why nothing has to clear the
     # draft when the selection moves.
     selectedEdge = key;
     edgeDraft = said;
+    edgeCarry = carried;
 }
 
-impl FlowLinePage.commitEdgeLabel(fromId: str, toId: str, said: str) -> None {
+impl FlowLinePage.commitEdgeLabel(
+    fromId: str, toId: str, said: str, carried: str
+) -> None {
     # An empty `said` is a clear, not a no-op, which is why this goes
-    # through LabelTransition rather than re-drawing the arrow.
+    # through LabelTransition rather than re-drawing the arrow. The tag
+    # rides along: the editor saves both fields at once.
     try {
-        result = root spawn LabelTransition(from_id=fromId, to_id=toId, label=said);
+        result = root spawn LabelTransition(
+            from_id=fromId, to_id=toId, label=said, carries=carried
+        );
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             edgeDraft = payload["label"];
+            edgeCarry = payload["carries"];
             selectedEdge = "";
             await reload(projectId);
-            toast("Label removed" if not payload["label"] else "Label saved");
+            toast(
+                "Label removed"
+                    if not payload["label"] and not payload["carries"]
+                    else "Label saved"
+            );
         } else {
             toast("Could not update that label");
         }
@@ -646,7 +667,8 @@ impl FlowLinePage.selectStep(stepId: str) -> None {
             "name": picked[0].name,
             "kind": picked[0].kind,
             "color": picked[0].color,
-            "owner": picked[0].owner
+            "owner": picked[0].owner,
+            "blurb": picked[0].blurb
         };
     }
 }
@@ -874,7 +896,8 @@ impl FlowLinePage.beginDrag(e: MouseEvent) -> None {
             "name": step.name,
             "kind": step.kind,
             "color": step.color,
-            "owner": step.owner
+            "owner": step.owner,
+            "blurb": step.blurb
         };
         return;
     }

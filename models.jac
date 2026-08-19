@@ -268,6 +268,9 @@ node WorkflowStep {
         color: str = "",
         # A ROLE, not a person: "domain expert", "model", "whoever raised it".
         owner: str = "",
+        # One line of what happens here, in the org's own words. Shown on the
+        # card in the Lane view, where it takes the kind row's place.
+        blurb: str = "",
         x: float = 0.0,
         y: float = 0.0,
         sort_order: float = 0.0,
@@ -302,8 +305,11 @@ edge LeadsTo: Milestone --> Milestone {}
 # A flow line transition. Cycles are ALLOWED by design (review looping back
 # to development is the point); only self-loops are refused, at link time.
 # `label` is what has to be true to cross; empty on older transitions.
+# `carries` is what moves across it, "issue" or "pr" (see CARRY_KINDS);
+# empty means untagged and is what every pre-existing transition reads as.
 edge FlowsTo: WorkflowStep --> WorkflowStep {
-    has label: str = "";
+    has label: str = "",
+        carries: str = "";
 }
 
 obj TaskView {
@@ -445,10 +451,12 @@ obj StepView {
         y: float,
         sort_order: float,
         owner: str = "",
+        blurb: str = "",
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids: same FlowsTo traversal builds both.
+        # Index-aligned with next_ids: one FlowsTo traversal builds all three.
         next_labels: list[str] = [],
+        next_carries: list[str] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0;
@@ -587,8 +595,10 @@ def step_view(s: WorkflowStep) -> StepView {
     }
     # `[edge ...]` is how an edge's own fields are read.
     next_labels: list[str] = [];
+    next_carries: list[str] = [];
     for e in [edge s->:FlowsTo:->] {
         next_labels.append(e.label);
+        next_carries.append(e.carries);
     }
     return StepView(
         id=jid(s),
@@ -596,12 +606,14 @@ def step_view(s: WorkflowStep) -> StepView {
         kind=s.kind,
         color=s.color,
         owner=s.owner,
+        blurb=s.blurb,
         x=s.x,
         y=s.y,
         sort_order=s.sort_order,
         prev_ids=prev_ids,
         next_ids=next_ids,
-        next_labels=next_labels
+        next_labels=next_labels,
+        next_carries=next_carries
     );
 }
 
