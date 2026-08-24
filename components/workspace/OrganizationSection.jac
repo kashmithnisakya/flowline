@@ -31,7 +31,7 @@ def:pub OrganizationSection -> JsxElement {
             <CardHeader>
                 <CardTitle>Organization</CardTitle>
                 <CardDescription>
-                    The only place these two are editable. The organization name heads every page in standup.
+                    The only place these two are editable. The organization name heads every page in Flowline.
                 </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">

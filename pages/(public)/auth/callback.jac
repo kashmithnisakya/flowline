@@ -72,14 +72,14 @@ def:pub SsoCallbackPage -> JsxPage {
                 >
                     <img
                         src="/static/brand/logo-full.svg"
-                        alt="standup"
+                        alt="flowline"
                         width={150}
                         height={40}
                         className="dark:hidden"
                     />
                     <img
                         src="/static/brand/logo-full-dark.svg"
-                        alt="standup"
+                        alt="flowline"
                         width={150}
                         height={40}
                         className="hidden dark:block"

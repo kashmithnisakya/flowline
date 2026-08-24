@@ -30,14 +30,14 @@ glob FAQS: list[QA] = [
          QA(
              q="Does it connect to GitHub?",
              a="Yes, read-mostly. Install the GitHub App on the repos you pick and "
-             "standup can list them, import issues as tasks, and show the state "
+             "Flowline can list them, import issues as tasks, and show the state "
              "of open pull requests. The only thing it ever writes to GitHub is "
              "an issue you explicitly create from a task."
          ),
          QA(
              q="Does it sync with GitHub in the background?",
              a="No. Syncing happens when you press Sync, and nothing runs on a "
-             "schedule. Standup also never moves a card for you: when an issue "
+             "schedule. Flowline also never moves a card for you: when an issue "
              "closes or a pull request merges, the card says so and you decide."
          ),
          QA(
@@ -49,7 +49,7 @@ glob FAQS: list[QA] = [
          ),
          QA(
              q="Is there a Slack or Teams app?",
-             a="No. standup is a web app today; there is no chat integration and no "
+             a="No. Flowline is a web app today; there is no chat integration and no "
              "mobile app."
          ),
          QA(

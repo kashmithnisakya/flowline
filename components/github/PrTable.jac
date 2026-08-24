@@ -1,6 +1,6 @@
 """One page of a repo's pull requests, read-only: a PR joins a task by its link
 or number on the task itself, this table only says which already have. Merged
-and draft are standup's reading of GitHub's flags (which report closed/open).
+and draft are Flowline's reading of GitHub's flags (which report closed/open).
 """
 
 glob PR_STATES: list[str] = ["open", "closed", "all"];

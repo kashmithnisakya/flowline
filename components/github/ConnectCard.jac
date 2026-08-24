@@ -43,7 +43,7 @@ def:pub ConnectCard(
                 </div>
                 <CardTitle className="font-display">Connect GitHub</CardTitle>
                 <CardDescription>
-                    Install the standup GitHub App and pick the repositories it may see.
+                    Install the Flowline GitHub App and pick the repositories it may see.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ def:pub ConnectCard(
                     </li>
                 </ul>
                 <p>
-                    You choose the repositories on GitHub's install screen. Standup reads only what you grant, nothing is polled in the background, and the one write is an issue somebody explicitly asks for.
+                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, nothing is polled in the background, and the one write is an issue somebody explicitly asks for.
                 </p>
                 {if len(missing) > 0 {
                     <p
