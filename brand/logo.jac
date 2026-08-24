@@ -82,9 +82,9 @@ def wordmark(width: int = 240, dark: bool = False) -> str {
         # move the wordmark's end away from the fixed-position trailing dot.
         f'\n    <text x="70" y="38" font-family="\'Bricolage Grotesque\','
         f"'Helvetica Neue',sans-serif\" font-size="
-        f'"30" font-weight="700" letter-spacing="-1.2" textLength="140" '
+        f'"30" font-weight="700" letter-spacing="-1.2" textLength="112" '
         f'lengthAdjust="spacingAndGlyphs" fill="{text_fill}">flowline</text>'
-        f'\n    <circle cx="221" cy="34" r="4" fill="{EMBER}"/>'
+        f'\n    <circle cx="193" cy="34" r="4" fill="{EMBER}"/>'
         f'\n</svg>\n'
     );
 }
