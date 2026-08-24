@@ -11,6 +11,7 @@ import from ...components.landing.Features { Features }
 import from ...components.landing.HowItWorks { HowItWorks }
 import from ...components.landing.CostMath { CostMath }
 import from ...components.landing.Faq { Faq }
+import from ...components.landing.ProofStrip { ProofStrip }
 import from ...components.landing.SiteFooter { SiteFooter }
 
 def:pub LandingPage -> JsxPage {
@@ -30,6 +31,7 @@ def:pub LandingPage -> JsxPage {
                 <HowItWorks/>
                 <CostMath/>
                 <Faq/>
+                <ProofStrip/>
             </main>
             <SiteFooter loggedIn={loggedIn}/>
         </div>;
