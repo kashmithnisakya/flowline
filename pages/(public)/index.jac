@@ -6,6 +6,7 @@ call to action pointing at their board.
 import from "@jac/runtime" { jacIsLoggedIn }
 import from ...components.landing.SiteNav { SiteNav }
 import from ...components.landing.Hero { Hero }
+import from ...components.landing.Tour { Tour }
 import from ...components.landing.Features { Features }
 import from ...components.landing.HowItWorks { HowItWorks }
 import from ...components.landing.Faq { Faq }
@@ -23,6 +24,7 @@ def:pub LandingPage -> JsxPage {
             <SiteNav loggedIn={loggedIn}/>
             <main>
                 <Hero loggedIn={loggedIn}/>
+                <Tour/>
                 <Features/>
                 <HowItWorks/>
                 <Faq/>
