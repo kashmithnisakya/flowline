@@ -1,4 +1,4 @@
-"""standup - Onboarding wizard: workspace name -> first project -> people ->
+"""flowline - Onboarding wizard: workspace name -> first project -> people ->
 flow line designer. Resumes where it stopped (no org name: step 1; no project:
 step 2), and the finish button saves any half-typed member. Keyed Cards remount
 per step for the entrance animation; `finishing` gives Finish its own spinner."""

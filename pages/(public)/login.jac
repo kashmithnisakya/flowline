@@ -1,4 +1,4 @@
-"""standup - Login / Signup, the public front door. Signup asks for credentials
+"""flowline - Login / Signup, the public front door. Signup asks for credentials
 only; naming the org and yourself belongs to the setup wizard. jacSignup does
 NOT create a session: signup, check success, then login. Brand panel beside a
 tabbed card with Google/GitHub SSO; no "Forgot?" link because there is no flow."""

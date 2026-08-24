@@ -1,4 +1,4 @@
-"""standup - Board page (/board): the org's flow line as a kanban. The columns
+"""flowline - Board page (/board): the org's flow line as a kanban. The columns
 ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""

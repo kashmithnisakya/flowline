@@ -1,4 +1,4 @@
-"""standup - root layout. App pages get the nav, an account menu (org name,
+"""flowline - root layout. App pages get the nav, an account menu (org name,
 settings, theme, log out) and the ⌘K palette; public pages render bare (the
 landing brings its own header). The header is sticky with a blur; below md
 the six links collapse into a dropdown menu.

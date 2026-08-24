@@ -1,5 +1,5 @@
 [project]
-name = "standup"
+name = "flowline"
 entry-point = "main.jac"
 kind = "web-app"
 jac-version = "==0.34.14"
@@ -88,10 +88,16 @@ client_secret = "${GITHUB_CLIENT_SECRET}"
 [scale.monitoring]
 enabled = true
 endpoint = "/metrics"
-namespace = "standup"
+namespace = "flowline"
 walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 
+[scale.kubernetes]
+# jac-scale derives the k8s app name from [project] name. Pin the old slug so
+# the deployed app, its Service, its secrets and its provisioned database keep
+# their names; renaming would deploy a fresh app with an empty database.
+app_name = "standup"
+
 [jacpack]
-name = 'standup'
-description = 'Jac IDE snapshot for standup'
+name = 'flowline'
+description = 'Jac IDE snapshot for flowline'

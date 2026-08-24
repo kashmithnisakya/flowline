@@ -1,4 +1,4 @@
-"""standup - retired route. Projects moved into the Workspace tab; kept as a
+"""flowline - retired route. Projects moved into the Workspace tab; kept as a
 redirect so bookmarks still land somewhere useful. Safe to delete a release on.
 """
 
