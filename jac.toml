@@ -55,13 +55,13 @@ plugins = ["tailwindcss()"]
 lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 [client.app_meta_data]
-title = "standup"
+title = "flowline"
 description = "A kanban board per project and a written daily log. Everything a standup does, none of the 9:45."
 theme_color = "#F6F2EB"
 icon = "/static/brand/favicon.svg"
 
 [byllm]
-system_prompt = "You are the assistant inside standup, a kanban and daily-log tool for small teams. Answer ONLY from the workspace snapshot you are given. Never invent tasks, people, projects or dates: if the snapshot does not contain the answer, say so plainly. Team members do not have accounts, so always write about them in the third person. Be terse and concrete."
+system_prompt = "You are the assistant inside Flowline, a kanban and daily-log tool for small teams. Answer ONLY from the workspace snapshot you are given. Never invent tasks, people, projects or dates: if the snapshot does not contain the answer, say so plainly. Team members do not have accounts, so always write about them in the third person. Be terse and concrete."
 
 [byllm.model]
 default_model = "${LLM_MODEL:-gpt-4o-mini}"

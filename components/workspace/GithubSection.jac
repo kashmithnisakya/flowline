@@ -287,7 +287,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         <span
                                             key="warn"
                                             aria-hidden={not confirmDisconnect}
-                                            title="Imported tasks and links stay. Standup just stops talking to GitHub."
+                                            title="Imported tasks and links stay. Flowline just stops talking to GitHub."
                                             className={"overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-all duration-300 ease-out " + (
                                                 "max-w-56 opacity-100"
                                                     if confirmDisconnect

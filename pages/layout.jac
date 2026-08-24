@@ -135,7 +135,7 @@ def:pub Shell -> JsxLayout {
                             <span
                                 className="font-display text-xl font-bold tracking-tight"
                             >
-                                standup
+                                flowline
                                 <span className="text-primary ml-0.5">.</span>
                             </span>
                         </Link>
@@ -234,7 +234,7 @@ def:pub Shell -> JsxLayout {
                                         aria-label="Account menu"
                                         className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card py-0.5 pr-2 pl-0.5 text-xs font-medium text-foreground transition-colors duration-200 hover:bg-accent"
                                     >
-                                        <Avatar name={orgName or "standup"} size="sm"/>
+                                        <Avatar name={orgName or "flowline"} size="sm"/>
                                         <span
                                             className="hidden max-w-40 truncate sm:inline"
                                         >

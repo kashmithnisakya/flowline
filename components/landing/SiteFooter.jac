@@ -52,7 +52,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                         height={20}
                     />
                     <span>
-                        standup
+                        flowline
                         <span className="text-primary ml-0.5">.</span>{" "}
                         · built with Jac · © 2026
                     </span>

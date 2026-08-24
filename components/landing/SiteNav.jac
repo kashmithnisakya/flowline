@@ -21,7 +21,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                         height={28}
                     />
                     <span className="font-display text-lg font-bold tracking-tight">
-                        standup
+                        flowline
                         <span className="text-primary ml-0.5">.</span>
                     </span>
                 </Link>
