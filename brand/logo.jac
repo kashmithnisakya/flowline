@@ -1,4 +1,4 @@
-"""standup brand mark, the single source of truth for the logo: a rising bar
+"""flowline brand mark, the single source of truth for the logo: a rising bar
 chart with an ember status dot. `jac run brand/logo.jac` regenerates every
 SVG and PNG/JPG variant into assets/brand/; commit the output.
 """
@@ -51,7 +51,7 @@ def mark(size: int = 64, tile: str = "", bar_fill: str = "", accent: str = "") -
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {TILE} {TILE}" '
         f'width="{size}" height="{size}" fill="none">'
-        f'\n    <title>standup</title>'
+        f'\n    <title>flowline</title>'
         f'\n    <rect x="0" y="0" width="{TILE}" height="{TILE}" '
         f'rx="{TILE_R}" fill="{tile_fill}"/>'
         f'{_bars(bars_fill, dot)}'
@@ -61,7 +61,7 @@ def mark(size: int = 64, tile: str = "", bar_fill: str = "", accent: str = "") -
 }
 
 
-# Full lockup: the mark plus the `standup` wordmark and trailing dot.
+# Full lockup: the mark plus the `flowline` wordmark and trailing dot.
 def wordmark(width: int = 240, dark: bool = False) -> str {
     tile_fill = PAPER if dark else INK;
     bars_fill = INK if dark else PAPER;
@@ -72,7 +72,7 @@ def wordmark(width: int = 240, dark: bool = False) -> str {
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" '
         f'width="{width}" height="{height}" fill="none">'
-        f'\n    <title>standup</title>'
+        f'\n    <title>flowline</title>'
         f'\n    <rect x="0" y="0" width="{TILE}" height="{TILE}" '
         f'rx="{TILE_R}" fill="{tile_fill}"/>'
         f'{_bars(bars_fill, EMBER)}'
@@ -83,7 +83,7 @@ def wordmark(width: int = 240, dark: bool = False) -> str {
         f'\n    <text x="70" y="38" font-family="\'Bricolage Grotesque\','
         f"'Helvetica Neue',sans-serif\" font-size="
         f'"30" font-weight="700" letter-spacing="-1.2" textLength="140" '
-        f'lengthAdjust="spacingAndGlyphs" fill="{text_fill}">standup</text>'
+        f'lengthAdjust="spacingAndGlyphs" fill="{text_fill}">flowline</text>'
         f'\n    <circle cx="221" cy="34" r="4" fill="{EMBER}"/>'
         f'\n</svg>\n'
     );
@@ -144,7 +144,7 @@ def _write_jpg(name: str, size: int) {
 
 with entry:__main__ {
     os.makedirs(OUT_DIR, exist_ok=True);
-    print("standup brand assets ->");
+    print("flowline brand assets ->");
     _write("logo-mark.svg", mark(size=64));
     _write("logo-mark-dark.svg", mark(size=64, tile=PAPER, bar_fill=INK, accent=EMBER));
     _write("logo-full.svg", wordmark(width=240));
