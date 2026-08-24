@@ -94,7 +94,7 @@ def _range(from_date: str, to_date: str) -> tuple {
 # (key, credits, network). Log the cause for the operator here; the client only
 # ever gets an empty report, so nothing about .env or billing reaches a browser.
 def _llm_failed(what: str, e: Exception) {
-    logging.getLogger("standup.assistant").error(
+    logging.getLogger("flowline.assistant").error(
         "assistant %s failed: %s: %s. Check OPENAI_API_KEY and LLM_MODEL in .env "
         "and the model account's credits, then restart the server.",
         what,

@@ -1,4 +1,4 @@
-"""standup - Entry Point. File-based routing: pages/ holds the routes. This
+"""flowline - Entry Point. File-based routing: pages/ holds the routes. This
 module registers every server endpoint (a walker missing from these imports
 404s) and renders the routed children.
 """

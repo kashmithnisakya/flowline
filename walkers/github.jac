@@ -863,9 +863,9 @@ walker CreateIssueFromTask(find_task) {
         }
         body = here.notes;
         if body {
-            body = body + "\n\n---\nTracked in standup.";
+            body = body + "\n\n---\nTracked in Flowline.";
         } else {
-            body = "Tracked in standup.";
+            body = "Tracked in Flowline.";
         }
         result = gh_request(
             token,

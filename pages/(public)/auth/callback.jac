@@ -1,4 +1,4 @@
-"""standup - SSO landing page. jac-scale's /sso/{platform}/callback finishes
+"""flowline - SSO landing page. jac-scale's /sso/{platform}/callback finishes
 the OAuth exchange and redirects here with ?token=<jwt> (or ?error=&message=);
 this page stores the token like a password login would and hands off.
 """
@@ -72,14 +72,14 @@ def:pub SsoCallbackPage -> JsxPage {
                 >
                     <img
                         src="/static/brand/logo-full.svg"
-                        alt="standup"
+                        alt="flowline"
                         width={150}
                         height={40}
                         className="dark:hidden"
                     />
                     <img
                         src="/static/brand/logo-full-dark.svg"
-                        alt="standup"
+                        alt="flowline"
                         width={150}
                         height={40}
                         className="hidden dark:block"

@@ -1,4 +1,4 @@
-"""standup - Settings page (/settings): appearance only. The theme is a
+"""flowline - Settings page (/settings): appearance only. The theme is a
 per-browser preference (localStorage), not an account field. The theme cards
 are mini app previews with deliberately hardcoded palette hexes: tokens would
 repaint every card to the current theme and make the choice unreadable."""

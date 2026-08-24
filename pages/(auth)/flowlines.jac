@@ -1,4 +1,4 @@
-"""standup - Flow line page (/flowlines): three faces of one graph, the template
+"""flowline - Flow line page (/flowlines): three faces of one graph, the template
 picker, the designer, and a read-only diagram (Flow or Lanes). One flow line per
 org, so no project selector. Validation is advisory and never blocks saving.
 The editor and the task panel dock BESIDE the canvas as flex siblings; keep

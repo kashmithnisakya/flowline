@@ -1,4 +1,4 @@
-"""standup - Daily Log page: one row per person per weekday. The PM logs on
+"""flowline - Daily Log page: one row per person per weekday. The PM logs on
 behalf of roster members (members have no accounts). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """

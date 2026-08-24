@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64" fill="none">
-    <title>standup</title>
+    <title>flowline</title>
     <rect x="0" y="0" width="56.0" height="56.0" rx="16.0" fill="#14120F"/>
     <rect x="12.0" y="34.0" width="7.0" height="12.0" rx="3.5" fill="#F6F2EB"/>
     <rect x="24.5" y="27.0" width="7.0" height="19.0" rx="3.5" fill="#F6F2EB"/>
     <rect x="37.0" y="20.0" width="7.0" height="26.0" rx="3.5" fill="#E8552F"/>
     <circle cx="40.5" cy="12" r="4.5" fill="#E8552F"/>
-    <text x="70" y="38" font-family="'Bricolage Grotesque','Helvetica Neue',sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" textLength="140" lengthAdjust="spacingAndGlyphs" fill="#14120F">standup</text>
-    <circle cx="221" cy="34" r="4" fill="#E8552F"/>
+    <text x="70" y="38" font-family="'Bricolage Grotesque','Helvetica Neue',sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" textLength="112" lengthAdjust="spacingAndGlyphs" fill="#14120F">flowline</text>
+    <circle cx="193" cy="34" r="4" fill="#E8552F"/>
 </svg>

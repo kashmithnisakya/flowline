@@ -24,7 +24,7 @@ glob DOT_HUES: list[str] = [
          "bg-chart-5"
      ];
 
-# "jaseci-labs/standup" -> "standup"
+# "kashmithnisakya/flowline" -> "flowline"
 def repoName(full_name: str) -> str {
     parts = full_name.split("/");
     return parts[-1] if parts else full_name;

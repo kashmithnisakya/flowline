@@ -1,4 +1,4 @@
-"""standup - Login / Signup, the public front door. Signup asks for credentials
+"""flowline - Login / Signup, the public front door. Signup asks for credentials
 only; naming the org and yourself belongs to the setup wizard. jacSignup does
 NOT create a session: signup, check success, then login. Brand panel beside a
 tabbed card with Google/GitHub SSO; no "Forgot?" link because there is no flow."""
@@ -69,14 +69,14 @@ def:pub LoginPage -> JsxPage {
                     <div className="mb-6 flex justify-center lg:hidden">
                         <img
                             src="/static/brand/logo-full.svg"
-                            alt="standup"
+                            alt="flowline"
                             width={132}
                             height={35}
                             className="dark:hidden"
                         />
                         <img
                             src="/static/brand/logo-full-dark.svg"
-                            alt="standup"
+                            alt="flowline"
                             width={132}
                             height={35}
                             className="hidden dark:block"
@@ -114,7 +114,9 @@ def:pub LoginPage -> JsxPage {
                         <h1
                             className="font-display text-3xl font-bold leading-none tracking-tight"
                         >
-                            {"Start your first standup." if signup else "Welcome back."}
+                            {"Start your first flow line."
+                                if signup
+                                else "Welcome back."}
                         </h1>
                         <p
                             className="mt-2 text-sm leading-relaxed text-muted-foreground"
@@ -284,7 +286,9 @@ def:pub LoginPage -> JsxPage {
                         </Button>
                     </form>
                     <p className="mt-5 text-center text-xs text-muted-foreground">
-                        {"Already have a workspace? " if signup else "New to standup? "}
+                        {"Already have a workspace? "
+                            if signup
+                            else "New to Flowline? "}
                         <button
                             type="button"
                             className="rounded-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

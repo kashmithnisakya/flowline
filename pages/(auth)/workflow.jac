@@ -1,4 +1,4 @@
-"""standup - /workflow redirect. The page moved to /flowlines when the feature
+"""flowline - /workflow redirect. The page moved to /flowlines when the feature
 was renamed; this keeps old links and bookmarks landing on the right tab.
 """
 

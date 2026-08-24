@@ -1,4 +1,4 @@
-"""standup - the public landing page at /. Sells the product rather than
+"""flowline - the public landing page at /. Sells the product rather than
 bouncing to login; a visitor with a session sees the same page with every
 call to action pointing at their board.
 """

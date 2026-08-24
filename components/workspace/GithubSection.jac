@@ -1,4 +1,4 @@
-"""standup - GitHub page (/github): the App installation and what it reads.
+"""flowline - GitHub page (/github): the App installation and what it reads.
 GitHub sends the install round trip back to this URL as query params, so the
 mount handler finishes it first and scrubs the params (the nonce is one-shot).
 """
@@ -287,7 +287,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         <span
                                             key="warn"
                                             aria-hidden={not confirmDisconnect}
-                                            title="Imported tasks and links stay. Standup just stops talking to GitHub."
+                                            title="Imported tasks and links stay. Flowline just stops talking to GitHub."
                                             className={"overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-all duration-300 ease-out " + (
                                                 "max-w-56 opacity-100"
                                                     if confirmDisconnect

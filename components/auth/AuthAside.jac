@@ -22,14 +22,14 @@ def:pub AuthAside -> JsxElement {
             ></div>
             <img
                 src="/static/brand/logo-full-dark.svg"
-                alt="standup"
+                alt="flowline"
                 width={168}
                 height={45}
                 className="relative dark:hidden"
             />
             <img
                 src="/static/brand/logo-full.svg"
-                alt="standup"
+                alt="flowline"
                 width={168}
                 height={45}
                 className="relative hidden dark:block"
