@@ -10,6 +10,10 @@ import from "react" { useEffect }
 # import constants directly or the client copy is emitted empty once a
 # component in a later page's closure imports it (see CLAUDE.md gotchas).
 import from ..constants { STATUSES }
+# kinds.jac and models.jac need the same pin: their exports drop the same way
+# (CARRY_LABEL / WIRE_TINT killed FlowCanvas, the tally objs killed _entry).
+import from ..components.flowlines.kinds { CARRY_LABEL, WIRE_TINT }
+import from ..models { LogTotals, MemberDays, ProjectTally, TaskTotals }
 import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
@@ -50,8 +54,11 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
 # and the palette button; the text row is pages only.
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
-        # Only referenced so the constants pin above counts as client code.
+        # Only referenced so the pins above count as client code. len() on a
+        # dict is broken client-side, so the kinds pin indexes instead.
         vocabPin: int = len(STATUSES),
+        kindsPin: str = CARRY_LABEL["issue"] + WIRE_TINT["sky"],
+        modelsPin: list[any] = [LogTotals, MemberDays, ProjectTally, TaskTotals],
         orgName: str = "",
         fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
