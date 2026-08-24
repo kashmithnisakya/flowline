@@ -71,7 +71,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                         FAQ
                     </a>
                     <a
-                        href="https://github.com/kashmithnisakya/standup"
+                        href="https://github.com/kashmithnisakya/flowline"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="transition-colors hover:text-foreground"
