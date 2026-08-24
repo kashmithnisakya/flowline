@@ -7,7 +7,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* standup brand, light — ink on warm paper with an ember accent.
+    /* flowline brand, light — ink on warm paper with an ember accent.
        Generated palette source of truth: brand/logo.jac.
        Dark mode deliberately switches families: pine ink + teal (below). */
     color-scheme: light;

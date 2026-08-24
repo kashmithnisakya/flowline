@@ -1,4 +1,4 @@
-"""standup - Projects page: create, rename, archive."""
+"""flowline - Projects page: create, rename, archive."""
 
 import from ...models { Project, RepoView }
 import from ...walkers.projects { ListProjects, SaveProject, ArchiveProject }

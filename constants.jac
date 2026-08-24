@@ -1,4 +1,4 @@
-"""standup - shared vocabulary lists."""
+"""flowline - shared vocabulary lists."""
 
 glob STATUSES: list[str] = [
          "Backlog",

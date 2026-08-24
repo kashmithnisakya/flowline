@@ -1,4 +1,4 @@
-"""standup - persisted graph model and shared helpers. EVERY node/edge/obj
+"""flowline - persisted graph model and shared helpers. EVERY node/edge/obj
 archetype lives HERE and must not move: archetype identity includes the module
 path, so relocating a declaration orphans persisted data.
 """

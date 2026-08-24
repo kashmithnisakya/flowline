@@ -1,4 +1,4 @@
-"""standup - Workspace (/workspace): everything you configure, in one place.
+"""flowline - Workspace (/workspace): everything you configure, in one place.
 Four tabs of settings CRUD (organization, projects, roles, people); GitHub
 lives at /github and old ?tab=github links redirect there. Each tab is a
 self-contained section, so the page stays a thin shell."""

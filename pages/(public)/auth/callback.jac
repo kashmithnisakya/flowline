@@ -1,4 +1,4 @@
-"""standup - SSO landing page. jac-scale's /sso/{platform}/callback finishes
+"""flowline - SSO landing page. jac-scale's /sso/{platform}/callback finishes
 the OAuth exchange and redirects here with ?token=<jwt> (or ?error=&message=);
 this page stores the token like a password login would and hands off.
 """

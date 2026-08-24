@@ -1,4 +1,4 @@
-"""standup - Overview: org-wide summary, progress and activity metrics.
+"""flowline - Overview: org-wide summary, progress and activity metrics.
 Every number here is counted server-side over the whole history (TaskCounts
 and LogCounts); the one list, needs-attention, is a page of eight from
 ListTasks(scope="attention") with the full count beside it. The page never

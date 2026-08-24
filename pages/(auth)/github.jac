@@ -1,4 +1,4 @@
-"""standup - GitHub (/github): read issues and pull requests, import work.
+"""flowline - GitHub (/github): read issues and pull requests, import work.
 Daily work, not configuration, so it has its own nav tab. The App's callback
 URL is <HOST>/github and GithubSection finishes an in-flight install on
 mount; old /workspace?tab=github links redirect here with their query intact."""

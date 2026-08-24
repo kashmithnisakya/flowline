@@ -1,4 +1,4 @@
-"""standup - GitHub page (/github): the App installation and what it reads.
+"""flowline - GitHub page (/github): the App installation and what it reads.
 GitHub sends the install round trip back to this URL as query params, so the
 mount handler finishes it first and scrubs the params (the nonce is one-shot).
 """

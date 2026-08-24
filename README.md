@@ -1,4 +1,4 @@
-# standup
+# flowline
 
 A board that follows the flow line your team actually uses, and a written daily
 log it fills in for you. For teams that hate status meetings.
