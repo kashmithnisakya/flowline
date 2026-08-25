@@ -3,6 +3,8 @@ behalf of roster members (members have no accounts). The week's entries are
 fetched once (Mon-Sun) and the day view filters locally.
 """
 
+import from "@jac/runtime" { useState }
+import from "react" { useEffect, useRef }
 import from ...models { LogEntry, MemberView }
 import from ...walkers.log { ListLogEntries, DeleteLogEntries }
 import from ...walkers.roster { ListMembers }
@@ -242,9 +244,11 @@ def:pub DailyLogPage -> JsxPage {
                     role="status"
                 >
                     <Spinner/>
-                    {"Loading the rest of the week (" + str(weekLoaded) + " of " + str(
-                        weekTotal
-                    ) + " entries)"}
+                    {"Loading the rest of the week ("
+                        + str(weekLoaded)
+                        + " of "
+                        + str(weekTotal)
+                        + " entries)"}
                 </div>
             }}
             {if not loading and not weekStreaming and weekLoaded < weekTotal {
@@ -253,7 +257,11 @@ def:pub DailyLogPage -> JsxPage {
                     className="flex items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs tabular-nums text-warning"
                     role="status"
                 >
-                    {"Showing " + str(weekLoaded) + " of " + str(weekTotal) + " entries for this week."}
+                    {"Showing "
+                        + str(weekLoaded)
+                        + " of "
+                        + str(weekTotal)
+                        + " entries for this week."}
                     <button
                         type="button"
                         className="font-medium underline-offset-2 hover:underline"

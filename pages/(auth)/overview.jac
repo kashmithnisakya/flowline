@@ -6,6 +6,8 @@ loads the workspace to add it up. Charts are plain marks: Done (pine) and
 Active (ember) fills over a muted Backlog track, counts labelled so nothing
 is colour-alone."""
 
+import from "@jac/runtime" { useState }
+import from "react" { useEffect }
 import from ...models {
     Project,
     MemberView,
@@ -202,11 +204,16 @@ def:pub OverviewPage -> JsxPage {
                     Where the work stands across projects and people.
                     {if not loading and not failed {
                         <span key="counts" className="text-muted-foreground/70">
-                            {" · " + str(len(activeMembers)) + (
-                                " person" if len(activeMembers) == 1 else " people"
-                            ) + " · " + str(len(activeProjects)) + (
-                                " project" if len(activeProjects) == 1 else " projects"
-                            )}
+                            {" · "
+                                + str(len(activeMembers))
+                                + (" person" if len(activeMembers) == 1 else " people")
+                                + " · "
+                                + str(len(activeProjects))
+                                + (
+                                    " project"
+                                        if len(activeProjects) == 1
+                                        else " projects"
+                                )}
                         </span>
                     }}
                 </p>
@@ -351,9 +358,8 @@ def:pub OverviewPage -> JsxPage {
                                     className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                                 >
                                     <span
-                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide " + (
-                                            "bg-destructive/10 text-destructive"
-                                        )}
+                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide "
+                                            + ("bg-destructive/10 text-destructive")}
                                     >
                                         {"Blocked"
                                             if t.status == "Blocked"
@@ -378,7 +384,7 @@ def:pub OverviewPage -> JsxPage {
                                             else ""}{(
                                             ("since " + prettyDay(t.updated_at[:10]))
                                                 if t.status == "Blocked"
-                                                and len(t.updated_at) >= 10
+                                                    and len(t.updated_at) >= 10
                                                 else dueLabel(
                                                     t.due_date, t.status, today
                                                 )
@@ -392,7 +398,9 @@ def:pub OverviewPage -> JsxPage {
                                     to="/board"
                                     className="block px-2 pt-2 text-xs font-medium text-primary hover:underline"
                                 >
-                                    {"+" + str(attentionTotal - len(attention)) + " more on the board"}
+                                    {"+"
+                                        + str(attentionTotal - len(attention))
+                                        + " more on the board"}
                                 </Link>
                             }}
                             {if len(attention) == 0 {
@@ -437,16 +445,18 @@ def:pub OverviewPage -> JsxPage {
                                         <div
                                             key={DAY_LABELS[i]}
                                             className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                                            title={DAY_LABELS[i] + ": " + str(
-                                                dayCounts[i]
-                                            ) + " entries"}
+                                            title={DAY_LABELS[i]
+                                                + ": "
+                                                + str(dayCounts[i])
+                                                + " entries"}
                                         >
                                             <span
-                                                className={"h-4 text-xs tabular-nums " + (
-                                                    "text-muted-foreground"
-                                                        if dayCounts[i] > 0
-                                                        else "text-muted-foreground/70 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                                                )}
+                                                className={"h-4 text-xs tabular-nums "
+                                                    + (
+                                                        "text-muted-foreground"
+                                                            if dayCounts[i] > 0
+                                                            else "text-muted-foreground/70 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                                                    )}
                                             >
                                                 {str(dayCounts[i])}
                                             </span>
@@ -535,7 +545,8 @@ def:pub OverviewPage -> JsxPage {
                                                     projBlocked[jid(p)]
                                                         if jid(p) in projBlocked
                                                         else 0
-                                                ) > 0 {
+                                                )
+                                                    > 0 {
                                                     <Badge
                                                         key="blocked"
                                                         variant="destructive"
@@ -557,7 +568,8 @@ def:pub OverviewPage -> JsxPage {
                                                 projDone[jid(p)]
                                                     if jid(p) in projDone
                                                     else 0
-                                            ) > 0 {
+                                            )
+                                                > 0 {
                                                 <div
                                                     key="done"
                                                     className="transition-[width] duration-500 ease-out"
@@ -565,16 +577,14 @@ def:pub OverviewPage -> JsxPage {
                                                         "width": pct(
                                                             (
                                                                 projDone[jid(p)]
-                                                                    if jid(
-                                                                        p
-                                                                    ) in projDone
+                                                                    if jid(p)
+                                                                        in projDone
                                                                     else 0
                                                             ),
                                                             (
                                                                 projTotal[jid(p)]
-                                                                    if jid(
-                                                                        p
-                                                                    ) in projTotal
+                                                                    if jid(p)
+                                                                        in projTotal
                                                                     else 0
                                                             )
                                                         ),
@@ -586,7 +596,8 @@ def:pub OverviewPage -> JsxPage {
                                                 projActive[jid(p)]
                                                     if jid(p) in projActive
                                                     else 0
-                                            ) > 0 {
+                                            )
+                                                > 0 {
                                                 <div
                                                     key="active"
                                                     className="transition-[width] duration-500 ease-out"
@@ -594,16 +605,14 @@ def:pub OverviewPage -> JsxPage {
                                                         "width": pct(
                                                             (
                                                                 projActive[jid(p)]
-                                                                    if jid(
-                                                                        p
-                                                                    ) in projActive
+                                                                    if jid(p)
+                                                                        in projActive
                                                                     else 0
                                                             ),
                                                             (
                                                                 projTotal[jid(p)]
-                                                                    if jid(
-                                                                        p
-                                                                    ) in projTotal
+                                                                    if jid(p)
+                                                                        in projTotal
                                                                     else 0
                                                             )
                                                         ),
@@ -693,11 +702,12 @@ def:pub OverviewPage -> JsxPage {
                                                     personOpen[m.id]
                                                         if m.id in personOpen
                                                         else 0
-                                                )} open ·{" " + str(
-                                                    personDone[m.id]
-                                                        if m.id in personDone
-                                                        else 0
-                                                )} done this week
+                                                )} open ·{" "
+                                                    + str(
+                                                        personDone[m.id]
+                                                            if m.id in personDone
+                                                            else 0
+                                                    )} done this week
                                             </div>
                                         </div>
                                     </div>
@@ -707,43 +717,57 @@ def:pub OverviewPage -> JsxPage {
                                         <span
                                             className="inline-grid grid-cols-7 gap-1"
                                             role="img"
-                                            aria-label={m.name + ": logged on " + str(
-                                                len(
-                                                    [
-                                                        c
-                                                        for c in (
-                                                            personDays[m.name]
-                                                                if m.name in personDays
-                                                                else []
-                                                        )
-                                                        if c > 0
-                                                    ]
+                                            aria-label={m.name
+                                                + ": logged on "
+                                                + str(
+                                                    len(
+                                                        [
+                                                            c
+                                                            for c in (
+                                                                personDays[m.name]
+                                                                    if m.name
+                                                                        in personDays
+                                                                    else []
+                                                            )
+                                                            if c > 0
+                                                        ]
+                                                    )
                                                 )
-                                            ) + " of 7 days"}
+                                                + " of 7 days"}
                                         >
                                             {for (di, d) in enumerate(weekDays) {
                                                 <span
                                                     key={d}
-                                                    title={DAY_LABELS[di] + ": " + str(
-                                                        (
-                                                            personDays[m.name][di]
-                                                                if m.name in personDays
-                                                                else 0
-                                                        )
-                                                    ) + " entries"}
-                                                    className={"h-3.5 w-3.5 rounded-[4px] " + (
-                                                        "bg-primary"
-                                                            if (
+                                                    title={DAY_LABELS[di]
+                                                        + ": "
+                                                        + str(
+                                                            (
                                                                 personDays[m.name][di]
-                                                                    if m.name in personDays
+                                                                    if m.name
+                                                                        in personDays
                                                                     else 0
-                                                            ) > 0
-                                                            else "bg-muted"
-                                                    ) + (
-                                                        " ring-1 ring-foreground/60 ring-offset-1 ring-offset-card"
-                                                            if d == today
-                                                            else ""
-                                                    )}
+                                                            )
+                                                        )
+                                                        + " entries"}
+                                                    className={"h-3.5 w-3.5 rounded-[4px] "
+                                                        + (
+                                                            "bg-primary"
+                                                                if (
+                                                                    personDays[m.name][
+                                                                        di
+                                                                    ]
+                                                                        if m.name
+                                                                            in personDays
+                                                                        else 0
+                                                                )
+                                                                    > 0
+                                                                else "bg-muted"
+                                                        )
+                                                        + (
+                                                            " ring-1 ring-foreground/60 ring-offset-1 ring-offset-card"
+                                                                if d == today
+                                                                else ""
+                                                        )}
                                                 />
                                             }}
                                         </span>
@@ -761,7 +785,8 @@ def:pub OverviewPage -> JsxPage {
                                                     personTotal[m.name]
                                                         if m.name in personTotal
                                                         else 0
-                                                ) == 1
+                                                )
+                                                    == 1
                                                 else " entries"}
                                         </span>
                                     </div>
