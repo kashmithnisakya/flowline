@@ -2,14 +2,16 @@
 
 impl WorkspacePage.loadAll -> None {
     try {
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
+        t = spaceRoot();
+        mResult = t spawn ListMembers();
+        pResult = t spawn ListProjects();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
         # The member dialog offers the org's managed roles as toggle
         # chips; an org with none (predates roles, or scratch and never
         # added any) falls back to the free-text input.
-        rResult = root spawn ListRoles();
+        t = spaceRoot();
+        rResult = t spawn ListRoles();
         roleRows = rResult.reports[0] if rResult.reports else [];
         opts: list[str] = [];
         for r in roleRows {
@@ -129,7 +131,8 @@ impl WorkspacePage.saveMember -> None {
         roles = roles + [draft];
     }
     try {
-        result = root spawn SaveMember(
+        t = spaceRoot();
+        result = t spawn SaveMember(
             member_id=editingId,
             name=name,
             roles=roles,
@@ -142,12 +145,14 @@ impl WorkspacePage.saveMember -> None {
             before = saved.project_ids;
             for pid in mProjects {
                 if pid not in before {
-                    root spawn AssignToProject(member_id=saved.id, project_id=pid);
+                    t = spaceRoot();
+                    t spawn AssignToProject(member_id=saved.id, project_id=pid);
                 }
             }
             for pid in before {
                 if pid not in mProjects {
-                    root spawn UnassignFromProject(member_id=saved.id, project_id=pid);
+                    t = spaceRoot();
+                    t spawn UnassignFromProject(member_id=saved.id, project_id=pid);
                 }
             }
         }
@@ -161,7 +166,8 @@ impl WorkspacePage.saveMember -> None {
 
 impl WorkspacePage.archiveMember(memberId: str) -> None {
     try {
-        root spawn ArchiveMember(member_id=memberId);
+        t = spaceRoot();
+        t spawn ArchiveMember(member_id=memberId);
         await loadAll();
     } except Exception as e {
         toast("Failed to archive member");
@@ -173,7 +179,8 @@ impl WorkspacePage.assignTo(memberId: str, projectId: str) -> None {
         return;
     }
     try {
-        root spawn AssignToProject(member_id=memberId, project_id=projectId);
+        t = spaceRoot();
+        t spawn AssignToProject(member_id=memberId, project_id=projectId);
         await loadAll();
     } except Exception as e {
         toast("Failed to assign");
@@ -193,7 +200,8 @@ impl WorkspacePage.unassignFrom(memberId: str, projectName: str) -> None {
         return;
     }
     try {
-        root spawn UnassignFromProject(member_id=memberId, project_id=target);
+        t = spaceRoot();
+        t spawn UnassignFromProject(member_id=memberId, project_id=target);
         await loadAll();
     } except Exception as e {
         toast("Failed to unassign");

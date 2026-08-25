@@ -6,9 +6,11 @@ notes out of JSX (a `#` there renders)."""
 
 import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
+import from ...lib.session { spaceRoot }
 import from ...walkers.projects { ListProjects, AssignToProject }
 import from ...walkers.tasks { UpdateTask, DeleteTask }
 import from ...walkers.roster { ListMembers, ListRoles }
+import from ...walkers.org { GetOrgContext }
 import from ...walkers.flowlines {
     GetFlowLine,
     ApplyTemplate,
@@ -85,7 +87,8 @@ glob BLANK_STEP: dict[str, str] = {
 
 
 def:pub FlowLinePage -> JsxPage {
-    has steps: list[StepView] = [],
+    has myLevel: str = "",  # My standing on this board; editing the flow line is manager+.
+        steps: list[StepView] = [],
         projects: list[Project] = [],
         # The org's roles and roster, for the who-does-what strip the
         # viewer shows under the kind legend and the Lane view's labels.
@@ -814,15 +817,17 @@ def:pub FlowLinePage -> JsxPage {
                                 }}
                             </SelectContent>
                         </Select>
-                        <Button
-                            key="edit"
-                            onClick={lambda {
-                                switchView("flow");
-                                editing = True;
-                            }}
-                        >
-                            Edit flow line
-                        </Button>
+                        {if myLevel not in ["editor", "viewer"] {
+                            <Button
+                                key="edit"
+                                onClick={lambda {
+                                    switchView("flow");
+                                    editing = True;
+                                }}
+                            >
+                                Edit flow line
+                            </Button>
+                        }}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                         {for k in STEP_KINDS {
@@ -860,12 +865,15 @@ def:pub FlowLinePage -> JsxPage {
                                     </span>
                                 </span>
                             }}
-                            <a
-                                href="/workspace?tab=roles"
-                                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                            >
-                                Manage roles
-                            </a>
+                            {if myLevel not in ["editor", "viewer"] {
+                                <a
+                                    key="manage-roles"
+                                    href="/workspace?tab=roles"
+                                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                                >
+                                    Manage roles
+                                </a>
+                            }}
                         </div>
                     }}
                     <div className="flex flex-col gap-3 sm:flex-row">
@@ -947,6 +955,7 @@ def:pub FlowLinePage -> JsxPage {
             </Dialog>
             <TaskDialog
                 open={taskOpen}
+                readOnly={myLevel == "viewer"}
                 editing={True}
                 form={taskForm}
                 projects={activeProjects}

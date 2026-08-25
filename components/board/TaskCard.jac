@@ -72,7 +72,9 @@ def:pub TaskCard(
     nextKey: str = "",
     nextLabel: str = "",
     doneKey: str = "",
-    onMarkDone: Callable[[str], None] = None
+    onMarkDone: Callable[[str], None] = None,
+    # False for viewers: the card stays readable but stops being movable.
+    canEdit: bool = True
 ) -> JsxElement {
     # While the native drag ghost travels, the source card dims so the board
     # shows where the card came from.
@@ -81,6 +83,9 @@ def:pub TaskCard(
     # The column does not forward a mark-done callback yet, so fall back to
     # the arrow path. Both land in the page's moveTo, undo toast included.
     def markDone(taskId: str) {
+        if not canEdit {
+            return;
+        }
         if onMarkDone {
             onMarkDone(taskId);
         } elif doneKey {
@@ -97,7 +102,7 @@ def:pub TaskCard(
 
     return
         <Card
-            draggable={True}
+            draggable={canEdit}
             onDragStart={lambda (e: DragEvent) {
                 dt = e.dataTransfer;
                 if dt {
@@ -200,64 +205,67 @@ def:pub TaskCard(
                 {if task.gh_issue_number > 0 or task.pr_state {
                     <GitHubChip key="github" task={task} onMarkDone={markDone}/>
                 }}
-                <div
-                    className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card/95 pointer-fine:p-0.5 pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:backdrop-blur-sm"
-                >
-                    <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
-                        disabled={not prevKey}
-                        title={"Move to " + prevLabel if prevKey else ""}
-                        aria-label={"Move to " + prevLabel
-                            if prevKey
-                            else "No earlier step"}
-                        onClick={lambda (e: MouseEvent) {
-                            e.stopPropagation();
-                            onArrowMove(task, prevKey);
-                        }}
+                {if canEdit {
+                    <div
+                        key="actions"
+                        className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card/95 pointer-fine:p-0.5 pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:backdrop-blur-sm"
                     >
-                        <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
+                            disabled={not prevKey}
+                            title={"Move to " + prevLabel if prevKey else ""}
+                            aria-label={"Move to " + prevLabel
+                                if prevKey
+                                else "No earlier step"}
+                            onClick={lambda (e: MouseEvent) {
+                                e.stopPropagation();
+                                onArrowMove(task, prevKey);
+                            }}
                         >
-                            <path d="m15 18-6-6 6-6"/>
-                        </svg>
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
-                        disabled={not nextKey}
-                        title={"Move to " + nextLabel if nextKey else ""}
-                        aria-label={"Move to " + nextLabel
-                            if nextKey
-                            else "No later step"}
-                        onClick={lambda (e: MouseEvent) {
-                            e.stopPropagation();
-                            onArrowMove(task, nextKey);
-                        }}
-                    >
-                        <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                            <svg
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="m15 18-6-6 6-6"/>
+                            </svg>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
+                            disabled={not nextKey}
+                            title={"Move to " + nextLabel if nextKey else ""}
+                            aria-label={"Move to " + nextLabel
+                                if nextKey
+                                else "No later step"}
+                            onClick={lambda (e: MouseEvent) {
+                                e.stopPropagation();
+                                onArrowMove(task, nextKey);
+                            }}
                         >
-                            <path d="m9 18 6-6-6-6"/>
-                        </svg>
-                    </Button>
-                </div>
+                            <svg
+                                width={14}
+                                height={14}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="m9 18 6-6-6-6"/>
+                            </svg>
+                        </Button>
+                    </div>
+                }}
             </CardContent>
         </Card>;
 }

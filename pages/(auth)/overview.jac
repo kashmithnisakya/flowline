@@ -37,6 +37,7 @@ import from "@jac/runtime" { Link }
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.Avatar { Avatar, AvatarStack }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
+import from ...lib.session { spaceRoot }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],

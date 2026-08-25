@@ -3,6 +3,7 @@ root layout with its own state and walker calls. A turn is a plain dict with a
 `role` and a `kind` (text / error / note / proposal, proposals also carry
 `state`): typing it as an obj would create a models <-> walkers import cycle."""
 
+import from ...lib.session { spaceRoot }
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
 import from ...walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 import from ...walkers.tasks { ListTasks, CreateTask, MoveTask }

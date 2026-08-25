@@ -2,8 +2,9 @@
 
 impl ProjectsSection.loadProjects -> None {
     try {
-        result = root spawn ListProjects();
-        rResult = root spawn ListRepos();
+        t = spaceRoot();
+        result = t spawn ListProjects();
+        rResult = t spawn ListRepos();
         projects = result.reports[0] if result.reports else [];
         repos = rResult.reports[0] if rResult.reports else [];
     } except Exception as e {
@@ -34,14 +35,16 @@ impl ProjectsSection.saveProject -> None {
     }
     saving = True;
     try {
-        result = root spawn SaveProject(
+        t = spaceRoot();
+        result = t spawn SaveProject(
             project_id=editingId, name=fName.strip(), description=fDescription
         );
         saved = result.reports[0] if result.reports else None;
         draft = normalizeRepoInput(fRepoDraft);
         if saved and fRepoDraft.strip() {
             if draft {
-                root spawn AddRepo(full_name=draft, project_id=jid(saved));
+                t = spaceRoot();
+                t spawn AddRepo(full_name=draft, project_id=jid(saved));
             } else {
                 toast("Saved, but the repo link did not look like a GitHub repo.");
             }
@@ -57,7 +60,8 @@ impl ProjectsSection.saveProject -> None {
 
 impl ProjectsSection.archiveProject(projectId: str) -> None {
     try {
-        root spawn ArchiveProject(project_id=projectId);
+        t = spaceRoot();
+        t spawn ArchiveProject(project_id=projectId);
         await loadProjects();
     } except Exception as e {
         toast("Failed to archive project");
@@ -67,7 +71,8 @@ impl ProjectsSection.archiveProject(projectId: str) -> None {
 
 impl ProjectsSection.removeRepo(repoId: str) -> None {
     try {
-        root spawn RemoveRepo(repo_id=repoId);
+        t = spaceRoot();
+        t spawn RemoveRepo(repo_id=repoId);
         await loadProjects();
     } except Exception as e {
         toast("Failed to remove repo");

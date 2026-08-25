@@ -2,9 +2,11 @@
 
 impl RolesSection.load -> None {
     try {
-        rResult = root spawn ListRoles();
+        t = spaceRoot();
+        rResult = t spawn ListRoles();
         roles = rResult.reports[0] if rResult.reports else [];
-        mResult = root spawn ListMembers();
+        t = spaceRoot();
+        mResult = t spawn ListMembers();
         members = mResult.reports[0] if mResult.reports else [];
     } except Exception as e {
         toast("Could not load roles");
@@ -26,9 +28,11 @@ impl RolesSection.addRole -> None {
         # harmless no-op rather than a second card. touch_blurb only when
         # something was typed, or re-adding a name would blank its wording.
         if said {
-            root spawn SaveRole(name=draft, blurb=said, touch_blurb=True);
+            t = spaceRoot();
+            t spawn SaveRole(name=draft, blurb=said, touch_blurb=True);
         } else {
-            root spawn SaveRole(name=draft);
+            t = spaceRoot();
+            t spawn SaveRole(name=draft);
         }
         newRole = "";
         newBlurb = "";
@@ -60,7 +64,8 @@ impl RolesSection.saveEdit -> None {
     }
     saving = True;
     try {
-        result = root spawn SaveRole(
+        t = spaceRoot();
+        result = t spawn SaveRole(
             name=was, new_name=wanted, blurb=said, touch_blurb=True
         );
         resp = result.reports[0] if result.reports else None;
@@ -85,7 +90,8 @@ impl RolesSection.deleteRole(name: str) -> None {
     }
     saving = True;
     try {
-        root spawn DeleteRole(name=name);
+        t = spaceRoot();
+        t spawn DeleteRole(name=name);
         confirmDelete = "";
         await load();
         if onChanged {

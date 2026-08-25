@@ -27,6 +27,7 @@ import from ...components.ui.input { Input }
 import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.roster { ListRepos, AddRepo }
+import from ...lib.session { spaceRoot }
 import from ...components.github.ConnectCard { ConnectCard }
 import from ...components.github.ReconnectBanner { ReconnectBanner }
 import from ...components.github.RepoPicker { RepoPicker }

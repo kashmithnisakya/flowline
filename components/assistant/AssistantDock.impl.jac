@@ -1,6 +1,7 @@
-"""Implementations for the assistant dock. Every LLM call is one `root spawn`
-of a bare walker (JWT + per-root isolation). The model never mutates: only
-`applyProposal` writes, after the user presses Apply, via CreateTask/MoveTask.
+"""Implementations for the assistant dock. Every LLM call is one spawn of a
+bare walker on the active space root (JWT + per-root isolation). The model
+never mutates: only `applyProposal` writes, after the user presses Apply,
+via CreateTask/MoveTask.
 """
 
 impl AssistantDock.setTurnState(index: int, state: str) -> None {
@@ -60,7 +61,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     reply: dict = {"role": "assistant", "kind": "error", "text": unavailable};
     try {
         if kind == "note" {
-            noteRun = root spawn WriteStandup(
+            t = spaceRoot();
+            noteRun = t spawn WriteStandup(
                 period=value, from_date=fromDate, to_date=toDate
             );
             note = noteRun.reports[0] if noteRun.reports else None;
@@ -70,7 +72,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
                 reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
         } elif kind == "do" {
-            propRun = root spawn ProposeAction(
+            t = spaceRoot();
+            propRun = t spawn ProposeAction(
                 instruction=value, from_date=fromDate, to_date=toDate
             );
             proposal = propRun.reports[0] if propRun.reports else None;
@@ -85,7 +88,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
                 reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
         } else {
-            askRun = root spawn AskAssistant(
+            t = spaceRoot();
+            askRun = t spawn AskAssistant(
                 question=value, from_date=fromDate, to_date=toDate
             );
             answer = askRun.reports[0] if askRun.reports else "";
@@ -114,7 +118,8 @@ impl AssistantDock.applyProposal(index: int) -> None {
             # exact title first, then a prefix, then a containment match, so
             # the first row is the card "the onboarding flow" meant.
             wanted = p.title.lower().strip();
-            found = root spawn ListTasks(scope="all", q=wanted, page_size=5);
+            t = spaceRoot();
+            found = t spawn ListTasks(scope="all", q=wanted, page_size=5);
             page = found.reports[0] if found.reports else None;
             hits = page.rows if page else [];
             taskId = hits[0].id if len(hits) > 0 and wanted else "";
@@ -123,10 +128,12 @@ impl AssistantDock.applyProposal(index: int) -> None {
                 busy = False;
                 return;
             }
-            root spawn MoveTask(task_id=taskId, status=p.status or "In Progress");
+            t = spaceRoot();
+            t spawn MoveTask(task_id=taskId, status=p.status or "In Progress");
         } else {
-            mResult = root spawn ListMembers();
-            pResult = root spawn ListProjects();
+            t = spaceRoot();
+            mResult = t spawn ListMembers();
+            pResult = t spawn ListProjects();
             people = mResult.reports[0] if mResult.reports else [];
             projects = pResult.reports[0] if pResult.reports else [];
             projectId = "";
@@ -141,7 +148,8 @@ impl AssistantDock.applyProposal(index: int) -> None {
                     assignees = [m.id];
                 }
             }
-            root spawn CreateTask(
+            t = spaceRoot();
+            t spawn CreateTask(
                 title=p.title,
                 category=p.category,
                 priority=p.priority or "Medium",

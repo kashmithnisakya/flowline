@@ -80,7 +80,10 @@ def:pub TaskDialog(
     # The flow line, for the "where is this task" picture above the notes.
     # Empty (no flow line, or a new task with no position yet) draws nothing.
     steps: list[StepView] = [],
-    roles: list[RoleView] = []
+    roles: list[RoleView] = [],
+    # True for viewers: the dialog reads as a details sheet, Save/Delete
+    # replaced by a single Close (the server refuses their writes anyway).
+    readOnly: bool = False
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -552,7 +555,14 @@ def:pub TaskDialog(
                 <DialogFooter
                     className="-mx-6 -mb-6 gap-2 border-t px-6 pt-4 pb-4 sm:justify-between"
                 >
-                    {if editing {
+                    {if readOnly {
+                        <span
+                            key="ro"
+                            className="self-center text-xs text-muted-foreground"
+                        >
+                            View only
+                        </span>
+                    } elif editing {
                         <Button
                             key="del"
                             variant="destructive"
@@ -571,28 +581,31 @@ def:pub TaskDialog(
                         </Button>
                     } else {
                         <span key="spacer"/>
-                    } }
+                    }  }
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
                             onClick={lambda { onOpenChange(False); }}
                         >
-                            Cancel
+                            {"Close" if readOnly else "Cancel"}
                         </Button>
-                        <Button
-                            onClick={lambda {
-                                pendingAction = "save";
-                                onSave();
-                            }}
-                            disabled={saving or not form["title"].strip()}
-                        >
-                            {if saving and pendingAction == "save" {
-                                <Spinner key="sp"/>
-                            }}
-                            {"Saving…"
-                                if saving and pendingAction == "save"
-                                else "Save"}
-                        </Button>
+                        {if not readOnly {
+                            <Button
+                                key="save"
+                                onClick={lambda {
+                                    pendingAction = "save";
+                                    onSave();
+                                }}
+                                disabled={saving or not form["title"].strip()}
+                            >
+                                {if saving and pendingAction == "save" {
+                                    <Spinner key="sp"/>
+                                }}
+                                {"Saving…"
+                                    if saving and pendingAction == "save"
+                                    else "Save"}
+                            </Button>
+                        }}
                     </div>
                 </DialogFooter>
             </DialogContent>

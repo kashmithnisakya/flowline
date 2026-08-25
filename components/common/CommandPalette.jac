@@ -10,6 +10,7 @@ import from "@jac/runtime" { navigate, useLocation, jacLogout }
 import from "react" { useEffect }
 import from ...models { TaskView }
 import from ...walkers.tasks { ListTasks }
+import from ...lib.session { spaceRoot }
 import from ...lib.theme { getThemePref, setThemePref }
 import from ..ui.dialog { Dialog, DialogContent, DialogTitle }
 import from .Avatar { AvatarStack, dotFor }
@@ -119,7 +120,8 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
     async def fetchTasks(wanted: str) {
         rows: list[TaskView] = [];
         try {
-            result = root spawn ListTasks(scope="all", q=wanted, page_size=MAX_TASKS);
+            t = spaceRoot();
+            result = t spawn ListTasks(scope="all", q=wanted, page_size=MAX_TASKS);
             page = result.reports[0] if result.reports else None;
             rows = page.rows if page else [];
         } except Exception as e {

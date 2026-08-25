@@ -1,5 +1,6 @@
 """flowline - Projects page: create, rename, archive."""
 
+import from ...lib.session { spaceRoot }
 import from ...models { Project, RepoView }
 import from ...walkers.projects { ListProjects, SaveProject, ArchiveProject }
 import from ...walkers.roster { ListRepos, AddRepo, RemoveRepo }
