@@ -271,9 +271,9 @@ def:pub BoardPage -> JsxPage {
         t
         for t in tasks
         if (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or fAssignee in t.assignee_ids)
-        and (fCategory == "All" or t.category == fCategory)
-        and (not hideDone or t.status != "Done")
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
+            and (not hideDone or t.status != "Done")
     ];
     # Everything Done in the working set is recent by construction (the
     # server's cutoff); older history is its own list, fetched under the
@@ -288,10 +288,10 @@ def:pub BoardPage -> JsxPage {
         t
         for t in olderDone
         if showAllDone
-        and not hideDone
-        and (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or fAssignee in t.assignee_ids)
-        and (fCategory == "All" or t.category == fCategory)
+            and not hideDone
+            and (fProject == "all" or t.project_id == fProject)
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
     ];
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
@@ -369,12 +369,13 @@ def:pub BoardPage -> JsxPage {
                 # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
-                        # The refresh-failed strip takes a row above the lanes.
-                        "[--lane-h:calc(100dvh-15.5rem)]"
-                            if loadFailed
-                            else "[--lane-h:calc(100dvh-12.5rem)]"
-                    )}
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
+                        + (
+                            # The refresh-failed strip takes a row above the lanes.
+                            "[--lane-h:calc(100dvh-15.5rem)]"
+                                if loadFailed
+                                else "[--lane-h:calc(100dvh-12.5rem)]"
+                        )}
                     style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 1fr))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
@@ -469,14 +470,17 @@ def:pub BoardPage -> JsxPage {
                 # Below the 17rem minimum the row scroll-snaps instead.
                 <div
                     key="columns"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
-                        # The refresh-failed strip takes a row above the lanes.
-                        "[--lane-h:calc(100dvh-15.5rem)]"
-                            if loadFailed
-                            else "[--lane-h:calc(100dvh-12.5rem)]"
-                    )}
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
+                        + (
+                            # The refresh-failed strip takes a row above the lanes.
+                            "[--lane-h:calc(100dvh-15.5rem)]"
+                                if loadFailed
+                                else "[--lane-h:calc(100dvh-12.5rem)]"
+                        )}
                     style={{
-                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 1fr))"
+                        "gridTemplateColumns": "repeat("
+                            + str(len(colKeys))
+                            + ", minmax(17rem, 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {
@@ -524,7 +528,8 @@ def:pub BoardPage -> JsxPage {
                                         t
                                         for t in visible
                                         if columnKeyOf(t) == key
-                                        and dueTone(t.due_date, t.status, today) == "overdue"
+                                            and dueTone(t.due_date, t.status, today)
+                                                == "overdue"
                                     ]
                                 )}
                         />

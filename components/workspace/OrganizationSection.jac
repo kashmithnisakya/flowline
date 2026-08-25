@@ -73,8 +73,8 @@ def:pub OrganizationSection -> JsxElement {
                             <Button
                                 onClick={save}
                                 disabled={saving
-                                or not orgName.strip()
-                                or not fullName.strip()}
+                                    or not orgName.strip()
+                                    or not fullName.strip()}
                             >
                                 {if saving {
                                     <Spinner key="sp"/>

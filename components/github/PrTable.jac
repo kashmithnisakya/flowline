@@ -81,9 +81,8 @@ def:pub PrTable(
             <CardContent className="space-y-3 pt-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm tabular-nums text-muted-foreground">
-                        {str(len(rows)) + (
-                            " pull request" if len(rows) == 1 else " pull requests"
-                        )}
+                        {str(len(rows))
+                            + (" pull request" if len(rows) == 1 else " pull requests")}
                     </div>
                     <div className="ml-auto">
                         <Select value={state} onValueChange={onState}>
@@ -141,7 +140,9 @@ def:pub PrTable(
                                     {"No matches" if query else "Nothing to show"}
                                 </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    {"No pull requests match \"" + query + "\" for that state."
+                                    {"No pull requests match \""
+                                        + query
+                                        + "\" for that state."
                                         if query
                                         else "No pull requests in this repo for that state."}
                                 </p>
@@ -209,9 +210,8 @@ def:pub PrTable(
                                             <TableCell>
                                                 <Badge
                                                     variant="outline"
-                                                    className={"font-normal " + stateClass(
-                                                        r.state
-                                                    )}
+                                                    className={"font-normal "
+                                                        + stateClass(r.state)}
                                                 >
                                                     {r.state}
                                                 </Badge>

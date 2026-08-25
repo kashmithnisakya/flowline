@@ -89,9 +89,9 @@ def:pub MiniLanes(
         }
         col = colOf[s.id];
         lane = laneOf[s.id];
-        top = miniTop[lane] + MINI_PAD + float(slotOf[s.id]) * (
-            MINI_CARD_H + MINI_ROW_GAP
-        );
+        top = miniTop[lane]
+            + MINI_PAD
+            + float(slotOf[s.id]) * (MINI_CARD_H + MINI_ROW_GAP);
         cy[s.id] = top + MINI_CARD_H / 2.0;
         isHere = s.id == currentKey;
         isNear = s.id in near;
@@ -99,22 +99,29 @@ def:pub MiniLanes(
             {
                 "id": s.id,
                 "name": s.name,
-                "left": "calc(" + str(MINI_GUTTER) + "px + " + colPct + " * (" + str(
-                    col
-                ) + " + " + str(MINI_INSET) + "))",
+                "left": "calc("
+                    + str(MINI_GUTTER)
+                    + "px + "
+                    + colPct
+                    + " * ("
+                    + str(col)
+                    + " + "
+                    + str(MINI_INSET)
+                    + "))",
                 "width": "calc(" + colPct + " * " + str(1.0 - MINI_INSET * 2.0) + ")",
                 "top": str(top) + "px",
-                "cls": CARD_BAR[colorKey(s.color)] + " " + (
-                    "z-10 ring-2 ring-primary/70 shadow-sm " + CARD_TINT[
-                        colorKey(s.color)
-                    ]
-                        if isHere
-                        else (
-                            "border-border bg-card"
-                                if isNear
-                                else "border-border/60 bg-card/70 opacity-60"
-                        )
-                ),
+                "cls": CARD_BAR[colorKey(s.color)]
+                    + " "
+                    + (
+                        "z-10 ring-2 ring-primary/70 shadow-sm "
+                            + CARD_TINT[colorKey(s.color)]
+                            if isHere
+                            else (
+                                "border-border bg-card"
+                                    if isNear
+                                    else "border-border/60 bg-card/70 opacity-60"
+                            )
+                    ),
                 "nameCls": "font-semibold text-foreground"
                     if isHere
                     else "text-foreground/85"
@@ -165,15 +172,30 @@ def:pub MiniLanes(
                 ix = tc + MINI_INSET;
                 mx = fc + 1.0 - (0.012 if twoWay else 0.0);
                 d = (
-                    "M " + str(ex) + " " + str(fy + off) + " L " + str(mx) + " " + str(
-                        fy + off
-                    ) + " L " + str(mx) + " " + str(ty + off) + " L " + str(ix) + " " + str(
-                        ty + off
-                    )
+                    "M "
+                    + str(ex)
+                    + " "
+                    + str(fy + off)
+                    + " L "
+                    + str(mx)
+                    + " "
+                    + str(fy + off)
+                    + " L "
+                    + str(mx)
+                    + " "
+                    + str(ty + off)
+                    + " L "
+                    + str(ix)
+                    + " "
+                    + str(ty + off)
                 );
-                headLeft = "calc(" + str(MINI_GUTTER) + "px + " + colPct + " * " + str(
-                    ix
-                ) + " - 5px)";
+                headLeft = "calc("
+                    + str(MINI_GUTTER)
+                    + "px + "
+                    + colPct
+                    + " * "
+                    + str(ix)
+                    + " - 5px)";
                 headTop = ty + off;
                 headDir = "r";
             } elif tc < fc {
@@ -183,15 +205,30 @@ def:pub MiniLanes(
                 ix = tc + 1.0 - MINI_INSET;
                 mx = fc + (0.012 if twoWay else 0.0);
                 d = (
-                    "M " + str(ex) + " " + str(fy + off) + " L " + str(mx) + " " + str(
-                        fy + off
-                    ) + " L " + str(mx) + " " + str(ty + off) + " L " + str(ix) + " " + str(
-                        ty + off
-                    )
+                    "M "
+                    + str(ex)
+                    + " "
+                    + str(fy + off)
+                    + " L "
+                    + str(mx)
+                    + " "
+                    + str(fy + off)
+                    + " L "
+                    + str(mx)
+                    + " "
+                    + str(ty + off)
+                    + " L "
+                    + str(ix)
+                    + " "
+                    + str(ty + off)
                 );
-                headLeft = "calc(" + str(MINI_GUTTER) + "px + " + colPct + " * " + str(
-                    ix
-                ) + ")";
+                headLeft = "calc("
+                    + str(MINI_GUTTER)
+                    + "px + "
+                    + colPct
+                    + " * "
+                    + str(ix)
+                    + ")";
                 headTop = ty + off;
                 headDir = "l";
             } else {
@@ -201,9 +238,13 @@ def:pub MiniLanes(
                 sy = fy + MINI_CARD_H / 2.0 if down else fy - MINI_CARD_H / 2.0;
                 ey = ty - MINI_CARD_H / 2.0 if down else ty + MINI_CARD_H / 2.0;
                 d = "M " + str(x) + " " + str(sy) + " L " + str(x) + " " + str(ey);
-                headLeft = "calc(" + str(MINI_GUTTER) + "px + " + colPct + " * " + str(
-                    x
-                ) + " - 4px)";
+                headLeft = "calc("
+                    + str(MINI_GUTTER)
+                    + "px + "
+                    + colPct
+                    + " * "
+                    + str(x)
+                    + " - 4px)";
                 headTop = ey - 5.0 if down else ey;
                 headDir = "d" if down else "u";
             }
@@ -228,19 +269,21 @@ def:pub MiniLanes(
                     "key": "h" + s.id + ">" + nid,
                     "left": headLeft,
                     "top": str(headTop - 4.0) + "px",
-                    "cls": tone + " " + (
-                        "border-y-4 border-l-[5px] border-y-transparent border-l-current"
-                            if headDir == "r"
-                            else (
-                                "border-y-4 border-r-[5px] border-y-transparent border-r-current"
-                                    if headDir == "l"
-                                    else (
-                                        "border-x-4 border-t-[5px] border-x-transparent border-t-current"
-                                            if headDir == "d"
-                                            else "border-x-4 border-b-[5px] border-x-transparent border-b-current"
-                                    )
-                            )
-                    )
+                    "cls": tone
+                        + " "
+                        + (
+                            "border-y-4 border-l-[5px] border-y-transparent border-l-current"
+                                if headDir == "r"
+                                else (
+                                    "border-y-4 border-r-[5px] border-y-transparent border-r-current"
+                                        if headDir == "l"
+                                        else (
+                                            "border-x-4 border-t-[5px] border-x-transparent border-t-current"
+                                                if headDir == "d"
+                                                else "border-x-4 border-b-[5px] border-x-transparent border-b-current"
+                                        )
+                                )
+                        )
                 }
             );
         }
@@ -257,27 +300,28 @@ def:pub MiniLanes(
                 "key": k,
                 "top": str(miniTop[k]) + "px",
                 "h": str(miniH[k]) + "px",
-                "cls": "absolute inset-x-0" + (
-                    " bg-primary/10"
-                        if isHereLane
-                        else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
-                ) + ("" if i == 0 else " border-t border-border/60"),
+                "cls": "absolute inset-x-0"
+                    + (
+                        " bg-primary/10"
+                            if isHereLane
+                            else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
+                    )
+                    + ("" if i == 0 else " border-t border-border/60"),
                 "label": str(b["label"]),
                 "sub": str(b["sub"]),
-                "subCls": "truncate text-[9.5px] leading-tight " + (
-                    "text-warning" if b["warn"] else "text-muted-foreground"
-                ),
+                "subCls": "truncate text-[9.5px] leading-tight "
+                    + ("text-warning" if b["warn"] else "text-muted-foreground"),
                 "dot": DOT_FILL[colorKey(str(b["color"]))],
-                "labelCls": "truncate text-[11px] font-semibold leading-tight " + (
-                    "text-foreground" if isHereLane else "text-foreground/75"
-                )
+                "labelCls": "truncate text-[11px] font-semibold leading-tight "
+                    + ("text-foreground" if isHereLane else "text-foreground/75")
             }
         );
     }
 
     return
         <div
-            className={"relative w-full overflow-hidden rounded-lg border bg-muted/30 " + className}
+            className={"relative w-full overflow-hidden rounded-lg border bg-muted/30 "
+                + className}
             style={{"height": str(total) + "px"}}
         >
             {for r in rects {
@@ -291,9 +335,8 @@ def:pub MiniLanes(
                     >
                         <div className="flex items-center gap-1.5">
                             <span
-                                className={"h-1.5 w-1.5 shrink-0 rounded-full " + r[
-                                    "dot"
-                                ]}
+                                className={"h-1.5 w-1.5 shrink-0 rounded-full "
+                                    + r["dot"]}
                             />
                             <span className={r["labelCls"]} title={r["label"]}>
                                 {r["label"]}
@@ -345,9 +388,8 @@ def:pub MiniLanes(
             {for c in cards {
                 <div
                     key={c["id"]}
-                    className={"absolute flex items-center rounded-md border pl-1.5 pr-1 text-[10.5px] leading-[11px] " + c[
-                        "cls"
-                    ]}
+                    className={"absolute flex items-center rounded-md border pl-1.5 pr-1 text-[10.5px] leading-[11px] "
+                        + c["cls"]}
                     style={{
                         "left": c["left"],
                         "width": c["width"],

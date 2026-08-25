@@ -204,9 +204,12 @@ def:pub AssistantDock -> JsxElement {
                 {for r in rows {
                     <div
                         key={"turn" + str(r["at"])}
-                        className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 " + (
-                            "justify-end" if r["role"] == "user" else "justify-start"
-                        )}
+                        className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 "
+                            + (
+                                "justify-end"
+                                    if r["role"] == "user"
+                                    else "justify-start"
+                            )}
                     >
                         {if r["role"] == "user" {
                             <div
@@ -269,11 +272,12 @@ def:pub AssistantDock -> JsxElement {
                         } else {
                             <div
                                 key="text"
-                                className={"max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed " + (
-                                    "whitespace-pre-wrap bg-destructive/10 text-destructive"
-                                        if r["kind"] == "error"
-                                        else "bg-secondary text-foreground"
-                                )}
+                                className={"max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed "
+                                    + (
+                                        "whitespace-pre-wrap bg-destructive/10 text-destructive"
+                                            if r["kind"] == "error"
+                                            else "bg-secondary text-foreground"
+                                    )}
                             >
                                 {if r["kind"] == "error" {
                                     <span key="plain">{r["text"]}</span>

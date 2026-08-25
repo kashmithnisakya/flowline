@@ -46,9 +46,11 @@ def firstOffset(year: int, month: int) -> int {
 def prettyLabel(iso: str) -> str {
     d = new(Date, iso + "T00:00:00");
     names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return names[int(d.getDay())] + ", " + MONTHS[int(d.getMonth())][:3] + " " + str(
-        int(d.getDate())
-    );
+    return names[int(d.getDay())]
+        + ", "
+        + MONTHS[int(d.getMonth())][:3]
+        + " "
+        + str(int(d.getDate()));
 }
 
 def todayIso -> str {
@@ -90,9 +92,8 @@ def:pub DatePicker(
         >
             <DropdownMenuTrigger
                 asChild={False}
-                className={"inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" + (
-                    " " + className if className else ""
-                )}
+                className={"inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    + (" " + className if className else "")}
             >
                 <svg
                     width={14}
@@ -195,15 +196,16 @@ def:pub DatePicker(
                         <button
                             key={"d" + str(d)}
                             type="button"
-                            className={"rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] " + (
-                                "bg-primary font-semibold text-primary-foreground"
-                                    if isoOf(year, month, d) == value
-                                    else (
-                                        "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
-                                            if isoOf(year, month, d) == todayStr
-                                            else "hover:bg-accent"
-                                    )
-                            )}
+                            className={"rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] "
+                                + (
+                                    "bg-primary font-semibold text-primary-foreground"
+                                        if isoOf(year, month, d) == value
+                                        else (
+                                            "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
+                                                if isoOf(year, month, d) == todayStr
+                                                else "hover:bg-accent"
+                                        )
+                                )}
                             onClick={lambda {
                                 onChange(isoOf(year, month, d));
                                 pickerOpen = False;

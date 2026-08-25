@@ -26,8 +26,11 @@ impl SsoButtons.start(platform: str) -> None {
     if not configured {
         pending = "";
         onFailure(
-            platform.capitalize() + " sign-in isn't configured yet. Add its "
-            "client_id and client_secret under [scale.sso." + platform + "] in jac.toml."
+            platform.capitalize()
+                + " sign-in isn't configured yet. Add its "
+                "client_id and client_secret under [scale.sso."
+                + platform
+                + "] in jac.toml."
         );
         return;
     }

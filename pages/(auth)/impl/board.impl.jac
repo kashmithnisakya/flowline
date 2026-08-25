@@ -89,9 +89,9 @@ impl BoardPage.loadAll -> None {
         d = new(Date);
         hh = str(d.getHours());
         mm = str(d.getMinutes());
-        loadedAt = ("0" + hh if len(hh) < 2 else hh) + ":" + (
-            "0" + mm if len(mm) < 2 else mm
-        );
+        loadedAt = ("0" + hh if len(hh) < 2 else hh)
+            + ":"
+            + ("0" + mm if len(mm) < 2 else mm);
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
         stored = localStorage.getItem("standup_project") or "";

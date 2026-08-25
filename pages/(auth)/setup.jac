@@ -3,6 +3,8 @@ flow line designer. Resumes where it stopped (no org name: step 1; no project:
 step 2), and the finish button saves any half-typed member. Keyed Cards remount
 per step for the entrance animation; `finishing` gives Finish its own spinner."""
 
+import from "@jac/runtime" { useState }
+import from "react" { useEffect }
 import from ...models { MemberView }
 import from ...walkers.projects { ListProjects, SaveProject }
 import from ...walkers.roster { SaveMember }
@@ -153,8 +155,8 @@ def:pub SetupPage -> JsxPage {
                             <Button
                                 onClick={saveProfile}
                                 disabled={busy
-                                or not orgName.strip()
-                                or not fullName.strip()}
+                                    or not orgName.strip()
+                                    or not fullName.strip()}
                             >
                                 {if busy {
                                     <Spinner key="sp"/>

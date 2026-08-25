@@ -156,7 +156,7 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                         size="sm"
                                                         onClick={saveEdit}
                                                         disabled={saving
-                                                        or not editName.strip()}
+                                                            or not editName.strip()}
                                                     >
                                                         Save
                                                     </Button>
@@ -178,11 +178,13 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                                                     className="flex items-center gap-2"
                                                 >
                                                     <span
-                                                        className={"h-2.5 w-2.5 shrink-0 rounded-full " + DOT_FILL[
-                                                            colorKey(
-                                                                card["color"] or "slate"
-                                                            )
-                                                        ]}
+                                                        className={"h-2.5 w-2.5 shrink-0 rounded-full "
+                                                            + DOT_FILL[
+                                                                colorKey(
+                                                                    card["color"]
+                                                                        or "slate"
+                                                                )
+                                                            ]}
                                                     />
                                                     <span
                                                         className="text-sm font-semibold"
@@ -283,7 +285,8 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                             placeholder="New role"
                             value={newRole}
                             onChange={lambda (e: ChangeEvent) { newRole = e.target.value; }}
-                            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
+                            onKeyDown={lambda (e: KeyboardEvent) { if e.key
+                                == "Enter" {
                                 e.preventDefault();
                                 addRole();
                             }}}
@@ -293,7 +296,8 @@ def:pub RolesSection(onChanged: Callable[[], None] = None) -> JsxElement {
                             placeholder="What this role does (optional)"
                             value={newBlurb}
                             onChange={lambda (e: ChangeEvent) { newBlurb = e.target.value; }}
-                            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
+                            onKeyDown={lambda (e: KeyboardEvent) { if e.key
+                                == "Enter" {
                                 e.preventDefault();
                                 addRole();
                             }}}

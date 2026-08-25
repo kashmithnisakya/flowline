@@ -278,7 +278,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         >
                                             {"Connected " + connectedAgo
                                                 if connectedAgo
-                                                else "Connected"}{" · last sync " + lastSyncAgo
+                                                else "Connected"}{" · last sync "
+                                                + lastSyncAgo
                                                 if lastSyncAgo
                                                 else " · not synced yet"}
                                         </p>
@@ -288,11 +289,12 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             key="warn"
                                             aria-hidden={not confirmDisconnect}
                                             title="Imported tasks and links stay. Flowline just stops talking to GitHub."
-                                            className={"overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-all duration-300 ease-out " + (
-                                                "max-w-56 opacity-100"
-                                                    if confirmDisconnect
-                                                    else "max-w-0 opacity-0"
-                                            )}
+                                            className={"overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-all duration-300 ease-out "
+                                                + (
+                                                    "max-w-56 opacity-100"
+                                                        if confirmDisconnect
+                                                        else "max-w-0 opacity-0"
+                                                )}
                                         >
                                             Imported tasks and links stay.
                                         </span>
@@ -331,7 +333,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                     <span
                                         key={"proj-" + r.id}
                                         className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground lg:inline-flex"
-                                        title={"Imports land in " + r.project_name + " unless you pick another project"}
+                                        title={"Imports land in "
+                                            + r.project_name
+                                            + " unless you pick another project"}
                                     >
                                         <svg
                                             width={12}
@@ -370,7 +374,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             else "Search pull requests, Enter to run"}
                                         className="pl-8 pr-8"
                                         onChange={lambda (e: ChangeEvent) { searchDraft = e.target.value; }}
-                                        onKeyDown={lambda (e: any) { if e.key == "Enter" {
+                                        onKeyDown={lambda (e: any) { if e.key
+                                            == "Enter" {
                                             runSearch();
                                         }}}
                                     />

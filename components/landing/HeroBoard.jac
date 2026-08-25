@@ -144,9 +144,8 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
             className="anim-fade-up anim-d4 mx-auto mt-12 w-full max-w-3xl text-left lg:mx-0 lg:mt-0 lg:max-w-none"
         >
             <div
-                className={"flex items-center justify-end gap-1.5 pb-2 text-[11px] font-semibold text-primary transition-opacity duration-300 " + (
-                    "opacity-0" if moves > 0 else ""
-                )}
+                className={"flex items-center justify-end gap-1.5 pb-2 text-[11px] font-semibold text-primary transition-opacity duration-300 "
+                    + ("opacity-0" if moves > 0 else "")}
                 aria-hidden="true"
             >
                 Drag a card, or tap one
@@ -173,11 +172,12 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                     {for (li, lane) in enumerate(LANES) {
                         <div
                             key={lane["name"]}
-                            className={"relative flex min-h-40 flex-col gap-2 rounded-xl border bg-muted/40 p-2 pt-2.5 transition-[box-shadow,background-color] duration-150 " + (
-                                "bg-primary/5 ring-2 ring-primary/40"
-                                    if overLane == li
-                                    else ""
-                            )}
+                            className={"relative flex min-h-40 flex-col gap-2 rounded-xl border bg-muted/40 p-2 pt-2.5 transition-[box-shadow,background-color] duration-150 "
+                                + (
+                                    "bg-primary/5 ring-2 ring-primary/40"
+                                        if overLane == li
+                                        else ""
+                                )}
                             onDragOver={lambda (e: DragEvent) {
                                 e.preventDefault();
                                 dt = e.dataTransfer;
@@ -209,18 +209,16 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                             }}
                         >
                             <span
-                                className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full " + lane[
-                                    "color"
-                                ]}
+                                className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full "
+                                    + lane["color"]}
                             />
                             <div
                                 className="flex items-center justify-between px-1 text-[11px] font-semibold"
                             >
                                 <span className="flex items-center gap-1.5">
                                     <span
-                                        className={"h-1.5 w-1.5 rounded-full " + lane[
-                                            "color"
-                                        ]}
+                                        className={"h-1.5 w-1.5 rounded-full "
+                                            + lane["color"]}
                                     />
                                     {lane["name"]}
                                 </span>
@@ -243,7 +241,8 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                         draggable={True}
                                         role="button"
                                         tabIndex={0}
-                                        aria-label={str(c["title"]) + ". Drag to another column, or press Enter to move it along."}
+                                        aria-label={str(c["title"])
+                                            + ". Drag to another column, or press Enter to move it along."}
                                         onDragStart={lambda (e: DragEvent) {
                                             dt = e.dataTransfer;
                                             if dt {
@@ -261,44 +260,47 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                         onClick={lambda { moveTo(
                                             c["title"], (curLane(c) + 1) % len(LANES)
                                         ); }}
-                                        onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter"
-                                        or e.key == " " {
+                                        onKeyDown={lambda (e: KeyboardEvent) { if e.key
+                                            == "Enter"
+                                            or e.key == " " {
                                             e.preventDefault();
                                             moveTo(
                                                 c["title"],
                                                 (curLane(c) + 1) % len(LANES)
                                             );
                                         }}}
-                                        className={"animate-in fade-in slide-in-from-bottom-1 cursor-grab select-none rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 transition-shadow duration-500 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing " + (
-                                            "opacity-50 "
-                                                if dragTitle == c["title"]
-                                                else ""
-                                        ) + (
-                                            "border-l-step-emerald"
-                                                if li == 2
-                                                else (
-                                                    "border-l-step-amber"
-                                                        if li == 1
-                                                        else "border-l-step-sky"
-                                                )
-                                        )}
+                                        className={"animate-in fade-in slide-in-from-bottom-1 cursor-grab select-none rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 transition-shadow duration-500 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+                                            + (
+                                                "opacity-50 "
+                                                    if dragTitle == c["title"]
+                                                    else ""
+                                            )
+                                            + (
+                                                "border-l-step-emerald"
+                                                    if li == 2
+                                                    else (
+                                                        "border-l-step-amber"
+                                                            if li == 1
+                                                            else "border-l-step-sky"
+                                                    )
+                                            )}
                                     >
                                         <div
                                             className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground"
                                         >
                                             <span
-                                                className={"h-1 w-1 rounded-full " + c[
-                                                    "dot"
-                                                ]}
+                                                className={"h-1 w-1 rounded-full "
+                                                    + c["dot"]}
                                             />
                                             {c["project"]}
                                         </div>
                                         <div
-                                            className={"mt-0.5 text-[11px] font-medium leading-snug " + (
-                                                "text-muted-foreground line-through decoration-foreground/30"
-                                                    if li == 2
-                                                    else ""
-                                            )}
+                                            className={"mt-0.5 text-[11px] font-medium leading-snug "
+                                                + (
+                                                    "text-muted-foreground line-through decoration-foreground/30"
+                                                        if li == 2
+                                                        else ""
+                                                )}
                                         >
                                             {c["title"]}
                                         </div>
@@ -314,11 +316,13 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                             {if c["due"] and li != 2 {
                                                 <span
                                                     key="due"
-                                                    className={"ml-auto text-[9px] font-semibold " + (
-                                                        "rounded bg-warning/15 px-1 text-warning"
-                                                            if c["due"] == "Tomorrow"
-                                                            else "text-muted-foreground"
-                                                    )}
+                                                    className={"ml-auto text-[9px] font-semibold "
+                                                        + (
+                                                            "rounded bg-warning/15 px-1 text-warning"
+                                                                if c["due"]
+                                                                    == "Tomorrow"
+                                                                else "text-muted-foreground"
+                                                        )}
                                                 >
                                                     {c["due"]}
                                                 </span>
@@ -347,11 +351,12 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                         {for (i, line) in enumerate(recent) {
                             <div
                                 key={str(i)}
-                                className={"animate-in fade-in slide-in-from-left-1 truncate duration-500 " + (
-                                    "text-foreground"
-                                        if i == len(recent) - 1
-                                        else "text-muted-foreground"
-                                )}
+                                className={"animate-in fade-in slide-in-from-left-1 truncate duration-500 "
+                                    + (
+                                        "text-foreground"
+                                            if i == len(recent) - 1
+                                            else "text-muted-foreground"
+                                    )}
                             >
                                 {line}
                                 {if i == len(recent) - 1 {

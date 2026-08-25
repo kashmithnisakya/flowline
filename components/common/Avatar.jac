@@ -59,9 +59,11 @@ def:pub initials(name: str) -> str {
 def:pub Avatar(name: str, size: str = "sm", className: str = "") -> JsxElement {
     return
         <span
-            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold " + SIZES.get(
-                size, SIZES["sm"]
-            ) + " " + hueFor(name) + ((" " + className) if className else "")}
+            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold "
+                + SIZES.get(size, SIZES["sm"])
+                + " "
+                + hueFor(name)
+                + ((" " + className) if className else "")}
             title={name}
             aria-label={name}
             role="img"
@@ -85,9 +87,8 @@ def:pub AvatarStack(names: list[str], max: int = 3, size: str = "xs") -> JsxElem
             {if extra > 0 {
                 <span
                     key="more"
-                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground ring-1 ring-card " + SIZES.get(
-                        size, SIZES["xs"]
-                    )}
+                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground ring-1 ring-card "
+                        + SIZES.get(size, SIZES["xs"])}
                 >
                     {"+" + str(extra)}
                 </span>

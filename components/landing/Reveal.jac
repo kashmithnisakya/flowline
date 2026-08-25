@@ -23,7 +23,7 @@ def:pub Reveal(props: any) -> JsxElement {
                 obs = new(
                     w.IntersectionObserver,
                     lambda (entries: any) { if len(entries) > 0
-                    and entries[0].isIntersecting {
+                        and entries[0].isIntersecting {
                         shown = True;
                     }},
                     {"threshold": 0.08}
@@ -38,9 +38,8 @@ def:pub Reveal(props: any) -> JsxElement {
     return
         <div
             ref={boxRef}
-            className={"transition-[opacity,transform] duration-500 ease-out " + (
-                "translate-y-0 opacity-100" if shown else "translate-y-3 opacity-0"
-            )}
+            className={"transition-[opacity,transform] duration-500 ease-out "
+                + ("translate-y-0 opacity-100" if shown else "translate-y-3 opacity-0")}
         >
             {props["children"]}
         </div>;

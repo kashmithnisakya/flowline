@@ -161,7 +161,7 @@ def:pub RepoPicker(
                                             className="line-clamp-2 text-xs text-muted-foreground"
                                         >
                                             {r.description
-                                            or "No description on GitHub."}
+                                                or "No description on GitHub."}
                                         </p>
                                     </div>
                                     {if r.attached {

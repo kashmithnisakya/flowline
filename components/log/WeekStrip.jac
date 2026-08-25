@@ -43,19 +43,20 @@ def:pub WeekStrip(
                 <button
                     key={DAY_NAMES[i]}
                     type="button"
-                    className={"flex min-w-16 flex-col items-center rounded-lg border px-3 py-1.5 transition active:scale-[0.97] " + (
-                        "border-primary bg-primary text-primary-foreground shadow-sm"
-                            if dayShift(monday, i) == selectedDate
-                            else (
-                                "border-primary/40 bg-card ring-1 ring-primary/30 hover:bg-accent"
-                                    if dayShift(monday, i) == today
-                                    else (
-                                        "bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
-                                            if i >= 5
-                                            else "bg-card hover:bg-accent"
-                                    )
-                            )
-                    )}
+                    className={"flex min-w-16 flex-col items-center rounded-lg border px-3 py-1.5 transition active:scale-[0.97] "
+                        + (
+                            "border-primary bg-primary text-primary-foreground shadow-sm"
+                                if dayShift(monday, i) == selectedDate
+                                else (
+                                    "border-primary/40 bg-card ring-1 ring-primary/30 hover:bg-accent"
+                                        if dayShift(monday, i) == today
+                                        else (
+                                            "bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                if i >= 5
+                                                else "bg-card hover:bg-accent"
+                                        )
+                                )
+                        )}
                     onClick={lambda { if onSelectDate {
                         onSelectDate(dayShift(monday, i));
                     }}}
@@ -75,14 +76,16 @@ def:pub WeekStrip(
                                 for e in entries
                                 if e.date == dayShift(monday, i)
                             ]
-                        ) > 0 {
+                        )
+                            > 0 {
                             <span
                                 key="count"
-                                className={"inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-semibold leading-none tabular-nums " + (
-                                    "bg-primary-foreground/25 text-primary-foreground"
-                                        if dayShift(monday, i) == selectedDate
-                                        else "bg-primary/10 text-primary"
-                                )}
+                                className={"inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs font-semibold leading-none tabular-nums "
+                                    + (
+                                        "bg-primary-foreground/25 text-primary-foreground"
+                                            if dayShift(monday, i) == selectedDate
+                                            else "bg-primary/10 text-primary"
+                                    )}
                             >
                                 {len(
                                     [

@@ -141,9 +141,9 @@ def:pub laneLayout(
             laneOf[s.id] = key;
             taskTotal = taskTotal + s.task_count;
         }
-        height = LANE_PAD * 2.0 + float(peakRows) * LANE_NODE_H + float(
-            peakRows - 1
-        ) * LANE_ROW_GAP;
+        height = LANE_PAD * 2.0
+            + float(peakRows) * LANE_NODE_H
+            + float(peakRows - 1) * LANE_ROW_GAP;
         isRole = key in roleNames;
         # The sub-line: holders for a role (warning tone when nobody), a
         # hint for the two synthetic lanes.
@@ -384,9 +384,9 @@ def:pub laneWires(
         for (rank, row) in enumerate(ranked) {
             idx = int(row[1]);
             e = edges[idx];
-            x = float(e["gapX"]) + TRUNK_INSET + inner * (float(rank) + 1.0) / (
-                float(n) + 1.0
-            );
+            x = float(e["gapX"])
+                + TRUNK_INSET
+                + inner * (float(rank) + 1.0) / (float(n) + 1.0);
             edges[idx]["trunkX"] = x;
         }
     }
@@ -419,18 +419,39 @@ def:pub laneWires(
                 d = "M " + str(ex) + " " + str(ey) + " L " + str(ix) + " " + str(iy);
             } else {
                 d = (
-                    "M " + str(ex) + " " + str(ey) + " L " + str(trunk) + " " + str(
-                        ey
-                    ) + " L " + str(trunk) + " " + str(iy) + " L " + str(ix) + " " + str(
-                        iy
-                    )
+                    "M "
+                    + str(ex)
+                    + " "
+                    + str(ey)
+                    + " L "
+                    + str(trunk)
+                    + " "
+                    + str(ey)
+                    + " L "
+                    + str(trunk)
+                    + " "
+                    + str(iy)
+                    + " L "
+                    + str(ix)
+                    + " "
+                    + str(iy)
                 );
             }
             dirn = 1.0 if e["rightward"] else -1.0;
             arrow = (
-                "M " + str(ix) + " " + str(iy) + " L " + str(ix - 8.0 * dirn) + " " + str(
-                    iy - 4.5
-                ) + " L " + str(ix - 8.0 * dirn) + " " + str(iy + 4.5) + " Z"
+                "M "
+                + str(ix)
+                + " "
+                + str(iy)
+                + " L "
+                + str(ix - 8.0 * dirn)
+                + " "
+                + str(iy - 4.5)
+                + " L "
+                + str(ix - 8.0 * dirn)
+                + " "
+                + str(iy + 4.5)
+                + " Z"
             );
             span = iy - ey;
             if span < 0.0 {
@@ -467,17 +488,38 @@ def:pub laneWires(
             ix = tx + NODE_W / 2.0 + inOff;
             iy = ty if downward else ty + LANE_NODE_H;
             d = (
-                "M " + str(ex) + " " + str(ey) + " L " + str(ex) + " " + str(
-                    (ey + iy) / 2.0
-                ) + " L " + str(ix) + " " + str((ey + iy) / 2.0) + " L " + str(ix) + " " + str(
-                    iy
-                )
+                "M "
+                + str(ex)
+                + " "
+                + str(ey)
+                + " L "
+                + str(ex)
+                + " "
+                + str((ey + iy) / 2.0)
+                + " L "
+                + str(ix)
+                + " "
+                + str((ey + iy) / 2.0)
+                + " L "
+                + str(ix)
+                + " "
+                + str(iy)
             );
             dirn = 1.0 if downward else -1.0;
             arrow = (
-                "M " + str(ix) + " " + str(iy) + " L " + str(ix - 4.5) + " " + str(
-                    iy - 8.0 * dirn
-                ) + " L " + str(ix + 4.5) + " " + str(iy - 8.0 * dirn) + " Z"
+                "M "
+                + str(ix)
+                + " "
+                + str(iy)
+                + " L "
+                + str(ix - 4.5)
+                + " "
+                + str(iy - 8.0 * dirn)
+                + " L "
+                + str(ix + 4.5)
+                + " "
+                + str(iy - 8.0 * dirn)
+                + " Z"
             );
             lx = ix;
             ly = (ey + iy) / 2.0;
