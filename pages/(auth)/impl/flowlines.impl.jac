@@ -4,6 +4,19 @@ prev/next truth lives. Locals are read before any await (stale-snapshot rule).
 """
 
 impl FlowLinePage.boot -> None {
+    # My standing here gates the edit affordances; own root = owner.
+    try {
+        t0 = spaceRoot();
+        if str(t0) {
+            cres = t0 spawn GetOrgContext();
+            ctx = cres.reports[0] if cres.reports else None;
+            myLevel = ctx["level"] if ctx and ctx["ok"] else "";
+        } else {
+            myLevel = "owner";
+        }
+    } except Exception as e {
+        myLevel = "";
+    }
     loadMeta();
     # The board persists its project filter under the same key, so the two
     # tabs stay on the same project rather than each keeping a private idea
@@ -18,7 +31,8 @@ impl FlowLinePage.boot -> None {
         lineView = "lanes";
     }
     try {
-        result = root spawn ListProjects();
+        t = spaceRoot();
+        result = t spawn ListProjects();
         projects = result.reports[0] if result.reports else [];
     } except Exception as e {
         projects = [];
@@ -26,9 +40,11 @@ impl FlowLinePage.boot -> None {
     # Roles and roster feed the who-does-what strip; the diagram loads
     # fine without them, so failure here stays quiet.
     try {
-        roleResult = root spawn ListRoles();
+        t = spaceRoot();
+        roleResult = t spawn ListRoles();
         roleRows = roleResult.reports[0] if roleResult.reports else [];
-        memResult = root spawn ListMembers();
+        t = spaceRoot();
+        memResult = t spawn ListMembers();
         roleMembers = memResult.reports[0] if memResult.reports else [];
     } except Exception as e {
         roleRows = [];
@@ -38,7 +54,8 @@ impl FlowLinePage.boot -> None {
 
 impl FlowLinePage.reload(pid: str) -> None {
     try {
-        result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
+        t = spaceRoot();
+        result = t spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
     } except Exception as e {
         toast("Failed to load your flow line");
@@ -78,7 +95,8 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
     try {
         step = 1;
         while step <= wanted and step <= 20 {
-            result = root spawn ListStepTasks(
+            t = spaceRoot();
+            result = t spawn ListStepTasks(
                 step_id=stepId,
                 project_id=pid if pid and pid != "all" else "",
                 page=step,
@@ -115,7 +133,8 @@ impl FlowLinePage.morePeek -> None {
     peekLoadingMore = True;
     have = [t for t in peekTasks];
     try {
-        result = root spawn ListStepTasks(
+        tgt = spaceRoot();
+        result = tgt spawn ListStepTasks(
             step_id=stepId,
             project_id=pid if pid and pid != "all" else "",
             page=wanted,
@@ -243,7 +262,8 @@ impl FlowLinePage.saveTask -> None {
                     }
                 }
                 if not onProject {
-                    root spawn AssignToProject(member_id=aid, project_id=project);
+                    t = spaceRoot();
+                    t spawn AssignToProject(member_id=aid, project_id=project);
                     added = added + 1;
                 }
             }
@@ -251,7 +271,8 @@ impl FlowLinePage.saveTask -> None {
                 toast("Added " + str(added) + " assignee(s) to the project");
             }
         }
-        root spawn UpdateTask(
+        t = spaceRoot();
+        t spawn UpdateTask(
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
@@ -289,7 +310,8 @@ impl FlowLinePage.deleteTask -> None {
     fromStep = peekId;
     pid = projectId;
     try {
-        root spawn DeleteTask(task_id=editTaskId);
+        t = spaceRoot();
+        t spawn DeleteTask(task_id=editTaskId);
         taskOpen = False;
         await reload(pid);
         await refreshPeek(fromStep, pid);
@@ -310,7 +332,8 @@ impl FlowLinePage.selectProject(v: str) -> None {
 
 impl FlowLinePage.loadMeta -> None {
     try {
-        result = root spawn GetFlowLineMeta();
+        t = spaceRoot();
+        result = t spawn GetFlowLineMeta();
         payload = result.reports[0] if result.reports else None;
         if payload and payload["name"] {
             lineName = payload["name"];
@@ -339,7 +362,8 @@ impl FlowLinePage.lanePlan -> dict[str, any] {
 impl FlowLinePage.pickTemplate(key: str) -> None {
     applying = key;
     try {
-        result = root spawn ApplyTemplate(template_key=key);
+        t = spaceRoot();
+        result = t spawn ApplyTemplate(template_key=key);
         fresh = result.reports[0] if result.reports else [];
         if len(fresh) > 0 {
             steps = fresh;
@@ -371,7 +395,8 @@ impl FlowLinePage.saveRename -> None {
         return;
     }
     try {
-        result = root spawn RenameFlowLine(name=value);
+        t = spaceRoot();
+        result = t spawn RenameFlowLine(name=value);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["name"] {
             lineName = payload["name"];
@@ -414,7 +439,8 @@ impl FlowLinePage.commitName -> None {
         }
         saving = True;
         try {
-            result = root spawn SaveStep(
+            t = spaceRoot();
+            result = t spawn SaveStep(
                 name=name,
                 kind=form["kind"] or "active",
                 color=form["color"] or "",
@@ -467,7 +493,8 @@ impl FlowLinePage.commitName -> None {
     saving = True;
     try {
         # SaveStep reads empty as "keep", so a lone space clears the field.
-        root spawn SaveStep(
+        t = spaceRoot();
+        t spawn SaveStep(
             step_id=selectedId, name=name, owner=owner or " ", blurb=blurb or " "
         );
         await reload(projectId);
@@ -484,14 +511,15 @@ impl FlowLinePage.commitField(key: str, value: str) -> None {
     }
     try {
         if key == "kind" {
-            root spawn SaveStep(step_id=selectedId, kind=value);
+            t = spaceRoot();
+            t spawn SaveStep(step_id=selectedId, kind=value);
         } elif key == "color" {
-            root spawn SaveStep(step_id=selectedId, color=value);
+            t = spaceRoot();
+            t spawn SaveStep(step_id=selectedId, color=value);
         } elif key == "owner" {
             # SaveStep reads empty as "keep", so a lone space clears.
-            root spawn SaveStep(
-                step_id=selectedId, owner=value if value.strip() else " "
-            );
+            t = spaceRoot();
+            t spawn SaveStep(step_id=selectedId, owner=value if value.strip() else " ");
         }
         await reload(projectId);
     } except Exception as e {
@@ -512,7 +540,8 @@ impl FlowLinePage.deleteStep -> None {
     saving = True;
     gone = selectedId;
     try {
-        result = root spawn DeleteStep(step_id=gone);
+        t = spaceRoot();
+        result = t spawn DeleteStep(step_id=gone);
         payload = result.reports[0] if result.reports else None;
         if payload and not payload["ok"] {
             confirmDelete = False;
@@ -537,7 +566,8 @@ impl FlowLinePage.deleteStep -> None {
 impl FlowLinePage.deleteFlowLine -> None {
     wiping = True;
     try {
-        result = root spawn DeleteFlowLine();
+        t = spaceRoot();
+        result = t spawn DeleteFlowLine();
         payload = result.reports[0] if result.reports else None;
         if not payload or not payload["ok"] {
             toast("The flow line could not be deleted");
@@ -567,7 +597,8 @@ impl FlowLinePage.deleteFlowLine -> None {
 
 impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
     try {
-        result = root spawn LinkTransition(from_id=fromId, to_id=toId);
+        t = spaceRoot();
+        result = t spawn LinkTransition(from_id=fromId, to_id=toId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             await reload(projectId);
@@ -606,7 +637,8 @@ impl FlowLinePage.commitEdgeLabel(
     # through LabelTransition rather than re-drawing the arrow. The tag
     # rides along: the editor saves both fields at once.
     try {
-        result = root spawn LabelTransition(
+        t = spaceRoot();
+        result = t spawn LabelTransition(
             from_id=fromId, to_id=toId, label=said, carries=carried
         );
         payload = result.reports[0] if result.reports else None;
@@ -631,7 +663,8 @@ impl FlowLinePage.commitEdgeLabel(
 impl FlowLinePage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {
-        root spawn UnlinkTransition(from_id=fromId, to_id=toId);
+        t = spaceRoot();
+        t spawn UnlinkTransition(from_id=fromId, to_id=toId);
         await reload(projectId);
     } except Exception as e {
         toast("Could not remove that transition");
@@ -1025,7 +1058,8 @@ impl FlowLinePage.endDrag(e: MouseEvent) -> None {
     nx = float(drag["lx"]);
     ny = float(drag["ly"]);
     try {
-        root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
+        t = spaceRoot();
+        t spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
         await reload(projectId);
     } except Exception as err {
         toast("Failed to save the position");

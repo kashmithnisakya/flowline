@@ -35,7 +35,14 @@ impl LoginPage.submit(e: FormEvent) -> None {
             # Marker for the session-expired notice: a 401 clears the JWT
             # and reloads, and this is how /login knows it was a timeout.
             localStorage.setItem("standup_session", "1");
-            window.location.href = "/board";
+            # A stashed invite outranks the board: finish joining first.
+            pending: str = "";
+            try {
+                pending = localStorage.getItem("standup_invite") or "";
+            } except Exception {
+                pending = "";
+            }
+            window.location.href = "/join" if pending else "/board";
         } else {
             error = "Invalid email or password.";
         }

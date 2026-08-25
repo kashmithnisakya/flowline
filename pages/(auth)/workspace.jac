@@ -5,11 +5,13 @@ self-contained section, so the page stays a thin shell."""
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
+import from ...lib.session { spaceRoot }
 import from ...models { Project, MemberView }
 import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
 import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
+import from ...components.roster.InvitePanel { InvitePanel }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
 import from ...components.workspace.RolesSection { RolesSection }
@@ -200,8 +202,9 @@ def:pub WorkspacePage -> JsxPage {
                 >
                     <p className="text-sm text-muted-foreground">
                         <span className="tabular-nums">{str(len(active))}</span>
-                        {" on the roster. They are records, not accounts."}
+                        {" on the roster. Invite someone to give their row a login."}
                     </p>
+                    <InvitePanel members={members} onChanged={loadAll}/>
                     {if loading {
                         <div
                             key="sk"

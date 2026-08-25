@@ -22,7 +22,8 @@ impl DailyLogPage.loadWeek -> None {
         pageNo = 1;
         more = True;
         while more and pageNo <= 10 {
-            result = root spawn ListLogEntries(
+            t = spaceRoot();
+            result = t spawn ListLogEntries(
                 from_date=monday, to_date=sunday, page=pageNo, page_size=500
             );
             got = result.reports[0] if result.reports else None;
@@ -51,7 +52,8 @@ impl DailyLogPage.loadWeek -> None {
         }
         # Roster only on the first load; it does not change with the week.
         if len(memberNames) == 0 {
-            mResult = root spawn ListMembers();
+            t = spaceRoot();
+            mResult = t spawn ListMembers();
             fetched = mResult.reports[0] if mResult.reports else [];
             memberNames = [
                 m.name
@@ -94,7 +96,8 @@ impl DailyLogPage.deleteSelected -> None {
         return;
     }
     try {
-        root spawn DeleteLogEntries(entry_ids=selectedIds);
+        t = spaceRoot();
+        t spawn DeleteLogEntries(entry_ids=selectedIds);
         selecting = False;
         selectedIds = [];
         await loadWeek();

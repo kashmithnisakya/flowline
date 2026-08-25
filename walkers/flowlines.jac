@@ -16,10 +16,15 @@ import from models {
     hydrate_views,
     step_view,
     resolve,
-    on_attached,
     owned
 }
-import from walkers.util { now_iso, page_bounds }
+import from walkers.util {
+    now_iso,
+    page_bounds,
+    caller_level,
+    level_rank,
+    attach_stamp
+}
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
@@ -82,7 +87,7 @@ def get_meta(holder: Root) -> WorkflowMeta {
         return existing[0];
     }
     fresh = holder ++> WorkflowMeta();
-    on_attached(holder, fresh);
+    attach_stamp(holder, fresh);
     return fresh;
 }
 
@@ -113,6 +118,11 @@ walker RenameFlowLine {
         reports: list[dict[str, str]] = [];
 
     can rename with Root entry {
+        # Members below manager cannot edit the flow line; silent no-op like
+        # every other unauthorized mutation.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         meta = get_meta(here);
         if self.name.strip() {
             meta.name = self.name.strip();
@@ -238,6 +248,10 @@ walker ApplyTemplate {
         reports: list[list[StepView]] = [];
 
     can apply with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         existing = [here-->[?:WorkflowStep]];
         if existing {
             views: list[StepView] = [];
@@ -277,7 +291,7 @@ walker ApplyTemplate {
                 created_at=stamp,
                 updated_at=stamp
             );
-            on_attached(here, fresh);
+            attach_stamp(here, fresh);
             made.append(fresh);
             order = order + 1024.0;
         }
@@ -301,6 +315,11 @@ walker ApplyTemplate {
             }
             source +>:FlowsTo(label=said, carries=carried):+> target;
         }
+        # Steps were stamped before their transitions were wired; re-stamp
+        # so the fresh FlowsTo edges carry the grants too (idempotent).
+        for m in made {
+            attach_stamp(here, m);
+        }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
         meta = get_meta(here);
@@ -319,7 +338,7 @@ walker ApplyTemplate {
                         color=rr["color"] if "color" in rr else "",
                         sort_order=r_order
                     );
-                    on_attached(here, fresh_role);
+                    attach_stamp(here, fresh_role);
                 }
                 r_order = r_order + 1024.0;
             }
@@ -364,6 +383,10 @@ walker SaveStep {
         reports: list[StepView] = [];
 
     can save with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         # Clamp before anything else: the response envelope echoes these
         # fields, so a non-finite float would 500 the request even when the
         # stored value is clean.
@@ -421,7 +444,7 @@ walker SaveStep {
             created_at=stamp,
             updated_at=stamp
         );
-        on_attached(here, fresh);
+        attach_stamp(here, fresh);
         report step_view(fresh);
     }
 }
@@ -434,6 +457,11 @@ walker MoveStep(find_step) {
         reports: list[StepView] = [];
 
     can move with WorkflowStep entry {
+        # Below manager: silent no-op. `here` is the step, so the org root
+        # for the level check is its holder.
+        if level_rank(caller_level([here<--][0], jid(root))) < 3 {
+            disengage;
+        }
         # Clamp the walker's own fields too, not just what is stored: the
         # response envelope echoes them, and a non-finite float there is not
         # JSON-encodable, so the request would 500 even with clean data.
@@ -457,6 +485,10 @@ walker DeleteStep(find_step) {
     can remove with WorkflowStep entry {
         owners = [here<--];
         holder = owners[0];
+        # Below manager: silent no-op.
+        if level_rank(caller_level(holder, jid(root))) < 3 {
+            disengage;
+        }
         kind = here.kind;
         if kind == "start" or kind == "done" {
             siblings = 0;
@@ -502,6 +534,10 @@ walker DeleteFlowLine {
     has reports: list[dict[str, any]] = [];
 
     can wipe with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         steps = [here-->[?:WorkflowStep]];
         gone: list[str] = [];
         for s in steps {
@@ -535,6 +571,10 @@ walker LinkTransition {
         reports: list[dict[str, any]] = [];
 
     can link with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -569,6 +609,8 @@ walker LinkTransition {
             disengage;
         }
         source +>:FlowsTo(label=self.label.strip(), carries=carried):+> target;
+        # Re-stamp the source so the fresh outgoing edge carries the grants.
+        attach_stamp(here, source);
         report {"ok": True, "linked": True, "duplicate": False};
     }
 }
@@ -586,6 +628,10 @@ walker LabelTransition {
         reports: list[dict[str, any]] = [];
 
     can relabel with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -619,6 +665,10 @@ walker UnlinkTransition {
         reports: list[dict[str, any]] = [];
 
     can unlink with Root entry {
+        # Below manager: silent no-op.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {

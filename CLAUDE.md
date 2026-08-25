@@ -122,13 +122,65 @@ was deleted) fall back to `STATUS_KIND[status]` and render in the first column
 of that kind; an org with no flow line at all falls back to `STATUSES`. Both
 fallbacks are load-bearing — do not assume a task has a step.
 
+### Organizations — one board, many accounts
+
+Since Aug 2026 an account's root can be SHARED: teammates sign in with their
+own accounts and hold an ACL key to the founder's root (the org graph). All of
+it lives in `walkers/org.jac` plus the grant helpers in `walkers/util.jac`.
+
+- **Levels**: `viewer` / `editor` / `manager` (`ORG_LEVELS` in constants),
+  `owner` derived from owning the root, ranked by `level_rank`. The runtime
+  key is coarse (`acl_for_level`: viewer→READ, else WRITE); the finer lines
+  are walker checks — every mutating walker opens with a
+  `level_rank(caller_level(org_root, jid(root))) < N` gate that silently
+  `disengage`s, exactly like the `owned()` no-ops. Inside an nd-entered
+  walker `here` is the ORG root but `root` is the CALLER's root, so
+  `jid(root)` is the caller identity; a `[root-->]` traversal in a walker is
+  a bug (it reads the member's personal graph).
+- **The invite handshake** works within two runtime rules: only the owner's
+  session can grant on the org root, and pre-grant the two sides share only
+  `root.shared`. So: manager mints an `Invite` (only the code's SHA-256
+  persists), invitee parks a `JoinRequest` on `root.shared` granted READ to
+  the org root, owner's `ApproveJoin` proves code→invite and stamps the key.
+  The waiting UI (`/join`) polls `CheckJoin`, which writes the `Membership`
+  row on the member's OWN root (login routing + space switcher read it).
+- **Ownership is creator-sticky**: a node a member creates is owned by their
+  account, so the root cascade does not cover it for anyone else.
+  `attach_stamp(org_root, fresh)` (which replaced every `on_attached` call
+  site) stamps every linked member's key on the fresh node AND its incident
+  edges; `backfill_member` re-walks the graph at ApproveJoin (new joiners
+  see the past) and SetMemberLevel (per-node stamps are absolute, so a
+  demotion must overwrite them or the old WRITE entries win).
+- **Shields**: `Invite` nodes are NO_ACCESS below manager, the
+  `GithubConnection` below editor (`shield_node`); ApproveJoin/SetMemberLevel
+  keep those in sync. GitHub role gates run BEFORE `gh_request` — the graph
+  write being dropped does not undo an API call.
+- **Client space context**: `spaceRoot()` in `lib/session.jac` returns the
+  active board ("" = own root) and every walker call targets it
+  (`t = spaceRoot(); r = t spawn Walker(...)`). It is declared `-> Root`
+  purely because E1115 rejects str/any spawn targets; at runtime it is a
+  string the client sends as the nd. A bare `root spawn` in app code is
+  almost always a bug now — the exceptions are the setup wizard and the
+  walkers that genuinely run on the caller's own root (`RequestJoin`,
+  `CheckJoin`, `ListMyMemberships`, `EnsureOrgMeta` from the layout).
+- **UI gating** reads `GetOrgContext` (level, org name, member identity):
+  layout hides Workspace below manager and badges viewers "View only";
+  board/flowlines/log hide edit affordances for viewers (`canEdit` on
+  KanbanColumn/TaskCard, `readOnly` on TaskDialog). Hiding is cosmetic; the
+  walker gates are the enforcement.
+- The org's display name is mirrored in-graph (`OrgMeta`, seeded lazily by
+  `EnsureOrgMeta` from the owner's layout) because members cannot read the
+  owner's `/user/me` profile.
+
 ### Security model — the one thing not to regress
 
-Isolation is structural: authenticated walkers run on the caller's own root, so
-`[root --> …]` cannot reach another tenant. **But `jobj(id)` resolves any node
-id regardless of owner — resolution is not authorization.** Every jid-addressed
-mutation must call `owned(holder, target)` (or go through the `find_task` /
-`find_log_entry` lookup bases) before touching anything.
+Isolation is structural: authenticated walkers run on the caller's own root
+(or an org root their key opens), so `[root --> …]` cannot reach another
+tenant. **But `jobj(id)` resolves any readable node id — resolution is not
+authorization.** Every jid-addressed mutation must call `owned(holder,
+target)` (or go through the `find_task` / `find_log_entry` lookup bases)
+before touching anything, and mutating walkers additionally check the
+caller's org level (see Organizations above).
 
 **An uncaught walker exception is returned to the browser with its Python
 traceback** (the runtime sets `include_traceback` unconditionally, no config

@@ -36,7 +36,8 @@ impl GithubSection.boot -> None {
         }
         blank: dict[str, any] = {};
         try {
-            result = root spawn CompleteGithubInstall(
+            t = spaceRoot();
+            result = t spawn CompleteGithubInstall(
                 code=code, installation_id=installId, state=state
             );
             payload = result.reports[0] if result.reports else blank;
@@ -58,7 +59,8 @@ impl GithubSection.boot -> None {
 
 impl GithubSection.loadStatus -> None {
     try {
-        result = root spawn GithubStatus();
+        t = spaceRoot();
+        result = t spawn GithubStatus();
         view = result.reports[0] if result.reports else None;
         if view {
             conn = view;
@@ -71,9 +73,10 @@ impl GithubSection.loadStatus -> None {
 
 impl GithubSection.loadWorkspace -> None {
     try {
-        rResult = root spawn ListRepos();
-        pResult = root spawn ListProjects();
-        sResult = root spawn GetFlowLine();
+        t = spaceRoot();
+        rResult = t spawn ListRepos();
+        pResult = t spawn ListProjects();
+        sResult = t spawn GetFlowLine();
         fetched = rResult.reports[0] if rResult.reports else [];
         repos = fetched;
         projects = pResult.reports[0] if pResult.reports else [];
@@ -109,7 +112,8 @@ impl GithubSection.startInstall -> None {
     starting = True;
     blank: dict[str, any] = {};
     try {
-        result = root spawn StartGithubInstall();
+        t = spaceRoot();
+        result = t spawn StartGithubInstall();
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] and payload["url"] {
             # A full-page hop to github.com; this tab does not come back until
@@ -137,7 +141,8 @@ impl GithubSection.disconnect -> None {
     }
     confirmDisconnect = False;
     try {
-        root spawn DisconnectGithub();
+        t = spaceRoot();
+        t spawn DisconnectGithub();
         repoId = "";
         issues = [];
         pulls = [];
@@ -161,7 +166,8 @@ impl GithubSection.searchRepos -> None {
     try {
         needle = pickerQuery.strip();
         pickerRef.current = needle;
-        result = root spawn ListGithubRepos(query=needle, page=1);
+        t = spaceRoot();
+        result = t spawn ListGithubRepos(query=needle, page=1);
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
             pickerRows = payload["rows"] or [];
@@ -190,7 +196,8 @@ impl GithubSection.moreRepos -> None {
     pickerLoadingMore = True;
     blank: dict[str, any] = {};
     try {
-        result = root spawn ListGithubRepos(query=needle, page=wanted);
+        t = spaceRoot();
+        result = t spawn ListGithubRepos(query=needle, page=wanted);
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] and pickerRef.current == needle {
             # Sort the merged list: each page arrives sorted on its own, so
@@ -216,7 +223,8 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     attaching = fullName;
     project = pickerProject if pickerProject != "none" else "";
     try {
-        root spawn AddRepo(full_name=fullName, project_id=project);
+        t = spaceRoot();
+        t spawn AddRepo(full_name=fullName, project_id=project);
         await loadWorkspace();
         await searchRepos();
         toast("Attached " + fullName);
@@ -246,14 +254,15 @@ impl GithubSection.loadIssues(reset: bool) -> None {
     q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
+        t = spaceRoot();
         result = (
-            root spawn SearchRepoItems(
+            t spawn SearchRepoItems(
                 repo_id=repoId, kind="issues", query=q, state=issueState, page=wanted
             )
         )
             if q
             else (
-                root spawn ListRepoIssues(repo_id=repoId, state=issueState, page=wanted)
+                t spawn ListRepoIssues(repo_id=repoId, state=issueState, page=wanted)
             );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
@@ -291,13 +300,14 @@ impl GithubSection.loadPulls(reset: bool) -> None {
     q = searchQuery.strip();
     blank: dict[str, any] = {};
     try {
+        t = spaceRoot();
         result = (
-            root spawn SearchRepoItems(
+            t spawn SearchRepoItems(
                 repo_id=repoId, kind="pulls", query=q, state=prState, page=wanted
             )
         )
             if q
-            else (root spawn ListRepoPulls(repo_id=repoId, state=prState, page=wanted));
+            else (t spawn ListRepoPulls(repo_id=repoId, state=prState, page=wanted));
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
             pulls = base + (payload["rows"] or []);
@@ -354,7 +364,8 @@ impl GithubSection.importSelected -> None {
     project = importProject if importProject != "none" else "";
     blank: dict[str, any] = {};
     try {
-        result = root spawn ImportIssues(
+        t = spaceRoot();
+        result = t spawn ImportIssues(
             repo_id=repoId,
             numbers=selected,
             project_id=project,

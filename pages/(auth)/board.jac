@@ -23,6 +23,7 @@ import from ...walkers.tasks {
 }
 import from ...walkers.flowlines { GetFlowLine }
 import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
+import from ...walkers.org { GetOrgContext }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
@@ -35,6 +36,7 @@ import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
+import from ...lib.session { spaceRoot }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -61,7 +63,10 @@ glob BLANK_TASK: dict[str, str] = {
 
 
 def:pub BoardPage -> JsxPage {
-    has showAllDone: bool = False,
+    has  # My standing on this board: "owner" on the account's own root,
+    # else the org level. Viewers get a read-only board.
+    myLevel: str = "",
+        showAllDone: bool = False,
         # The working set: open tasks plus Done touched in the last week,
         # which is everything the board renders until "completed earlier"
         # is opened. Older Done history pages in on demand below.
@@ -329,7 +334,7 @@ def:pub BoardPage -> JsxPage {
                             onHideDone={lambda { hideDone = not hideDone; }}
                             categories={allCategories}
                         />
-                        {if ghConnected {
+                        {if ghConnected and myLevel != "viewer" {
                             <Button
                                 key="sync"
                                 variant="outline"
@@ -342,7 +347,11 @@ def:pub BoardPage -> JsxPage {
                                 {"Syncing…" if syncing else "Sync GitHub"}
                             </Button>
                         }}
-                        <Button onClick={lambda { openCreate(""); }}>New task</Button>
+                        {if myLevel != "viewer" {
+                            <Button key="new" onClick={lambda { openCreate(""); }}>
+                                New task
+                            </Button>
+                        }}
                     </div>
                 } }
             </div>
@@ -521,6 +530,7 @@ def:pub BoardPage -> JsxPage {
                                 olderPage + 1, fProject, fAssignee, fCategory
                             ); }}
                             onAddTask={openCreate}
+                            canEdit={myLevel != "viewer"}
                             overdueCount={0
                                 if key == doneKey
                                 else len(
@@ -538,6 +548,7 @@ def:pub BoardPage -> JsxPage {
             }   }
             <TaskDialog
                 open={dialogOpen}
+                readOnly={myLevel == "viewer"}
                 editing={bool(editingId)}
                 form={form}
                 projects={activeProjects}

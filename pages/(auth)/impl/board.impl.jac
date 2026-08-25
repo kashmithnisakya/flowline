@@ -1,12 +1,27 @@
 """Implementations for the Board page."""
 
 impl BoardPage.boot -> None {
-    # Onboarding gate: a workspace with no projects yet goes to the wizard.
-    # (The organization itself is created at signup.)
+    # My standing here gates the edit affordances; own root = owner.
     try {
-        projResult = root spawn ListProjects();
+        t0 = spaceRoot();
+        if str(t0) {
+            cres = t0 spawn GetOrgContext();
+            ctx = cres.reports[0] if cres.reports else None;
+            myLevel = ctx["level"] if ctx and ctx["ok"] else "";
+        } else {
+            myLevel = "owner";
+        }
+    } except Exception as e {
+        myLevel = "";
+    }
+    # Onboarding gate: a workspace with no projects yet goes to the wizard.
+    # Founders only: a member on a joined org root must never land in the
+    # owner's wizard, however empty the org still is.
+    try {
+        t = spaceRoot();
+        projResult = t spawn ListProjects();
         existing = projResult.reports[0] if projResult.reports else [];
-        if len(existing) == 0 {
+        if len(existing) == 0 and not str(t) {
             window.location.href = "/setup";
             return;
         }
@@ -16,7 +31,8 @@ impl BoardPage.boot -> None {
     # Cheap and never fails on its own: it only decides whether the board
     # offers the GitHub affordances at all.
     try {
-        gResult = root spawn GithubStatus();
+        t = spaceRoot();
+        gResult = t spawn GithubStatus();
         if gResult.reports {
             ghConnected = gResult.reports[0].connected;
         }
@@ -43,7 +59,8 @@ impl BoardPage.loadAll -> None {
         pageNo = 1;
         more = True;
         while more and pageNo <= 20 {
-            tResult = root spawn ListTasks(scope="working", page=pageNo, page_size=500);
+            t = spaceRoot();
+            tResult = t spawn ListTasks(scope="working", page=pageNo, page_size=500);
             tPage = tResult.reports[0] if tResult.reports else None;
             if not tPage {
                 more = False;
@@ -55,14 +72,15 @@ impl BoardPage.loadAll -> None {
             pageNo = pageNo + 1;
         }
         truncated = more;
-        cResult = root spawn TaskCounts();
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
+        t = spaceRoot();
+        cResult = t spawn TaskCounts();
+        mResult = t spawn ListMembers();
+        pResult = t spawn ListProjects();
         # The board counts its own columns; skipping the server's per-step
         # count spares a walk over every task on each poll.
-        sResult = root spawn GetFlowLine(with_counts=False);
-        rResult = root spawn ListRepos();
-        roResult = root spawn ListRoles();
+        sResult = t spawn GetFlowLine(with_counts=False);
+        rResult = t spawn ListRepos();
+        roResult = t spawn ListRoles();
         fetchedMembers = mResult.reports[0] if mResult.reports else [];
         fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
@@ -172,7 +190,8 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
     # await is the value from the render that started this call.
     have: list[TaskView] = rowsRef.current or [];
     try {
-        result = root spawn ListTasks(
+        t = spaceRoot();
+        result = t spawn ListTasks(
             scope="older",
             project_id=pid if pid != "all" else "",
             assignee_id=who if who != "All" else "",
@@ -233,7 +252,8 @@ impl BoardPage.openById(taskId: str) -> None {
     # A card outside the working set (older history, a palette hit): one
     # owner-checked fetch rather than loading everything to find it.
     try {
-        result = root spawn GetTask(task_id=taskId);
+        tgt = spaceRoot();
+        result = tgt spawn GetTask(task_id=taskId);
         found = result.reports[0] if result.reports else None;
         if found {
             openEdit(found);
@@ -310,7 +330,8 @@ impl BoardPage.saveTask -> None {
                     }
                 }
                 if not onProject {
-                    root spawn AssignToProject(member_id=aid, project_id=project);
+                    t = spaceRoot();
+                    t spawn AssignToProject(member_id=aid, project_id=project);
                     added = added + 1;
                 }
             }
@@ -319,7 +340,8 @@ impl BoardPage.saveTask -> None {
             }
         }
         if editingId {
-            root spawn UpdateTask(
+            t = spaceRoot();
+            t spawn UpdateTask(
                 task_id=editingId,
                 title=title,
                 category=form["category"],
@@ -336,7 +358,8 @@ impl BoardPage.saveTask -> None {
                 project_id=project
             );
         } else {
-            root spawn CreateTask(
+            t = spaceRoot();
+            t spawn CreateTask(
                 title=title,
                 category=form["category"],
                 priority=form["priority"],
@@ -364,7 +387,8 @@ impl BoardPage.deleteTask -> None {
     }
     saving = True;
     try {
-        root spawn DeleteTask(task_id=editingId);
+        t = spaceRoot();
+        t spawn DeleteTask(task_id=editingId);
         dialogOpen = False;
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
@@ -534,11 +558,13 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     landed: list[TaskView] = [];
     try {
         if onFlowLine {
-            result = root spawn MoveTask(
+            tgt = spaceRoot();
+            result = tgt spawn MoveTask(
                 task_id=taskId, step_id=columnKey, step_name=label
             );
         } else {
-            result = root spawn MoveTask(task_id=taskId, status=columnKey);
+            tgt = spaceRoot();
+            result = tgt spawn MoveTask(task_id=taskId, status=columnKey);
         }
         landed = result.reports or [];
     } except Exception as e {
@@ -627,7 +653,8 @@ impl BoardPage.toggleAssignee(memberId: str) -> None {
 impl BoardPage.saveMoveInfo -> None {
     saving = True;
     try {
-        root spawn SetMoveInfo(
+        t = spaceRoot();
+        t spawn SetMoveInfo(
             task_id=moveTaskId,
             reviewer_id=mForm["reviewer"] if mForm["reviewer"] != "none" else "",
             review_due=mForm["review_due"],
@@ -665,7 +692,8 @@ impl BoardPage.syncGithub -> None {
     }
     syncing = True;
     try {
-        result = root spawn SyncGithub();
+        t = spaceRoot();
+        result = t spawn SyncGithub();
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             # loadAll owns the refresh, including the movesRef fence: an
@@ -688,7 +716,8 @@ impl BoardPage.createIssue(repoId: str) -> None {
     }
     saving = True;
     try {
-        result = root spawn CreateIssueFromTask(task_id=editingId, repo_id=repoId);
+        t = spaceRoot();
+        result = t spawn CreateIssueFromTask(task_id=editingId, repo_id=repoId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             opened = payload["task"];

@@ -19,10 +19,16 @@ import from models {
     AssignedTo,
     ForProject,
     resolve,
-    on_attached,
     owned
 }
-import from walkers.util { now_iso, minutes_since }
+import from walkers.util {
+    now_iso,
+    minutes_since,
+    caller_level,
+    level_rank,
+    attach_stamp,
+    shield_node
+}
 import from walkers.log { record_task_event }
 import from walkers.tasks { find_task, status_for_step }
 import from walkers.ghutil {
@@ -123,6 +129,11 @@ walker StartGithubInstall {
     has reports: list[dict[str, any]] = [];
 
     can begin with Root entry {
+        # Members below manager cannot touch the GitHub connection; the
+        # check runs before any GitHub API call on purpose.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         gaps = missing_config();
         if gaps {
             report {
@@ -137,7 +148,8 @@ walker StartGithubInstall {
         target = existing[0] if existing else None;
         if not target {
             target = here ++> GithubConnection();
-            on_attached(here, target);
+            attach_stamp(here, target);
+            shield_node(here, target, 2);
         }
         nonce = new_state();
         target.pending_state = nonce;
@@ -158,6 +170,11 @@ walker CompleteGithubInstall {
         reports: list[dict[str, any]] = [];
 
     can finish with Root entry {
+        # Members below manager cannot touch the GitHub connection; the
+        # check runs before any GitHub API call on purpose.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         existing = [here-->[?:GithubConnection]];
         target = existing[0] if existing else None;
         if not isinstance(target, GithubConnection) {
@@ -239,6 +256,11 @@ walker DisconnectGithub {
     has reports: list[dict[str, any]] = [];
 
     can drop with Root entry {
+        # Members below manager cannot touch the GitHub connection; the
+        # check runs before any GitHub API call on purpose.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         existing = [here-->[?:GithubConnection]];
         for c in existing {
             forget_installation(c.installation_id);
@@ -694,6 +716,10 @@ walker ImportIssues {
         reports: list[dict[str, any]] = [];
 
     can pull with Root entry {
+        # Editor gate, before any GitHub call.
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         full_name = owned_full_name(here, self.repo_id);
         if not full_name {
             report {"ok": False, "error": "not_found", "message": "Unknown repo."};
@@ -798,7 +824,6 @@ walker ImportIssues {
                 gh_issue_state=issue_state,
                 gh_synced_at=stamp
             );
-            on_attached(here, fresh);
             if isinstance(target_project, Project) {
                 fresh +>:ForProject():+> target_project;
             }
@@ -818,6 +843,9 @@ walker ImportIssues {
                     fresh +>:AssignedTo():+> m;
                 }
             }
+            # Stamp after the edges are wired so ForProject and AssignedTo
+            # pick up the member grants too.
+            attach_stamp(here, fresh);
             record_task_event(
                 here,
                 fresh,
@@ -842,6 +870,10 @@ walker CreateIssueFromTask(find_task) {
         # (what ownership is measured against) is one hop back.
         owners = [here<--];
         holder = owners[0];
+        # Editor gate, before any GitHub call.
+        if level_rank(caller_level(holder, jid(root))) < 2 {
+            disengage;
+        }
         if here.gh_issue_number != 0 {
             report {
                 "ok": False,
@@ -915,6 +947,10 @@ walker SyncGithub {
     has reports: list[dict[str, any]] = [];
 
     can refresh with Root entry {
+        # Editor gate, before any GitHub call.
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         c = connection_of(here);
         token = token_of(c);
         if not token {

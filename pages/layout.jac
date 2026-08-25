@@ -14,7 +14,8 @@ import from ..constants { STATUSES }
 # (CARRY_LABEL / WIRE_TINT killed FlowCanvas, the tally objs killed _entry).
 import from ..components.flowlines.kinds { CARRY_LABEL, WIRE_TINT }
 import from ..models { LogTotals, MemberDays, ProjectTally, TaskTotals }
-import from ..lib.session { fetchProfile }
+import from ..lib.session { fetchProfile, spaceRoot, setSpaceRoot }
+import from ..walkers.org { ListMyMemberships, GetOrgContext, EnsureOrgMeta }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
 import from ..components.common.Avatar { Avatar }
@@ -35,7 +36,7 @@ import from ..components.ui.dropdown_menu {
 }
 import from ..components.assistant.AssistantDock { AssistantDock }
 
-glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
+glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback", "/join"],
      THEME_CHOICES: list[dict[str, str]] = [
          {"value": "light", "label": "Light"},
          {"value": "dark", "label": "Dark"},
@@ -61,6 +62,12 @@ def:pub Shell -> JsxLayout {
         modelsPin: list[any] = [LogTotals, MemberDays, ProjectTally, TaskTotals],
         orgName: str = "",
         fullName: str = "",
+        # The active space: "" = this account's own board, otherwise a
+        # joined org's root id. spaceLevel is the caller's standing there
+        # ("owner" on their own board), and gates the admin chrome.
+        spaceOrgId: str = "",
+        spaceLevel: str = "",
+        memberships: list[dict[str, str]] = [],
         # Mirrors the html.dark class for the toggle icon. Read after
         # applyTheme so "system" resolves to what is actually showing.
         themeDark: bool = False,
@@ -99,10 +106,24 @@ def:pub Shell -> JsxLayout {
     def toggleTheme -> None;
     def pickTheme(pref: str) -> None;
 
+    def switchSpace(orgRootId: str) -> None;
+
     location = useLocation();
     chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
+    # Admin chrome hides only once we KNOW the caller is below manager;
+    # "" (still loading) keeps the owner's chrome from flashing away.
+    canManage = spaceLevel not in ["editor", "viewer"];
+    allowedItems: list[dict[str, str]] = [];
+    for item in NAV_ITEMS {
+        if item["to"] == "/workspace" and not canManage {
+            continue;
+        }
+        allowedItems.append(item);
+    }
     # The wizard has nothing to link to yet: every page would be empty.
-    navItems: list[dict[str, str]] = [] if location.pathname == "/setup" else NAV_ITEMS;
+    navItems: list[dict[str, str]] = []
+        if location.pathname == "/setup"
+        else allowedItems;
 
     def navClass(path: str) -> str {
         base = "rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 ";
@@ -151,6 +172,14 @@ def:pub Shell -> JsxLayout {
                             }}
                         </div>
                         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+                            {if spaceLevel == "viewer" {
+                                <span
+                                    key="viewonly"
+                                    className="rounded-full border border-border/70 bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                                >
+                                    View only
+                                </span>
+                            }}
                             <button
                                 type="button"
                                 aria-label="Open command palette"
@@ -275,12 +304,51 @@ def:pub Shell -> JsxLayout {
                                         }}
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator/>
+                                    {if len(memberships) > 0 {
+                                        <DropdownMenuLabel
+                                            key="spaces-label"
+                                            className="text-xs font-medium text-muted-foreground"
+                                        >
+                                            Spaces
+                                        </DropdownMenuLabel>
+                                    }}
+                                    {if len(memberships) > 0 {
+                                        <DropdownMenuItem
+                                            key="space-own"
+                                            onSelect={lambda { switchSpace(""); }}
+                                        >
+                                            {("● " if not spaceOrgId else "")
+                                                + "My workspace"}
+                                        </DropdownMenuItem>
+                                    }}
+                                    {for ms in memberships {
+                                        <DropdownMenuItem
+                                            key={"space-" + ms["org_root_id"]}
+                                            onSelect={lambda { switchSpace(
+                                                ms["org_root_id"]
+                                            ); }}
+                                        >
+                                            {(
+                                                "● "
+                                                    if spaceOrgId == ms["org_root_id"]
+                                                    else ""
+                                            )
+                                                + (
+                                                    ms["org_name"] or "Joined workspace"
+                                                )}
+                                        </DropdownMenuItem>
+                                    }}
+                                    {if len(memberships) > 0 {
+                                        <DropdownMenuSeparator key="spaces-sep"/>
+                                    }}
                                     <DropdownMenuItem asChild={True}>
                                         <Link to="/settings">Settings</Link>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem asChild={True}>
-                                        <Link to="/workspace">Workspace</Link>
-                                    </DropdownMenuItem>
+                                    {if canManage {
+                                        <DropdownMenuItem key="ws-item" asChild={True}>
+                                            <Link to="/workspace">Workspace</Link>
+                                        </DropdownMenuItem>
+                                    }}
                                     <DropdownMenuSeparator/>
                                     <DropdownMenuLabel
                                         className="text-xs font-medium text-muted-foreground"

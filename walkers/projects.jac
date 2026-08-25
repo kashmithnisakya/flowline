@@ -1,6 +1,7 @@
 """Project walkers: CRUD plus member assignment edges."""
 
-import from models { Project, Member, OnProject, resolve, on_attached, owned }
+import from models { Project, Member, OnProject, resolve, owned }
+import from walkers.util { caller_level, level_rank, attach_stamp }
 
 # ----------------------------------------------------------------- projects
 
@@ -25,6 +26,11 @@ walker SaveProject {
         reports: list[Project] = [];
 
     can save with Root entry {
+        # Members below manager cannot manage projects; silent no-op like
+        # every other unauthorized mutation.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         if not self.name.strip() {
             disengage;
         }
@@ -39,7 +45,7 @@ walker SaveProject {
             fresh = here ++> Project(
                 name=self.name.strip(), description=self.description
             );
-            on_attached(here, fresh);
+            attach_stamp(here, fresh);
             report fresh;
         }
     }
@@ -50,6 +56,10 @@ walker ArchiveProject {
     has project_id: str;
 
     can archive with Root entry {
+        # Members below manager cannot manage projects.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         target = resolve(self.project_id);
         if isinstance(target, Project) and owned(here, target) {
             target.active = False;
@@ -63,6 +73,10 @@ walker AssignToProject {
         project_id: str;
 
     can assign with Root entry {
+        # Members below manager cannot manage projects.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         m = resolve(self.member_id);
         p = resolve(self.project_id);
         if not isinstance(m, Member) or not isinstance(p, Project) {
@@ -73,6 +87,8 @@ walker AssignToProject {
         }
         if not [edge m->:OnProject:->p] {
             m +>:OnProject():+> p;
+            # Re-stamp so linked members' ACL grants cover the fresh edge.
+            attach_stamp(here, m);
         }
         report {"assigned": True};
     }
@@ -83,6 +99,10 @@ walker UnassignFromProject {
         project_id: str;
 
     can unassign with Root entry {
+        # Members below manager cannot manage projects.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         m = resolve(self.member_id);
         p = resolve(self.project_id);
         if not isinstance(m, Member) or not isinstance(p, Project) {

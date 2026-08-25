@@ -18,7 +18,15 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { now_iso, today_iso, shift_day, page_bounds }
+import from walkers.util {
+    now_iso,
+    today_iso,
+    shift_day,
+    page_bounds,
+    caller_level,
+    level_rank,
+    attach_stamp
+}
 import from walkers.log { record_task_event, sync_task_links }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
@@ -309,6 +317,11 @@ walker CreateTask {
         reports: list[TaskView] = [];
 
     can create with Root entry {
+        # Org members below editor cannot write tasks; silent no-op like
+        # every other unauthorized mutation.
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         if not self.title.strip() {
             disengage;
         }
@@ -344,7 +357,6 @@ walker CreateTask {
             updated_at=stamp,
             sort_order=peak + 1024.0
         );
-        on_attached(here, fresh);
         for aid in self.assignee_ids {
             m = resolve(aid);
             if isinstance(m, Member) and owned(here, m) {
@@ -355,6 +367,9 @@ walker CreateTask {
         if isinstance(p, Project) and owned(here, p) {
             fresh +>:ForProject():+> p;
         }
+        # After the edges: attach_stamp covers the node and its incident
+        # edges, and a member-created edge is as creator-sticky as the node.
+        attach_stamp(here, fresh);
         record_task_event(here, fresh, "Added to " + col, stamp);
         report fresh.to_view();
     }
@@ -391,9 +406,13 @@ walker UpdateTask(find_task) {
         reports: list[TaskView] = [];
 
     can apply with Task entry {
-        # The task's container is the caller's root (root ++> Task).
+        # The task's container is the org root reached via [here<--], NOT
+        # the caller's root: members enter this graph on a foreign root.
         owners = [here<--];
         holder = owners[0];
+        if level_rank(caller_level(holder, jid(root))) < 2 {
+            disengage;
+        }
         landing = self.status;
         if self.step_id {
             mapped = status_for_step(holder, self.step_id);
@@ -437,6 +456,9 @@ walker UpdateTask(find_task) {
         if isinstance(p, Project) and owned(holder, p) {
             here +>:ForProject():+> p;
         }
+        # Re-stamp: the rewired assignee/project edges are fresh and
+        # creator-sticky (idempotent for the task itself).
+        attach_stamp(holder, here);
         if moved {
             record_task_event(holder, here, "Moved to " + here.status, here.updated_at);
         }
@@ -469,6 +491,10 @@ walker SetMoveInfo(find_task) {
     can apply with Task entry {
         owners = [here<--];
         holder = owners[0];
+        # Editor gate (see UpdateTask).
+        if level_rank(caller_level(holder, jid(root))) < 2 {
+            disengage;
+        }
         rev = resolve(self.reviewer_id);
         if isinstance(rev, Member) and owned(holder, rev) {
             here.reviewer_id = self.reviewer_id;
@@ -500,9 +526,12 @@ walker MoveTask(find_task) {
         reports: list[TaskView] = [];
 
     can move with Task entry {
-        # The task's container is the caller's root (root ++> Task).
         owners = [here<--];
         holder = owners[0];
+        # Editor gate (see UpdateTask).
+        if level_rank(caller_level(holder, jid(root))) < 2 {
+            disengage;
+        }
         landing = self.status;
         label = self.status;
         # Who the move hands the task to: one member, or empty. A list, not
@@ -568,6 +597,11 @@ walker MoveTask(find_task) {
                 took = True;
             }
         }
+        if took {
+            # The handoff rewired the AssignedTo edge; re-stamp so every
+            # member keeps seeing it.
+            attach_stamp(holder, here);
+        }
         if landing != was or took {
             record_task_event(holder, here, note, here.updated_at);
         }
@@ -578,6 +612,12 @@ walker MoveTask(find_task) {
 
 walker DeleteTask(find_task) {
     can remove with Task entry {
+        owners = [here<--];
+        holder = owners[0];
+        # Editor gate (see UpdateTask).
+        if level_rank(caller_level(holder, jid(root))) < 2 {
+            disengage;
+        }
         gone = jid(here);
         del here;
         report {"deleted": gone};

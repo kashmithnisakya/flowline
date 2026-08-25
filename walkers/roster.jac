@@ -16,10 +16,10 @@ import from models {
     repo_view,
     role_view,
     resolve,
-    on_attached,
     owned,
     valid_full_name
 }
+import from walkers.util { caller_level, level_rank, attach_stamp }
 
 # ------------------------------------------------------------------- roster
 
@@ -48,6 +48,11 @@ walker SaveMember {
         reports: list[MemberView] = [];
 
     can save with Root entry {
+        # Members below manager cannot touch the roster; silent no-op like
+        # every other unauthorized mutation.
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         if not self.name.strip() {
             disengage;
         }
@@ -85,7 +90,7 @@ walker SaveMember {
                     if t.strip()
                 ]
             );
-            on_attached(here, fresh);
+            attach_stamp(here, fresh);
             report member_view(fresh);
         }
     }
@@ -100,6 +105,10 @@ walker SetMemberRoles {
         reports: list[MemberView] = [];
 
     can set_roles with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         target = resolve(self.member_id);
         if isinstance(target, Member) and owned(here, target) {
             target.roles = [
@@ -119,6 +128,10 @@ walker ArchiveMember {
     has member_id: str;
 
     can archive with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         target = resolve(self.member_id);
         if isinstance(target, Member) and owned(here, target) {
             target.active = False;
@@ -167,6 +180,10 @@ walker SaveRole {
         reports: list[dict[str, any]] = [];
 
     can save with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         said = self.name.strip();
         if not said {
             disengage;
@@ -188,7 +205,7 @@ walker SaveRole {
                 }
             }
             target = here ++> Role(name=said, sort_order=peak + 1024.0);
-            on_attached(here, target);
+            attach_stamp(here, target);
         }
         if self.touch_blurb {
             target.blurb = self.blurb.strip();
@@ -221,6 +238,10 @@ walker DeleteRole {
         reports: list[dict[str, any]] = [];
 
     can remove with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         said = self.name.strip();
         if not said {
             disengage;
@@ -267,6 +288,10 @@ walker AddRepo {
         reports: list[RepoView] = [];
 
     can add with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         fn = self.full_name.strip();
         # The client normalizes pasted URLs, but the walker is the endpoint
         # anyone can call, and this name later lands in an api.github.com
@@ -278,13 +303,15 @@ walker AddRepo {
         target = existing[0] if existing else None;
         if not target {
             target = here ++> Repo(full_name=fn);
-            on_attached(here, target);
+            attach_stamp(here, target);
         }
         if self.project_id {
             proj = resolve(self.project_id);
             if isinstance(proj, Project) and owned(here, proj) {
                 if not [edge proj->:HasRepo:->target] {
                     proj +>:HasRepo():+> target;
+                    # Re-stamp: the HasRepo edge postdates the node stamp.
+                    attach_stamp(here, target);
                 }
             }
         }
@@ -296,6 +323,10 @@ walker RemoveRepo {
     has repo_id: str;
 
     can remove with Root entry {
+        # Manager gate (see SaveMember).
+        if level_rank(caller_level(here, jid(root))) < 3 {
+            disengage;
+        }
         target = resolve(self.repo_id);
         if isinstance(target, Repo) and owned(here, target) {
             gone = jid(target);

@@ -46,6 +46,8 @@ def:pub KanbanColumn(
     onMoreOlder: Callable[[], None] = None,
     # Opens the task dialog with this column preselected.
     onAddTask: Callable[[str], None] = None,
+    # False for viewers: cards render without move/drag affordances.
+    canEdit: bool = True,
     # Overdue cards in this column, for the header signal.
     overdueCount: int = 0
 ) -> JsxElement {
@@ -152,6 +154,7 @@ def:pub KanbanColumn(
                         nextKey={nextKey}
                         nextLabel={nextLabel}
                         doneKey={doneKey}
+                        canEdit={canEdit}
                     />
                 }}
                 {if len(tasks) == 0 {
@@ -159,7 +162,9 @@ def:pub KanbanColumn(
                         key="empty"
                         className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground"
                     >
-                        {"Nothing here yet" if onAddTask else "Drop a task here"}
+                        {"Drop a task here"
+                            if (not onAddTask and canEdit)
+                            else "Nothing here yet"}
                     </div>
                 }}
                 {if showingAll and (moreOlder or loadingOlder) {
@@ -201,7 +206,7 @@ def:pub KanbanColumn(
                     </button>
                 }}
             </div>
-            {if onAddTask {
+            {if onAddTask and canEdit {
                 <button
                     key="add"
                     type="button"

@@ -5,6 +5,7 @@ this stays about the roles themselves."""
 
 import from ...models { MemberView, RoleView }
 import from ...walkers.roster { ListMembers, ListRoles, SaveRole, DeleteRole }
+import from ...lib.session { spaceRoot }
 import from ..flowlines.kinds { DOT_FILL, colorKey }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }

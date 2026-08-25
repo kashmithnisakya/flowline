@@ -186,4 +186,13 @@ glob STATUSES: list[str] = [
          "Changes Requested": "active",
          "Done": "done",
          "Blocked": "blocked"
+     },
+     # Org membership levels, weakest first. "owner" is never stored: it is
+     # derived from owning the org root. Shared by the invite dialog and the
+     # walkers' role checks.
+     ORG_LEVELS: list[str] = ["viewer", "editor", "manager"],
+     ORG_LEVEL_BLURBS: dict[str, str] = {
+         "viewer": "Sees the board, flow line, overview and log. Changes nothing.",
+         "editor": "Creates, moves and completes tasks. Writes the daily log.",
+         "manager": "Everything an editor does, plus projects, flow lines and inviting people."
      };

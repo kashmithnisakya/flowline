@@ -46,3 +46,58 @@ async def:pub fetchOrgName -> str {
     name = profile["org_name"] if profile["org_name"] else "";
     return name;
 }
+
+# The account's login email, from /user/me identities ("" when logged out).
+# The invite flow sends it so an email-pinned invite can match.
+async def:pub fetchAccountEmail -> str {
+    try {
+        response = await fetch("/user/me", {"headers": authHeaders()});
+        if not response.ok {
+            return "";
+        }
+        body = await response.json();
+        data = body["data"] if body["data"] else {};
+        ids = data["identities"] if data["identities"] else [];
+        for ident in ids {
+            if ident["value"] {
+                return str(ident["value"]);
+            }
+        }
+        return "";
+    } except Exception as e {
+        return "";
+    }
+}
+
+
+# ------------------------------------------------------------------- spaces
+# Which board this session operates on: "" is the account's own root (the
+# founder's org), an org root id means "a board this account joined". Every
+# walker call targets `spaceRoot()`: the compiled client sends it as the
+# spawn node, and the server enforces the caller's key on every request.
+
+# Declared -> Root because the value is only ever a spawn target and E1115
+# rejects str/any there. At runtime it IS a string: the compiled client
+# passes it through as the walker's node id ("" = the caller's own root).
+def:pub spaceRoot -> Root {
+    v: any = "";
+    try {
+        v = localStorage.getItem("standup_space") or "";
+    } except Exception {
+        v = "";
+    }
+    return v;
+}
+
+
+def:pub setSpaceRoot(orgRootId: str) -> None {
+    try {
+        if orgRootId {
+            localStorage.setItem("standup_space", orgRootId);
+        } else {
+            localStorage.removeItem("standup_space");
+        }
+    } except Exception {
+        return;
+    }
+}

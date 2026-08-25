@@ -10,6 +10,51 @@ impl Shell.loadOrg -> None {
     if who {
         fullName = who;
     }
+    # Space context: which board this session shows, and my standing there.
+    sp = spaceRoot();
+    spId = str(sp);
+    spaceOrgId = spId;
+    try {
+        mres = root spawn ListMyMemberships();
+        got = mres.reports[0] if mres.reports else None;
+        memberships = got["rows"] if got and got["rows"] else [];
+    } except Exception {
+        memberships = [];
+    }
+    if spId {
+        try {
+            cres = sp spawn GetOrgContext();
+            ctx = cres.reports[0] if cres.reports else None;
+            if ctx and ctx["ok"] {
+                spaceLevel = ctx["level"];
+                if ctx["org_name"] {
+                    orgName = ctx["org_name"];
+                }
+            } else {
+                # The key was revoked: fall back to the account's own board.
+                setSpaceRoot("");
+                window.location.reload();
+            }
+        } except Exception {
+            # Transient failure: keep the page, just without level gating.
+            spaceLevel = spaceLevel;
+        }
+    } else {
+        spaceLevel = "owner";
+        if name {
+            # Mirror the org name into the graph so members can read it.
+            try {
+                root spawn EnsureOrgMeta(name=name);
+            } except Exception {
+                spaceLevel = "owner";
+            }
+        }
+    }
+}
+
+impl Shell.switchSpace(orgRootId: str) -> None {
+    setSpaceRoot(orgRootId);
+    window.location.href = "/board";
 }
 
 impl Shell.logout -> None {

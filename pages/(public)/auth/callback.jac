@@ -34,7 +34,14 @@ def:pub SsoCallbackPage -> JsxPage {
             # Same marker a password login sets, so a later 401 can tell
             # this apart from a cold arrival at /login.
             localStorage.setItem("standup_session", "1");
-            window.location.href = "/board";
+            # A stashed invite outranks the board: finish joining first.
+            pending: str = "";
+            try {
+                pending = localStorage.getItem("standup_invite") or "";
+            } except Exception {
+                pending = "";
+            }
+            window.location.href = "/join" if pending else "/board";
         } else {
             failure = problem or "Sign-in was cancelled or failed.";
         }

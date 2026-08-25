@@ -5,9 +5,11 @@ fetched once (Mon-Sun) and the day view filters locally.
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect, useRef }
+import from ...lib.session { spaceRoot }
 import from ...models { LogEntry, MemberView }
 import from ...walkers.log { ListLogEntries, DeleteLogEntries }
 import from ...walkers.roster { ListMembers }
+import from ...walkers.org { GetOrgContext }
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
@@ -43,7 +45,8 @@ def mondayOf(iso: str) -> str {
 }
 
 def:pub DailyLogPage -> JsxPage {
-    has entries: list[LogEntry] = [],
+    has myLevel: str = "",  # My standing on this board; bulk delete hides for viewers.
+        entries: list[LogEntry] = [],
         # Roster names give the week matrix a row per person, quiet or not.
         memberNames: list[str] = [],
         selecting: bool = False,
@@ -69,6 +72,19 @@ def:pub DailyLogPage -> JsxPage {
 
     async can with entry {
         selectedDate = todayIso();
+        # My standing here gates the bulk-delete affordance.
+        try {
+            t0 = spaceRoot();
+            if str(t0) {
+                cres = t0 spawn GetOrgContext();
+                ctx = cres.reports[0] if cres.reports else None;
+                myLevel = ctx["level"] if ctx and ctx["ok"] else "";
+            } else {
+                myLevel = "owner";
+            }
+        } except Exception {
+            myLevel = "";
+        }
     }
 
     async can with [selectedDate] entry {
@@ -202,7 +218,7 @@ def:pub DailyLogPage -> JsxPage {
                         >
                             Delete ({len(selectedIds)})
                         </Button>
-                    } else {
+                    } elif myLevel != "viewer" {
                         <Button
                             key="sel"
                             variant="outline"
