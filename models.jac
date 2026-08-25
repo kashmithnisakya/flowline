@@ -69,7 +69,12 @@ node Member {
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
-        active: bool = True;
+        active: bool = True,
+        # A roster row becomes a login when an invite is approved: the
+        # member's account root id plus their org level ("" = roster only,
+        # no login). The level here is the authoritative role record.
+        account_root_id: str = "",
+        level: str = "";
 }
 
 node Repo {
@@ -417,7 +422,9 @@ obj MemberView {
         tags: list[str],
         active: bool,
         project_ids: list[str],
-        project_names: list[str];
+        project_names: list[str],
+        level: str = "",
+        linked: bool = False;
 }
 
 obj RepoView {
@@ -634,6 +641,51 @@ def member_view(m: Member) -> MemberView {
         tags=m.tags,
         active=m.active,
         project_ids=ids,
-        project_names=names
+        project_names=names,
+        level=m.level,
+        linked=bool(m.account_root_id)
     );
+}
+
+# ------------------------------------------------------------- organizations
+
+# The org's display name, readable in-graph. The owner's account profile
+# stays the source of truth; this mirror exists because members cannot read
+# another account's /user/me. Seeded lazily by EnsureOrgMeta.
+node OrgMeta {
+    has name: str = "";
+}
+
+# An invite minted by a manager. Only the SHA-256 of the code persists: the
+# link is shown once at creation, so a member who can somehow read this node
+# still cannot reconstruct it. status: pending -> done | revoked.
+node Invite {
+    has code_hash: str = "",
+        email: str = "",
+        level: str = "editor",
+        member_id: str = "",
+        created_at: str = "",
+        status: str = "pending";
+}
+
+# A claim parked on the deployment's shared root by the invitee (the only
+# graph both sides can reach before any grant exists). Carries the raw code
+# as proof of possession; readable only by its creator and the org root it
+# is addressed to.
+node JoinRequest {
+    has org_root_id: str = "",
+        code: str = "",
+        claimant_root_id: str = "",
+        name: str = "",
+        email: str = "";
+}
+
+# The member's own record of an org they joined, on their personal root:
+# login routing reads this without touching the org graph. org_name and
+# level are cached copies; the org's Member row is the truth.
+node Membership {
+    has org_root_id: str = "",
+        org_name: str = "",
+        member_jid: str = "",
+        level: str = "";
 }

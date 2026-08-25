@@ -83,6 +83,19 @@ import from walkers.github {
 }
 import from walkers.insights { Digest }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
+import from walkers.org {
+    EnsureOrgMeta,
+    GetOrgContext,
+    CreateInvite,
+    ListInvites,
+    RevokeInvite,
+    RequestJoin,
+    ApproveJoin,
+    CheckJoin,
+    ListMyMemberships,
+    SetMemberLevel,
+    RemoveMember
+}
 
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;

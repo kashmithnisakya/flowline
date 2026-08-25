@@ -17,7 +17,14 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { today_iso, shift_day, page_bounds }
+import from walkers.util {
+    today_iso,
+    shift_day,
+    page_bounds,
+    caller_level,
+    level_rank,
+    attach_stamp
+}
 
 # ---------------------------------------------------------------- daily log
 
@@ -132,6 +139,11 @@ walker LogActivity {
         reports: list[LogEntry] = [];
 
     can start with Root entry {
+        # Org members below editor cannot write the log; silent no-op like
+        # every other unauthorized mutation.
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         if not self.date {
             disengage;
         }
@@ -141,7 +153,7 @@ walker LogActivity {
         }
         visit [here-->[?:LogDay, date==self.date]] else {
             fresh = here ++> LogDay(date=self.date);
-            on_attached(here, fresh);
+            attach_stamp(here, fresh);
             visit fresh;
         }
     }
@@ -178,6 +190,8 @@ walker LogActivity {
         if isinstance(m, Member) {
             row +>:By():+> m;
         }
+        # Fresh row and edges are creator-sticky; stamp for the whole team.
+        attach_stamp(holder, row);
         report row;
     }
 }
@@ -197,7 +211,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         day = days[0];
     } else {
         day = holder ++> LogDay(date=today);
-        on_attached(holder, day);
+        attach_stamp(holder, day);
     }
     names: list[str] = [];
     tag_pool: list[str] = [];
@@ -210,7 +224,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         }
     }
     projects = [task->:ForProject:->];
-    day +>:Logged():+> LogEntry(
+    row = day +>:Logged():+> LogEntry(
         date=today,
         at=stamp,
         task_id=jid(task),
@@ -226,6 +240,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         tags=", ".join(tag_pool),
         project_name=projects[0].name if projects else ""
     );
+    attach_stamp(holder, row);
 }
 
 # The move handoff arrives after the move row was written; refresh the
@@ -259,6 +274,10 @@ walker find_log_entry {
     has entry_id: str = "";
 
     can locate with Root entry {
+        # Editor gate: the only subclass (UpdateLogEntry) mutates.
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         target = resolve(self.entry_id);
         if not isinstance(target, LogEntry) {
             disengage;
@@ -299,6 +318,10 @@ walker DeleteLogEntries {
     has entry_ids: list[str] = [];
 
     can remove with Root entry {
+        # Editor gate (see LogActivity).
+        if level_rank(caller_level(here, jid(root))) < 2 {
+            disengage;
+        }
         gone: list[str] = [];
         for eid in self.entry_ids {
             target = resolve(eid);
