@@ -1,4 +1,9 @@
-"""Three setup steps, these mirror the real onboarding wizard."""
+"""Three setup steps, these mirror the real onboarding wizard. Each step
+carries a small mock of the screen it happens on: the signup form, the
+roster, then the board writing the log.
+"""
+
+import from ..common.Avatar { Avatar }
 
 obj Step {
     has n: str,
@@ -27,6 +32,89 @@ glob STEPS: list[Step] = [
          )
      ];
 
+# The screen each step happens on, reduced to a glanceable mock.
+def StepThumb(n: str) -> JsxElement {
+    if n == "1" {
+        return
+            <div
+                aria-hidden="true"
+                className="mt-auto flex h-24 flex-col justify-center gap-2 rounded-xl border bg-card p-4"
+            >
+                <div className="h-4 w-4/5 rounded-md border bg-muted/40"></div>
+                <div className="h-4 w-3/5 rounded-md border bg-muted/40"></div>
+                <div className="h-5 w-2/5 rounded-md bg-primary"></div>
+            </div>;
+    }
+    if n == "2" {
+        return
+            <div
+                aria-hidden="true"
+                className="mt-auto flex h-24 flex-col justify-center gap-2.5 rounded-xl border bg-card p-4"
+            >
+                <div className="flex">
+                    <span className="inline-flex">
+                        <Avatar
+                            name="Amara Perera"
+                            size="sm"
+                            className="ring-2 ring-card"
+                        />
+                    </span>
+                    <span className="-ml-2 inline-flex">
+                        <Avatar
+                            name="Kasun Silva"
+                            size="sm"
+                            className="ring-2 ring-card"
+                        />
+                    </span>
+                    <span className="-ml-2 inline-flex">
+                        <Avatar
+                            name="Priya Raman"
+                            size="sm"
+                            className="ring-2 ring-card"
+                        />
+                    </span>
+                </div>
+                <div className="flex gap-1.5">
+                    <span
+                        className="rounded-full border px-2 py-0.5 text-[9px] font-medium text-muted-foreground"
+                    >
+                        Launch Site
+                    </span>
+                    <span
+                        className="rounded-full border px-2 py-0.5 text-[9px] font-medium text-muted-foreground"
+                    >
+                        Platform
+                    </span>
+                </div>
+            </div>;
+    }
+    return
+        <div
+            aria-hidden="true"
+            className="mt-auto flex h-24 flex-col justify-center gap-2 rounded-xl border bg-card p-4"
+        >
+            <div className="grid grid-cols-3 gap-1.5">
+                <div
+                    className="h-8 rounded-md border-t-[3px] border-t-step-sky bg-step-sky-wash"
+                ></div>
+                <div
+                    className="h-8 rounded-md border-t-[3px] border-t-step-amber bg-step-amber-wash"
+                ></div>
+                <div
+                    className="h-8 rounded-md border-t-[3px] border-t-step-emerald bg-step-emerald-wash"
+                ></div>
+            </div>
+            <div className="flex items-center gap-1.5">
+                <span
+                    className="text-[8px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                    Log
+                </span>
+                <div className="h-2 w-3/5 rounded bg-muted"></div>
+            </div>
+        </div>;
+}
+
 def:pub HowItWorks -> JsxElement {
     return
         <section id="how" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
@@ -42,7 +130,7 @@ def:pub HowItWorks -> JsxElement {
             </h2>
             <div className="mt-10 grid gap-8 md:grid-cols-3">
                 {for s in STEPS {
-                    <div key={s.n} className="relative space-y-3">
+                    <div key={s.n} className="relative flex h-full flex-col gap-3">
                         {if s.n != "3" {
                             <div
                                 key="line"
@@ -65,6 +153,7 @@ def:pub HowItWorks -> JsxElement {
                         <p className="text-sm leading-relaxed text-muted-foreground">
                             {s.body}
                         </p>
+                        {StepThumb(s.n)}
                     </div>
                 }}
             </div>
