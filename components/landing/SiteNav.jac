@@ -1,17 +1,42 @@
 """Public site header; shows the app link when a session exists. Below sm the
 anchor links sit behind a disclosure toggle so phones can still reach them.
+A hairline under the border tracks scroll progress so the page reads alive.
 """
 
+import from "react" { useEffect }
 import from "@jac/runtime" { Link }
 import from ..ui.button { Button }
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
-    has menuOpen: bool = False;
+    has menuOpen: bool = False,
+        progress: float = 0.0;
+
+    useEffect(
+        lambda {
+            doc: any = document;
+            onScroll = lambda {
+                el: any = doc.documentElement;
+                max: any = el.scrollHeight - el.clientHeight;
+                progress = (float(el.scrollTop) * 100.0 / float(max))
+                    if max > 0
+                    else 0.0;
+            };
+            window.addEventListener("scroll", onScroll, {"passive": True});
+            onScroll();
+            return lambda { window.removeEventListener("scroll", onScroll); };
+        },
+        []
+    );
 
     return
         <header
             className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur"
         >
+            <span
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-[-1px] block h-px bg-primary"
+                style={{"width": str(progress) + "%"}}
+            />
             <nav className="mx-auto flex max-w-[1180px] items-center gap-8 px-7 py-4">
                 <Link to="/" className="flex items-center gap-2">
                     <img
