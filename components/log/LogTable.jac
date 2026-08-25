@@ -58,9 +58,11 @@ def prettyDate(iso: str) -> str {
         "Nov",
         "Dec"
     ];
-    return days[int(d.getDay())] + ", " + months[int(d.getMonth())] + " " + str(
-        int(d.getDate())
-    );
+    return days[int(d.getDay())]
+        + ", "
+        + months[int(d.getMonth())]
+        + " "
+        + str(int(d.getDate()));
 }
 
 def:pub LogTable(
@@ -147,9 +149,8 @@ def:pub LogTable(
                                 data-state={"selected"
                                     if selecting and jid(en) in selected
                                     else ""}
-                                className={"data-[state=selected]:bg-primary/5" + (
-                                    " cursor-pointer" if selecting else ""
-                                )}
+                                className={"data-[state=selected]:bg-primary/5"
+                                    + (" cursor-pointer" if selecting else "")}
                                 onClick={lambda { if selecting and onToggleSelect {
                                     onToggleSelect(jid(en));
                                 }}}
@@ -175,9 +176,10 @@ def:pub LogTable(
                                     {if len(en.at) >= 16 {
                                         <div
                                             key="at"
-                                            className={"tabular-nums text-muted-foreground " + (
-                                                "text-xs" if showDate else "text-sm"
-                                            )}
+                                            className={"tabular-nums text-muted-foreground "
+                                                + (
+                                                    "text-xs" if showDate else "text-sm"
+                                                )}
                                         >
                                             {en.at[11:16]}
                                         </div>
@@ -248,9 +250,8 @@ def:pub LogTable(
                                     {if en.status {
                                         <span
                                             key="st"
-                                            className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium " + statusTint(
-                                                en.status
-                                            )}
+                                            className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium "
+                                                + statusTint(en.status)}
                                         >
                                             {en.status}
                                         </span>

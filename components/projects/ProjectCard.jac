@@ -53,9 +53,8 @@ def:pub ProjectCard(
             <CardHeader className="gap-1">
                 <CardTitle className="flex items-center gap-2 text-base">
                     <span
-                        className={"h-2 w-2 shrink-0 rounded-full " + dotHueFor(
-                            project.name
-                        )}
+                        className={"h-2 w-2 shrink-0 rounded-full "
+                            + dotHueFor(project.name)}
                     />
                     <span className="truncate">{project.name}</span>
                 </CardTitle>

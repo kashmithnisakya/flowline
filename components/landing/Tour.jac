@@ -132,11 +132,12 @@ def:pub Tour -> JsxElement {
                         role="tab"
                         aria-selected={tab == t["key"]}
                         onClick={lambda { tab = t["key"]; }}
-                        className={"rounded-full px-5 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring " + (
-                            "bg-primary text-primary-foreground"
-                                if tab == t["key"]
-                                else "border bg-card text-muted-foreground hover:text-foreground"
-                        )}
+                        className={"rounded-full px-5 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring "
+                            + (
+                                "bg-primary text-primary-foreground"
+                                    if tab == t["key"]
+                                    else "border bg-card text-muted-foreground hover:text-foreground"
+                            )}
                     >
                         {t["label"]}
                     </button>
@@ -241,18 +242,16 @@ def:pub Tour -> JsxElement {
                                     className="relative flex min-h-36 flex-col gap-2 rounded-xl border bg-muted/40 p-2 pt-2.5"
                                 >
                                     <span
-                                        className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full " + lane[
-                                            "color"
-                                        ]}
+                                        className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full "
+                                            + lane["color"]}
                                     />
                                     <div
                                         className="flex items-center justify-between px-1 text-[11px] font-semibold"
                                     >
                                         <span className="flex items-center gap-1.5">
                                             <span
-                                                className={"h-1.5 w-1.5 rounded-full " + lane[
-                                                    "color"
-                                                ]}
+                                                className={"h-1.5 w-1.5 rounded-full "
+                                                    + lane["color"]}
                                             />
                                             {lane["name"]}
                                         </span>
@@ -265,26 +264,25 @@ def:pub Tour -> JsxElement {
                                     {for c in lane["cards"] {
                                         <div
                                             key={c["title"]}
-                                            className={"rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 " + lane[
-                                                "bar"
-                                            ]}
+                                            className={"rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 "
+                                                + lane["bar"]}
                                         >
                                             <div
                                                 className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground"
                                             >
                                                 <span
-                                                    className={"h-1 w-1 rounded-full " + c[
-                                                        "dot"
-                                                    ]}
+                                                    className={"h-1 w-1 rounded-full "
+                                                        + c["dot"]}
                                                 />
                                                 {c["project"]}
                                             </div>
                                             <div
-                                                className={"mt-0.5 text-[11px] font-medium leading-snug " + (
-                                                    "text-muted-foreground line-through decoration-foreground/30"
-                                                        if lane["name"] == "Done"
-                                                        else ""
-                                                )}
+                                                className={"mt-0.5 text-[11px] font-medium leading-snug "
+                                                    + (
+                                                        "text-muted-foreground line-through decoration-foreground/30"
+                                                            if lane["name"] == "Done"
+                                                            else ""
+                                                    )}
                                             >
                                                 {c["title"]}
                                             </div>
@@ -325,9 +323,8 @@ def:pub Tour -> JsxElement {
                         {for (i, r) in enumerate(LOG_ROWS) {
                             <div
                                 key={r["who"]}
-                                className={"flex items-center gap-3 py-3 " + (
-                                    "border-b" if i < len(LOG_ROWS) - 1 else ""
-                                )}
+                                className={"flex items-center gap-3 py-3 "
+                                    + ("border-b" if i < len(LOG_ROWS) - 1 else "")}
                             >
                                 <Avatar name={r["who"]} size="sm"/>
                                 <div className="min-w-0 flex-1">
@@ -349,9 +346,8 @@ def:pub Tour -> JsxElement {
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
                                     <span
-                                        className={"rounded-full px-2 py-0.5 text-[9.5px] font-bold " + STATUS_TINT[
-                                            r["status"]
-                                        ]}
+                                        className={"rounded-full px-2 py-0.5 text-[9.5px] font-bold "
+                                            + STATUS_TINT[r["status"]]}
                                     >
                                         {r["status"]}
                                     </span>

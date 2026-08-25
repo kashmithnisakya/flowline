@@ -79,9 +79,8 @@ def:pub Features -> JsxElement {
                                             </span>
                                         }}
                                         <span
-                                            className={"rounded-full px-2.5 py-0.5 text-[10px] font-bold " + pill[
-                                                "cls"
-                                            ]}
+                                            className={"rounded-full px-2.5 py-0.5 text-[10px] font-bold "
+                                                + pill["cls"]}
                                         >
                                             {pill["name"]}
                                         </span>
@@ -120,9 +119,8 @@ def:pub Features -> JsxElement {
                                         {r["what"]}
                                     </span>
                                     <span
-                                        className={"ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold " + r[
-                                            "tint"
-                                        ]}
+                                        className={"ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold "
+                                            + r["tint"]}
                                     >
                                         {r["status"]}
                                     </span>
@@ -147,9 +145,8 @@ def:pub Features -> JsxElement {
                                 {for (i, name) in enumerate(ROSTER) {
                                     <span
                                         key={name}
-                                        className={"inline-flex" + (
-                                            " -ml-2" if i > 0 else ""
-                                        )}
+                                        className={"inline-flex"
+                                            + (" -ml-2" if i > 0 else "")}
                                     >
                                         <Avatar
                                             name={name}

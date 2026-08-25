@@ -33,9 +33,8 @@ def PriorityGlyph(level: str) -> JsxElement {
             height={12}
             viewBox="0 0 12 12"
             fill="currentColor"
-            className={"shrink-0 " + (
-                "text-destructive" if high else "text-muted-foreground/70"
-            )}
+            className={"shrink-0 "
+                + ("text-destructive" if high else "text-muted-foreground/70")}
             role="img"
             aria-label={level + " priority"}
         >
@@ -92,9 +91,9 @@ def:pub TaskCard(
     tone = dueTone(task.due_date, task.status, today);
     showPriority = task.priority == "High" or task.priority == "Low";
     hasFooter = len(task.assignee_names) > 0
-    or bool(task.category)
-    or showPriority
-    or bool(task.due_date);
+        or bool(task.category)
+        or showPriority
+        or bool(task.due_date);
 
     return
         <Card
@@ -112,20 +111,20 @@ def:pub TaskCard(
             role="button"
             tabIndex={0}
             onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter"
-            or e.key == " " {
+                or e.key == " " {
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing " + (
-                "opacity-50 " if isDragging else ""
-            ) + (
-                # The COLUMN carries the step's colour; a card only
-                # wears a bar of it. Tinting both made the board shout,
-                # and the grouping is already clear from the panel.
-                ("bg-card " + CARD_BAR[colorKey(color)])
-                    if color
-                    else "border-border/70"
-            )}
+            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+                + ("opacity-50 " if isDragging else "")
+                + (
+                    # The COLUMN carries the step's colour; a card only
+                    # wears a bar of it. Tinting both made the board shout,
+                    # and the grouping is already clear from the panel.
+                    ("bg-card " + CARD_BAR[colorKey(color)])
+                        if color
+                        else "border-border/70"
+                )}
         >
             <CardContent className="space-y-1.5 p-3">
                 {if task.project_name {
@@ -134,9 +133,8 @@ def:pub TaskCard(
                         className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
                     >
                         <span
-                            className={"h-1.5 w-1.5 shrink-0 rounded-full " + dotFor(
-                                task.project_name
-                            )}
+                            className={"h-1.5 w-1.5 shrink-0 rounded-full "
+                                + dotFor(task.project_name)}
                         />
                         <span className="truncate">{task.project_name}</span>
                     </div>
@@ -180,9 +178,8 @@ def:pub TaskCard(
                                 {if task.due_date {
                                     <span
                                         key="due"
-                                        className={"whitespace-nowrap text-[11px] " + DUE_TINT[
-                                            tone
-                                        ]}
+                                        className={"whitespace-nowrap text-[11px] "
+                                            + DUE_TINT[tone]}
                                         title={"Due " + prettyDay(task.due_date)}
                                     >
                                         {dueLabel(task.due_date, task.status, today)}

@@ -48,13 +48,14 @@ def:pub MoveDialog(
                 <DialogHeader>
                     <div className="flex items-start gap-3">
                         <div
-                            className={"flex size-9 shrink-0 items-center justify-center rounded-lg " + (
-                                # A handoff waits on someone; a stop needs
-                                # attention. Same tokens as the step kinds.
-                                "bg-warning/15 text-warning"
-                                    if isReview
-                                    else "bg-destructive/15 text-destructive"
-                            )}
+                            className={"flex size-9 shrink-0 items-center justify-center rounded-lg "
+                                + (
+                                    # A handoff waits on someone; a stop needs
+                                    # attention. Same tokens as the step kinds.
+                                    "bg-warning/15 text-warning"
+                                        if isReview
+                                        else "bg-destructive/15 text-destructive"
+                                )}
                         >
                             {if isReview {
                                 <svg

@@ -61,13 +61,14 @@ def:pub WeekMatrix(
         d
         for (i, d) in enumerate(weekDays)
         if i < 5
-        or len(
-            [
-                e
-                for e in entries
-                if e.date == d
-            ]
-        ) > 0
+            or len(
+                [
+                    e
+                    for e in entries
+                    if e.date == d
+                ]
+            )
+                > 0
     ];
     if len(rows) == 0 {
         return <span/>;
@@ -93,7 +94,9 @@ def:pub WeekMatrix(
                 <div
                     className="grid min-w-[40rem] gap-1.5"
                     style={{
-                        "gridTemplateColumns": "10rem repeat(" + str(len(days)) + ", minmax(0, 1fr))"
+                        "gridTemplateColumns": "10rem repeat("
+                            + str(len(days))
+                            + ", minmax(0, 1fr))"
                     }}
                 >
                     <div/>
@@ -102,15 +105,16 @@ def:pub WeekMatrix(
                             key={"h" + d}
                             type="button"
                             onClick={lambda { onSelectDate(d); }}
-                            className={"rounded-md py-1 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-accent " + (
-                                "text-primary"
-                                    if d == selectedDate
-                                    else (
-                                        "text-foreground"
-                                            if d == today
-                                            else "text-muted-foreground"
-                                    )
-                            )}
+                            className={"rounded-md py-1 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-accent "
+                                + (
+                                    "text-primary"
+                                        if d == selectedDate
+                                        else (
+                                            "text-foreground"
+                                                if d == today
+                                                else "text-muted-foreground"
+                                        )
+                                )}
                             aria-current={"date" if d == today else None}
                         >
                             {dayLabel(d)}
@@ -129,44 +133,54 @@ def:pub WeekMatrix(
                                     key={who + d}
                                     type="button"
                                     onClick={lambda { onSelectDate(d); }}
-                                    title={who + " · " + dayLabel(d) + ": " + str(
-                                        len(cells[who + "|" + d])
-                                    ) + " entries"}
-                                    className={"flex min-h-14 flex-col items-start gap-0.5 rounded-lg border p-1.5 text-left text-[11px] leading-tight transition-colors hover:bg-accent " + (
-                                        (
-                                            "border-destructive/50 bg-destructive/5"
-                                                if len(
-                                                    [
-                                                        e
-                                                        for e in cells[who + "|" + d]
-                                                        if e.status == "Blocked"
-                                                    ]
-                                                ) > 0
-                                                else "border-border bg-card"
+                                    title={who
+                                        + " · "
+                                        + dayLabel(d)
+                                        + ": "
+                                        + str(len(cells[who + "|" + d]))
+                                        + " entries"}
+                                    className={"flex min-h-14 flex-col items-start gap-0.5 rounded-lg border p-1.5 text-left text-[11px] leading-tight transition-colors hover:bg-accent "
+                                        + (
+                                            (
+                                                "border-destructive/50 bg-destructive/5"
+                                                    if len(
+                                                        [
+                                                            e
+                                                            for e in cells[
+                                                                who + "|" + d
+                                                            ]
+                                                            if e.status == "Blocked"
+                                                        ]
+                                                    )
+                                                        > 0
+                                                    else "border-border bg-card"
+                                            )
+                                                if len(cells[who + "|" + d]) > 0
+                                                else "border-dashed border-border/70 bg-transparent"
                                         )
-                                            if len(cells[who + "|" + d]) > 0
-                                            else "border-dashed border-border/70 bg-transparent"
-                                    ) + (
-                                        " ring-2 ring-primary/40"
-                                            if d == selectedDate
-                                            else ""
-                                    )}
+                                        + (
+                                            " ring-2 ring-primary/40"
+                                                if d == selectedDate
+                                                else ""
+                                        )}
                                 >
                                     {for (i, e) in enumerate(cells[who + "|" + d]) {
                                         if i < MAX_LINES {
                                             <span
                                                 key={jid(e)}
-                                                className={"w-full truncate " + (
-                                                    "font-medium text-destructive"
-                                                        if e.status == "Blocked"
-                                                        else "text-foreground"
-                                                )}
+                                                className={"w-full truncate "
+                                                    + (
+                                                        "font-medium text-destructive"
+                                                            if e.status == "Blocked"
+                                                            else "text-foreground"
+                                                    )}
                                             >
-                                                {(e.task_title or e.activity) + (
-                                                    (" → " + e.status)
-                                                        if e.task_title and e.status
-                                                        else ""
-                                                )}
+                                                {(e.task_title or e.activity)
+                                                    + (
+                                                        (" → " + e.status)
+                                                            if e.task_title and e.status
+                                                            else ""
+                                                    )}
                                             </span>
                                         }
                                     }}
@@ -175,9 +189,12 @@ def:pub WeekMatrix(
                                             key="more"
                                             className="text-muted-foreground"
                                         >
-                                            {"+" + str(
-                                                len(cells[who + "|" + d]) - MAX_LINES
-                                            ) + " more"}
+                                            {"+"
+                                                + str(
+                                                    len(cells[who + "|" + d])
+                                                        - MAX_LINES
+                                                )
+                                                + " more"}
                                         </span>
                                     }}
                                 </button>
