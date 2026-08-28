@@ -76,7 +76,18 @@ impl GithubSection.loadWorkspace -> None {
         sResult = root spawn GetFlowLine();
         fetched = rResult.reports[0] if rResult.reports else [];
         repos = fetched;
-        projects = pResult.reports[0] if pResult.reports else [];
+        fetchedProjects: list[Project] = pResult.reports[0] if pResult.reports else [];
+        projects = fetchedProjects;
+        # One active project is no real choice: preselect it so a fresh
+        # workspace never attaches its first repo to "No project".
+        actives: list[Project] = [
+            p
+            for p in fetchedProjects
+            if p.active
+        ];
+        if pickerProject == "none" and len(actives) == 1 {
+            pickerProject = jid(actives[0]);
+        }
         # The "as" picker offers the org's own flow line steps; imports land on
         # the start step by default (where new work lands). An org with no
         # flow line keeps the legacy status list instead.
@@ -371,13 +382,14 @@ impl GithubSection.importSelected -> None {
         return;
     }
     importing = True;
-    project = importProject if importProject != "none" else "";
     blank: dict[str, any] = {};
     try {
+        # No project field: an empty project_id makes ImportIssues inherit
+        # the repo's own project, chosen when the repo was attached.
         result = root spawn ImportIssues(
             repo_id=repoId,
             numbers=selected,
-            project_id=project,
+            project_id="",
             status=importStatus,
             step_id=importStep
         );
