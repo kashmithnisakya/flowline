@@ -719,7 +719,7 @@ def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[f
     maxY = 0.0;
     first = True;
     for s in steps {
-        pos = stepXY(s, live);
+        pos: list[float] = stepXY(s, live);
         if first or pos[0] < minX {
             minX = pos[0];
         }
