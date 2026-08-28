@@ -56,7 +56,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from "sonner" { toast }
-import from "react" { useEffect, useLayoutEffect }
+import from "react" { useState, useEffect, useLayoutEffect, useRef }
 import from ...components.common.glyphs { Spinner, WarnIcon }
 
 glob BLANK_STEP: dict[str, str] = {
@@ -198,7 +198,7 @@ def:pub FlowLinePage -> JsxPage {
     # viewport height, so a resize moves the centering target.
     useEffect(
         lambda {
-            onResize = lambda {
+            onResize: any = lambda {
                 measureBox();
                 fitZoom();
             };
@@ -214,7 +214,7 @@ def:pub FlowLinePage -> JsxPage {
     # press would then close the panel too.
     useEffect(
         lambda {
-            onKey = lambda (e: any) {
+            onKey: any = lambda (e: any) {
                 if e.key != "Escape" or not peekId {
                     return;
                 }
@@ -426,9 +426,9 @@ def:pub FlowLinePage -> JsxPage {
                     seen[s.id] = True;
                 }
             }
-            at = 0;
+            at: int = 0;
             while at < len(frontier) {
-                current = frontier[at];
+                current: str = frontier[at];
                 at = at + 1;
                 for nid in byId[current].next_ids {
                     if nid in byId and nid not in seen {
@@ -437,7 +437,7 @@ def:pub FlowLinePage -> JsxPage {
                     }
                 }
             }
-            stranded = 0;
+            stranded: int = 0;
             for s in steps {
                 if s.id not in seen {
                     stranded = stranded + 1;
@@ -460,9 +460,9 @@ def:pub FlowLinePage -> JsxPage {
                     reach[s.id] = True;
                 }
             }
-            at2 = 0;
+            at2: int = 0;
             while at2 < len(backlog) {
-                current2 = backlog[at2];
+                current2: str = backlog[at2];
                 at2 = at2 + 1;
                 for pid in byId[current2].prev_ids {
                     if pid in byId and pid not in reach {
@@ -471,7 +471,7 @@ def:pub FlowLinePage -> JsxPage {
                     }
                 }
             }
-            noPath = 0;
+            noPath: int = 0;
             for s in steps {
                 if s.id not in reach {
                     noPath = noPath + 1;
