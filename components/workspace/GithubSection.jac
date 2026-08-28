@@ -21,7 +21,8 @@ import from ...walkers.github {
     ListRepoIssues,
     ListRepoPulls,
     SearchRepoItems,
-    ImportIssues
+    ImportIssues,
+    SetRepoAutoSync
 }
 import from ...components.ui.input { Input }
 import from ...walkers.flowlines { GetFlowLine }
@@ -42,6 +43,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.ui.checkbox { Checkbox }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -171,6 +173,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def searchRepos -> None;
     async def moreRepos -> None;
     async def attachRepo(fullName: str) -> None;
+    async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
     async def importSelected -> None;
@@ -325,6 +328,25 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                         }}
                                     </SelectContent>
                                 </Select>
+                                {for r in [
+                                    x
+                                    for x in repos
+                                    if x.id == repoId
+                                ] {
+                                    <label
+                                        key={"auto-" + r.id}
+                                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+                                        title="New issues in this repo become cards on the entry step whenever the board syncs"
+                                    >
+                                        <Checkbox
+                                            checked={r.auto_sync}
+                                            onCheckedChange={lambda { toggleAutoSync(
+                                                r.id, not r.auto_sync
+                                            ); }}
+                                        />
+                                        Auto-add new issues
+                                    </label>
+                                }}
                                 {for r in [
                                     x
                                     for x in repos

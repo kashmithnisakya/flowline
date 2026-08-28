@@ -230,6 +230,7 @@ def:pub BoardPage -> JsxPage {
     def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
     async def syncGithub -> None;
+    async def autoSyncGithub(connected: bool) -> None;
     async def createIssue(repoId: str) -> None;
     def markDoneFromPr(taskId: str) -> None;
 

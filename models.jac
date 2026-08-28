@@ -73,7 +73,12 @@ node Member {
 }
 
 node Repo {
-    has full_name: str;
+    has full_name: str,
+        # Auto-file new issues onto the entry step on every GitHub sync.
+        # The cursor is the newest `updated_at` seen, so each sync asks
+        # GitHub only for what changed since; empty means backfill.
+        auto_sync: bool = False,
+        issue_cursor: str = "";
 }
 
 node Task {
@@ -424,7 +429,8 @@ obj RepoView {
     has id: str,
         full_name: str,
         project_id: str,
-        project_name: str;
+        project_name: str,
+        auto_sync: bool = False;
 }
 
 obj RoleView {
@@ -517,7 +523,8 @@ def repo_view(r: Repo) -> RepoView {
         id=jid(r),
         full_name=r.full_name,
         project_id=project_id,
-        project_name=project_name
+        project_name=project_name,
+        auto_sync=r.auto_sync
     );
 }
 
