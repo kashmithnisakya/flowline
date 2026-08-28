@@ -61,6 +61,38 @@ def:pub GitHubChip(task: TaskView, onMarkDone: Callable[[str], None]) -> JsxElem
                         {prLabel}
                     </Badge>
                 }}
+                {if task.gh_sub_total > 0 {
+                    <Badge
+                        key="family"
+                        variant="outline"
+                        title={"Sub-issues: "
+                            + str(task.gh_sub_done)
+                            + " of "
+                            + str(task.gh_sub_total)
+                            + " done"}
+                        className={(
+                            "border-success/40 bg-success/10 text-success"
+                                if task.gh_sub_done == task.gh_sub_total
+                                else "border-primary/40 bg-primary/10 text-primary"
+                        )
+                            + " h-5 rounded-full tabular-nums"}
+                    >
+                        {"⌗ " + str(task.gh_sub_done) + "/" + str(task.gh_sub_total)}
+                    </Badge>
+                }}
+                {if task.gh_parent_number > 0 {
+                    <Badge
+                        key="parent"
+                        variant="outline"
+                        title={"Part of "
+                            + task.gh_parent_repo
+                            + " #"
+                            + str(task.gh_parent_number)}
+                        className="h-5 rounded-full border-border bg-card text-muted-foreground"
+                    >
+                        {"↳ #" + str(task.gh_parent_number)}
+                    </Badge>
+                }}
             </div>
             {if suggestDone {
                 <div
