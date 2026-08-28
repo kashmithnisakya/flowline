@@ -15,15 +15,52 @@ impl BoardPage.boot -> None {
     }
     # Cheap and never fails on its own: it only decides whether the board
     # offers the GitHub affordances at all.
+    connected: bool = False;
     try {
         gResult = root spawn GithubStatus();
         if gResult.reports {
-            ghConnected = gResult.reports[0].connected;
+            connected = gResult.reports[0].connected;
         }
+        ghConnected = connected;
     } except Exception as e {
         ghConnected = False;
     }
     await loadAll();
+    # Opening the board IS the sync trigger: auto-file new issues from
+    # auto-sync repos after first paint. Passed as an argument because the
+    # `ghConnected` just assigned is a stale read in this same handler.
+    await autoSyncGithub(connected);
+}
+
+impl BoardPage.autoSyncGithub(connected: bool) -> None {
+    if not connected or syncing {
+        return;
+    }
+    syncing = True;
+    added: int = 0;
+    try {
+        result = root spawn SyncGithub(auto=True);
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] and "auto_added" in payload {
+            added = payload["auto_added"] or 0;
+        }
+        if added > 0 {
+            await loadAll();
+            toast(
+                str(added)
+                    + (
+                        " issue added from GitHub"
+                            if added == 1
+                            else " issues added from GitHub"
+                    )
+            );
+        }
+    } except Exception as e {
+        # Quiet on purpose: the board just opened and nothing was asked for.
+        # The Sync button still reports loudly.
+        added = 0;
+    }
+    syncing = False;
 }
 
 impl BoardPage.loadAll -> None {
@@ -672,7 +709,11 @@ impl BoardPage.syncGithub -> None {
             # in-flight drag keeps its optimistic state and the next poll
             # picks the synced values up.
             await loadAll();
-            toast("Synced " + str(payload["synced"]) + " tasks");
+            msg: str = "Synced " + str(payload["synced"]) + " tasks";
+            if "auto_added" in payload and payload["auto_added"] {
+                msg = msg + " · " + str(payload["auto_added"]) + " issues added";
+            }
+            toast(msg);
         } else {
             toast(str(payload["message"]) if payload else "Sync failed");
         }

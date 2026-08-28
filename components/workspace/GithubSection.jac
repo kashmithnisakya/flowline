@@ -21,7 +21,8 @@ import from ...walkers.github {
     ListRepoIssues,
     ListRepoPulls,
     SearchRepoItems,
-    ImportIssues
+    ImportIssues,
+    SetRepoAutoSync
 }
 import from ...components.ui.input { Input }
 import from ...walkers.flowlines { GetFlowLine }
@@ -42,6 +43,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.ui.checkbox { Checkbox }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -118,7 +120,6 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         issueLoading: bool = False,
         issueMore: bool = False,
         selected: list[int] = [],
-        importProject: str = "none",
         importStatus: str = "Backlog",
         steps: list[StepView] = [],
         importStep: str = "",
@@ -171,6 +172,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def searchRepos -> None;
     async def moreRepos -> None;
     async def attachRepo(fullName: str) -> None;
+    async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
     async def importSelected -> None;
@@ -218,6 +220,15 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     exactStamps = connectedAt;
     if lastSync {
         exactStamps = exactStamps + " · last sync " + lastSync;
+    }
+
+    # The import destination is the repo's own project, chosen when the repo
+    # was attached; the import bar shows it instead of asking every time.
+    repoProjectName: str = "";
+    for rp in repos {
+        if rp.id == repoId {
+            repoProjectName = rp.project_name;
+        }
     }
 
     return
@@ -328,14 +339,32 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 {for r in [
                                     x
                                     for x in repos
+                                    if x.id == repoId
+                                ] {
+                                    <label
+                                        key={"auto-" + r.id}
+                                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+                                        title="New issues in this repo become cards on the entry step whenever the board syncs"
+                                    >
+                                        <Checkbox
+                                            checked={r.auto_sync}
+                                            onCheckedChange={lambda { toggleAutoSync(
+                                                r.id, not r.auto_sync
+                                            ); }}
+                                        />
+                                        Auto-add new issues
+                                    </label>
+                                }}
+                                {for r in [
+                                    x
+                                    for x in repos
                                     if x.id == repoId and x.project_name
                                 ] {
                                     <span
                                         key={"proj-" + r.id}
                                         className="hidden items-center gap-1 whitespace-nowrap text-xs text-muted-foreground lg:inline-flex"
-                                        title={"Imports land in "
-                                            + r.project_name
-                                            + " unless you pick another project"}
+                                        title={"Issues from this repo land in "
+                                            + r.project_name}
                                     >
                                         <svg
                                             width={12}
@@ -471,12 +500,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             hasMore={issueHasMore}
                                             state={issueState}
                                             selected={selected}
-                                            projects={[
-                                                p
-                                                for p in projects
-                                                if p.active
-                                            ]}
-                                            projectId={importProject}
+                                            projectName={repoProjectName}
                                             status={importStatus}
                                             steps={steps}
                                             stepId={importStep}
@@ -484,7 +508,6 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             importing={importing}
                                             onState={lambda (v: str) { issueState = v; }}
                                             onToggle={toggleIssue}
-                                            onProject={lambda (v: str) { importProject = v; }}
                                             onStatus={lambda (v: str) { importStatus = v; }}
                                             onStep={lambda (v: str) { importStep = v; }}
                                             onImport={importSelected}

@@ -20,7 +20,8 @@ import from models {
     ForProject,
     resolve,
     on_attached,
-    owned
+    owned,
+    repo_view
 }
 import from walkers.util { now_iso, minutes_since }
 import from walkers.log { record_task_event }
@@ -43,7 +44,13 @@ import from constants { STATUSES }
 glob INSTALL_WINDOW_MINUTES: float = 15.0,
      PAGE_SIZE: int = 50,
      IMPORT_CAP: int = 25,
-     SYNC_PR_CAP: int = 20;
+     SYNC_PR_CAP: int = 20,
+     # Auto-file reads at most this many 100-issue pages per repo per sync;
+     # the cursor carries a long backfill across syncs instead of one call.
+     AUTO_SYNC_PAGES: int = 3,
+     # A board mounts twice on a full page load; the auto pass skips itself
+     # when a sync just ran so the double mount costs one GitHub call.
+     AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0;
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -682,6 +689,116 @@ walker SearchRepoItems {
 
 # ---------------------------------------------------------------- writes
 
+# The done step closed issues land on: first done-kind step by sort order,
+# or "" for an org with no flow line yet (plain "Done" then applies).
+def first_done_step(holder: Root) -> str {
+    done_step = "";
+    done_sort = 0.0;
+    for s in [holder-->[?:WorkflowStep, kind=="done"]] {
+        if not done_step or s.sort_order < done_sort {
+            done_step = jid(s);
+            done_sort = s.sort_order;
+        }
+    }
+    return done_step;
+}
+
+
+# Where auto-filed issues land: the first start-kind step of the flow line
+# as [status, step_id], or ["Backlog", ""] for an org with no flow line.
+def entry_landing(holder: Root) -> list[str] {
+    entry_step = "";
+    entry_sort = 0.0;
+    for s in [holder-->[?:WorkflowStep, kind=="start"]] {
+        if not entry_step or s.sort_order < entry_sort {
+            entry_step = jid(s);
+            entry_sort = s.sort_order;
+        }
+    }
+    if entry_step {
+        mapped = status_for_step(holder, entry_step);
+        if mapped {
+            return [mapped, entry_step];
+        }
+    }
+    return ["Backlog", ""];
+}
+
+
+# Create ONE task from a GitHub issue payload; shared by manual import and
+# the auto-sync pass. `peaks` caches the top sort_order per landing status,
+# one scan per column instead of one per row. The caller has already ruled
+# out PRs and existing (gh_repo, gh_issue_number) tasks.
+def file_issue_item(
+    holder: Root,
+    item: dict[str, any],
+    full_name: str,
+    number: int,
+    target_project: any,
+    members: list[Member],
+    col: str,
+    step: str,
+    done_step: str,
+    peaks: dict[str, float]
+) -> Task {
+    issue_state = str(item.get("state") or "open");
+    landing = "Done" if issue_state == "closed" else col;
+    landing_step = done_step if issue_state == "closed" else step;
+    if landing not in peaks {
+        top = 0.0;
+        for t in [holder-->[?:Task, status==landing]] {
+            if t.sort_order > top {
+                top = t.sort_order;
+            }
+        }
+        peaks[landing] = top;
+    }
+    peaks[landing] = peaks[landing] + 1024.0;
+    body = str(item.get("body") or "");
+    stamp = now_iso();
+    fresh = holder ++> Task(
+        title=str(item.get("title") or ("Issue #" + str(number))),
+        category="",
+        priority="Medium",
+        status=landing,
+        step_id=landing_step,
+        notes=body[:2000],
+        issue_link=str(item.get("html_url") or ""),
+        created_at=stamp,
+        updated_at=stamp,
+        sort_order=peaks[landing],
+        gh_repo=full_name,
+        gh_issue_number=number,
+        gh_issue_state=issue_state,
+        gh_synced_at=stamp
+    );
+    on_attached(holder, fresh);
+    if isinstance(target_project, Project) {
+        fresh +>:ForProject():+> target_project;
+    }
+    # Map GitHub assignees onto roster members by username. Anyone without
+    # a match is simply left off; we never invent people.
+    logins: list[str] = [];
+    raw_assignees = item.get("assignees") or [];
+    if isinstance(raw_assignees, list) {
+        for a in raw_assignees {
+            if isinstance(a, dict) {
+                logins.append(str(a.get("login") or "").lower());
+            }
+        }
+    }
+    for m in members {
+        if m.github_username and m.github_username.lower() in logins {
+            fresh +>:AssignedTo():+> m;
+        }
+    }
+    record_task_event(
+        holder, fresh, "Imported from GitHub " + full_name + " #" + str(number), stamp
+    );
+    return fresh;
+}
+
+
 walker ImportIssues {
     """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
     the identity. Closed issues land on the done step, the rest on the chosen
@@ -718,14 +835,7 @@ walker ImportIssues {
         }
         # Closed issues always land on the done step (first by sort order),
         # or plain "Done" for an org that has no flow line yet.
-        done_step = "";
-        done_sort = 0.0;
-        for s in [here-->[?:WorkflowStep, kind=="done"]] {
-            if not done_step or s.sort_order < done_sort {
-                done_step = jid(s);
-                done_sort = s.sort_order;
-            }
-        }
+        done_step = first_done_step(here);
         # An explicit project wins; otherwise inherit the repo's own project,
         # which is structurally owned already (root -> Project -> HasRepo).
         repo_node = resolve(self.repo_id);
@@ -743,12 +853,7 @@ walker ImportIssues {
         imported: list[TaskView] = [];
         skipped: list[int] = [];
         failed: list[int] = [];
-        peak = 0.0;
-        for t in [here-->[?:Task, status==col]] {
-            if t.sort_order > peak {
-                peak = t.sort_order;
-            }
-        }
+        peaks: dict[str, float] = {};
         wanted = self.numbers[:IMPORT_CAP];
         for number in wanted {
             if number <= 0 {
@@ -776,53 +881,17 @@ walker ImportIssues {
                 failed.append(number);
                 continue;
             }
-            issue_state = str(item.get("state") or "open");
-            landing = "Done" if issue_state == "closed" else col;
-            landing_step = done_step if issue_state == "closed" else step;
-            body = str(item.get("body") or "");
-            stamp = now_iso();
-            peak = peak + 1024.0;
-            fresh = here ++> Task(
-                title=str(item.get("title") or ("Issue #" + str(number))),
-                category="",
-                priority="Medium",
-                status=landing,
-                step_id=landing_step,
-                notes=body[:2000],
-                issue_link=str(item.get("html_url") or ""),
-                created_at=stamp,
-                updated_at=stamp,
-                sort_order=peak,
-                gh_repo=full_name,
-                gh_issue_number=number,
-                gh_issue_state=issue_state,
-                gh_synced_at=stamp
-            );
-            on_attached(here, fresh);
-            if isinstance(target_project, Project) {
-                fresh +>:ForProject():+> target_project;
-            }
-            # Map GitHub assignees onto roster members by username. Anyone
-            # without a match is simply left off; we never invent people.
-            logins: list[str] = [];
-            raw_assignees = item.get("assignees") or [];
-            if isinstance(raw_assignees, list) {
-                for a in raw_assignees {
-                    if isinstance(a, dict) {
-                        logins.append(str(a.get("login") or "").lower());
-                    }
-                }
-            }
-            for m in members {
-                if m.github_username and m.github_username.lower() in logins {
-                    fresh +>:AssignedTo():+> m;
-                }
-            }
-            record_task_event(
+            fresh = file_issue_item(
                 here,
-                fresh,
-                "Imported from GitHub " + full_name + " #" + str(number),
-                stamp
+                item,
+                full_name,
+                number,
+                target_project,
+                members,
+                col,
+                step,
+                done_step,
+                peaks
             );
             imported.append(fresh.to_view());
         }
@@ -907,12 +976,38 @@ walker CreateIssueFromTask(find_task) {
 }
 
 
-walker SyncGithub {
-    """Refresh cached issue and PR state for linked tasks.
+walker SetRepoAutoSync {
+    """Turn auto-filing of new issues on or off for one repo. Enabling
+    clears the cursor so the next sync backfills the repo's history; the
+    (gh_repo, gh_issue_number) identity keeps re-runs duplicate-free."""
+    has repo_id: str = "",
+        enabled: bool = False,
+        reports: list[dict[str, any]] = [];
 
-    Read-only by design: it never moves a card. A closed issue or a merged
-    PR shows up as a suggestion on the board and a person decides."""
-    has reports: list[dict[str, any]] = [];
+    can set with Root entry {
+        target = resolve(self.repo_id);
+        if not isinstance(target, Repo) or not owned(here, target) {
+            report {"ok": False, "error": "not_found", "message": "Unknown repo."};
+            disengage;
+        }
+        target.auto_sync = self.enabled;
+        if self.enabled {
+            target.issue_cursor = "";
+        }
+        report {"ok": True, "repo": repo_view(target)};
+    }
+}
+
+
+walker SyncGithub {
+    """File new issues for auto-sync repos, then refresh cached issue and
+    PR state for linked tasks.
+
+    It never moves a card a person placed: a closed issue or a merged PR
+    shows up as a suggestion on the board and a person decides. `auto`
+    marks a board-open sync, which skips itself when one just ran."""
+    has auto: bool = False,
+        reports: list[dict[str, any]] = [];
 
     can refresh with Root entry {
         c = connection_of(here);
@@ -920,6 +1015,112 @@ walker SyncGithub {
         if not token {
             report not_connected();
             disengage;
+        }
+        if self.auto
+            and isinstance(c, GithubConnection)
+            and minutes_since(c.last_sync_at) < AUTO_SYNC_COOLDOWN_MINUTES {
+            report {
+                "ok": True,
+                "synced": 0,
+                "auto_added": 0,
+                "changed": [],
+                "last_sync_at": c.last_sync_at
+            };
+            disengage;
+        }
+        # File new issues first, so a just-created card is already linked
+        # when the state refresh below reads everything back. One list call
+        # per page per repo, oldest update first, so the cursor can walk a
+        # long backfill across several syncs instead of one giant call.
+        auto_added = 0;
+        auto_repos = [
+            r
+            for r in [here-->[?:Repo]]
+            if r.auto_sync and valid_full_name(r.full_name)
+        ];
+        if auto_repos {
+            seen_keys: dict[str, bool] = {};
+            for t in [here-->[?:Task]] {
+                if t.gh_repo and t.gh_issue_number > 0 {
+                    seen_keys[t.gh_repo + "#" + str(t.gh_issue_number)] = True;
+                }
+            }
+            landing = entry_landing(here);
+            done_step = first_done_step(here);
+            members = [here-->[?:Member]];
+            peaks: dict[str, float] = {};
+            for r in auto_repos {
+                attached = [r<-:HasRepo:<-[?:Project]];
+                repo_project = attached[0] if attached else None;
+                newest = r.issue_cursor;
+                page = 1;
+                while page <= AUTO_SYNC_PAGES {
+                    params: dict[str, any] = {
+                        "state": "all",
+                        "per_page": 100,
+                        "page": page,
+                        "sort": "updated",
+                        "direction": "asc"
+                    };
+                    if r.issue_cursor {
+                        params["since"] = r.issue_cursor;
+                    }
+                    result = gh_request(
+                        token, "GET", "/repos/" + r.full_name + "/issues", params
+                    );
+                    if not result["ok"] {
+                        mark_invalid(c, result);
+                        break;
+                    }
+                    data = result["data"];
+                    if not isinstance(data, list) {
+                        break;
+                    }
+                    for item in data {
+                        if not isinstance(item, dict) {
+                            continue;
+                        }
+                        # PRs advance the cursor too, or a PR-heavy stretch
+                        # would pin a backfill in place forever.
+                        updated = str(item.get("updated_at") or "");
+                        if updated > newest {
+                            newest = updated;
+                        }
+                        if item.get("pull_request") {
+                            continue;
+                        }
+                        number = int(item.get("number") or 0);
+                        if number <= 0 {
+                            continue;
+                        }
+                        key = r.full_name + "#" + str(number);
+                        if key in seen_keys {
+                            continue;
+                        }
+                        file_issue_item(
+                            here,
+                            item,
+                            r.full_name,
+                            number,
+                            repo_project,
+                            members,
+                            landing[0],
+                            landing[1],
+                            done_step,
+                            peaks
+                        );
+                        seen_keys[key] = True;
+                        auto_added = auto_added + 1;
+                    }
+                    if len(data) < 100 {
+                        break;
+                    }
+                    page = page + 1;
+                }
+                if newest and newest != r.issue_cursor {
+                    r.issue_cursor = newest;
+                }
+            }
         }
         linked = [
             t
@@ -1031,6 +1232,7 @@ walker SyncGithub {
         report {
             "ok": True,
             "synced": len(linked),
+            "auto_added": auto_added,
             "changed": changed,
             "last_sync_at": stamp
         };
