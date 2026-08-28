@@ -245,7 +245,9 @@ walker DisconnectGithub {
     are this workspace's own data, not GitHub's."""
     has reports: list[dict[str, any]] = [];
 
-    can drop with Root entry {
+    # Not `drop`: jac 0.36.1's instrument_drops pass reserves `inst` and an
+    # ability named drop collides with it, 422ing the endpoint (issue #123).
+    can disconnect with Root entry {
         existing = [here-->[?:GithubConnection]];
         for c in existing {
             forget_installation(c.installation_id);
