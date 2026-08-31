@@ -327,6 +327,16 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     dialogOpen = True;
 }
 
+impl BoardPage.openTaskById(tid: str) -> None {
+    # Jump the open dialog to another card of the same family. A row not in
+    # the loaded working set (deep history) is simply a no-op.
+    for t in tasks + olderDone {
+        if t.id == tid {
+            openEdit(t);
+        }
+    }
+}
+
 impl BoardPage.saveTask -> None {
     title = form["title"].strip();
     if not title {

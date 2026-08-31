@@ -231,6 +231,7 @@ def:pub BoardPage -> JsxPage {
     def openEdit(t: TaskView) -> None;
     async def syncGithub -> None;
     async def autoSyncGithub(connected: bool) -> None;
+    def openTaskById(tid: str) -> None;
     async def createIssue(repoId: str) -> None;
     def markDoneFromPr(taskId: str) -> None;
 
@@ -297,9 +298,43 @@ def:pub BoardPage -> JsxPage {
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
     editingIssueNumber = 0;
+    # The open card's sub-issue family, resolved from rows already loaded:
+    # its children when it is a parent, its parent's card when it is a child.
+    famRows: list[TaskView] = [];
+    famTotal: int = 0;
+    famDone: int = 0;
+    famParentId: str = "";
+    famParentLabel: str = "";
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
+            famTotal = t.gh_sub_total;
+            famDone = t.gh_sub_done;
+            if t.gh_sub_total > 0 {
+                for kid in tasks + olderDone {
+                    if (
+                        kid.gh_parent_number > 0
+                        and kid.gh_parent_repo == t.gh_repo
+                        and kid.gh_parent_number == t.gh_issue_number
+                    ) {
+                        famRows.append(kid);
+                    }
+                }
+            }
+            if t.gh_parent_number > 0 {
+                for pt in tasks + olderDone {
+                    if (
+                        pt.gh_repo == t.gh_parent_repo
+                        and pt.gh_issue_number == t.gh_parent_number
+                    ) {
+                        famParentId = pt.id;
+                        famParentLabel = "#"
+                            + str(pt.gh_issue_number)
+                            + " · "
+                            + pt.title;
+                    }
+                }
+            }
         }
     }
 
@@ -564,6 +599,12 @@ def:pub BoardPage -> JsxPage {
                 onCreateIssue={createIssue}
                 steps={steps}
                 roles={roleRows}
+                family={famRows}
+                familyTotal={famTotal}
+                familyDone={famDone}
+                parentTaskId={famParentId}
+                parentLabel={famParentLabel}
+                onOpenTask={openTaskById}
             />
             <MoveDialog
                 open={bool(moveTaskId)}
