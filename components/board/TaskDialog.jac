@@ -14,7 +14,7 @@ glob STATUSES: list[str] = [
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"];
 
-import from ...models { Project, MemberView, RepoView, StepView, RoleView }
+import from ...models { Project, MemberView, RepoView, StepView, RoleView, TaskView }
 import from ..common.Markdown { Markdown }
 import from .MiniLanes { MiniLanes }
 import from ..log.DatePicker { DatePicker }
@@ -53,6 +53,18 @@ glob FIELD: str = "w-full",
      WIDE: str = "grid gap-2 sm:col-span-2";
 
 # A field that takes the whole row rather than half of it.
+# A family row's column label: the child's step (or legacy status) mapped
+# through the board's own key/label lists, so the pill says what the board
+# column says.
+def familyStepLabel(kid: TaskView, keys: list[str], labels: list[str]) -> str {
+    for (i, k) in enumerate(keys) {
+        if (k == kid.step_id or k == kid.status) and i < len(labels) {
+            return labels[i];
+        }
+    }
+    return kid.status;
+}
+
 def:pub TaskDialog(
     open: bool,
     editing: bool,
@@ -80,7 +92,16 @@ def:pub TaskDialog(
     # The flow line, for the "where is this task" picture above the notes.
     # Empty (no flow line, or a new task with no position yet) draws nothing.
     steps: list[StepView] = [],
-    roles: list[RoleView] = []
+    roles: list[RoleView] = [],
+    # Sub-issue family of the open card, resolved by the caller from rows it
+    # already holds; the dialog only draws it. onOpenTask jumps the dialog
+    # to another card of the family.
+    family: list[TaskView] = [],
+    familyTotal: int = 0,
+    familyDone: int = 0,
+    parentTaskId: str = "",
+    parentLabel: str = "",
+    onOpenTask: Callable[[str], None] = None
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -508,6 +529,80 @@ def:pub TaskDialog(
                                 currentKey={form["status"]}
                             />
                         </div>
+                    }}
+                    {if editing and familyTotal > 0 {
+                        <div key="family" className="grid gap-2">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <Label>Sub-issues</Label>
+                                <span
+                                    className="text-xs tabular-nums text-muted-foreground"
+                                >
+                                    {str(familyDone)
+                                        + " of "
+                                        + str(familyTotal)
+                                        + " done"}
+                                </span>
+                            </div>
+                            <div className="divide-y overflow-hidden rounded-lg border">
+                                {for kid in family {
+                                    <button
+                                        key={kid.id}
+                                        type="button"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                                        title={"Open " + kid.title}
+                                        onClick={lambda { if onOpenTask {
+                                            onOpenTask(kid.id);
+                                        }}}
+                                    >
+                                        <span
+                                            className="flex-none text-xs tabular-nums text-muted-foreground"
+                                        >
+                                            {"#" + str(kid.gh_issue_number)}
+                                        </span>
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {kid.title}
+                                        </span>
+                                        <span
+                                            className={"flex-none rounded-full border px-2 text-xs "
+                                                + (
+                                                    "border-success/40 bg-success/10 text-success"
+                                                        if kid.status == "Done"
+                                                        else "text-muted-foreground"
+                                                )}
+                                        >
+                                            {familyStepLabel(
+                                                kid, columnKeys, columnLabels
+                                            )}
+                                        </span>
+                                    </button>
+                                }}
+                                {if len(family) < familyTotal {
+                                    <div
+                                        key="ghost"
+                                        className="px-3 py-2 text-xs text-muted-foreground"
+                                    >
+                                        {str(familyTotal - len(family))
+                                            + " more on GitHub, not on the board"}
+                                    </div>
+                                }}
+                            </div>
+                        </div>
+                    }}
+                    {if editing and parentTaskId {
+                        <button
+                            key="parentlink"
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            title={"Open the parent issue " + parentLabel}
+                            onClick={lambda { if onOpenTask {
+                                onOpenTask(parentTaskId);
+                            }}}
+                        >
+                            <span className="flex-none">↳ Part of</span>
+                            <span className="min-w-0 flex-1 truncate">
+                                {parentLabel}
+                            </span>
+                        </button>
                     }}
                     <div className="grid gap-2">
                         <div className="flex items-center justify-between">

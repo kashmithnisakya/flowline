@@ -50,7 +50,11 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      AUTO_SYNC_PAGES: int = 3,
      # A board mounts twice on a full page load; the auto pass skips itself
      # when a sync just ran so the double mount costs one GitHub call.
-     AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0;
+     AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0,
+     # Sub-issue child lists fetched per sync, stalest families first by
+     # walk order. Counts are free (they ride the issue list); only the
+     # child links cost a call, and only when a family changed.
+     SUB_ISSUE_CAP: int = 20;
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -415,6 +419,25 @@ def repo_from_link(link: str) -> str {
 }
 
 
+# Sub-issue payloads name their repo as an API url; a child can live in a
+# different repo than its parent, so the repo is read per child.
+def repo_from_api_url(url: str) -> str {
+    marker = "/repos/";
+    if marker not in url {
+        return "";
+    }
+    parts = [
+        p
+        for p in url.split(marker)[-1].split("/")
+        if p
+    ];
+    if len(parts) < 2 {
+        return "";
+    }
+    return parts[0] + "/" + parts[1];
+}
+
+
 # GitHub reports a merged PR as state "closed" with a merged_at timestamp,
 # and a draft as state "open" with draft=true. The board wants those apart.
 def pr_state_of(item: dict[str, any]) -> str {
@@ -756,6 +779,9 @@ def file_issue_item(
         peaks[landing] = top;
     }
     peaks[landing] = peaks[landing] + 1024.0;
+    subs = item.get("sub_issues_summary") or {};
+    sub_total = int(subs.get("total") or 0) if isinstance(subs, dict) else 0;
+    sub_done = int(subs.get("completed") or 0) if isinstance(subs, dict) else 0;
     body = str(item.get("body") or "");
     stamp = now_iso();
     fresh = holder ++> Task(
@@ -772,7 +798,9 @@ def file_issue_item(
         gh_repo=full_name,
         gh_issue_number=number,
         gh_issue_state=issue_state,
-        gh_synced_at=stamp
+        gh_synced_at=stamp,
+        gh_sub_total=sub_total,
+        gh_sub_done=sub_done
     );
     on_attached(holder, fresh);
     if isinstance(target_project, Project) {
@@ -1131,6 +1159,17 @@ walker SyncGithub {
         ];
         changed: list[TaskView] = [];
         stamp = now_iso();
+        # Family lookups for sub-issue stamping: every linked task by its
+        # GitHub identity, and which parents already have a stamped child.
+        task_by_key: dict[str, Task] = {};
+        child_stamped: dict[str, bool] = {};
+        for t in linked {
+            task_by_key[t.gh_repo + "#" + str(t.gh_issue_number)] = t;
+            if t.gh_parent_repo and t.gh_parent_number > 0 {
+                child_stamped[t.gh_parent_repo + "#" + str(t.gh_parent_number)] = True;
+            }
+        }
+        family_calls = 0;
         # One list call per repo beats one GET per task: a workspace with 60
         # linked tasks across 3 repos costs 3 requests, not 60.
         repos: list[str] = [];
@@ -1141,6 +1180,7 @@ walker SyncGithub {
         }
         for full_name in repos {
             states: dict[int, str] = {};
+            sums: dict[int, list[int]] = {};
             for page in [1, 2] {
                 result = gh_request(
                     token,
@@ -1158,9 +1198,15 @@ walker SyncGithub {
                 }
                 for item in data {
                     if isinstance(item, dict) and not item.get("pull_request") {
-                        states[int(item.get("number") or 0)] = str(
-                            item.get("state") or ""
-                        );
+                        number = int(item.get("number") or 0);
+                        states[number] = str(item.get("state") or "");
+                        subs = item.get("sub_issues_summary") or {};
+                        if isinstance(subs, dict) {
+                            sums[number] = [
+                                int(subs.get("total") or 0),
+                                int(subs.get("completed") or 0)
+                            ];
+                        }
                     }
                 }
                 if len(data) < 100 {
@@ -1175,6 +1221,62 @@ walker SyncGithub {
                 if fresh_state and fresh_state != t.gh_issue_state {
                     t.gh_issue_state = fresh_state;
                     changed.append(t.to_view());
+                }
+                # Sub-issue family: refresh the parent's counts, then refetch
+                # the child list when the counts moved or no child is stamped
+                # yet (first sync after this shipped, or children imported
+                # after the parent's last family fetch).
+                key = t.gh_repo + "#" + str(t.gh_issue_number);
+                pair = sums.get(t.gh_issue_number) or [t.gh_sub_total, t.gh_sub_done];
+                moved = pair[0] != t.gh_sub_total or pair[1] != t.gh_sub_done;
+                t.gh_sub_total = pair[0];
+                t.gh_sub_done = pair[1];
+                if moved and pair[0] == 0 {
+                    # The family dissolved on GitHub: unstamp its children.
+                    for kid_t in linked {
+                        if (
+                            kid_t.gh_parent_repo == t.gh_repo
+                            and kid_t.gh_parent_number == t.gh_issue_number
+                        ) {
+                            kid_t.gh_parent_repo = "";
+                            kid_t.gh_parent_number = 0;
+                        }
+                    }
+                }
+                unstamped = pair[0] > 0 and key not in child_stamped;
+                if (
+                    ((moved and pair[0] > 0) or unstamped)
+                    and family_calls < SUB_ISSUE_CAP
+                ) {
+                    family_calls = family_calls + 1;
+                    kids = gh_request(
+                        token,
+                        "GET",
+                        "/repos/"
+                            + full_name
+                            + "/issues/"
+                            + str(t.gh_issue_number)
+                            + "/sub_issues"
+                    );
+                    if kids["ok"] and isinstance(kids["data"], list) {
+                        for kid in kids["data"] {
+                            if not isinstance(kid, dict) {
+                                continue;
+                            }
+                            child_key = repo_from_api_url(
+                                str(kid.get("repository_url") or "")
+                            )
+                                + "#"
+                                + str(int(kid.get("number") or 0));
+                            if child_key in task_by_key {
+                                task_by_key[child_key].gh_parent_repo = t.gh_repo;
+                                task_by_key[child_key].gh_parent_number = t.gh_issue_number;
+                                child_stamped[key] = True;
+                            }
+                        }
+                    } else {
+                        mark_invalid(c, kids);
+                    }
                 }
                 t.gh_synced_at = stamp;
             }
