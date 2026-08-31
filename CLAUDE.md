@@ -224,6 +224,10 @@ File-based routing with route groups:
   `def setZoom` in the same component is a duplicate declaration and the
   whole Vite build fails with a 503 at request time (`jac check` passes —
   the clash only exists in the emitted JS). Name the method something else.
+  Worse, an **imported function** named `set<Field>` doesn't even fail the
+  build: the generated setter shadows the import silently, so every call
+  updates React state instead of doing its job (issue #131, `setThemePref`
+  vs `has themePref`). Never declare a `has` whose setter name an import uses.
 - **A docstring as the first statement of a plain `def` is a parse error** —
   use a `#` comment above the `def`.
 - **On a full page load an app page mounts twice**: once bare, before the
