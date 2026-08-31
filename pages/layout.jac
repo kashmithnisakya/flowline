@@ -64,7 +64,9 @@ def:pub Shell -> JsxLayout {
         # Mirrors the html.dark class for the toggle icon. Read after
         # applyTheme so "system" resolves to what is actually showing.
         themeDark: bool = False,
-        themePref: str = "system",
+        # Not `themePref`: its generated setter would shadow the imported
+        # setThemePref, silently breaking the toggle (issue #131).
+        themeChoice: str = "system",
         paletteOpen: bool = False;
 
     async can with entry {
@@ -72,7 +74,7 @@ def:pub Shell -> JsxLayout {
         watchTheme();
         doc: any = document;
         themeDark = bool(doc.documentElement.classList.contains("dark"));
-        themePref = getThemePref();
+        themeChoice = getThemePref();
         isIn = jacIsLoggedIn();
         loggedIn = isIn;
         if isIn {
@@ -288,7 +290,7 @@ def:pub Shell -> JsxLayout {
                                         Theme
                                     </DropdownMenuLabel>
                                     <DropdownMenuRadioGroup
-                                        value={themePref}
+                                        value={themeChoice}
                                         onValueChange={pickTheme}
                                     >
                                         {for choice in THEME_CHOICES {
