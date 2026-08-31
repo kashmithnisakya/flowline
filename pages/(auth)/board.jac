@@ -230,6 +230,8 @@ def:pub BoardPage -> JsxPage {
     def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
     async def syncGithub -> None;
+    async def autoSyncGithub(connected: bool) -> None;
+    def openTaskById(tid: str) -> None;
     async def createIssue(repoId: str) -> None;
     def markDoneFromPr(taskId: str) -> None;
 
@@ -271,9 +273,9 @@ def:pub BoardPage -> JsxPage {
         t
         for t in tasks
         if (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or fAssignee in t.assignee_ids)
-        and (fCategory == "All" or t.category == fCategory)
-        and (not hideDone or t.status != "Done")
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
+            and (not hideDone or t.status != "Done")
     ];
     # Everything Done in the working set is recent by construction (the
     # server's cutoff); older history is its own list, fetched under the
@@ -288,17 +290,51 @@ def:pub BoardPage -> JsxPage {
         t
         for t in olderDone
         if showAllDone
-        and not hideDone
-        and (fProject == "all" or t.project_id == fProject)
-        and (fAssignee == "All" or fAssignee in t.assignee_ids)
-        and (fCategory == "All" or t.category == fCategory)
+            and not hideDone
+            and (fProject == "all" or t.project_id == fProject)
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
     ];
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
     editingIssueNumber = 0;
+    # The open card's sub-issue family, resolved from rows already loaded:
+    # its children when it is a parent, its parent's card when it is a child.
+    famRows: list[TaskView] = [];
+    famTotal: int = 0;
+    famDone: int = 0;
+    famParentId: str = "";
+    famParentLabel: str = "";
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
+            famTotal = t.gh_sub_total;
+            famDone = t.gh_sub_done;
+            if t.gh_sub_total > 0 {
+                for kid in tasks + olderDone {
+                    if (
+                        kid.gh_parent_number > 0
+                        and kid.gh_parent_repo == t.gh_repo
+                        and kid.gh_parent_number == t.gh_issue_number
+                    ) {
+                        famRows.append(kid);
+                    }
+                }
+            }
+            if t.gh_parent_number > 0 {
+                for pt in tasks + olderDone {
+                    if (
+                        pt.gh_repo == t.gh_parent_repo
+                        and pt.gh_issue_number == t.gh_parent_number
+                    ) {
+                        famParentId = pt.id;
+                        famParentLabel = "#"
+                            + str(pt.gh_issue_number)
+                            + " · "
+                            + pt.title;
+                    }
+                }
+            }
         }
     }
 
@@ -369,12 +405,13 @@ def:pub BoardPage -> JsxPage {
                 # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
-                        # The refresh-failed strip takes a row above the lanes.
-                        "[--lane-h:calc(100dvh-15.5rem)]"
-                            if loadFailed
-                            else "[--lane-h:calc(100dvh-12.5rem)]"
-                    )}
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
+                        + (
+                            # The refresh-failed strip takes a row above the lanes.
+                            "[--lane-h:calc(100dvh-15.5rem)]"
+                                if loadFailed
+                                else "[--lane-h:calc(100dvh-12.5rem)]"
+                        )}
                     style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 1fr))"}}
                 >
                     {for i in [0, 1, 2, 3, 4] {
@@ -469,14 +506,17 @@ def:pub BoardPage -> JsxPage {
                 # Below the 17rem minimum the row scroll-snaps instead.
                 <div
                     key="columns"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch " + (
-                        # The refresh-failed strip takes a row above the lanes.
-                        "[--lane-h:calc(100dvh-15.5rem)]"
-                            if loadFailed
-                            else "[--lane-h:calc(100dvh-12.5rem)]"
-                    )}
+                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
+                        + (
+                            # The refresh-failed strip takes a row above the lanes.
+                            "[--lane-h:calc(100dvh-15.5rem)]"
+                                if loadFailed
+                                else "[--lane-h:calc(100dvh-12.5rem)]"
+                        )}
                     style={{
-                        "gridTemplateColumns": "repeat(" + str(len(colKeys)) + ", minmax(17rem, 1fr))"
+                        "gridTemplateColumns": "repeat("
+                            + str(len(colKeys))
+                            + ", minmax(17rem, 1fr))"
                     }}
                 >
                     {for (ci, key) in enumerate(colKeys) {
@@ -524,7 +564,8 @@ def:pub BoardPage -> JsxPage {
                                         t
                                         for t in visible
                                         if columnKeyOf(t) == key
-                                        and dueTone(t.due_date, t.status, today) == "overdue"
+                                            and dueTone(t.due_date, t.status, today)
+                                                == "overdue"
                                     ]
                                 )}
                         />
@@ -558,6 +599,12 @@ def:pub BoardPage -> JsxPage {
                 onCreateIssue={createIssue}
                 steps={steps}
                 roles={roleRows}
+                family={famRows}
+                familyTotal={famTotal}
+                familyDone={famDone}
+                parentTaskId={famParentId}
+                parentLabel={famParentLabel}
+                onOpenTask={openTaskById}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

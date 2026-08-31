@@ -109,9 +109,11 @@ def:pub ConnectCard(
                         key="gap"
                         className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive"
                     >
-                        {"This server is missing " + ", ".join(missing) + ". Set them "
-                        "in the environment (the GitHub section of the README lists each one) "
-                        "and restart, then try again."}
+                        {"This server is missing "
+                            + ", ".join(missing)
+                            + ". Set them "
+                            "in the environment (the GitHub section of the README lists each one) "
+                            "and restart, then try again."}
                     </p>
                 }}
             </CardContent>

@@ -69,7 +69,8 @@ def:pub StatTile(
                     {if showDelta {
                         <span
                             key="delta"
-                            className={"inline-flex items-center gap-0.5 font-semibold tabular-nums " + tone}
+                            className={"inline-flex items-center gap-0.5 font-semibold tabular-nums "
+                                + tone}
                         >
                             {if delta != 0 {
                                 <svg

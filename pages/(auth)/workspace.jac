@@ -3,6 +3,8 @@ Four tabs of settings CRUD (organization, projects, roles, people); GitHub
 lives at /github and old ?tab=github links redirect there. Each tab is a
 self-contained section, so the page stays a thin shell."""
 
+import from "@jac/runtime" { useState }
+import from "react" { useEffect }
 import from ...models { Project, MemberView }
 import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
 import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
@@ -151,11 +153,12 @@ def:pub WorkspacePage -> JsxPage {
                         <button
                             key={"m-" + entry[0]}
                             type="button"
-                            className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium " + (
-                                "bg-background text-foreground shadow-sm"
-                                    if tab == entry[0]
-                                    else "text-muted-foreground transition-colors hover:text-foreground"
-                            )}
+                            className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium "
+                                + (
+                                    "bg-background text-foreground shadow-sm"
+                                        if tab == entry[0]
+                                        else "text-muted-foreground transition-colors hover:text-foreground"
+                                )}
                             onClick={lambda { selectTab(entry[0]); }}
                         >
                             {entry[1]}

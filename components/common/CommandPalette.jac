@@ -207,9 +207,10 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
 
     def rowClass(index: int) -> str {
         base = "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ";
-        return base + (
-            "bg-accent text-foreground" if index == active else "hover:bg-accent/60"
-        );
+        return base
+            + (
+                "bg-accent text-foreground" if index == active else "hover:bg-accent/60"
+            );
     }
 
     return
@@ -305,9 +306,8 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                                     role="option"
                                     aria-selected={len(pageItems) + i == active}
                                     className={rowClass(len(pageItems) + i)}
-                                    onMouseEnter={lambda { active = len(
-                                        pageItems
-                                    ) + i; }}
+                                    onMouseEnter={lambda { active = len(pageItems)
+                                        + i; }}
                                     onClick={lambda { runItem(len(pageItems) + i); }}
                                 >
                                     <span className="font-medium">{a["label"]}</span>
@@ -332,15 +332,14 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                                     key={t.id}
                                     type="button"
                                     role="option"
-                                    aria-selected={len(pageItems) + len(
-                                        actionItems
-                                    ) + i == active}
+                                    aria-selected={len(pageItems) + len(actionItems) + i
+                                        == active}
                                     className={rowClass(
                                         len(pageItems) + len(actionItems) + i
                                     )}
-                                    onMouseEnter={lambda { active = len(pageItems) + len(
-                                        actionItems
-                                    ) + i; }}
+                                    onMouseEnter={lambda { active = len(pageItems)
+                                        + len(actionItems)
+                                        + i; }}
                                     onClick={lambda { runItem(
                                         len(pageItems) + len(actionItems) + i
                                     ); }}
@@ -348,9 +347,8 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                                     {if t.project_name {
                                         <span
                                             key="dot"
-                                            className={"h-1.5 w-1.5 shrink-0 rounded-full " + dotFor(
-                                                t.project_name
-                                            )}
+                                            className={"h-1.5 w-1.5 shrink-0 rounded-full "
+                                                + dotFor(t.project_name)}
                                         />
                                     }}
                                     <span

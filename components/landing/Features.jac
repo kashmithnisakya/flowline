@@ -1,47 +1,39 @@
-"""What the product actually ships today, four cards, nothing aspirational."""
+"""What the product actually ships today, four cards, nothing aspirational.
+Each card shows its feature with product parts (step pills, log rows, the
+roster, the isolation diagram) instead of a paragraph doing the work.
+"""
 
 import from ..ui.card { Card, CardContent }
+import from ..common.Avatar { Avatar }
 
-obj Feature {
-    has n: str,
-        title: str,
-        body: str,
-        tag: str;
-}
-
-glob FEATURES: list[Feature] = [
-         Feature(
-             n="01",
-             title="A flow line you design",
-             body="Name the steps your team actually uses and connect them however "
-             "work moves, loops included. The board is those steps, with "
-             "drag-and-drop between them and filters by project and assignee.",
-             tag="Flow line"
-         ),
-         Feature(
-             n="02",
-             title="A written daily log",
-             body="One row per person per weekday: what they worked on, the project, "
-             "status, notes and links to the issue or PR. It becomes the archive "
-             "nobody has to remember.",
-             tag="Daily Log"
-         ),
-         Feature(
-             n="03",
-             title="Projects and people you control",
-             body="Create, rename and archive projects; add teammates and assign them "
-             "to as many projects as you need. Archiving keeps the history and "
-             "frees the open work.",
-             tag="Admin"
-         ),
-         Feature(
-             n="04",
-             title="A workspace that is yours",
-             body="Your account is your organization. Everything you create lives on "
-             "your own private graph. Another account cannot read or touch it.",
-             tag="Private"
-         )
-     ];
+# The mini flow the first card draws; wash/ink/bar are step colour tokens.
+glob FLOW_PILLS: list[dict[str, str]] = [
+         {"name": "Idea", "cls": "bg-step-sky-wash text-step-sky-ink"},
+         {"name": "Build", "cls": "bg-step-amber-wash text-step-amber-ink"},
+         {"name": "Review", "cls": "bg-step-indigo-wash text-step-indigo-ink"},
+         {"name": "Done", "cls": "bg-step-emerald-wash text-step-emerald-ink"}
+     ],
+     FLOW_COLS: list[str] = [
+         "border-t-step-sky bg-step-sky-wash",
+         "border-t-step-amber bg-step-amber-wash",
+         "border-t-step-indigo bg-step-indigo-wash",
+         "border-t-step-emerald bg-step-emerald-wash"
+     ],
+     LOG_PEEK: list[dict[str, str]] = [
+         {
+             "who": "Amara",
+             "what": "shipped the hero rework",
+             "status": "Done",
+             "tint": "bg-step-emerald-wash text-step-emerald-ink"
+         },
+         {
+             "who": "Priya",
+             "what": "auth rollout behind the flag",
+             "status": "In progress",
+             "tint": "bg-step-amber-wash text-step-amber-ink"
+         }
+     ],
+     ROSTER: list[str] = ["Amara Perera", "Kasun Silva", "Dev Fernando", "Priya Raman"];
 
 def:pub Features -> JsxElement {
     return
@@ -63,37 +55,153 @@ def:pub Features -> JsxElement {
                 Four things replace the ritual, and unlike the meeting, the record is still there next month.
             </p>
             <div className="mt-10 grid gap-6 sm:grid-cols-2">
-                {for f in FEATURES {
-                    <Card
-                        key={f.n}
-                        className="card-hover h-full py-0 hover:ring-foreground/20"
-                    >
-                        <CardContent className="flex h-full flex-col gap-3 p-7">
-                            <div className="flex items-center justify-between">
-                                <span
-                                    className="font-display text-sm font-bold text-primary"
-                                >
-                                    {f.n}
-                                </span>
-                                <span
-                                    className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
-                                >
-                                    {f.tag}
-                                </span>
+                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                    <CardContent className="flex h-full flex-col gap-3 p-7">
+                        <h3 className="font-display text-xl font-bold tracking-tight">
+                            A flow line you design
+                        </h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            Name the steps your team actually uses and connect them however work moves, loops included. The board is those steps.
+                        </p>
+                        <div className="mt-auto pt-3" aria-hidden="true">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                {for (i, pill) in enumerate(FLOW_PILLS) {
+                                    <span
+                                        key={pill["name"]}
+                                        className="flex items-center gap-1.5"
+                                    >
+                                        {if i > 0 {
+                                            <span
+                                                key="arrow"
+                                                className="text-[10px] text-muted-foreground"
+                                            >
+                                                {"⇄" if i == 3 else "→"}
+                                            </span>
+                                        }}
+                                        <span
+                                            className={"rounded-full px-2.5 py-0.5 text-[10px] font-bold "
+                                                + pill["cls"]}
+                                        >
+                                            {pill["name"]}
+                                        </span>
+                                    </span>
+                                }}
                             </div>
-                            <h3
-                                className="font-display text-xl font-bold tracking-tight"
+                            <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                                {for c in FLOW_COLS {
+                                    <div
+                                        key={c}
+                                        className={"h-9 rounded-md border-t-[3px] " + c}
+                                    ></div>
+                                }}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                    <CardContent className="flex h-full flex-col gap-3 p-7">
+                        <h3 className="font-display text-xl font-bold tracking-tight">
+                            A written daily log
+                        </h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            One row per person per weekday: the work, the status, the links. The archive nobody has to remember.
+                        </p>
+                        <div className="mt-auto space-y-1.5 pt-3" aria-hidden="true">
+                            {for r in LOG_PEEK {
+                                <div
+                                    key={r["who"]}
+                                    className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[11px]"
+                                >
+                                    <span className="font-bold">{r["who"]}</span>
+                                    <span
+                                        className="min-w-0 truncate text-muted-foreground"
+                                    >
+                                        {r["what"]}
+                                    </span>
+                                    <span
+                                        className={"ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold "
+                                            + r["tint"]}
+                                    >
+                                        {r["status"]}
+                                    </span>
+                                </div>
+                            }}
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                    <CardContent className="flex h-full flex-col gap-3 p-7">
+                        <h3 className="font-display text-xl font-bold tracking-tight">
+                            Projects and people you control
+                        </h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            Add teammates without accounts, assign them to any project, and archive without losing the history.
+                        </p>
+                        <div
+                            className="mt-auto flex items-center pt-3"
+                            aria-hidden="true"
+                        >
+                            <div className="flex">
+                                {for (i, name) in enumerate(ROSTER) {
+                                    <span
+                                        key={name}
+                                        className={"inline-flex"
+                                            + (" -ml-2" if i > 0 else "")}
+                                    >
+                                        <Avatar
+                                            name={name}
+                                            size="sm"
+                                            className="ring-2 ring-card"
+                                        />
+                                    </span>
+                                }}
+                            </div>
+                            <span
+                                className="ml-3 text-[11px] font-medium text-muted-foreground"
                             >
-                                {f.title}
-                            </h3>
-                            <p
-                                className="text-sm leading-relaxed text-muted-foreground"
-                            >
-                                {f.body}
-                            </p>
-                        </CardContent>
-                    </Card>
-                }}
+                                + your team
+                            </span>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                    <CardContent className="flex h-full flex-col gap-3 p-7">
+                        <h3 className="font-display text-xl font-bold tracking-tight">
+                            A workspace that is yours
+                        </h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                            Your account is your organization, on its own private graph. Another account cannot read or touch it.
+                        </p>
+                        <div
+                            className="mt-auto flex items-center gap-3 pt-3"
+                            aria-hidden="true"
+                        >
+                            <div className="flex-1 rounded-lg border p-2.5">
+                                <div
+                                    className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground"
+                                >
+                                    your org
+                                </div>
+                                <div
+                                    className="mt-1.5 h-1.5 rounded-full bg-primary/25"
+                                ></div>
+                                <div className="mt-1 h-1.5 w-2/3 rounded-full bg-muted"></div>
+                            </div>
+                            <span className="text-sm font-bold text-muted-foreground">
+                                ×
+                            </span>
+                            <div className="flex-1 rounded-lg border p-2.5 opacity-45">
+                                <div
+                                    className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground"
+                                >
+                                    anyone else
+                                </div>
+                                <div className="mt-1.5 h-1.5 rounded-full bg-muted"></div>
+                                <div className="mt-1 h-1.5 w-3/5 rounded-full bg-muted"></div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </section>;
 }

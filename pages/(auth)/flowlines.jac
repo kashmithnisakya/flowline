@@ -56,7 +56,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from "sonner" { toast }
-import from "react" { useEffect, useLayoutEffect }
+import from "react" { useState, useEffect, useLayoutEffect, useRef }
 import from ...components.common.glyphs { Spinner, WarnIcon }
 
 glob BLANK_STEP: dict[str, str] = {
@@ -198,7 +198,7 @@ def:pub FlowLinePage -> JsxPage {
     # viewport height, so a resize moves the centering target.
     useEffect(
         lambda {
-            onResize = lambda {
+            onResize: any = lambda {
                 measureBox();
                 fitZoom();
             };
@@ -214,7 +214,7 @@ def:pub FlowLinePage -> JsxPage {
     # press would then close the panel too.
     useEffect(
         lambda {
-            onKey = lambda (e: any) {
+            onKey: any = lambda (e: any) {
                 if e.key != "Escape" or not peekId {
                     return;
                 }
@@ -398,7 +398,14 @@ def:pub FlowLinePage -> JsxPage {
     stepNoun = "step" if len(steps) == 1 else "steps";
     linkNoun = "transition" if linkCount == 1 else "transitions";
     wipeSummary = (
-        str(len(steps)) + " " + stepNoun + " and " + str(linkCount) + " " + linkNoun + " will be removed."
+        str(len(steps))
+        + " "
+        + stepNoun
+        + " and "
+        + str(linkCount)
+        + " "
+        + linkNoun
+        + " will be removed."
     );
 
     # Advisory checks. All plain BFS over the views already in hand.
@@ -419,9 +426,9 @@ def:pub FlowLinePage -> JsxPage {
                     seen[s.id] = True;
                 }
             }
-            at = 0;
+            at: int = 0;
             while at < len(frontier) {
-                current = frontier[at];
+                current: str = frontier[at];
                 at = at + 1;
                 for nid in byId[current].next_ids {
                     if nid in byId and nid not in seen {
@@ -430,7 +437,7 @@ def:pub FlowLinePage -> JsxPage {
                     }
                 }
             }
-            stranded = 0;
+            stranded: int = 0;
             for s in steps {
                 if s.id not in seen {
                     stranded = stranded + 1;
@@ -438,7 +445,9 @@ def:pub FlowLinePage -> JsxPage {
             }
             if stranded > 0 {
                 issues.append(
-                    str(stranded) + (" step has" if stranded == 1 else " steps have") + " no path from a start step."
+                    str(stranded)
+                        + (" step has" if stranded == 1 else " steps have")
+                        + " no path from a start step."
                 );
             }
         }
@@ -451,9 +460,9 @@ def:pub FlowLinePage -> JsxPage {
                     reach[s.id] = True;
                 }
             }
-            at2 = 0;
+            at2: int = 0;
             while at2 < len(backlog) {
-                current2 = backlog[at2];
+                current2: str = backlog[at2];
                 at2 = at2 + 1;
                 for pid in byId[current2].prev_ids {
                     if pid in byId and pid not in reach {
@@ -462,7 +471,7 @@ def:pub FlowLinePage -> JsxPage {
                     }
                 }
             }
-            noPath = 0;
+            noPath: int = 0;
             for s in steps {
                 if s.id not in reach {
                     noPath = noPath + 1;
@@ -470,7 +479,9 @@ def:pub FlowLinePage -> JsxPage {
             }
             if noPath > 0 {
                 issues.append(
-                    str(noPath) + (" step has" if noPath == 1 else " steps have") + " no path to a done step."
+                    str(noPath)
+                        + (" step has" if noPath == 1 else " steps have")
+                        + " no path to a done step."
                 );
             }
         }
@@ -561,11 +572,12 @@ def:pub FlowLinePage -> JsxPage {
                             >
                                 <WarnIcon size={13} className="mt-0.5 shrink-0"/>
                                 <span className="tabular-nums">
-                                    {issues[0] + (
-                                        " (+" + str(len(issues) - 1) + ")"
-                                            if len(issues) > 1
-                                            else ""
-                                    )}
+                                    {issues[0]
+                                        + (
+                                            " (+" + str(len(issues) - 1) + ")"
+                                                if len(issues) > 1
+                                                else ""
+                                        )}
                                 </span>
                             </span>
                         }}
@@ -649,7 +661,9 @@ def:pub FlowLinePage -> JsxPage {
                                     >
                                         <p className="text-sm text-pretty">
                                             <span className="font-medium">
-                                                {"Drawing a transition out of " + connectTitle + "."}
+                                                {"Drawing a transition out of "
+                                                    + connectTitle
+                                                    + "."}
                                             </span>
                                             <span className="text-muted-foreground">
                                                 {" Click the step it flows into, backwards is fine,"
@@ -687,7 +701,8 @@ def:pub FlowLinePage -> JsxPage {
                                         onChange={lambda (e: any) { setField(
                                             "name", e.target.value
                                         ); }}
-                                        onKeyDown={lambda (e: any) { if e.key == "Enter" {
+                                        onKeyDown={lambda (e: any) { if e.key
+                                            == "Enter" {
                                             commitName();
                                         }}}
                                     />
@@ -695,7 +710,7 @@ def:pub FlowLinePage -> JsxPage {
                                         <Button
                                             size="sm"
                                             disabled={saving
-                                            or not (form["name"] or "").strip()}
+                                                or not (form["name"] or "").strip()}
                                             onClick={commitName}
                                         >
                                             Add to canvas
@@ -741,9 +756,12 @@ def:pub FlowLinePage -> JsxPage {
                         <span
                             className="rounded-full border px-3 py-1 text-xs tabular-nums text-muted-foreground"
                         >
-                            {str(len(steps)) + " steps · " + str(linkCount) + " transitions · " + str(
-                                taskTotal
-                            ) + (" task" if taskTotal == 1 else " tasks")}
+                            {str(len(steps))
+                                + " steps · "
+                                + str(linkCount)
+                                + " transitions · "
+                                + str(taskTotal)
+                                + (" task" if taskTotal == 1 else " tasks")}
                         </span>
                         <div className="flex-1"/>
                         {if len(issues) > 0 {
@@ -760,22 +778,24 @@ def:pub FlowLinePage -> JsxPage {
                         >
                             <button
                                 type="button"
-                                className={"rounded-md px-2.5 py-1 text-xs font-medium " + (
-                                    "bg-background text-foreground shadow-sm"
-                                        if not laneMode
-                                        else "text-muted-foreground transition-colors hover:text-foreground"
-                                )}
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if not laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
                                 onClick={lambda { switchView("flow"); }}
                             >
                                 Flow
                             </button>
                             <button
                                 type="button"
-                                className={"rounded-md px-2.5 py-1 text-xs font-medium " + (
-                                    "bg-background text-foreground shadow-sm"
-                                        if laneMode
-                                        else "text-muted-foreground transition-colors hover:text-foreground"
-                                )}
+                                className={"rounded-md px-2.5 py-1 text-xs font-medium "
+                                    + (
+                                        "bg-background text-foreground shadow-sm"
+                                            if laneMode
+                                            else "text-muted-foreground transition-colors hover:text-foreground"
+                                    )}
                                 onClick={lambda { switchView("lanes"); }}
                             >
                                 Lanes
@@ -811,9 +831,8 @@ def:pub FlowLinePage -> JsxPage {
                                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
                             >
                                 <span
-                                    className={"h-2 w-2 rounded-full " + DOT_FILL[
-                                        KIND_COLORS[k]
-                                    ]}
+                                    className={"h-2 w-2 rounded-full "
+                                        + DOT_FILL[KIND_COLORS[k]]}
                                 />
                                 {KIND_LABEL[k]}
                             </span>
@@ -830,9 +849,8 @@ def:pub FlowLinePage -> JsxPage {
                                     className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
                                 >
                                     <span
-                                        className={"h-2 w-2 shrink-0 rounded-full " + DOT_FILL[
-                                            colorKey(rr.color or "slate")
-                                        ]}
+                                        className={"h-2 w-2 shrink-0 rounded-full "
+                                            + DOT_FILL[colorKey(rr.color or "slate")]}
                                     />
                                     <span className="font-medium">{rr.name}</span>
                                     <span className="text-muted-foreground">

@@ -241,11 +241,12 @@ def:pub LoginPage -> JsxPage {
                             {if signup {
                                 <p
                                     key="rule"
-                                    className={"flex items-center gap-1.5 text-xs transition-colors " + (
-                                        "text-success"
-                                            if len(password) >= MIN_PASSWORD
-                                            else "text-muted-foreground"
-                                    )}
+                                    className={"flex items-center gap-1.5 text-xs transition-colors "
+                                        + (
+                                            "text-success"
+                                                if len(password) >= MIN_PASSWORD
+                                                else "text-muted-foreground"
+                                        )}
                                     aria-live="polite"
                                 >
                                     <svg

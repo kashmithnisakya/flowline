@@ -79,7 +79,8 @@ import from walkers.github {
     SearchRepoItems,
     ImportIssues,
     CreateIssueFromTask,
-    SyncGithub
+    SyncGithub,
+    SetRepoAutoSync
 }
 import from walkers.insights { Digest }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }

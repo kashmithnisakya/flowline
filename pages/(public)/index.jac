@@ -6,9 +6,13 @@ call to action pointing at their board.
 import from "@jac/runtime" { jacIsLoggedIn }
 import from ...components.landing.SiteNav { SiteNav }
 import from ...components.landing.Hero { Hero }
+import from ...components.landing.Tour { Tour }
 import from ...components.landing.Features { Features }
 import from ...components.landing.HowItWorks { HowItWorks }
+import from ...components.landing.CostMath { CostMath }
 import from ...components.landing.Faq { Faq }
+import from ...components.landing.ProofStrip { ProofStrip }
+import from ...components.landing.Reveal { Reveal }
 import from ...components.landing.SiteFooter { SiteFooter }
 
 def:pub LandingPage -> JsxPage {
@@ -23,9 +27,24 @@ def:pub LandingPage -> JsxPage {
             <SiteNav loggedIn={loggedIn}/>
             <main>
                 <Hero loggedIn={loggedIn}/>
-                <Features/>
-                <HowItWorks/>
-                <Faq/>
+                <Reveal>
+                    <Tour/>
+                </Reveal>
+                <Reveal>
+                    <Features/>
+                </Reveal>
+                <Reveal>
+                    <HowItWorks/>
+                </Reveal>
+                <Reveal>
+                    <CostMath/>
+                </Reveal>
+                <Reveal>
+                    <Faq/>
+                </Reveal>
+                <Reveal>
+                    <ProofStrip/>
+                </Reveal>
             </main>
             <SiteFooter loggedIn={loggedIn}/>
         </div>;

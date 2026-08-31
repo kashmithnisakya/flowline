@@ -128,9 +128,8 @@ def:pub MemberTable(
                                 <TableCell>
                                     <div className="flex items-center gap-3">
                                         <span
-                                            className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold " + hueFor(
-                                                m.name
-                                            )}
+                                            className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold "
+                                                + hueFor(m.name)}
                                         >
                                             {initialsOf(m.name)}
                                         </span>

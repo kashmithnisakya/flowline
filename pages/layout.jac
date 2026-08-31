@@ -84,7 +84,7 @@ def:pub Shell -> JsxLayout {
     useEffect(
         lambda {
             onKey = lambda (e: any) { if (e.metaKey or e.ctrlKey)
-            and str(e.key).lower() == "k" {
+                and str(e.key).lower() == "k" {
                 e.preventDefault();
                 paletteOpen = True;
             }};

@@ -32,13 +32,10 @@ glob FAQS: list[QA] = [
              a="Yes, read-mostly. Install the GitHub App on the repos you pick and "
              "Flowline can list them, import issues as tasks, and show the state "
              "of open pull requests. The only thing it ever writes to GitHub is "
-             "an issue you explicitly create from a task."
-         ),
-         QA(
-             q="Does it sync with GitHub in the background?",
-             a="No. Syncing happens when you press Sync, and nothing runs on a "
-             "schedule. Flowline also never moves a card for you: when an issue "
-             "closes or a pull request merges, the card says so and you decide."
+             "an issue you explicitly create from a task. Syncing happens when "
+             "you press Sync, nothing runs on a schedule, and Flowline never "
+             "moves a card for you. There is no Slack, Teams or mobile app "
+             "today; Flowline is a web app."
          ),
          QA(
              q="Do we have to use the same columns as everyone else?",
@@ -46,11 +43,6 @@ glob FAQS: list[QA] = [
              "uses and connect them however work moves, loops included. The "
              "board is those steps, so the two can never disagree. Start from "
              "a template if you would rather not draw one."
-         ),
-         QA(
-             q="Is there a Slack or Teams app?",
-             a="No. Flowline is a web app today; there is no chat integration and no "
-             "mobile app."
          ),
          QA(
              q="What happened to the spreadsheet we used before?",
@@ -77,9 +69,10 @@ def:pub Faq -> JsxElement {
             <div
                 className="mt-8 max-w-[840px] divide-y divide-foreground/10 border-y border-foreground/10"
             >
-                {for f in FAQS {
+                {for (i, f) in enumerate(FAQS) {
                     <details
                         key={f.q}
+                        open={i == 0}
                         className="group py-5 [interpolate-size:allow-keywords] [&::details-content]:h-0 [&::details-content]:overflow-clip [&::details-content]:opacity-0 [&::details-content]:transition-[height,opacity,content-visibility] [&::details-content]:duration-300 [&::details-content]:ease-out [&::details-content]:[transition-behavior:allow-discrete] [&[open]::details-content]:h-auto [&[open]::details-content]:opacity-100"
                     >
                         <summary

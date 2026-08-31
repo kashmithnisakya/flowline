@@ -88,7 +88,7 @@ glob STATUSES: list[str] = [
                      "owner": "Architect",
                      "blurb": "big changes only",
                      "x": 400.0,
-                     "y": 430.0
+                     "y": 560.0
                  },
                  {
                      "name": "Implement",
@@ -97,7 +97,7 @@ glob STATUSES: list[str] = [
                      "owner": "Builder",
                      "blurb": "drive the model, add tests",
                      "x": 740.0,
-                     "y": 560.0
+                     "y": 430.0
                  },
                  {
                      "name": "Review & merge",

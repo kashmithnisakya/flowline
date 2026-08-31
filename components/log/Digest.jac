@@ -40,9 +40,11 @@ def prevDay(iso: str) -> str {
 # "2026-08-11" -> "Tue, Aug 11"
 def longDay(iso: str) -> str {
     d = new(Date, iso + "T00:00:00");
-    return DAY_NAMES[int(d.getDay())] + ", " + MONTHS[int(d.getMonth())] + " " + str(
-        int(d.getDate())
-    );
+    return DAY_NAMES[int(d.getDay())]
+        + ", "
+        + MONTHS[int(d.getMonth())]
+        + " "
+        + str(int(d.getDate()));
 }
 
 # member_name is every assignee comma-joined; an empty one is "Unassigned".
@@ -98,9 +100,8 @@ def grouped(entries: list[LogEntry]) -> list[dict[str, any]] {
             }
             items.append(
                 {
-                    "what": (e.task_title or e.activity) + (
-                        (" (" + e.activity + ")") if e.task_title else ""
-                    ),
+                    "what": (e.task_title or e.activity)
+                        + ((" (" + e.activity + ")") if e.task_title else ""),
                     "blocked": e.status == "Blocked"
                 }
             );
@@ -109,22 +110,25 @@ def grouped(entries: list[LogEntry]) -> list[dict[str, any]] {
             n = importCounts[repo];
             items.append(
                 {
-                    "what": "Imported " + str(n) + (
-                        " issue" if n == 1 else " issues"
-                    ) + " from " + repo,
+                    "what": "Imported "
+                        + str(n)
+                        + (" issue" if n == 1 else " issues")
+                        + " from "
+                        + repo,
                     "blocked": False
                 }
             );
         }
         hidden = len(items) - MAX_ITEMS;
         if hidden > 0 {
-            items = items[:MAX_ITEMS] + [
-                {
-                    "what": "+" + str(hidden) + " more in the table below",
-                    "blocked": False,
-                    "more": True
-                }
-            ];
+            items = items[:MAX_ITEMS]
+                + [
+                    {
+                        "what": "+" + str(hidden) + " more in the table below",
+                        "blocked": False,
+                        "more": True
+                    }
+                ];
         }
         out.append({"who": who, "items": items});
     }
@@ -173,16 +177,26 @@ def markdown(
             for it in g["items"] {
                 # The "+n more" line points at the table on the page; in the
                 # pasted text it is just a count.
-                out = out + "  - " + (
-                    it["what"].split(" in the table")[0] if it["more"] else it["what"]
-                ) + "\n";
+                out = out
+                    + "  - "
+                    + (
+                        it["what"].split(" in the table")[0]
+                            if it["more"]
+                            else it["what"]
+                    )
+                    + "\n";
             }
         }
         return out;
     }
-    return "**Standup · " + longDay(day) + "**\n\n" + block("Yesterday", yest) + "\n" + block(
-        "Today", today
-    ) + "\n" + block("Blockers", blocked);
+    return "**Standup · "
+        + longDay(day)
+        + "**\n\n"
+        + block("Yesterday", yest)
+        + "\n"
+        + block("Today", today)
+        + "\n"
+        + block("Blockers", blocked);
 }
 
 # Typed accessor: the checker cannot see through dict[str, any] values.
@@ -215,15 +229,16 @@ def DigestColumn(title: str, sub: str, rows: list[dict[str, any]]) -> JsxElement
                                 {for (j, it) in enumerate(itemsOf(g)) {
                                     <li
                                         key={str(j)}
-                                        className={"truncate " + (
-                                            "text-destructive"
-                                                if it["blocked"]
-                                                else (
-                                                    "italic text-muted-foreground/70"
-                                                        if it["more"]
-                                                        else "text-muted-foreground"
-                                                )
-                                        )}
+                                        className={"truncate "
+                                            + (
+                                                "text-destructive"
+                                                    if it["blocked"]
+                                                    else (
+                                                        "italic text-muted-foreground/70"
+                                                            if it["more"]
+                                                            else "text-muted-foreground"
+                                                    )
+                                            )}
                                         title={it["what"]}
                                     >
                                         {it["what"]}

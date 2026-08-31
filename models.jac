@@ -73,7 +73,12 @@ node Member {
 }
 
 node Repo {
-    has full_name: str;
+    has full_name: str,
+        # Auto-file new issues onto the entry step on every GitHub sync.
+        # The cursor is the newest `updated_at` seen, so each sync asks
+        # GitHub only for what changed since; empty means backfill.
+        auto_sync: bool = False,
+        issue_cursor: str = "";
 }
 
 node Task {
@@ -107,6 +112,13 @@ node Task {
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
         gh_synced_at: str = "",
+        # GitHub sub-issue family, stamped by the sync. A parent carries its
+        # summary counts; a child carries its parent's identity. Fields, not
+        # edges: an edge would cost a traversal per row in every list.
+        gh_parent_repo: str = "",
+        gh_parent_number: int = 0,
+        gh_sub_total: int = 0,
+        gh_sub_done: int = 0,
         pr_number: int = 0,
         pr_state: str = "";
 
@@ -181,6 +193,10 @@ node Task {
             gh_issue_number=self.gh_issue_number,
             gh_issue_state=self.gh_issue_state,
             gh_synced_at=self.gh_synced_at,
+            gh_parent_repo=self.gh_parent_repo,
+            gh_parent_number=self.gh_parent_number,
+            gh_sub_total=self.gh_sub_total,
+            gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
             pr_state=self.pr_state
         );
@@ -339,6 +355,10 @@ obj TaskView {
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
         gh_synced_at: str = "",
+        gh_parent_repo: str = "",
+        gh_parent_number: int = 0,
+        gh_sub_total: int = 0,
+        gh_sub_done: int = 0,
         pr_number: int = 0,
         pr_state: str = "";
 }
@@ -424,7 +444,8 @@ obj RepoView {
     has id: str,
         full_name: str,
         project_id: str,
-        project_name: str;
+        project_name: str,
+        auto_sync: bool = False;
 }
 
 obj RoleView {
@@ -517,7 +538,8 @@ def repo_view(r: Repo) -> RepoView {
         id=jid(r),
         full_name=r.full_name,
         project_id=project_id,
-        project_name=project_name
+        project_name=project_name,
+        auto_sync=r.auto_sync
     );
 }
 

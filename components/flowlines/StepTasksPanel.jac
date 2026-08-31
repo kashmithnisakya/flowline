@@ -39,16 +39,16 @@ def:pub StepTasksPanel(
 
     return
         <div
-            className={"pointer-events-auto flex max-h-full min-h-0 flex-col rounded-lg border bg-card shadow-lg animate-in fade-in slide-in-from-right-4 duration-300 " + className}
+            className={"pointer-events-auto flex max-h-full min-h-0 flex-col rounded-lg border bg-card shadow-lg animate-in fade-in slide-in-from-right-4 duration-300 "
+                + className}
             onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
         >
             <div className="flex items-start gap-2 px-3.5 pt-3.5 pb-2.5">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm font-semibold">
                         <span
-                            className={"h-2.5 w-2.5 shrink-0 rounded-full " + DOT_FILL[
-                                tone
-                            ]}
+                            className={"h-2.5 w-2.5 shrink-0 rounded-full "
+                                + DOT_FILL[tone]}
                         />
                         <span className="truncate" title={step.name}>{step.name}</span>
                         <span className="shrink-0 font-normal text-muted-foreground">
@@ -88,9 +88,8 @@ def:pub StepTasksPanel(
                 {if loading {
                     <div key="loading" className="flex flex-col gap-2">
                         <div
-                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                tone
-                            ]}
+                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                + CARD_BAR[tone]}
                         >
                             <Skeleton className="h-4 w-3/5"/>
                             <div className="flex items-center gap-1.5">
@@ -99,9 +98,8 @@ def:pub StepTasksPanel(
                             </div>
                         </div>
                         <div
-                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                tone
-                            ]}
+                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                + CARD_BAR[tone]}
                         >
                             <Skeleton className="h-4 w-2/5"/>
                             <div className="flex items-center gap-1.5">
@@ -110,9 +108,8 @@ def:pub StepTasksPanel(
                             </div>
                         </div>
                         <div
-                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 " + CARD_BAR[
-                                tone
-                            ]}
+                            className={"flex flex-col gap-2 rounded-lg border bg-card p-3 "
+                                + CARD_BAR[tone]}
                         >
                             <Skeleton className="h-4 w-1/2"/>
                             <div className="flex items-center gap-1.5">
@@ -134,9 +131,8 @@ def:pub StepTasksPanel(
                             <button
                                 key={t.id}
                                 type="button"
-                                className={"flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-px hover:border-foreground/20 hover:shadow-md " + CARD_BAR[
-                                    tone
-                                ]}
+                                className={"flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-px hover:border-foreground/20 hover:shadow-md "
+                                    + CARD_BAR[tone]}
                                 onClick={lambda { if onOpenTask { onOpenTask(t.id); }}}
                             >
                                 <span className="text-sm font-medium">{t.title}</span>
@@ -166,9 +162,10 @@ def:pub StepTasksPanel(
                                     {if t.due_date {
                                         <span
                                             key="due"
-                                            className={"ml-auto shrink-0 whitespace-nowrap " + DUE_TINT[
-                                                dueTone(t.due_date, t.status, today)
-                                            ]}
+                                            className={"ml-auto shrink-0 whitespace-nowrap "
+                                                + DUE_TINT[
+                                                    dueTone(t.due_date, t.status, today)
+                                                ]}
                                             title={"Due " + prettyDay(t.due_date)}
                                         >
                                             {dueLabel(t.due_date, t.status, today)}
@@ -187,9 +184,11 @@ def:pub StepTasksPanel(
                             >
                                 {"Loading…"
                                     if loadingMore
-                                    else "Show more (" + str(len(tasks)) + " of " + str(
-                                        count
-                                    ) + ")"}
+                                    else "Show more ("
+                                        + str(len(tasks))
+                                        + " of "
+                                        + str(count)
+                                        + ")"}
                             </button>
                         }}
                     </div>
