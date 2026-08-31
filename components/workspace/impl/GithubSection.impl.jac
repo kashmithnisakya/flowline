@@ -363,6 +363,7 @@ impl GithubSection.selectRepo(value: str) -> None {
     selected = [];
     issuePage = 1;
     prPage = 1;
+    importProject = "none";
 }
 
 impl GithubSection.runSearch -> None {
@@ -384,12 +385,13 @@ impl GithubSection.importSelected -> None {
     importing = True;
     blank: dict[str, any] = {};
     try {
-        # No project field: an empty project_id makes ImportIssues inherit
-        # the repo's own project, chosen when the repo was attached.
+        # An explicit pick (repo attached without a project) wins; empty
+        # project_id makes ImportIssues inherit the repo's own project.
+        project = importProject if importProject != "none" else "";
         result = root spawn ImportIssues(
             repo_id=repoId,
             numbers=selected,
-            project_id="",
+            project_id=project,
             status=importStatus,
             step_id=importStep
         );

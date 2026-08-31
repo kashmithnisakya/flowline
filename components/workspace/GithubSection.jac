@@ -120,6 +120,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         issueLoading: bool = False,
         issueMore: bool = False,
         selected: list[int] = [],
+        # Destination for a repo attached without a project; "none" keeps the
+        # import inheriting nothing. A repo WITH a project ignores this.
+        importProject: str = "none",
         importStatus: str = "Backlog",
         steps: list[StepView] = [],
         importStep: str = "",
@@ -501,6 +504,12 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             state={issueState}
                                             selected={selected}
                                             projectName={repoProjectName}
+                                            projects={[
+                                                p
+                                                for p in projects
+                                                if p.active
+                                            ]}
+                                            projectId={importProject}
                                             status={importStatus}
                                             steps={steps}
                                             stepId={importStep}
@@ -508,6 +517,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             importing={importing}
                                             onState={lambda (v: str) { issueState = v; }}
                                             onToggle={toggleIssue}
+                                            onProject={lambda (v: str) { importProject = v; }}
                                             onStatus={lambda (v: str) { importStatus = v; }}
                                             onStep={lambda (v: str) { importStep = v; }}
                                             onImport={importSelected}
