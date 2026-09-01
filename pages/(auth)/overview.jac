@@ -22,7 +22,9 @@ import from ...walkers.tasks { ListTasks, TaskCounts }
 import from ...walkers.roster { ListMembers }
 import from ...walkers.projects { ListProjects }
 import from ...walkers.log { LogCounts }
+import from ...walkers.insights { Digest }
 import from ...components.dashboard.StatTile { StatTile }
+import from ...components.dashboard.QueueCards { ReviewQueueCard, GoneQuietCard }
 import from ...components.ui.card {
     Card,
     CardHeader,
@@ -107,6 +109,11 @@ def:pub OverviewPage -> JsxPage {
         # Every number on the page, counted over the whole history.
         counts: TaskTotals = TaskTotals(),
         logs: LogTotals = LogTotals(),
+        # Digest snapshot slices, kept as dicts: typing them as the walker's
+        # objs would pull walkers.insights types into the client bundle.
+        reviewQueue: list[dict] = [],
+        quiet: list[dict] = [],
+        blockedInfo: dict[str, dict] = {},
         loading: bool = True,
         failed: bool = False;
 
@@ -365,10 +372,22 @@ def:pub OverviewPage -> JsxPage {
                                             if t.status == "Blocked"
                                             else "Overdue"}
                                     </span>
-                                    <span
-                                        className="min-w-0 flex-1 truncate text-sm font-medium"
-                                    >
-                                        {t.title}
+                                    <span className="min-w-0 flex-1">
+                                        <span
+                                            className="block truncate text-sm font-medium"
+                                        >
+                                            {t.title}
+                                        </span>
+                                        {if t.status == "Blocked"
+                                            and t.id in blockedInfo
+                                            and len(blockedInfo[t.id]["reason"]) > 0 {
+                                            <span
+                                                key="why"
+                                                className="block truncate text-xs text-muted-foreground"
+                                            >
+                                                {blockedInfo[t.id]["reason"]}
+                                            </span>
+                                        }}
                                     </span>
                                     {if len(t.assignee_names) > 0 {
                                         <AvatarStack
@@ -427,6 +446,12 @@ def:pub OverviewPage -> JsxPage {
                             }}
                         </CardContent>
                     </Card>
+                    <div
+                        className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
+                    >
+                        <ReviewQueueCard rows={reviewQueue}/>
+                        <GoneQuietCard rows={quiet}/>
+                    </div>
                     <div
                         className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
                     >

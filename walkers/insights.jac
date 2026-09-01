@@ -21,7 +21,8 @@ glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"]
 # ------------------------------------------------------------------ view objs
 
 obj BlockedItem {
-    has title: str,
+    has task_id: str,
+        title: str,
         project: str,
         assignees: str,
         reason: str,
@@ -29,7 +30,8 @@ obj BlockedItem {
 }
 
 obj ReviewItem {
-    has title: str,
+    has task_id: str,
+        title: str,
         project: str,
         reviewer: str,
         review_due: str,
@@ -38,7 +40,8 @@ obj ReviewItem {
 }
 
 obj AgingItem {
-    has title: str,
+    has task_id: str,
+        title: str,
         project: str,
         status: str,
         assignees: str,
@@ -216,6 +219,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             (reason, since) = _blocked_reason(entries, jid(t));
             blocked.append(
                 BlockedItem(
+                    task_id=jid(t),
                     title=t.title,
                     project=_named(proj, t),
                     assignees=_named(who, t),
@@ -231,6 +235,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if t.status == "Review" {
             review_queue.append(
                 ReviewItem(
+                    task_id=jid(t),
                     title=t.title,
                     project=_named(proj, t),
                     reviewer=t.reviewer_name,
@@ -252,6 +257,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if idle >= STALE_AFTER_DAYS {
             aging.append(
                 AgingItem(
+                    task_id=jid(t),
                     title=t.title,
                     project=_named(proj, t),
                     status=t.status,
@@ -272,6 +278,11 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
             );
         }
     }
+
+    # Longest-waiting first for both queues; negative key, .sort has no
+    # reverse here. Ties keep task iteration order, which is stable.
+    review_queue.sort(key=lambda (r: ReviewItem) { -r.waiting_days; });
+    aging.sort(key=lambda (a: AgingItem) { -a.idle_days; });
 
     people: list[PersonStat] = [];
     for m in members {
