@@ -1,4 +1,5 @@
-"""The activity feed: rows written automatically by board moves."""
+"""The activity feed: rows written automatically by board moves, plus the
+PM's own entries. `onEdit` adds a per-row pencil (hidden in select mode)."""
 
 import from "@jac/runtime" { Link }
 import from ...models { LogEntry }
@@ -72,7 +73,8 @@ def:pub LogTable(
     selected: list[str] = [],
     onToggleSelect: Callable[[str], None] = None,
     # The day view already names the day in its header; only the time is news.
-    showDate: bool = True
+    showDate: bool = True,
+    onEdit: Callable[[LogEntry], None] = None
 ) -> JsxElement {
     if len(entries) == 0 {
         return
@@ -96,7 +98,7 @@ def:pub LogTable(
                     </svg>
                     <p className="text-sm font-semibold">{emptyLabel}</p>
                     <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                        Entries are written automatically as tasks move on the board.
+                        Most entries are written automatically as tasks move on the board; Add entry logs work that happened off it.
                     </p>
                     <Link
                         to="/board"
@@ -140,6 +142,9 @@ def:pub LogTable(
                             <TableHead className={HEAD_CLS}>Links</TableHead>
                             <TableHead className={HEAD_CLS}>Status</TableHead>
                             <TableHead className={HEAD_CLS}>Note</TableHead>
+                            {if not selecting and onEdit {
+                                <TableHead key="edit" className="w-8"/>
+                            }}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -269,6 +274,35 @@ def:pub LogTable(
                                 >
                                     {en.notes}
                                 </TableCell>
+                                {if not selecting and onEdit {
+                                    <TableCell key="edit" className="w-8">
+                                        <button
+                                            type="button"
+                                            aria-label="Edit entry"
+                                            title="Edit entry"
+                                            className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                                            onClick={lambda { if onEdit {
+                                                onEdit(en);
+                                            }}}
+                                        >
+                                            <svg
+                                                width={14}
+                                                height={14}
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path
+                                                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                                                />
+                                                <path d="m15 5 4 4"/>
+                                            </svg>
+                                        </button>
+                                    </TableCell>
+                                }}
                             </TableRow>
                         }}
                     </TableBody>
