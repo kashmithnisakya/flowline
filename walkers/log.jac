@@ -17,7 +17,7 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { today_iso, shift_day, page_bounds }
+import from walkers.util { today_iso, shift_day, page_bounds, now_iso }
 
 # ---------------------------------------------------------------- daily log
 
@@ -162,8 +162,11 @@ walker LogActivity {
         if isinstance(p, Project) and owned(holder, p) {
             project_name = p.name;
         }
+        # Stamped like the automatic rows, so the time column and the
+        # digest's ordering treat manual entries the same way.
         row = here +>:Logged():+> LogEntry(
             date=here.date,
+            at=now_iso(),
             activity=self.activity,
             category=self.category,
             repo=self.repo,
