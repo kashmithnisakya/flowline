@@ -234,7 +234,6 @@ def:pub BoardPage -> JsxPage {
     async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
     async def createIssue(repoId: str) -> None;
-    def markDoneFromPr(taskId: str) -> None;
 
     activeMembers = [
         m

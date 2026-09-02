@@ -71,19 +71,16 @@ def:pub TaskCard(
     prevLabel: str = "",
     nextKey: str = "",
     nextLabel: str = "",
-    doneKey: str = "",
-    onMarkDone: Callable[[str], None] = None
+    doneKey: str = ""
 ) -> JsxElement {
     # While the native drag ghost travels, the source card dims so the board
     # shows where the card came from.
     has isDragging: bool = False;
 
-    # The column does not forward a mark-done callback yet, so fall back to
-    # the arrow path. Both land in the page's moveTo, undo toast included.
+    # The nudge routes through the arrow path: the page's moveTo, undo
+    # toast included.
     def markDone(taskId: str) {
-        if onMarkDone {
-            onMarkDone(taskId);
-        } elif doneKey {
+        if doneKey {
             onArrowMove(task, doneKey);
         }
     }

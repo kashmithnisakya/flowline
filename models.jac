@@ -78,7 +78,9 @@ node Repo {
         # The cursor is the newest `updated_at` seen, so each sync asks
         # GitHub only for what changed since; empty means backfill.
         auto_sync: bool = False,
-        issue_cursor: str = "";
+        issue_cursor: str = "",
+        # Merged PR moves the linked card to the done step on sync.
+        auto_done: bool = False;
 }
 
 node Task {
@@ -450,7 +452,8 @@ obj RepoView {
         full_name: str,
         project_id: str,
         project_name: str,
-        auto_sync: bool = False;
+        auto_sync: bool = False,
+        auto_done: bool = False;
 }
 
 obj RoleView {
@@ -544,7 +547,8 @@ def repo_view(r: Repo) -> RepoView {
         full_name=r.full_name,
         project_id=project_id,
         project_name=project_name,
-        auto_sync=r.auto_sync
+        auto_sync=r.auto_sync,
+        auto_done=r.auto_done
     );
 }
 

@@ -80,7 +80,8 @@ import from walkers.github {
     ImportIssues,
     CreateIssueFromTask,
     SyncGithub,
-    SetRepoAutoSync
+    SetRepoAutoSync,
+    SetRepoAutoDone
 }
 import from walkers.insights { Digest, OverviewSnapshot }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
