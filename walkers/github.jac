@@ -23,7 +23,7 @@ import from models {
     owned,
     repo_view
 }
-import from walkers.util { now_iso, minutes_since }
+import from walkers.util { now_iso, minutes_since, clean_tags }
 import from walkers.log { record_task_event }
 import from walkers.tasks { find_task, status_for_step }
 import from walkers.ghutil {
@@ -346,10 +346,9 @@ def owned_full_name(holder: Root, repo_id: str) -> str {
 }
 
 
-def issue_row(
-    item: dict[str, any], owned_tasks: list[Task], full_name: str
-) -> GhIssueRow {
-    number = int(item.get("number") or 0);
+# An issue's label names, from the API's list of label objects. Shared by
+# the browse rows and the import so both read labels the same way.
+def label_names(item: dict[str, any]) -> list[str] {
     labels: list[str] = [];
     raw_labels = item.get("labels") or [];
     if isinstance(raw_labels, list) {
@@ -359,6 +358,15 @@ def issue_row(
             }
         }
     }
+    return labels;
+}
+
+
+def issue_row(
+    item: dict[str, any], owned_tasks: list[Task], full_name: str
+) -> GhIssueRow {
+    number = int(item.get("number") or 0);
+    labels = label_names(item);
     assignee = "";
     who = item.get("assignee") or {};
     if isinstance(who, dict) {
@@ -787,6 +795,7 @@ def file_issue_item(
     fresh = holder ++> Task(
         title=str(item.get("title") or ("Issue #" + str(number))),
         category="",
+        tags=clean_tags(label_names(item)),
         priority="Medium",
         status=landing,
         step_id=landing_step,

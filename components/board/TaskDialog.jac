@@ -382,6 +382,18 @@ def:pub TaskDialog(
                             </datalist>
                         </div>
                         <div className="grid content-start gap-2">
+                            <Label htmlFor="task-tags">Tags</Label>
+                            <Input
+                                id="task-tags"
+                                className={FIELD}
+                                placeholder="Comma-separated, e.g. bug, payments"
+                                value={form["tags"]}
+                                onChange={lambda (e: any) { onField(
+                                    "tags", e.target.value
+                                ); }}
+                            />
+                        </div>
+                        <div className="grid content-start gap-2">
                             <Label>Due date</Label>
                             <DatePicker
                                 value={form["due_date"]}

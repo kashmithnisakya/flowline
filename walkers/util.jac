@@ -47,6 +47,20 @@ def today_iso -> str {
 }
 
 
+# Task tags as stored: trimmed, no empties, first occurrence wins. Shared by
+# the task walkers and the GitHub import so no writer invents its own rules.
+def clean_tags(raw: list[str]) -> list[str] {
+    kept: list[str] = [];
+    for t in raw {
+        name = str(t).strip();
+        if name and name not in kept {
+            kept.append(name);
+        }
+    }
+    return kept;
+}
+
+
 # Page arithmetic shared by every list walker: a 1-based page, a size clamped
 # to [1, cap], and the slice bounds. `page_size` 0 asks for the default.
 def page_bounds(

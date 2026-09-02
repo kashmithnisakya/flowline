@@ -39,6 +39,7 @@ import from ...lib.dates { todayIso, dueTone }
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
          "category": "",
+         "tags": "",
          "project": "none",
          "priority": "Medium",
          "status": "Backlog",

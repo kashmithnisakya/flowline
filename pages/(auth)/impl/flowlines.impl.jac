@@ -185,6 +185,7 @@ impl FlowLinePage.openTask(tid: str) -> None {
     taskForm = {
         "title": picked.title,
         "category": picked.category,
+        "tags": ", ".join(picked.tags),
         "project": picked.project_id or "none",
         "priority": picked.priority,
         "status": key,
@@ -255,6 +256,11 @@ impl FlowLinePage.saveTask -> None {
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
+            tags=[
+                s.strip()
+                for s in taskForm["tags"].split(",")
+                if s.strip()
+            ],
             priority=taskForm["priority"],
             status=mappedStatus(landing),
             step_id=landing,

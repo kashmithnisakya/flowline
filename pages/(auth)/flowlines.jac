@@ -70,6 +70,7 @@ glob BLANK_STEP: dict[str, str] = {
      BLANK_TASK: dict[str, str] = {
          "title": "",
          "category": "",
+         "tags": "",
          "project": "none",
          "priority": "Medium",
          "status": "Backlog",
