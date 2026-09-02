@@ -549,65 +549,90 @@ def repo_view(r: Repo) -> RepoView {
 }
 
 
-# Views for a page of tasks, with the assignee and project links gathered by
-# walking IN from each Member and Project once. A per-task hop is a separate
-# traversal and they dominate everything at list sizes: 50 rows cost three
-# traversals each, while this costs one per member plus one per project no
-# matter how long the page is.
-def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
-    wanted: list[str] = [];
-    for t in rows {
-        wanted.append(jid(t));
+# Task links gathered by walking IN from each Member, Project and Milestone
+# once. A per-task hop is a separate traversal and dominates at list sizes;
+# this costs one walk per holder no matter how many tasks are involved.
+obj TaskLinks {
+    has assignee_ids: dict[str, list[str]] = {},
+        assignee_names: dict[str, list[str]] = {},
+        project_id: dict[str, str] = {},
+        project_name: dict[str, str] = {},
+        milestone_id: dict[str, str] = {},
+        milestone_name: dict[str, str] = {};
+
+    # Comma-joined assignee names for one task, "" when unassigned.
+    def named(task_id: str) -> str {
+        return ", ".join(self.assignee_names[task_id])
+            if task_id in self.assignee_names
+            else "";
     }
-    ids: dict[str, list[str]] = {};
-    names: dict[str, list[str]] = {};
+
+    # Project name for one task, "" when the task is unfiled.
+    def project_of(task_id: str) -> str {
+        return self.project_name[task_id] if task_id in self.project_name else "";
+    }
+}
+
+# One walk IN from every Member, Project and Milestone. Callers that need both
+# views and tallies gather this once and pass it around.
+def task_links(holder: Root) -> TaskLinks {
+    links = TaskLinks();
     for m in [holder-->[?:Member]] {
         who = jid(m);
         for t in [m<-:AssignedTo:<-] {
             key = jid(t);
-            if key not in ids {
-                ids[key] = [];
-                names[key] = [];
+            if key not in links.assignee_ids {
+                links.assignee_ids[key] = [];
+                links.assignee_names[key] = [];
             }
-            ids[key].append(who);
-            names[key].append(m.name);
+            links.assignee_ids[key].append(who);
+            links.assignee_names[key].append(m.name);
         }
     }
-    proj_id: dict[str, str] = {};
-    proj_name: dict[str, str] = {};
     for p in [holder-->[?:Project]] {
         pid = jid(p);
         for t in [p<-:ForProject:<-] {
             key = jid(t);
-            proj_id[key] = pid;
-            proj_name[key] = p.name;
+            links.project_id[key] = pid;
+            links.project_name[key] = p.name;
         }
     }
-    stone_id: dict[str, str] = {};
-    stone_name: dict[str, str] = {};
     for ms in [holder-->[?:Milestone]] {
         sid = jid(ms);
         for t in [ms<-:InMilestone:<-] {
             key = jid(t);
-            stone_id[key] = sid;
-            stone_name[key] = ms.title;
+            links.milestone_id[key] = sid;
+            links.milestone_name[key] = ms.title;
         }
     }
+    return links;
+}
+
+
+# Views for a page of tasks from links already gathered.
+def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
     views: list[TaskView] = [];
     for t in rows {
         key = jid(t);
         views.append(
             t.view_with(
-                ids[key] if key in ids else [],
-                names[key] if key in names else [],
-                proj_id[key] if key in proj_id else "",
-                proj_name[key] if key in proj_name else "",
-                stone_id[key] if key in stone_id else "",
-                stone_name[key] if key in stone_name else ""
+                links.assignee_ids[key] if key in links.assignee_ids else [],
+                links.assignee_names[key] if key in links.assignee_names else [],
+                links.project_id[key] if key in links.project_id else "",
+                links.project_name[key] if key in links.project_name else "",
+                links.milestone_id[key] if key in links.milestone_id else "",
+                links.milestone_name[key] if key in links.milestone_name else ""
             )
         );
     }
     return views;
+}
+
+
+# Views for a page of tasks, gathering the links itself. Use `views_from` when
+# the caller already holds a TaskLinks.
+def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
+    return views_from(task_links(holder), rows);
 }
 
 
