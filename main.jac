@@ -82,7 +82,7 @@ import from walkers.github {
     SyncGithub,
     SetRepoAutoSync
 }
-import from walkers.insights { Digest }
+import from walkers.insights { Digest, OverviewSnapshot }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 
 def:pub app(children: any) -> JsxElement {

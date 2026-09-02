@@ -13,7 +13,10 @@ import from models {
     AssignedTo,
     ForProject,
     OnProject,
+    TaskLinks,
+    task_links,
     hydrate_views,
+    views_from,
     resolve,
     on_attached,
     owned
@@ -74,6 +77,23 @@ def title_rank(title: str, needle: str) -> int {
     return 2;
 }
 
+# The needs-attention rule: an open task that is Blocked or already past due.
+def needs_attention(t: Task, today: str) -> bool {
+    if t.status == "Done" {
+        return False;
+    }
+    return t.status == "Blocked" or bool(t.due_date and t.due_date < today);
+}
+
+
+# Blocked first, then soonest due date; undated last. Callers sort by jid
+# first, so ties stay deterministic across two requests.
+def order_attention(rows: list[Task]) {
+    rows.sort(key=lambda (t: Task) { t.due_date or "9999-12-31"; });
+    rows.sort(key=lambda (t: Task) { 0 if t.status == "Blocked" else 1; });
+}
+
+
 walker ListTasks {
     """One page of tasks. `scope` picks the working set the board renders
     ("working": open plus Done touched in the last `done_days`), the history
@@ -128,10 +148,7 @@ walker ListTasks {
                     continue;
                 }
             } elif self.scope == "attention" {
-                if done {
-                    continue;
-                }
-                if t.status != "Blocked" and not (t.due_date and t.due_date < today) {
+                if not needs_attention(t, today) {
                     continue;
                 }
             }
@@ -154,9 +171,7 @@ walker ListTasks {
         } elif self.scope == "older" or self.scope == "done" {
             picked.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
         } elif self.scope == "attention" {
-            # Blocked first, then the soonest due date; undated last.
-            picked.sort(key=lambda (t: Task) { t.due_date or "9999-12-31"; });
-            picked.sort(key=lambda (t: Task) { 0 if t.status == "Blocked" else 1; });
+            order_attention(picked);
         } else {
             picked.sort(key=lambda (t: Task) { t.sort_order; });
         }
@@ -198,102 +213,124 @@ walker ListTasks {
     }
 }
 
+# Every Overview number, from tasks already gathered. Tallies attribute each
+# task through `links`, so the per-holder edges are read once for the whole
+# call rather than once per tally.
+def task_totals(
+    holder: Root, tasks: list[Task], links: TaskLinks, monday: str
+) -> TaskTotals {
+    week0 = monday if len(monday) >= 10 else today_iso();
+    today = today_iso();
+    # Week bounds up front: shift_day parses a date, so calling it per task
+    # would be four parses per row.
+    starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
+    ends = [shift_day(starts[i], 7) for i in range(4)];
+    by_week = [0, 0, 0, 0];
+    open_count = 0;
+    overdue_count = 0;
+    blocked_count = 0;
+    cats: list[str] = [];
+    by_project: dict[str, list[Task]] = {};
+    by_member: dict[str, list[Task]] = {};
+    for t in tasks {
+        key = jid(t);
+        pid = links.project_id[key] if key in links.project_id else "";
+        if pid {
+            if pid not in by_project {
+                by_project[pid] = [];
+            }
+            by_project[pid].append(t);
+        }
+        for who in (links.assignee_ids[key] if key in links.assignee_ids else []) {
+            if who not in by_member {
+                by_member[who] = [];
+            }
+            by_member[who].append(t);
+        }
+        if t.category and t.category not in cats {
+            cats.append(t.category);
+        }
+        if t.status != "Done" {
+            open_count = open_count + 1;
+            if t.status == "Blocked" {
+                blocked_count = blocked_count + 1;
+            }
+            if t.due_date and t.due_date < today {
+                overdue_count = overdue_count + 1;
+            }
+            continue;
+        }
+        day = t.updated_at[:10];
+        for i in range(4) {
+            if day >= starts[i] and day < ends[i] {
+                by_week[i] = by_week[i] + 1;
+            }
+        }
+    }
+    tallies: list[ProjectTally] = [];
+    for pr in [holder-->[?:Project]] {
+        pid = jid(pr);
+        total = 0;
+        done = 0;
+        blocked = 0;
+        active = 0;
+        for t in (by_project[pid] if pid in by_project else []) {
+            total = total + 1;
+            if t.status == "Done" {
+                done = done + 1;
+            } elif t.status == "Blocked" {
+                blocked = blocked + 1;
+            } elif t.status in ACTIVE_STATUSES {
+                active = active + 1;
+            }
+        }
+        tallies.append(
+            ProjectTally(
+                project_id=pid, total=total, done=done, blocked=blocked, active=active
+            )
+        );
+    }
+    people: list[MemberTally] = [];
+    for m in [holder-->[?:Member]] {
+        mid = jid(m);
+        mine_open = 0;
+        mine_done = 0;
+        for t in (by_member[mid] if mid in by_member else []) {
+            if t.status != "Done" {
+                mine_open = mine_open + 1;
+            } elif t.updated_at[:10] >= week0 {
+                mine_done = mine_done + 1;
+            }
+        }
+        people.append(
+            MemberTally(member_id=mid, open=mine_open, done_in_week=mine_done)
+        );
+    }
+    cats.sort();
+    return TaskTotals(
+        open=open_count,
+        overdue=overdue_count,
+        blocked=blocked_count,
+        done_by_week=by_week,
+        projects=tallies,
+        members=people,
+        categories=cats
+    );
+}
+
+
 walker TaskCounts {
     """The Overview's numbers over the whole history: open tasks, Done per
     week for the four weeks ending in `monday`'s week, and total/done per
-    project. Per-project counts walk in from each Project, so the cost is a
-    handful of edge reads rather than one hop per task."""
+    project."""
     has monday: str = "",
         reports: list[TaskTotals] = [];
 
     can count with Root entry {
-        week0 = self.monday if len(self.monday) >= 10 else today_iso();
-        today = today_iso();
-        # Week bounds up front: shift_day parses a date, so calling it per
-        # task would be four parses per row.
-        starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
-        ends = [shift_day(starts[i], 7) for i in range(4)];
-        by_week = [0, 0, 0, 0];
-        open_count = 0;
-        overdue_count = 0;
-        blocked_count = 0;
-        cats: list[str] = [];
-        for t in [here-->[?:Task]] {
-            if t.category and t.category not in cats {
-                cats.append(t.category);
-            }
-            if t.status != "Done" {
-                open_count = open_count + 1;
-                if t.status == "Blocked" {
-                    blocked_count = blocked_count + 1;
-                }
-                if t.due_date and t.due_date < today {
-                    overdue_count = overdue_count + 1;
-                }
-                continue;
-            }
-            day = t.updated_at[:10];
-            for i in range(4) {
-                if day >= starts[i] and day < ends[i] {
-                    by_week[i] = by_week[i] + 1;
-                }
-            }
-        }
-        # Per project and per member, walking IN from each holder: a handful
-        # of edge reads instead of one hop per task.
-        tallies: list[ProjectTally] = [];
-        for pr in [here-->[?:Project]] {
-            total = 0;
-            done = 0;
-            blocked = 0;
-            active = 0;
-            for t in [pr<-:ForProject:<-] {
-                total = total + 1;
-                if t.status == "Done" {
-                    done = done + 1;
-                } elif t.status == "Blocked" {
-                    blocked = blocked + 1;
-                } elif t.status in ACTIVE_STATUSES {
-                    active = active + 1;
-                }
-            }
-            tallies.append(
-                ProjectTally(
-                    project_id=jid(pr),
-                    total=total,
-                    done=done,
-                    blocked=blocked,
-                    active=active
-                )
-            );
-        }
-        people: list[MemberTally] = [];
-        for m in [here-->[?:Member]] {
-            mine_open = 0;
-            mine_done = 0;
-            for t in [m<-:AssignedTo:<-] {
-                if t.status != "Done" {
-                    mine_open = mine_open + 1;
-                } elif t.updated_at[:10] >= week0 {
-                    mine_done = mine_done + 1;
-                }
-            }
-            people.append(
-                MemberTally(member_id=jid(m), open=mine_open, done_in_week=mine_done)
-            );
-        }
-        cats.sort();
-        report TaskTotals(
-            open=open_count,
-            overdue=overdue_count,
-            blocked=blocked_count,
-            done_by_week=by_week,
-            projects=tallies,
-            members=people,
-            categories=cats
-        );
+        report task_totals(here, [here-->[?:Task]], task_links(here), self.monday);
     }
 }
+
 
 walker CreateTask {
     has title: str,

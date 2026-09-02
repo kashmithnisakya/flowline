@@ -9,11 +9,21 @@ import from models {
     Task,
     LogDay,
     LogEntry,
+    TaskView,
+    TaskTotals,
+    LogTotals,
+    MemberView,
+    TaskLinks,
     AssignedTo,
     ForProject,
-    Logged
+    Logged,
+    member_view,
+    task_links,
+    views_from
 }
 import from walkers.util { now_iso }
+import from walkers.tasks { task_totals, needs_attention, order_attention }
+import from walkers.log { log_totals }
 
 glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
      STALE_AFTER_DAYS: int = 7;
@@ -133,30 +143,6 @@ def _tasks_of(holder: Root) -> list[Task] {
     return [holder-->[?:Task]];
 }
 
-# Assignee names and project name per task jid, gathered by walking IN from
-# each Member and Project. Two hops per person or project instead of two per
-# task: at 2,000 tasks that is a dozen edge reads, not four thousand.
-def _hydrate(holder: Root) -> tuple[dict[str, str], dict[str, str]] {
-    who: dict[str, str] = {};
-    for m in [holder-->[?:Member]] {
-        for t in [m<-:AssignedTo:<-] {
-            key = jid(t);
-            who[key] = (who[key] + ", " + m.name) if key in who else m.name;
-        }
-    }
-    proj: dict[str, str] = {};
-    for p in [holder-->[?:Project]] {
-        for t in [p<-:ForProject:<-] {
-            proj[jid(t)] = p.name;
-        }
-    }
-    return (who, proj);
-}
-
-def _named(who: dict[str, str], t: Task) -> str {
-    key = jid(t);
-    return who[key] if key in who else "";
-}
 
 def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
     rows: list[LogEntry] = [];
@@ -185,6 +171,106 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple {
 
 # ------------------------------------------------------------------- assembly
 
+# The three queues the Overview and the assistant both read. Each takes tasks
+# and links already gathered, so callers traverse the graph once.
+def _blocked_items(
+    tasks: list[Task], links: TaskLinks, entries: list[LogEntry]
+) -> list[BlockedItem] {
+    rows: list[BlockedItem] = [];
+    for t in tasks {
+        if t.status != "Blocked" {
+            continue;
+        }
+        (reason, since) = _blocked_reason(entries, jid(t));
+        rows.append(
+            BlockedItem(
+                task_id=jid(t),
+                title=t.title,
+                project=links.project_of(jid(t)),
+                assignees=links.named(jid(t)),
+                reason=reason or t.notes,
+                since=since[:10] if since else t.updated_at[:10]
+            )
+        );
+    }
+    return rows;
+}
+
+
+# Longest-waiting first; negative key because .sort takes no reverse here.
+def _review_items(tasks: list[Task], links: TaskLinks, today: str) -> list[ReviewItem] {
+    rows: list[ReviewItem] = [];
+    for t in tasks {
+        if t.status != "Review" {
+            continue;
+        }
+        rows.append(
+            ReviewItem(
+                task_id=jid(t),
+                title=t.title,
+                project=links.project_of(jid(t)),
+                reviewer=t.reviewer_name,
+                review_due=t.review_due,
+                pr_link=t.pr_link,
+                waiting_days=_days_between(t.updated_at[:10], today)
+            )
+        );
+    }
+    rows.sort(key=lambda (r: ReviewItem) { -r.waiting_days; });
+    return rows;
+}
+
+
+# Open tasks untouched for STALE_AFTER_DAYS, longest-idle first.
+def _aging_items(tasks: list[Task], links: TaskLinks, today: str) -> list[AgingItem] {
+    rows: list[AgingItem] = [];
+    for t in tasks {
+        if t.status == "Done" {
+            continue;
+        }
+        idle = _days_between(t.updated_at[:10], today);
+        if idle >= STALE_AFTER_DAYS {
+            rows.append(
+                AgingItem(
+                    task_id=jid(t),
+                    title=t.title,
+                    project=links.project_of(jid(t)),
+                    status=t.status,
+                    assignees=links.named(jid(t)),
+                    idle_days=idle
+                )
+            );
+        }
+    }
+    rows.sort(key=lambda (a: AgingItem) { -a.idle_days; });
+    return rows;
+}
+
+
+# Open tasks already past their due date. Assistant-only: the Overview shows
+# the overdue count from task_totals, not the list.
+def _overdue_items(
+    tasks: list[Task], links: TaskLinks, today: str
+) -> list[OverdueItem] {
+    rows: list[OverdueItem] = [];
+    for t in tasks {
+        if t.status == "Done" or not (t.due_date and t.due_date < today) {
+            continue;
+        }
+        rows.append(
+            OverdueItem(
+                title=t.title,
+                project=links.project_of(jid(t)),
+                assignees=links.named(jid(t)),
+                due_date=t.due_date,
+                status=t.status
+            )
+        );
+    }
+    return rows;
+}
+
+
 # Gather the whole workspace into one object. Reads only, root-scoped.
 def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     today = _today();
@@ -200,7 +286,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if p.active
     ];
     entries = _entries_between(holder, from_date, to_date);
-    (who, proj) = _hydrate(holder);
+    links = task_links(holder);
 
     open_tasks = [
         t
@@ -213,83 +299,17 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if t.status == "Done" and t.updated_at[:10] >= from_date
     ];
 
-    blocked: list[BlockedItem] = [];
-    for t in tasks {
-        if t.status == "Blocked" {
-            (reason, since) = _blocked_reason(entries, jid(t));
-            blocked.append(
-                BlockedItem(
-                    task_id=jid(t),
-                    title=t.title,
-                    project=_named(proj, t),
-                    assignees=_named(who, t),
-                    reason=reason or t.notes,
-                    since=since[:10] if since else t.updated_at[:10]
-                )
-            );
-        }
-    }
-
-    review_queue: list[ReviewItem] = [];
-    for t in tasks {
-        if t.status == "Review" {
-            review_queue.append(
-                ReviewItem(
-                    task_id=jid(t),
-                    title=t.title,
-                    project=_named(proj, t),
-                    reviewer=t.reviewer_name,
-                    review_due=t.review_due,
-                    pr_link=t.pr_link,
-                    waiting_days=_days_between(t.updated_at[:10], today)
-                )
-            );
-        }
-    }
-
-    aging: list[AgingItem] = [];
-    overdue: list[OverdueItem] = [];
-    for t in tasks {
-        if t.status == "Done" {
-            continue;
-        }
-        idle = _days_between(t.updated_at[:10], today);
-        if idle >= STALE_AFTER_DAYS {
-            aging.append(
-                AgingItem(
-                    task_id=jid(t),
-                    title=t.title,
-                    project=_named(proj, t),
-                    status=t.status,
-                    assignees=_named(who, t),
-                    idle_days=idle
-                )
-            );
-        }
-        if t.due_date and t.due_date < today {
-            overdue.append(
-                OverdueItem(
-                    title=t.title,
-                    project=_named(proj, t),
-                    assignees=_named(who, t),
-                    due_date=t.due_date,
-                    status=t.status
-                )
-            );
-        }
-    }
-
-    # Longest-waiting first for both queues; negative key, .sort has no
-    # reverse here. Ties keep task iteration order, which is stable.
-    review_queue.sort(key=lambda (r: ReviewItem) { -r.waiting_days; });
-    aging.sort(key=lambda (a: AgingItem) { -a.idle_days; });
+    blocked = _blocked_items(tasks, links, entries);
+    review_queue = _review_items(tasks, links, today);
+    aging = _aging_items(tasks, links, today);
+    overdue = _overdue_items(tasks, links, today);
 
     people: list[PersonStat] = [];
     for m in members {
         mine = [
             t
             for t in tasks
-            if m.name in _named(who, t)
+            if m.name in links.named(jid(t))
         ];
         people.append(
             PersonStat(
@@ -333,7 +353,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         owned_tasks = [
             t
             for t in tasks
-            if _named(proj, t) == p.name
+            if links.project_of(jid(t)) == p.name
         ];
         project_stats.append(
             ProjectStat(
@@ -397,6 +417,66 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
 }
 
 # --------------------------------------------------------------------- walker
+
+obj OverviewData {
+    """Exactly what the Overview renders. The three queues are the only
+    Snapshot slices the page uses; the rest of a Digest is assistant-only."""
+    has counts: TaskTotals,
+        logs: LogTotals,
+        attention: list[TaskView],
+        attention_total: int,
+        members: list[MemberView],
+        projects: list[Project],
+        review_queue: list[ReviewItem],
+        aging: list[AgingItem],
+        blocked: list[BlockedItem];
+}
+
+
+walker OverviewSnapshot {
+    """The whole Overview in one call. Tasks, members and projects are walked
+    once and every panel is computed from that, so the page costs one round
+    trip and one traversal instead of six and three."""
+    has monday: str = "",
+        from_date: str = "",
+        attention_size: int = 8,
+        reports: list[OverviewData] = [];
+
+    can build with Root entry {
+        today = _today();
+        tasks = _tasks_of(here);
+        links = task_links(here);
+        entries = _entries_between(here, self.from_date or today, today);
+        flagged = [
+            t
+            for t in tasks
+            if needs_attention(t, today)
+        ];
+        # Same tiebreak as ListTasks: sorts are stable, so the jid pass
+        # underneath the real key keeps paging deterministic.
+        flagged.sort(key=lambda (t: Task) { jid(t); });
+        order_attention(flagged);
+        members: list[MemberView] = [];
+        for m in [here-->[?:Member]] {
+            members.append(member_view(m));
+        }
+        members.sort(key=lambda (m: MemberView) { m.name; });
+        projects = [here-->[?:Project]];
+        projects.sort(key=lambda (p: Project) { p.name; });
+        report OverviewData(
+            counts=task_totals(here, tasks, links, self.monday),
+            logs=log_totals(here, self.monday),
+            attention=views_from(links, flagged[:self.attention_size]),
+            attention_total=len(flagged),
+            members=members,
+            projects=projects,
+            review_queue=_review_items(tasks, links, today),
+            aging=_aging_items(tasks, links, today),
+            blocked=_blocked_items(tasks, links, entries)
+        );
+    }
+}
+
 
 walker Digest {
     """The workspace snapshot. Bare (JWT-required) like every walker here: a

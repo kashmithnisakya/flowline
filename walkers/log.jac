@@ -55,65 +55,72 @@ walker ListLogEntries {
     }
 }
 
+# The Overview's log numbers: entries per week for the four weeks ending in
+# `monday`'s week (oldest first), per weekday of that week, and which days each
+# person logged on. Reads node fields only, so row volume does not change cost.
+def log_totals(holder: Root, monday: str) -> LogTotals {
+    week0 = monday if len(monday) >= 10 else today_iso();
+    starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
+    since = starts[0];
+    until = shift_day(week0, 6);
+    week_days = [shift_day(week0, i) for i in range(7)];
+    # Week bounds up front, for the same reason as task_totals.
+    ends = [shift_day(starts[i], 7) for i in range(4)];
+    by_week = [0, 0, 0, 0];
+    by_day = [0, 0, 0, 0, 0, 0, 0];
+    per_person: dict[str, list[int]] = {};
+    for day in [holder-->[?:LogDay, date>=since, date<=until]] {
+        for row in [day->:Logged:->] {
+            for i in range(4) {
+                if row.date >= starts[i] and row.date < ends[i] {
+                    by_week[i] = by_week[i] + 1;
+                }
+            }
+            if row.date < week0 {
+                continue;
+            }
+            slot = -1;
+            for i in range(7) {
+                if row.date == week_days[i] {
+                    slot = i;
+                }
+            }
+            if slot < 0 {
+                continue;
+            }
+            by_day[slot] = by_day[slot] + 1;
+            for who in row.member_name.split(",") {
+                name = who.strip();
+                if not name {
+                    continue;
+                }
+                if name not in per_person {
+                    per_person[name] = [0, 0, 0, 0, 0, 0, 0];
+                }
+                per_person[name][slot] = per_person[name][slot] + 1;
+            }
+        }
+    }
+    people: list[MemberDays] = [];
+    for name in per_person {
+        counts = per_person[name];
+        people.append(MemberDays(name=name, by_day=counts, total=sum(counts)));
+    }
+    return LogTotals(by_week=by_week, by_day=by_day, members=people);
+}
+
+
 walker LogCounts {
-    """The Overview's log numbers: entries per week for the four weeks ending
-    in `monday`'s week (oldest first), per weekday of that week, and which
-    days each person logged on. Reads node fields only, so a week with two
-    thousand rows costs the same as one with twenty."""
+    """The Overview's log numbers over the four weeks ending in `monday`'s
+    week."""
     has monday: str = "",
         reports: list[LogTotals] = [];
 
     can count with Root entry {
-        week0 = self.monday if len(self.monday) >= 10 else today_iso();
-        starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
-        since = starts[0];
-        until = shift_day(week0, 6);
-        week_days = [shift_day(week0, i) for i in range(7)];
-        # Week bounds up front, for the same reason as TaskCounts.
-        ends = [shift_day(starts[i], 7) for i in range(4)];
-        by_week = [0, 0, 0, 0];
-        by_day = [0, 0, 0, 0, 0, 0, 0];
-        per_person: dict[str, list[int]] = {};
-        for day in [here-->[?:LogDay, date>=since, date<=until]] {
-            for row in [day->:Logged:->] {
-                for i in range(4) {
-                    if row.date >= starts[i] and row.date < ends[i] {
-                        by_week[i] = by_week[i] + 1;
-                    }
-                }
-                if row.date < week0 {
-                    continue;
-                }
-                slot = -1;
-                for i in range(7) {
-                    if row.date == week_days[i] {
-                        slot = i;
-                    }
-                }
-                if slot < 0 {
-                    continue;
-                }
-                by_day[slot] = by_day[slot] + 1;
-                for who in row.member_name.split(",") {
-                    name = who.strip();
-                    if not name {
-                        continue;
-                    }
-                    if name not in per_person {
-                        per_person[name] = [0, 0, 0, 0, 0, 0, 0];
-                    }
-                    per_person[name][slot] = per_person[name][slot] + 1;
-                }
-            }
-        }
-        people: list[MemberDays] = [];
-        for name in per_person {
-            counts = per_person[name];
-            people.append(MemberDays(name=name, by_day=counts, total=sum(counts)));
-        }
-        report LogTotals(by_week=by_week, by_day=by_day, members=people);
+        report log_totals(here, self.monday);
     }
 }
+
 
 walker LogActivity {
     """Get-or-create the day bucket under the caller's root, then append one

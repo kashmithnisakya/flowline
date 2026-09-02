@@ -18,11 +18,7 @@ import from ...models {
     MemberDays,
     VocabTerm
 }
-import from ...walkers.tasks { ListTasks, TaskCounts }
-import from ...walkers.roster { ListMembers }
-import from ...walkers.projects { ListProjects }
-import from ...walkers.log { LogCounts }
-import from ...walkers.insights { Digest }
+import from ...walkers.insights { OverviewSnapshot }
 import from ...components.dashboard.StatTile { StatTile }
 import from ...components.dashboard.QueueCards { ReviewQueueCard, GoneQuietCard }
 import from ...components.ui.card {
