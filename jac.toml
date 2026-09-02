@@ -95,6 +95,9 @@ max_replicas = 10
 cpu_utilization_target = 70
 autoscaler_scale_up_max_pods = 4
 
+[scale.microservices]
+enabled = true
+
 [scale.microservices.logs]
 enabled = true
 
