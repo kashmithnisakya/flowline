@@ -313,6 +313,7 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     form = {
         "title": t.title,
         "category": t.category,
+        "tags": ", ".join(t.tags),
         "project": t.project_id or "none",
         "priority": t.priority,
         "status": columnKeyOf(t),
@@ -345,6 +346,11 @@ impl BoardPage.saveTask -> None {
     saving = True;
     project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
+    tagList = [
+        s.strip()
+        for s in form["tags"].split(",")
+        if s.strip()
+    ];
     try {
         # Assigning people who are not on the task's project pulls them in.
         if project {
@@ -370,6 +376,7 @@ impl BoardPage.saveTask -> None {
                 task_id=editingId,
                 title=title,
                 category=form["category"],
+                tags=tagList,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
@@ -386,6 +393,7 @@ impl BoardPage.saveTask -> None {
             root spawn CreateTask(
                 title=title,
                 category=form["category"],
+                tags=tagList,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",

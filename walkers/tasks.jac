@@ -18,7 +18,7 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { now_iso, today_iso, shift_day, page_bounds }
+import from walkers.util { now_iso, today_iso, shift_day, page_bounds, clean_tags }
 import from walkers.log { record_task_event, sync_task_links }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
@@ -298,6 +298,7 @@ walker TaskCounts {
 walker CreateTask {
     has title: str,
         category: str = "",
+        tags: list[str] = [],
         priority: str = "Medium",
         status: str = "Backlog",
         step_id: str = "",
@@ -334,6 +335,7 @@ walker CreateTask {
         fresh = here ++> Task(
             title=self.title.strip(),
             category=self.category,
+            tags=clean_tags(self.tags),
             priority=self.priority,
             status=col,
             step_id=step,
@@ -377,6 +379,7 @@ walker find_task {
 walker UpdateTask(find_task) {
     has title: str = "",
         category: str = "",
+        tags: list[str] = [],
         priority: str = "",
         status: str = "",
         step_id: str = "",
@@ -405,6 +408,7 @@ walker UpdateTask(find_task) {
         moved = landing and landing != here.status;
         here.title = self.title;
         here.category = self.category;
+        here.tags = clean_tags(self.tags);
         here.priority = self.priority;
         here.status = landing;
         here.due_date = self.due_date;

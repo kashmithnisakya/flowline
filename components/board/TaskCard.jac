@@ -92,6 +92,7 @@ def:pub TaskCard(
     showPriority = task.priority == "High" or task.priority == "Low";
     hasFooter = len(task.assignee_names) > 0
         or bool(task.category)
+        or len(task.tags) > 0
         or showPriority
         or bool(task.due_date);
 
@@ -160,6 +161,26 @@ def:pub TaskCard(
                                 className="h-5 max-w-28 truncate rounded-full px-2 text-[11px] font-medium"
                             >
                                 {task.category}
+                            </Badge>
+                        }}
+                        {for (ti, tg) in enumerate(task.tags) {
+                            if ti < 3 {
+                                <Badge
+                                    key={tg}
+                                    variant="secondary"
+                                    className="h-5 max-w-24 truncate rounded-full px-2 text-[11px] font-normal"
+                                >
+                                    {tg}
+                                </Badge>
+                            }
+                        }}
+                        {if len(task.tags) > 3 {
+                            <Badge
+                                key="moretags"
+                                variant="secondary"
+                                className="h-5 rounded-full px-1.5 text-[11px] font-normal tabular-nums"
+                            >
+                                {"+" + str(len(task.tags) - 3)}
                             </Badge>
                         }}
                         {if showPriority or task.due_date {

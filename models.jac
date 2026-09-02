@@ -105,6 +105,9 @@ node Task {
         created_at: str = "",
         updated_at: str = "",
         sort_order: float = 0.0,
+        # Free labels beside the single category; GitHub issue labels land
+        # here at import. Additive with a default, so old rows keep working.
+        tags: list[str] = [],
         # GitHub identity. issue_link/pr_link stay the human URLs anyone can
         # paste by hand; these are the machine key the API syncs against.
         # gh_issue_number == 0 means "not linked to a real issue".
@@ -170,6 +173,7 @@ node Task {
             id=jid(self),
             title=self.title,
             category=self.category,
+            tags=self.tags,
             priority=self.priority,
             status=self.status,
             step_id=self.step_id,
@@ -349,6 +353,7 @@ obj TaskView {
         project_id: str,
         project_name: str,
         step_id: str = "",
+        tags: list[str] = [],
         milestone_id: str = "",
         milestone_name: str = "",
         gh_repo: str = "",
