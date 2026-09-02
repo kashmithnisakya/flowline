@@ -81,6 +81,19 @@ prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 
 [scale.kubernetes]
 app_name = "flowline"
+# Sized from a load test against flowline-dev (2026-09-02). Under load an app pod
+# pegs at ~1000m and goes no higher: `jac start` is one process, so the GIL caps
+# pure-Python work at one core however many the node has. Capacity is therefore
+# pods, not cores per pod -- hence the higher ceiling and the honest request.
+cpu_request = "500m"
+memory_request = "1Gi"
+memory_limit = "4Gi"
+min_replicas = 2
+max_replicas = 10
+# 70% of a 500m request leaves real headroom under the ~1000m ceiling. Against the
+# 50m default request the HPA sat at 1811%/50%, permanently pinned at max.
+cpu_utilization_target = 70
+autoscaler_scale_up_max_pods = 4
 
 [jacpack]
 name = 'flowline'
