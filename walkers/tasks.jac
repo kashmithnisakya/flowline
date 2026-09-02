@@ -481,7 +481,13 @@ walker SetMoveInfo(find_task) {
             here.pr_link = self.pr_link.strip();
         }
         if self.note.strip() {
-            here.notes = self.note.strip();
+            # Prepend, never replace: notes is the task's description (or an
+            # imported issue body). Newest-first keeps the blocked card's
+            # excerpt leading with the reason. Same-line resubmits are no-ops.
+            line = "**" + now_iso()[:10] + ":** " + self.note.strip();
+            if not here.notes.startswith(line) {
+                here.notes = line + ("\n\n" + here.notes if here.notes else "");
+            }
         }
         here.updated_at = now_iso();
         sync_task_links(holder, here, self.note.strip());
