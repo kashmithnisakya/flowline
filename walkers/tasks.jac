@@ -545,12 +545,18 @@ walker SetMoveInfo(find_task) {
 }
 
 walker MoveTask(find_task) {
-    """The drag-drop / arrow-move endpoint. Server-authoritative: a move appends
-    to the end of the target column. `step_id` is the flow line column and its
-    mapped status is written too; without it, the legacy status-only move."""
+    """The drag-drop / arrow-move endpoint. Server-authoritative: a move
+    appends to the end of the target column, unless `before_id`/`after_id`
+    asks for the spot beside that card there (a stale anchor appends). A
+    positioned drop in the card's own column is a pure reorder: no status
+    write, no hand-off, no log row, no updated_at bump. `step_id` is the
+    flow line column and its mapped status is written too; without it, the
+    legacy status-only move."""
     has status: str = "",
         step_id: str = "",
         step_name: str = "",
+        before_id: str = "",
+        after_id: str = "",
         reports: list[TaskView] = [];
 
     can move with Task entry {
@@ -559,6 +565,10 @@ walker MoveTask(find_task) {
         holder = owners[0];
         landing = self.status;
         label = self.status;
+        # Read before step_id is rewritten below: a positioned drop in the
+        # card's own column stays a reorder for the writes further down.
+        positioned = bool(self.before_id or self.after_id);
+        reorder = False;
         # Who the move hands the task to: one member, or empty. A list, not
         # an Optional: the checker does not narrow `Member | None` through
         # `if`, so the connect and the `.name` read would not type.
@@ -571,6 +581,7 @@ walker MoveTask(find_task) {
                 disengage;
             }
             landing = mapped;
+            reorder = positioned and self.step_id == here.step_id;
             # Only a CHANGE of step is a hand-off. Re-dropping a card in its
             # own column (a reorder) must not reassign it.
             if self.step_id != here.step_id {
@@ -582,30 +593,37 @@ walker MoveTask(find_task) {
             here.step_id = self.step_id;
             label = self.step_name or mapped;
         } else {
+            reorder = positioned and not here.step_id and landing == here.status;
             # A status-only move (the assistant, a merged PR, an org with no
             # flow line) must drop whatever step the task was on, or the board
             # keeps drawing it in the old column while the status says
             # otherwise.
             here.step_id = "";
         }
-        # Peak over the column the task is LANDING in, counted the way the
-        # board draws it: step-addressed tasks by step, everything else by
-        # status.
-        peak = 0.0;
+        # The landing column without the moving card, ordered the way the
+        # board draws it. Serves both the anchor lookup and the append peak.
+        col: list[Task] = [];
         for t in [holder-->[?:Task]] {
+            if jid(t) == jid(here) {
+                continue;
+            }
             in_column = (
                 t.step_id == self.step_id
                     if self.step_id
                     else (t.status == landing and not t.step_id)
             );
-            if in_column and t.sort_order > peak {
-                peak = t.sort_order;
+            if in_column {
+                col.append(t);
             }
         }
+        col.sort(key=lambda (t: Task) { jid(t); });
+        col.sort(key=lambda (t: Task) { t.sort_order; });
         was = here.status;
         here.status = landing;
-        here.sort_order = peak + 1024.0;
-        here.updated_at = now_iso();
+        here.sort_order = self.landing_sort(col, here);
+        if not reorder {
+            here.updated_at = now_iso();
+        }
         # A hand-off replaces the assignees: the card changes hands, it does
         # not gain a hand. The log line names who it went to.
         note = "Moved to " + label;
@@ -627,6 +645,47 @@ walker MoveTask(find_task) {
         }
         report here.to_view();
         disengage;
+    }
+
+    # The landing sort: the midpoint beside a valid anchor, the end of the
+    # column otherwise. Two neighbors too close for a float midpoint
+    # re-spread the whole column at 1024 with the card in its slot.
+    def landing_sort(col: list[Task], moving: Task) -> float {
+        anchor_id = self.before_id or self.after_id;
+        slot = -1;
+        for (i, t) in enumerate(col) {
+            if jid(t) == anchor_id {
+                slot = i;
+            }
+        }
+        if anchor_id and slot >= 0 {
+            ahead = bool(self.before_id);
+            if ahead {
+                hi = col[slot].sort_order;
+                lo = col[slot - 1].sort_order if slot > 0 else hi - 2048.0;
+            } else {
+                lo = col[slot].sort_order;
+                hi = col[slot + 1].sort_order if slot + 1 < len(col) else lo + 2048.0;
+            }
+            mid = (lo + hi) / 2.0;
+            if mid > lo and mid < hi {
+                return mid;
+            }
+            at = slot if ahead else slot + 1;
+            spread = col[0:at] + [moving] + col[at:];
+            n = 0.0;
+            out = 0.0;
+            for t in spread {
+                n = n + 1024.0;
+                t.sort_order = n;
+                if jid(t) == jid(moving) {
+                    out = n;
+                }
+            }
+            return out;
+        }
+        peak = col[-1].sort_order if col else 0.0;
+        return peak + 1024.0;
     }
 }
 

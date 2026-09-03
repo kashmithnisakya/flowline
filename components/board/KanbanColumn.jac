@@ -29,6 +29,8 @@ def:pub KanbanColumn(
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
     onDropTask: Callable[[str, str], None],
+    # A drop on a card's half, threaded to TaskCard: insert beside that card.
+    onDropBeside: Callable[[str, str, bool], None] = None,
     prevKey: str = "",
     prevLabel: str = "",
     nextKey: str = "",
@@ -152,6 +154,7 @@ def:pub KanbanColumn(
                         nextKey={nextKey}
                         nextLabel={nextLabel}
                         doneKey={doneKey}
+                        onDropBeside={onDropBeside}
                     />
                 }}
                 {if len(tasks) == 0 {

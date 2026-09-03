@@ -221,7 +221,10 @@ def:pub BoardPage -> JsxPage {
     def columnKeyOf(t: TaskView) -> str;
     def mappedStatus(key: str) -> str;
     def doneColumnKey -> str;
-    async def moveTo(taskId: str, columnKey: str) -> None;
+    async def moveTo(
+        taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+    ) -> None;
+    def moveBeside(draggedId: str, targetId: str, ahead: bool) -> None;
     def arrowMove(t: TaskView, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
@@ -540,6 +543,7 @@ def:pub BoardPage -> JsxPage {
                             onOpen={openEdit}
                             onArrowMove={arrowMove}
                             onDropTask={moveTo}
+                            onDropBeside={moveBeside}
                             prevKey={colKeys[ci - 1] if ci > 0 else ""}
                             prevLabel={columnLabel(colKeys[ci - 1]) if ci > 0 else ""}
                             nextKey={colKeys[ci + 1] if ci < len(colKeys) - 1 else ""}
