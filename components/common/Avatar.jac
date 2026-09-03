@@ -1,8 +1,12 @@
 """Initials avatars. The hue is a hash of the name, so the same person (or
 project) gets the same color on every page. Light keeps the initials in ink
 (the pale chart tints cannot carry 8px text); dark lets them take the hue.
-Class strings are whole literals so Tailwind's scanner keeps them.
+A manager-picked colour key overrides the hash via the step palette (soft
+fill plus ink, legible at avatar size). Class strings are whole literals so
+Tailwind's scanner keeps them.
 """
+
+import from ..flowlines.kinds { COUNT_TINT, colorKey }
 
 glob HUES: list[str] = [
          "bg-chart-1/25 text-foreground/85 dark:bg-chart-1/15 dark:text-chart-1",
@@ -32,8 +36,12 @@ def hashOf(name: str) -> int {
     return total % 5;
 }
 
-# Soft fill plus matching text, for an avatar circle.
-def:pub hueFor(name: str) -> str {
+# Soft fill plus matching text, for an avatar circle. A manager-picked
+# colour key wins; empty falls back to the hue hashed from the name.
+def:pub hueFor(name: str, color: str = "") -> str {
+    if color {
+        return COUNT_TINT[colorKey(color)];
+    }
     return HUES[hashOf(name)];
 }
 
@@ -56,13 +64,15 @@ def:pub initials(name: str) -> str {
     return (parts[0][:1] + last).upper();
 }
 
-def:pub Avatar(name: str, size: str = "sm", className: str = "") -> JsxElement {
+def:pub Avatar(
+    name: str, size: str = "sm", className: str = "", color: str = ""
+) -> JsxElement {
     return
         <span
             className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold "
                 + SIZES.get(size, SIZES["sm"])
                 + " "
-                + hueFor(name)
+                + hueFor(name, color)
                 + ((" " + className) if className else "")}
             title={name}
             aria-label={name}

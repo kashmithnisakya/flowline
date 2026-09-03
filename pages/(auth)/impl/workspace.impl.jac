@@ -107,6 +107,7 @@ impl WorkspacePage.openEdit(m: MemberView) -> None {
         "name": m.name,
         "email": m.email,
         "github": m.github_username,
+        "color": m.color,
         "roleDraft": ""
     };
     mRoles = m.roles;
@@ -135,7 +136,8 @@ impl WorkspacePage.saveMember -> None {
             roles=roles,
             email=form["email"].strip(),
             github_username=form["github"].strip(),
-            tags=mTags
+            tags=mTags,
+            color=form["color"]
         );
         saved = result.reports[0] if result.reports else None;
         if saved {
