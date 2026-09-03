@@ -733,7 +733,7 @@ impl BoardPage.syncGithub -> None {
                 msg = msg + " · " + str(payload["auto_added"]) + " issues added";
             }
             if "auto_done" in payload and payload["auto_done"] {
-                msg = msg + " · " + str(payload["auto_done"]) + " done on merge";
+                msg = msg + " · " + str(payload["auto_done"]) + " moved to done";
             }
             toast(msg);
         } else {
