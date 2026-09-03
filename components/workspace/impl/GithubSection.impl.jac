@@ -240,6 +240,26 @@ impl GithubSection.toggleAutoSync(rid: str, enabled: bool) -> None {
     }
 }
 
+impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
+    try {
+        result = root spawn SetRepoAutoDone(repo_id=rid, enabled=enabled);
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            rResult = root spawn ListRepos();
+            repos = rResult.reports[0] if rResult.reports else [];
+            toast(
+                "Merged PRs will move their cards to done on the next sync"
+                    if enabled
+                    else "Done on merge turned off"
+            );
+        } else {
+            toast("Could not update that repo");
+        }
+    } except Exception as e {
+        toast("Could not update that repo");
+    }
+}
+
 impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;

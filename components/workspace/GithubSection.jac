@@ -22,7 +22,8 @@ import from ...walkers.github {
     ListRepoPulls,
     SearchRepoItems,
     ImportIssues,
-    SetRepoAutoSync
+    SetRepoAutoSync,
+    SetRepoAutoDone
 }
 import from ...components.ui.input { Input }
 import from ...walkers.flowlines { GetFlowLine }
@@ -176,6 +177,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def moreRepos -> None;
     async def attachRepo(fullName: str) -> None;
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
+    async def toggleAutoDone(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
     async def importSelected -> None;
@@ -356,6 +358,25 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             ); }}
                                         />
                                         Auto-add new issues
+                                    </label>
+                                }}
+                                {for r in [
+                                    x
+                                    for x in repos
+                                    if x.id == repoId
+                                ] {
+                                    <label
+                                        key={"done-" + r.id}
+                                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+                                        title="A merged PR moves its card to the done step on the next sync"
+                                    >
+                                        <Checkbox
+                                            checked={r.auto_done}
+                                            onCheckedChange={lambda { toggleAutoDone(
+                                                r.id, not r.auto_done
+                                            ); }}
+                                        />
+                                        Done on merge
                                     </label>
                                 }}
                                 {for r in [

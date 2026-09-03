@@ -703,17 +703,6 @@ impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
     }
 }
 
-impl BoardPage.markDoneFromPr(taskId: str) -> None {
-    # Routed through the normal move so the card still gets its log entry
-    # and its undo toast. A merged PR suggests done, it never forces it.
-    for key in columnKeys() {
-        if columnKind(key) == "done" {
-            moveTo(taskId, key);
-            return;
-        }
-    }
-}
-
 impl BoardPage.syncGithub -> None {
     if syncing {
         return;
@@ -730,6 +719,9 @@ impl BoardPage.syncGithub -> None {
             msg: str = "Synced " + str(payload["synced"]) + " tasks";
             if "auto_added" in payload and payload["auto_added"] {
                 msg = msg + " · " + str(payload["auto_added"]) + " issues added";
+            }
+            if "auto_done" in payload and payload["auto_done"] {
+                msg = msg + " · " + str(payload["auto_done"]) + " done on merge";
             }
             toast(msg);
         } else {

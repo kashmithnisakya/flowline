@@ -37,7 +37,7 @@ import from walkers.ghutil {
     exchange_code,
     user_owns_installation
 }
-import from constants { STATUSES }
+import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
 
 # An install round trip that has sat unfinished for this long is a stale tab,
 # not a person mid-flow.
@@ -1038,13 +1038,32 @@ walker SetRepoAutoSync {
 }
 
 
+walker SetRepoAutoDone {
+    """Per-repo policy: a merged PR moves the linked card to the done step
+    on the next sync. Off, the board only renders the "Mark done" nudge."""
+    has repo_id: str = "",
+        enabled: bool = False,
+        reports: list[dict[str, any]] = [];
+
+    can set with Root entry {
+        target = resolve(self.repo_id);
+        if not isinstance(target, Repo) or not owned(here, target) {
+            report {"ok": False, "error": "not_found", "message": "Unknown repo."};
+            disengage;
+        }
+        target.auto_done = self.enabled;
+        report {"ok": True, "repo": repo_view(target)};
+    }
+}
+
+
 walker SyncGithub {
     """File new issues for auto-sync repos, then refresh cached issue and
     PR state for linked tasks.
 
-    It never moves a card a person placed: a closed issue or a merged PR
-    shows up as a suggestion on the board and a person decides. `auto`
-    marks a board-open sync, which skips itself when one just ran."""
+    A merged PR moves its card to the done step only for repos that opted
+    in (auto_done); everywhere else it stays a board suggestion a person
+    decides on. `auto` marks a board-open sync, skipped when one just ran."""
     has auto: bool = False,
         reports: list[dict[str, any]] = [];
 
@@ -1293,8 +1312,12 @@ walker SyncGithub {
         # Adopt hand-pasted PR links so they sync too, but only when they
         # point at a repo this workspace tracks.
         tracked: list[str] = [];
+        merge_done: list[str] = [];
         for r in [here-->[?:Repo]] {
             tracked.append(r.full_name);
+            if r.auto_done {
+                merge_done.append(r.full_name);
+            }
         }
         for t in [here-->[?:Task]] {
             if t.pr_link and t.pr_number == 0 {
@@ -1315,6 +1338,18 @@ walker SyncGithub {
             if t.status != "Done" and t.pr_number > 0 and valid_full_name(t.gh_repo)
         ];
         pr_tasks.sort(key=lambda (t: Task) { t.gh_synced_at; });
+        # The done landing for opted-in moves, resolved once. -1.0 marks the
+        # done column's sort peak as not yet scanned.
+        auto_done_step = first_done_step(here);
+        auto_done_name = "Done";
+        if auto_done_step {
+            st = resolve(auto_done_step);
+            if isinstance(st, WorkflowStep) {
+                auto_done_name = st.name;
+            }
+        }
+        done_peak = -1.0;
+        auto_done_moves = 0;
         checked = 0;
         for t in pr_tasks {
             if checked >= SYNC_PR_CAP {
@@ -1335,6 +1370,29 @@ walker SyncGithub {
             fresh_state = pr_state_of(item);
             if fresh_state and fresh_state != t.pr_state {
                 t.pr_state = fresh_state;
+                # Merged means done, but only for opted-in repos and only
+                # from statuses where the board chip would suggest it.
+                if fresh_state == "merged"
+                    and t.gh_repo in merge_done
+                    and t.status in MERGE_SUGGEST_STATUSES {
+                    if done_peak < 0.0 {
+                        done_peak = 0.0;
+                        for d in [here-->[?:Task, status=="Done"]] {
+                            if d.sort_order > done_peak {
+                                done_peak = d.sort_order;
+                            }
+                        }
+                    }
+                    done_peak = done_peak + 1024.0;
+                    t.status = "Done";
+                    t.step_id = auto_done_step;
+                    t.sort_order = done_peak;
+                    t.updated_at = stamp;
+                    record_task_event(
+                        here, t, "Moved to " + auto_done_name + " · PR merged", stamp
+                    );
+                    auto_done_moves = auto_done_moves + 1;
+                }
                 changed.append(t.to_view());
             }
             t.gh_synced_at = stamp;
@@ -1346,6 +1404,7 @@ walker SyncGithub {
             "ok": True,
             "synced": len(linked),
             "auto_added": auto_added,
+            "auto_done": auto_done_moves,
             "changed": changed,
             "last_sync_at": stamp
         };
