@@ -248,9 +248,9 @@ impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
             toast(
-                "Merged PRs will move their cards to done on the next sync"
+                "Merged PRs and closed issues will move their cards to done on the next sync"
                     if enabled
-                    else "Done on merge turned off"
+                    else "Done on merge & close turned off"
             );
         } else {
             toast("Could not update that repo");

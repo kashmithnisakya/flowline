@@ -737,6 +737,36 @@ def first_done_step(holder: Root) -> str {
 }
 
 
+# One opted-in automation move: append the card to the done column and log
+# why. `peak` below zero means the column is not yet scanned; the caller
+# keeps the returned peak so a sync scans the done column at most once.
+def auto_done_land(
+    holder: Root,
+    t: Task,
+    step_id: str,
+    step_name: str,
+    why: str,
+    stamp: str,
+    peak: float
+) -> float {
+    if peak < 0.0 {
+        peak = 0.0;
+        for d in [holder-->[?:Task, status=="Done"]] {
+            if d.sort_order > peak {
+                peak = d.sort_order;
+            }
+        }
+    }
+    peak = peak + 1024.0;
+    t.status = "Done";
+    t.step_id = step_id;
+    t.sort_order = peak;
+    t.updated_at = stamp;
+    record_task_event(holder, t, "Moved to " + step_name + " · " + why, stamp);
+    return peak;
+}
+
+
 # Where auto-filed issues land: the first start-kind step of the flow line
 # as [status, step_id], or ["Backlog", ""] for an org with no flow line.
 def entry_landing(holder: Root) -> list[str] {
@@ -1039,8 +1069,8 @@ walker SetRepoAutoSync {
 
 
 walker SetRepoAutoDone {
-    """Per-repo policy: a merged PR moves the linked card to the done step
-    on the next sync. Off, the board only renders the "Mark done" nudge."""
+    """Per-repo policy: a merged PR or a closed issue moves the linked card
+    to the done step on the next sync. Off, the board only shows nudges."""
     has repo_id: str = "",
         enabled: bool = False,
         reports: list[dict[str, any]] = [];
@@ -1061,9 +1091,9 @@ walker SyncGithub {
     """File new issues for auto-sync repos, then refresh cached issue and
     PR state for linked tasks.
 
-    A merged PR moves its card to the done step only for repos that opted
-    in (auto_done); everywhere else it stays a board suggestion a person
-    decides on. `auto` marks a board-open sync, skipped when one just ran."""
+    A merged PR or a closed issue moves its card to the done step only for
+    repos that opted in (auto_done); everywhere else it stays a board
+    suggestion. `auto` marks a board-open sync, skipped when one just ran."""
     has auto: bool = False,
         reports: list[dict[str, any]] = [];
 
@@ -1187,6 +1217,26 @@ walker SyncGithub {
         ];
         changed: list[TaskView] = [];
         stamp = now_iso();
+        # The workspace's repos, and which ones opted into merged-or-closed
+        # means done. The done landing is resolved once for both loops below.
+        tracked: list[str] = [];
+        merge_done: list[str] = [];
+        for r in [here-->[?:Repo]] {
+            tracked.append(r.full_name);
+            if r.auto_done {
+                merge_done.append(r.full_name);
+            }
+        }
+        auto_done_step = first_done_step(here);
+        auto_done_name = "Done";
+        if auto_done_step {
+            st = resolve(auto_done_step);
+            if isinstance(st, WorkflowStep) {
+                auto_done_name = st.name;
+            }
+        }
+        done_peak = -1.0;
+        auto_done_moves = 0;
         # Family lookups for sub-issue stamping: every linked task by its
         # GitHub identity, and which parents already have a stamped child.
         task_by_key: dict[str, Task] = {};
@@ -1248,6 +1298,22 @@ walker SyncGithub {
                 fresh_state = states.get(t.gh_issue_number) or "";
                 if fresh_state and fresh_state != t.gh_issue_state {
                     t.gh_issue_state = fresh_state;
+                    # A closed issue is terminal on GitHub's side, so an
+                    # opted-in repo moves the card from any open status.
+                    if fresh_state == "closed"
+                        and t.gh_repo in merge_done
+                        and t.status != "Done" {
+                        done_peak = auto_done_land(
+                            here,
+                            t,
+                            auto_done_step,
+                            auto_done_name,
+                            "issue closed",
+                            stamp,
+                            done_peak
+                        );
+                        auto_done_moves = auto_done_moves + 1;
+                    }
                     changed.append(t.to_view());
                 }
                 # Sub-issue family: refresh the parent's counts, then refetch
@@ -1311,14 +1377,6 @@ walker SyncGithub {
         }
         # Adopt hand-pasted PR links so they sync too, but only when they
         # point at a repo this workspace tracks.
-        tracked: list[str] = [];
-        merge_done: list[str] = [];
-        for r in [here-->[?:Repo]] {
-            tracked.append(r.full_name);
-            if r.auto_done {
-                merge_done.append(r.full_name);
-            }
-        }
         for t in [here-->[?:Task]] {
             if t.pr_link and t.pr_number == 0 {
                 guess_repo = repo_from_link(t.pr_link);
@@ -1338,18 +1396,6 @@ walker SyncGithub {
             if t.status != "Done" and t.pr_number > 0 and valid_full_name(t.gh_repo)
         ];
         pr_tasks.sort(key=lambda (t: Task) { t.gh_synced_at; });
-        # The done landing for opted-in moves, resolved once. -1.0 marks the
-        # done column's sort peak as not yet scanned.
-        auto_done_step = first_done_step(here);
-        auto_done_name = "Done";
-        if auto_done_step {
-            st = resolve(auto_done_step);
-            if isinstance(st, WorkflowStep) {
-                auto_done_name = st.name;
-            }
-        }
-        done_peak = -1.0;
-        auto_done_moves = 0;
         checked = 0;
         for t in pr_tasks {
             if checked >= SYNC_PR_CAP {
@@ -1375,21 +1421,14 @@ walker SyncGithub {
                 if fresh_state == "merged"
                     and t.gh_repo in merge_done
                     and t.status in MERGE_SUGGEST_STATUSES {
-                    if done_peak < 0.0 {
-                        done_peak = 0.0;
-                        for d in [here-->[?:Task, status=="Done"]] {
-                            if d.sort_order > done_peak {
-                                done_peak = d.sort_order;
-                            }
-                        }
-                    }
-                    done_peak = done_peak + 1024.0;
-                    t.status = "Done";
-                    t.step_id = auto_done_step;
-                    t.sort_order = done_peak;
-                    t.updated_at = stamp;
-                    record_task_event(
-                        here, t, "Moved to " + auto_done_name + " · PR merged", stamp
+                    done_peak = auto_done_land(
+                        here,
+                        t,
+                        auto_done_step,
+                        auto_done_name,
+                        "PR merged",
+                        stamp,
+                        done_peak
                     );
                     auto_done_moves = auto_done_moves + 1;
                 }

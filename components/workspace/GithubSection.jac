@@ -368,7 +368,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                     <label
                                         key={"done-" + r.id}
                                         className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
-                                        title="A merged PR moves its card to the done step on the next sync"
+                                        title="A merged PR or a closed issue moves its card to the done step on the next sync"
                                     >
                                         <Checkbox
                                             checked={r.auto_done}
@@ -376,7 +376,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 r.id, not r.auto_done
                                             ); }}
                                         />
-                                        Done on merge
+                                        Done on merge &amp; close
                                     </label>
                                 }}
                                 {for r in [
