@@ -3,6 +3,7 @@ Python imports, client components import types from models, and a Python
 anchor there would drag the wasm host into the browser bundle."""
 
 import datetime;
+import from models { Task }
 
 
 def now_iso -> str {
@@ -73,4 +74,24 @@ def page_bounds(
     p = page if page > 0 else 1;
     start = (p - 1) * size;
     return (p, size, start, start + size);
+}
+
+
+# The cutoff Done tasks fall behind, "" when history is not being trimmed.
+def done_cutoff(done_days: int) -> str {
+    return shift_day(today_iso(), 0 - done_days) if done_days > 0 else "";
+}
+
+
+# A Done task last touched before the cutoff: history, not the working set.
+# Shared by the list walkers and the board so the split has one definition.
+def is_older(t: Task, cutoff: str) -> bool {
+    return t.status == "Done" and bool(cutoff) and t.updated_at[:10] < cutoff;
+}
+
+
+# Board order: the drag order the user arranged. Callers sort by jid first,
+# so ties stay deterministic across two requests.
+def order_working(rows: list[Task]) {
+    rows.sort(key=lambda (t: Task) { t.sort_order; });
 }

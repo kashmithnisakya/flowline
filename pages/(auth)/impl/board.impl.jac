@@ -1,36 +1,19 @@
 """Implementations for the Board page."""
 
 impl BoardPage.boot -> None {
-    # Onboarding gate: a workspace with no projects yet goes to the wizard.
-    # (The organization itself is created at signup.)
-    try {
-        projResult = root spawn ListProjects();
-        existing = projResult.reports[0] if projResult.reports else [];
-        if len(existing) == 0 {
-            window.location.href = "/setup";
-            return;
-        }
-    } except Exception as e {
-        toast("Failed to load your workspace");
+    # One load carries the onboarding gate too: the wizard opens when the
+    # snapshot comes back with no projects.
+    info = await loadBoard(True);
+    if info["ok"] and int(info["projects"]) == 0 {
+        window.location.href = "/setup";
+        return;
     }
-    # Cheap and never fails on its own: it only decides whether the board
-    # offers the GitHub affordances at all.
-    connected: bool = False;
-    try {
-        gResult = root spawn GithubStatus();
-        if gResult.reports {
-            connected = gResult.reports[0].connected;
-        }
-        ghConnected = connected;
-    } except Exception as e {
-        ghConnected = False;
-    }
-    await loadAll();
     # Opening the board IS the sync trigger: auto-file new issues from
     # auto-sync repos after first paint. Passed as an argument because the
-    # `ghConnected` just assigned is a stale read in this same handler.
-    await autoSyncGithub(connected);
+    # `ghConnected` loadBoard just assigned is a stale read in this handler.
+    await autoSyncGithub(bool(info["connected"]));
 }
+
 
 impl BoardPage.autoSyncGithub(connected: bool) -> None {
     if not connected or syncing {
@@ -64,55 +47,79 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
 }
 
 impl BoardPage.loadAll -> None {
+    await loadBoard(True);
+}
+
+
+impl BoardPage.refreshTasks -> None {
+    await loadBoard(False);
+}
+
+
+impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
     # While a move is in flight its optimistic state is newer than anything
     # a concurrent fetch started earlier could return, skip.
     if movesRef.current {
-        return;
+        return {"ok": False, "projects": 0, "connected": ghConnected};
     }
+    projectCount = 0;
+    connected = ghConnected;
     try {
-        # The working set comes in pages of 500 so a big board still paints
-        # after the first. The loop is bounded; if the server still has more
-        # at the bound the board says so rather than quietly showing part of
-        # the workspace. Filters stay client-side (instant to flip), so
-        # `older` here is the unfiltered count of what the cutoff left out.
+        # Pages of 500 so a big board paints after the first; the loop is
+        # bounded and says so rather than showing part of the workspace.
+        # Only page 1 carries the workspace lists.
         fetchedTasks: list[TaskView] = [];
         olderUnfiltered = 0;
+        cats: list[str] = [];
+        fetchedMembers: list[MemberView] = [];
+        fetchedProjects: list[Project] = [];
+        fetchedSteps: list[StepView] = [];
+        fetchedRepos: list[RepoView] = [];
+        fetchedRoles: list[RoleView] = [];
         pageNo = 1;
         more = True;
+        gotPage = False;
         while more and pageNo <= 20 {
-            tResult = root spawn ListTasks(scope="working", page=pageNo, page_size=500);
-            tPage = tResult.reports[0] if tResult.reports else None;
-            if not tPage {
+            bResult = root spawn BoardSnapshot(
+                page=pageNo, page_size=500, with_workspace=withWorkspace and pageNo == 1
+            );
+            data = bResult.reports[0] if bResult.reports else None;
+            if not data {
                 more = False;
             } else {
-                fetchedTasks = fetchedTasks + tPage.rows;
-                more = tPage.has_more;
-                olderUnfiltered = tPage.older;
+                gotPage = True;
+                fetchedTasks = fetchedTasks + data.rows;
+                more = data.has_more;
+                olderUnfiltered = data.older;
+                cats = data.categories;
+                if withWorkspace and pageNo == 1 {
+                    fetchedMembers = data.members;
+                    fetchedProjects = data.projects;
+                    fetchedSteps = data.steps;
+                    fetchedRepos = data.repos;
+                    fetchedRoles = data.roles;
+                    connected = data.github_connected;
+                    projectCount = len(data.projects);
+                }
             }
             pageNo = pageNo + 1;
         }
         truncated = more;
-        cResult = root spawn TaskCounts();
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
-        # The board counts its own columns; skipping the server's per-step
-        # count spares a walk over every task on each poll.
-        sResult = root spawn GetFlowLine(with_counts=False);
-        rResult = root spawn ListRepos();
-        roResult = root spawn ListRoles();
-        fetchedMembers = mResult.reports[0] if mResult.reports else [];
-        fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
             tasks = fetchedTasks;
-            members = fetchedMembers;
-            projects = fetchedProjects;
-            steps = sResult.reports[0] if sResult.reports else [];
-            repos = rResult.reports[0] if rResult.reports else [];
-            roleRows = roResult.reports[0] if roResult.reports else [];
             workingTruncated = truncated;
-            cPayload = cResult.reports[0] if cResult.reports else None;
-            if cPayload {
-                knownCategories = cPayload.categories;
+            # An empty answer must not wipe the category list the filter bar
+            # is built from: an empty page keeps the list it already had.
+            if gotPage {
+                knownCategories = cats;
+            }
+            if withWorkspace {
+                members = fetchedMembers;
+                projects = fetchedProjects;
+                steps = fetchedSteps;
+                repos = fetchedRepos;
+                roleRows = fetchedRoles;
+                ghConnected = connected;
             }
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`
@@ -132,10 +139,10 @@ impl BoardPage.loadAll -> None {
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
         stored = localStorage.getItem("standup_project") or "";
-        if stored and stored != "all" {
+        if withWorkspace and stored and stored != "all" {
             found = False;
-            for p in fetchedProjects {
-                if jid(p) == stored and p.active {
+            for pr in fetchedProjects {
+                if jid(pr) == stored and pr.active {
                     found = True;
                 }
             }
@@ -147,12 +154,17 @@ impl BoardPage.loadAll -> None {
     } except Exception as e {
         # No toast: the page itself says so (full panel with nothing on
         # screen, a strip with data still showing), and a toast per failed
-        # 60s poll would only nag.
+        # poll would only nag.
         loadFailed = True;
+        loading = False;
+        retrying = False;
+        return {"ok": False, "projects": 0, "connected": connected};
     }
     loading = False;
     retrying = False;
+    return {"ok": True, "projects": projectCount, "connected": connected};
 }
+
 
 impl BoardPage.retryLoad -> None {
     if movesRef.current {
