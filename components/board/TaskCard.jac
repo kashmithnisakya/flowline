@@ -71,11 +71,21 @@ def:pub TaskCard(
     prevLabel: str = "",
     nextKey: str = "",
     nextLabel: str = "",
-    doneKey: str = ""
+    doneKey: str = "",
+    # A drop on the card's upper half inserts before it, lower half after.
+    onDropBeside: Callable[[str, str, bool], None] = None
 ) -> JsxElement {
     # While the native drag ghost travels, the source card dims so the board
-    # shows where the card came from.
-    has isDragging: bool = False;
+    # shows where the card came from. dropHint draws the insertion line.
+    has isDragging: bool = False,
+        dropHint: str = "";
+
+    # Which half of the card the pointer is in, as "above"/"below".
+    def hoverHalf(e: DragEvent) -> str {
+        el: any = e.currentTarget;
+        r = el.getBoundingClientRect();
+        return "above" if (e.clientY - r.top) < r.height / 2.0 else "below";
+    }
 
     # The nudge routes through the arrow path: the page's moveTo, undo
     # toast included.
@@ -105,6 +115,25 @@ def:pub TaskCard(
                 isDragging = True;
             }}
             onDragEnd={lambda { isDragging = False; }}
+            onDragOver={lambda (e: DragEvent) { if onDropBeside and not isDragging {
+                e.preventDefault();
+                e.stopPropagation();
+                half = hoverHalf(e);
+                if dropHint != half {
+                    dropHint = half;
+                }
+            }}}
+            onDragLeave={lambda { if dropHint { dropHint = ""; }}}
+            onDrop={lambda (e: DragEvent) { if onDropBeside {
+                e.preventDefault();
+                e.stopPropagation();
+                dropHint = "";
+                dt = e.dataTransfer;
+                dragged = dt.getData("text/x-standup-task") if dt else "";
+                if dragged and dragged != task.id {
+                    onDropBeside(dragged, task.id, hoverHalf(e) == "above");
+                }
+            }}}
             onClick={lambda { onOpen(task); }}
             role="button"
             tabIndex={0}
@@ -124,6 +153,18 @@ def:pub TaskCard(
                         else "border-border/70"
                 )}
         >
+            {if dropHint == "above" {
+                <div
+                    key="hintAbove"
+                    className="pointer-events-none absolute -top-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                />
+            }}
+            {if dropHint == "below" {
+                <div
+                    key="hintBelow"
+                    className="pointer-events-none absolute -bottom-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                />
+            }}
             <CardContent className="space-y-1.5 p-3">
                 {if task.project_name {
                     <div

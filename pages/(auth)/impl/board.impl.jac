@@ -544,10 +544,14 @@ impl BoardPage.columnKeyOf(t: TaskView) -> str {
     return keys[0] if keys else "";
 }
 
-impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
+impl BoardPage.moveTo(
+    taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+) -> None {
     # Optimistic: mutate the card in state and rebind; the server owns the
-    # end-of-column order. movesRef fences the poll so a stale fetch cannot
-    # snap the card back; on failure the board refetches server truth.
+    # order. movesRef fences the poll so a stale fetch cannot snap the card
+    # back; on failure the board refetches server truth. An anchorId asks
+    # for the spot beside that card; in the card's own column that is a
+    # pure reorder (no toast, no handoff dialog, no log on the server).
     # A column key is a step jid, or a legacy status when there is no flow line.
     onFlowLine = len(steps) > 0;
     label = columnLabel(columnKey);
@@ -567,25 +571,52 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     oldKey = "";
     oldLabel = "";
     peak = 0.0;
+    positioned = False;
     for t in working {
         if t.id == taskId {
             oldKey = columnKeyOf(t);
             oldLabel = columnLabel(oldKey);
         }
+        if anchorId and t.id == anchorId and columnKeyOf(t) == columnKey {
+            positioned = True;
+        }
         if columnKeyOf(t) == columnKey and t.sort_order > peak {
             peak = t.sort_order;
         }
     }
-    if not oldKey or oldKey == columnKey {
+    if not oldKey or (oldKey == columnKey and not positioned) {
         return;
     }
+    reorder = positioned and oldKey == columnKey;
     landing = mappedStatus(columnKey);
+    # The rendered order is the array order, so a positioned drop splices
+    # the row beside its anchor; an append keeps the sort_order patch.
+    row: list[TaskView] = [];
+    rest: list[TaskView] = [];
     for t in working {
         if t.id == taskId {
             t.status = landing;
             t.step_id = columnKey if onFlowLine else "";
-            t.sort_order = peak + 1024.0;
+            if not positioned {
+                t.sort_order = peak + 1024.0;
+            }
+            row.append(t);
+        } else {
+            rest.append(t);
         }
+    }
+    if positioned and len(row) > 0 {
+        spliced: list[TaskView] = [];
+        for t in rest {
+            if ahead and t.id == anchorId {
+                spliced.append(row[0]);
+            }
+            spliced.append(t);
+            if not ahead and t.id == anchorId {
+                spliced.append(row[0]);
+            }
+        }
+        working = spliced;
     }
     tasks = working;
     olderDone = [
@@ -600,12 +631,20 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     # whole story: the reported row replaces it.
     landed: list[TaskView] = [];
     try {
+        beforeId = anchorId if positioned and ahead else "";
+        afterId = anchorId if positioned and not ahead else "";
         if onFlowLine {
             result = root spawn MoveTask(
-                task_id=taskId, step_id=columnKey, step_name=label
+                task_id=taskId,
+                step_id=columnKey,
+                step_name=label,
+                before_id=beforeId,
+                after_id=afterId
             );
         } else {
-            result = root spawn MoveTask(task_id=taskId, status=columnKey);
+            result = root spawn MoveTask(
+                task_id=taskId, status=columnKey, before_id=beforeId, after_id=afterId
+            );
         }
         landed = result.reports or [];
     } except Exception as e {
@@ -650,6 +689,11 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         }
         tasks = swapped;
     }
+    # A reorder is its own feedback: the card visibly sits where it was
+    # dropped, and dragging it back is the undo.
+    if reorder {
+        return;
+    }
     # Every successful move confirms itself and offers the undo: a card can
     # land out of sight (Hide Done, or a column below the fold), and the
     # handoff dialog is skippable, so it cannot be the only feedback.
@@ -670,6 +714,23 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         moveKind = columnKind(columnKey);
         moveTaskTitle = title;
         moveTaskId = taskId;
+    }
+}
+
+impl BoardPage.moveBeside(draggedId: str, targetId: str, ahead: bool) -> None {
+    # The target names the landing column; a target outside the working set
+    # (older history rows) keeps today's append-to-column behavior.
+    if draggedId == targetId {
+        return;
+    }
+    key = "";
+    for t in tasks {
+        if t.id == targetId {
+            key = columnKeyOf(t);
+        }
+    }
+    if key {
+        moveTo(draggedId, key, targetId, ahead);
     }
 }
 
