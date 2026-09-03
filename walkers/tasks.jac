@@ -21,7 +21,16 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { now_iso, today_iso, shift_day, page_bounds, clean_tags }
+import from walkers.util {
+    now_iso,
+    today_iso,
+    shift_day,
+    page_bounds,
+    clean_tags,
+    done_cutoff,
+    is_older,
+    order_working
+}
 import from walkers.log { record_task_event, sync_task_links }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
@@ -120,9 +129,7 @@ walker ListTasks {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         needle = self.q.lower().strip();
         today = today_iso();
-        cutoff = shift_day(today_iso(), 0 - self.done_days)
-            if self.done_days > 0
-            else "";
+        cutoff = done_cutoff(self.done_days);
         picked: list[Task] = [];
         left_out: list[Task] = [];
         for t in [here-->[?:Task]] {
@@ -133,7 +140,7 @@ walker ListTasks {
                 continue;
             }
             done = t.status == "Done";
-            old = done and bool(cutoff) and t.updated_at[:10] < cutoff;
+            old = is_older(t, cutoff);
             if self.scope == "working" {
                 if old {
                     left_out.append(t);
@@ -173,7 +180,7 @@ walker ListTasks {
         } elif self.scope == "attention" {
             order_attention(picked);
         } else {
-            picked.sort(key=lambda (t: Task) { t.sort_order; });
+            order_working(picked);
         }
         report TaskPage(
             rows=hydrate_views(here, picked[start:end]),

@@ -9,11 +9,10 @@ import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleV
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
-import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers, ListRepos, ListRoles }
+import from ...walkers.board { BoardSnapshot }
+import from ...walkers.projects { AssignToProject }
 import from ...walkers.tasks {
     ListTasks,
-    TaskCounts,
     GetTask,
     CreateTask,
     UpdateTask,
@@ -21,8 +20,7 @@ import from ...walkers.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.flowlines { GetFlowLine }
-import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
+import from ...walkers.github { SyncGithub, CreateIssueFromTask }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
@@ -83,7 +81,7 @@ def:pub BoardPage -> JsxPage {
         # The working set is fetched in pages; past the bound the board
         # says so rather than quietly showing part of the workspace.
         workingTruncated: bool = False,
-        # Distinct categories over the whole history, from TaskCounts.
+        # Distinct categories over the whole history, from the snapshot.
         knownCategories: list[str] = [],
         members: list[MemberView] = [],
         # The org's roles, for the lane order and colours in the task
@@ -165,12 +163,13 @@ def:pub BoardPage -> JsxPage {
         [pendingTaskId, loading, len(tasks)]
     );
 
-    # Live-ish board: refetch on tab focus plus a 60s poll. One manual
+    # Live-ish board: refetch on tab focus plus a 60s poll, both through
+    # refreshTasks -- one walker call, no roster refetch. One manual
     # useEffect so the listener/interval handles are visible to the cleanup
     # (entry/exit abilities compile to separate closures).
     useEffect(
         lambda {
-            onFocus = lambda { loadAll(); };
+            onFocus = lambda { refreshTasks(); };
             window.addEventListener("focus", onFocus);
             # The assistant dock lives in the layout, not in this tree, so an
             # applied proposal announces itself with an event rather than leaving
@@ -182,7 +181,7 @@ def:pub BoardPage -> JsxPage {
             onNewTask = lambda { pendingTaskId = "new"; };
             window.addEventListener("standup:open-task", onOpenTask);
             window.addEventListener("standup:new-task", onNewTask);
-            timer = window.setInterval(lambda { loadAll(); }, 60000);
+            timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("standup:refresh", onFocus);
@@ -195,7 +194,12 @@ def:pub BoardPage -> JsxPage {
     );
 
     async def boot -> None;
+    # loadAll refreshes everything (boot, and every write that can touch the
+    # roster); refreshTasks is the poll's path and skips the workspace lists,
+    # which are edited on other pages. Both run through loadBoard.
     async def loadAll -> None;
+    async def refreshTasks -> None;
+    async def loadBoard(withWorkspace: bool) -> dict;
     async def retryLoad -> None;
     # Older Done history: page 1 replaces, later pages append; any filter
     # change or task write starts over so the rows never go stale.

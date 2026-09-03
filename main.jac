@@ -83,6 +83,7 @@ import from walkers.github {
     SetRepoAutoSync,
     SetRepoAutoDone
 }
+import from walkers.board { BoardSnapshot }
 import from walkers.insights { Digest, OverviewSnapshot }
 import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
 
