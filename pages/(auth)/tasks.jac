@@ -31,6 +31,23 @@ glob SCOPES: list[list[str]] = [
      ],
      PAGE_SIZE: int = 50;
 
+# Merge freshly seen values into an accumulated, sorted, de-duplicated list.
+# The category and tag dropdowns both build this way, so one page never
+# empties a filter list just because the current page carries none of them.
+def mergeSorted(existing: list[str], fresh: list[str]) -> list[str] {
+    if len(fresh) == 0 {
+        return existing;
+    }
+    merged = [v for v in existing];
+    for v in fresh {
+        if v not in merged {
+            merged.append(v);
+        }
+    }
+    merged.sort();
+    return merged;
+}
+
 def:pub TasksPage -> JsxPage {
     has rows: list[TaskView] = [],
         members: list[MemberView] = [],
@@ -39,7 +56,10 @@ def:pub TasksPage -> JsxPage {
         fProject: str = "all",
         fAssignee: str = "All",
         fCategory: str = "All",
+        fTag: str = "All",
+        fEstimate: str = "All",
         categories: list[str] = [],
+        tags: list[str] = [],
         query: str = "",
         # The committed query; the input holds the draft until Enter.
         queryDraft: str = "",
@@ -63,6 +83,8 @@ def:pub TasksPage -> JsxPage {
         fProject,
         fAssignee,
         fCategory,
+        fTag,
+        fEstimate,
         query,
         sort,
         sortDir,
@@ -78,6 +100,8 @@ def:pub TasksPage -> JsxPage {
     def setProject(value: str) -> None;
     def setAssignee(value: str) -> None;
     def setCategory(value: str) -> None;
+    def setTag(value: str) -> None;
+    def setEstimate(value: str) -> None;
     def runSearch -> None;
     def clearSearch -> None;
     def goPage(delta: int) -> None;
@@ -160,6 +184,37 @@ def:pub TasksPage -> JsxPage {
                         }}
                     </SelectContent>
                 </Select>
+                {if len(tags) > 0 {
+                    <Select key="tag" value={fTag} onValueChange={setTag}>
+                        <SelectTrigger
+                            className="h-8 w-36"
+                            size="sm"
+                            aria-label="Filter by tag"
+                        >
+                            <SelectValue placeholder="Tag"/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="All">All tags</SelectItem>
+                            {for tg in tags {
+                                <SelectItem key={tg} value={tg}>{tg}</SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
+                }}
+                <Select value={fEstimate} onValueChange={setEstimate}>
+                    <SelectTrigger
+                        className="h-8 w-36"
+                        size="sm"
+                        aria-label="Filter by estimate"
+                    >
+                        <SelectValue placeholder="Estimate"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">Any estimate</SelectItem>
+                        <SelectItem value="yes">Estimated</SelectItem>
+                        <SelectItem value="no">Unestimated</SelectItem>
+                    </SelectContent>
+                </Select>
                 <Input
                     className="h-8 w-52"
                     placeholder="Search titles, Enter to run"
@@ -207,6 +262,8 @@ def:pub TasksPage -> JsxPage {
                                 or fProject != "all"
                                 or fAssignee != "All"
                                 or fCategory != "All"
+                                or fTag != "All"
+                                or fEstimate != "All"
                             else "No tasks yet."}
                     />
                     {if pageCount > 1 {

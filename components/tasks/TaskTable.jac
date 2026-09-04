@@ -1,7 +1,7 @@
 """The task table: a flat, sortable list of TaskView rows. Sortable columns
-are node fields (Title, Status, Priority, Category, Due, Updated); Project and
-Assignees render but do not sort (they are edge hops, ordered server-side only
-by node field). A row deep-links to the board dialog for editing."""
+are node fields (Title, Status, Priority, Est, Category, Due, Updated);
+Project and Assignees render but do not sort (they are edge hops, ordered
+server-side only by node field). A row deep-links to the board dialog."""
 
 import from "@jac/runtime" { Link }
 import from ...models { TaskView }
@@ -10,6 +10,7 @@ import from ..common.Avatar { AvatarStack }
 import from ..ui.card { Card, CardContent }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 import from ...lib.dates { todayIso, dueLabel, dueTone, prettyDay }
+import from ...lib.utils { fmtEstimate }
 
 glob PRIORITY_TINT: dict[str, str] = {
          "High": "font-semibold text-destructive",
@@ -20,12 +21,12 @@ glob PRIORITY_TINT: dict[str, str] = {
          ["title", "Task"],
          ["status", "Status"],
          ["priority", "Priority"],
+         ["estimate", "Est"],
          ["category", "Category"],
          ["due", "Due"],
          ["updated", "Updated"]
      ];
 
-# Header cells whose key sorts server-side; the rest render label-only.
 # A caret showing the active sort direction, or a faint idle mark.
 def sortCaret(active: bool, dir: str) -> str {
     if not active {
@@ -108,6 +109,13 @@ def:pub TaskTable(
                                         )}
                                 >
                                     {t.priority}
+                                </TableCell>
+                                <TableCell
+                                    className="whitespace-nowrap text-sm tabular-nums text-muted-foreground"
+                                >
+                                    {fmtEstimate(t.estimate)
+                                        if t.estimate > 0.0
+                                        else "—"}
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
                                     {t.category or "—"}

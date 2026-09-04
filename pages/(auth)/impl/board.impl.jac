@@ -326,6 +326,7 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "title": t.title,
         "category": t.category,
         "tags": ", ".join(t.tags),
+        "estimate": fmtEstimate(t.estimate) if t.estimate > 0.0 else "",
         "project": t.project_id or "none",
         "priority": t.priority,
         "status": columnKeyOf(t),
@@ -363,6 +364,7 @@ impl BoardPage.saveTask -> None {
         for s in form["tags"].split(",")
         if s.strip()
     ];
+    est = parseEstimate(form["estimate"]);
     try {
         # Assigning people who are not on the task's project pulls them in.
         if project {
@@ -389,6 +391,7 @@ impl BoardPage.saveTask -> None {
                 title=title,
                 category=form["category"],
                 tags=tagList,
+                estimate=est,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
@@ -406,6 +409,7 @@ impl BoardPage.saveTask -> None {
                 title=title,
                 category=form["category"],
                 tags=tagList,
+                estimate=est,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",

@@ -124,6 +124,8 @@ def sort_tasks(rows: list[Task], field: str, reverse: bool) {
         rows.sort(key=lambda (t: Task) { t.status; }, reverse=reverse);
     } elif field == "category" {
         rows.sort(key=lambda (t: Task) { t.category.lower(); }, reverse=reverse);
+    } elif field == "estimate" {
+        rows.sort(key=lambda (t: Task) { t.estimate; }, reverse=reverse);
     } elif field == "due" {
         rows.sort(
             key=lambda (t: Task) { t.due_date or "9999-12-31"; }, reverse=reverse
@@ -153,6 +155,10 @@ walker ListTasks {
         project_id: str = "",
         assignee_id: str = "",
         category: str = "",
+        # A tag the task must carry; "estimated" is "" (any), "yes" (has an
+        # estimate) or "no" (unestimated).
+        tag: str = "",
+        estimated: str = "",
         # The table view's column sort; empty keeps the scope's own order.
         sort: str = "",
         sort_dir: str = "asc",
@@ -173,6 +179,15 @@ walker ListTasks {
                 continue;
             }
             if self.category and t.category != self.category {
+                continue;
+            }
+            if self.tag and self.tag not in t.tags {
+                continue;
+            }
+            if self.estimated == "yes" and t.estimate <= 0.0 {
+                continue;
+            }
+            if self.estimated == "no" and t.estimate > 0.0 {
                 continue;
             }
             done = t.status == "Done";
@@ -383,6 +398,7 @@ walker CreateTask {
     has title: str,
         category: str = "",
         tags: list[str] = [],
+        estimate: float = 0.0,
         priority: str = "Medium",
         status: str = "Backlog",
         step_id: str = "",
@@ -420,6 +436,7 @@ walker CreateTask {
             title=self.title.strip(),
             category=self.category,
             tags=clean_tags(self.tags),
+            estimate=self.estimate,
             priority=self.priority,
             status=col,
             step_id=step,
@@ -464,6 +481,7 @@ walker UpdateTask(find_task) {
     has title: str = "",
         category: str = "",
         tags: list[str] = [],
+        estimate: float = 0.0,
         priority: str = "",
         status: str = "",
         step_id: str = "",
@@ -493,6 +511,7 @@ walker UpdateTask(find_task) {
         here.title = self.title;
         here.category = self.category;
         here.tags = clean_tags(self.tags);
+        here.estimate = self.estimate;
         here.priority = self.priority;
         here.status = landing;
         here.due_date = self.due_date;
