@@ -44,6 +44,7 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
      NAV_ITEMS: list[dict[str, str]] = [
          {"to": "/flowlines", "label": "Flow line"},
          {"to": "/board", "label": "Board"},
+         {"to": "/tasks", "label": "Tasks"},
          {"to": "/overview", "label": "Overview"},
          {"to": "/log", "label": "Log"},
          {"to": "/github", "label": "GitHub"},

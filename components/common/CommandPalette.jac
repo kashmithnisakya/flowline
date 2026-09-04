@@ -29,6 +29,12 @@ glob PAGES: list[dict[str, str]] = [
          },
          {
              "kind": "page",
+             "label": "Tasks",
+             "to": "/tasks",
+             "hint": "Sortable table of every task"
+         },
+         {
+             "kind": "page",
              "label": "Overview",
              "to": "/overview",
              "hint": "Where the work stands"

@@ -3,8 +3,7 @@ PM's own entries. `onEdit` adds a per-row pencil (hidden in select mode)."""
 
 import from "@jac/runtime" { Link }
 import from ...models { LogEntry }
-import from ...constants { STATUS_KIND, KIND_COLORS }
-import from ..flowlines.kinds { COUNT_TINT }
+import from ..flowlines.kinds { statusChip }
 import from ..ui.card { Card, CardContent }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
@@ -31,14 +30,6 @@ def linkRef(url: str) -> str {
         }
     }
     return "link";
-}
-
-# The legacy status in the board's colour voice: status -> kind -> colour key
-# -> chip classes (literal strings live in constants/kinds tables).
-def statusTint(status: str) -> str {
-    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
-    color = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
-    return COUNT_TINT[color] if color in COUNT_TINT else COUNT_TINT["slate"];
 }
 
 # "2026-08-10" -> "Mon, Aug 10", matching the DatePicker trigger.
@@ -256,7 +247,7 @@ def:pub LogTable(
                                         <span
                                             key="st"
                                             className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium "
-                                                + statusTint(en.status)}
+                                                + statusChip(en.status)}
                                         >
                                             {en.status}
                                         </span>
