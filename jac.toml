@@ -97,6 +97,7 @@ autoscaler_scale_up_max_pods = 4
 
 [scale.microservices]
 enabled = true
+http_forward_timeout = 120.0
 
 [scale.microservices.logs]
 enabled = true
