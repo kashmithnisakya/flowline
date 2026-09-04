@@ -52,6 +52,35 @@ import from ..common.glyphs { Spinner }
 glob FIELD: str = "w-full",
      WIDE: str = "grid gap-2 sm:col-span-2";
 
+# Open-in-new-tab affordance for a link field: an external-link icon anchor
+# beside the input. Callers guard on a non-empty url, so this always renders.
+def OpenLink(url: str) -> JsxElement {
+    return
+        <a
+            href={url}
+            target="_blank"
+            rel="noopener"
+            title="Open in a new tab"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+            <svg
+                width={16}
+                height={16}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <path d="M15 3h6v6"/>
+                <path d="M10 14 21 3"/>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            </svg>
+        </a>;
+}
+
 # A field that takes the whole row rather than half of it.
 # A family row's column label: the child's step (or legacy status) mapped
 # through the board's own key/label lists, so the pill says what the board
@@ -419,13 +448,19 @@ def:pub TaskDialog(
                         </div>
                         <div className={WIDE}>
                             <Label>GitHub issue (optional)</Label>
-                            <Input
-                                placeholder="https://github.com/owner/repo/issues/12"
-                                value={form["issue"]}
-                                onChange={lambda (e: ChangeEvent) { onField(
-                                    "issue", e.target.value
-                                ); }}
-                            />
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    className="flex-1"
+                                    placeholder="https://github.com/owner/repo/issues/12"
+                                    value={form["issue"]}
+                                    onChange={lambda (e: ChangeEvent) { onField(
+                                        "issue", e.target.value
+                                    ); }}
+                                />
+                                {if form["issue"].strip() {
+                                    <OpenLink url={form["issue"].strip()}/>
+                                }}
+                            </div>
                         </div>
                     </div>
                     {if canCreateIssue {
@@ -525,13 +560,19 @@ def:pub TaskDialog(
                                 </div>
                                 <div className={WIDE}>
                                     <Label>PR link</Label>
-                                    <Input
-                                        placeholder="https://github.com/..."
-                                        value={form["pr"]}
-                                        onChange={lambda (e: ChangeEvent) { onField(
-                                            "pr", e.target.value
-                                        ); }}
-                                    />
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            className="flex-1"
+                                            placeholder="https://github.com/..."
+                                            value={form["pr"]}
+                                            onChange={lambda (e: ChangeEvent) { onField(
+                                                "pr", e.target.value
+                                            ); }}
+                                        />
+                                        {if form["pr"].strip() {
+                                            <OpenLink url={form["pr"].strip()}/>
+                                        }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
