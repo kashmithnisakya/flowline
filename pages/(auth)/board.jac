@@ -33,10 +33,12 @@ import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
+import from ...lib.utils { fmtEstimate, parseEstimate }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
          "category": "",
+         "estimate": "",
          "tags": "",
          "project": "none",
          "priority": "Medium",
@@ -97,6 +99,10 @@ def:pub BoardPage -> JsxPage {
         fProject: str = "all",
         fAssignee: str = "All",
         fCategory: str = "All",
+        # A tag the card must carry, or "All"; the estimate filter is "All",
+        # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
+        fTag: str = "All",
+        fEstimate: str = "All",
         hideDone: bool = False,
         dialogOpen: bool = False,
         editingId: str = "",
@@ -263,6 +269,33 @@ def:pub BoardPage -> JsxPage {
         }
     }
     allCategories.sort();
+    # Tags for the filter dropdown, from the loaded set (unlike categories,
+    # tags are not carried in the snapshot; the working set is enough to
+    # filter what the board shows).
+    allTags: list[str] = [];
+    for t in tasks + olderDone {
+        for tg in t.tags {
+            if tg not in allTags {
+                allTags.append(tg);
+            }
+        }
+    }
+    allTags.sort();
+
+    # One filter predicate for both the working set and the older-Done list,
+    # so a new condition is added once. hideDone and the older-list's own
+    # showAllDone guard stay at the call sites, since they differ per list.
+    def matches(t: TaskView) -> bool {
+        return (fProject == "all" or t.project_id == fProject)
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
+            and (fTag == "All" or fTag in t.tags)
+            and (
+                fEstimate == "All"
+                or (fEstimate == "yes" and t.estimate > 0.0)
+                or (fEstimate == "no" and t.estimate <= 0.0)
+            );
+    }
 
     colKeys = columnKeys();
     doneKey = doneColumnKey();
@@ -279,10 +312,7 @@ def:pub BoardPage -> JsxPage {
     visible = [
         t
         for t in tasks
-        if (fProject == "all" or t.project_id == fProject)
-            and (fAssignee == "All" or fAssignee in t.assignee_ids)
-            and (fCategory == "All" or t.category == fCategory)
-            and (not hideDone or t.status != "Done")
+        if matches(t) and (not hideDone or t.status != "Done")
     ];
     # Everything Done in the working set is recent by construction (the
     # server's cutoff); older history is its own list, fetched under the
@@ -296,11 +326,7 @@ def:pub BoardPage -> JsxPage {
     olderShown = [
         t
         for t in olderDone
-        if showAllDone
-            and not hideDone
-            and (fProject == "all" or t.project_id == fProject)
-            and (fAssignee == "All" or fAssignee in t.assignee_ids)
-            and (fCategory == "All" or t.category == fCategory)
+        if showAllDone and not hideDone and matches(t)
     ];
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
@@ -371,6 +397,11 @@ def:pub BoardPage -> JsxPage {
                             onCategory={setCategoryFilter}
                             onHideDone={lambda { hideDone = not hideDone; }}
                             categories={allCategories}
+                            tags={allTags}
+                            tag={fTag}
+                            estimate={fEstimate}
+                            onTag={lambda (v: str) { fTag = v; }}
+                            onEstimate={lambda (v: str) { fEstimate = v; }}
                         />
                         {if ghConnected {
                             <Button

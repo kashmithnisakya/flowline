@@ -58,6 +58,7 @@ import from ...components.ui.select {
 import from "sonner" { toast }
 import from "react" { useState, useEffect, useLayoutEffect, useRef }
 import from ...components.common.glyphs { Spinner, WarnIcon }
+import from ...lib.utils { fmtEstimate, parseEstimate }
 
 glob BLANK_STEP: dict[str, str] = {
          "name": "",
@@ -71,6 +72,7 @@ glob BLANK_STEP: dict[str, str] = {
          "title": "",
          "category": "",
          "tags": "",
+         "estimate": "",
          "project": "none",
          "priority": "Medium",
          "status": "Backlog",

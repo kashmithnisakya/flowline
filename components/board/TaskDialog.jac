@@ -394,6 +394,21 @@ def:pub TaskDialog(
                             />
                         </div>
                         <div className="grid content-start gap-2">
+                            <Label htmlFor="task-estimate">Estimate</Label>
+                            <Input
+                                id="task-estimate"
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                className={FIELD}
+                                placeholder="Points or hours"
+                                value={form["estimate"]}
+                                onChange={lambda (e: any) { onField(
+                                    "estimate", e.target.value
+                                ); }}
+                            />
+                        </div>
+                        <div className="grid content-start gap-2">
                             <Label>Due date</Label>
                             <DatePicker
                                 value={form["due_date"]}

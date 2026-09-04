@@ -186,6 +186,7 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "title": picked.title,
         "category": picked.category,
         "tags": ", ".join(picked.tags),
+        "estimate": fmtEstimate(picked.estimate) if picked.estimate > 0.0 else "",
         "project": picked.project_id or "none",
         "priority": picked.priority,
         "status": key,
@@ -261,6 +262,7 @@ impl FlowLinePage.saveTask -> None {
                 for s in taskForm["tags"].split(",")
                 if s.strip()
             ],
+            estimate=parseEstimate(taskForm["estimate"]),
             priority=taskForm["priority"],
             status=mappedStatus(landing),
             step_id=landing,

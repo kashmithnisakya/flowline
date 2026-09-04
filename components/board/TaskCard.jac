@@ -8,6 +8,7 @@ a full lane squashes every card to a sliver instead of scrolling."""
 import from ...models { TaskView }
 import from ..flowlines.kinds { CARD_BAR, colorKey }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
+import from ...lib.utils { fmtEstimate }
 import from ..common.Avatar { AvatarStack, dotFor }
 import from ..common.Markdown { Markdown }
 import from ..ui.card { Card, CardContent }
@@ -100,6 +101,7 @@ def:pub TaskCard(
     hasFooter = len(task.assignee_names) > 0
         or bool(task.category)
         or len(task.tags) > 0
+        or task.estimate > 0.0
         or showPriority
         or bool(task.due_date);
 
@@ -221,13 +223,22 @@ def:pub TaskCard(
                                 {"+" + str(len(task.tags) - 3)}
                             </Badge>
                         }}
-                        {if showPriority or task.due_date {
+                        {if showPriority or task.due_date or task.estimate > 0.0 {
                             # Right-aligned; wraps to its own line, still
                             # right-aligned, when the lane is narrow.
                             <span
                                 key="when"
                                 className="ml-auto flex shrink-0 items-center gap-1.5"
                             >
+                                {if task.estimate > 0.0 {
+                                    <span
+                                        key="est"
+                                        className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground"
+                                        title="Estimate"
+                                    >
+                                        {fmtEstimate(task.estimate)}
+                                    </span>
+                                }}
                                 {if showPriority {
                                     <PriorityGlyph
                                         key="priority"

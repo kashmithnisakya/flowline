@@ -110,6 +110,9 @@ node Task {
         # Free labels beside the single category; GitHub issue labels land
         # here at import. Additive with a default, so old rows keep working.
         tags: list[str] = [],
+        # Effort estimate in the org's own unit (points or hours). 0 means
+        # unestimated; additive with a default, so old rows read as such.
+        estimate: float = 0.0,
         # GitHub identity. issue_link/pr_link stay the human URLs anyone can
         # paste by hand; these are the machine key the API syncs against.
         # gh_issue_number == 0 means "not linked to a real issue".
@@ -176,6 +179,7 @@ node Task {
             title=self.title,
             category=self.category,
             tags=self.tags,
+            estimate=self.estimate,
             priority=self.priority,
             status=self.status,
             step_id=self.step_id,
@@ -356,6 +360,7 @@ obj TaskView {
         project_name: str,
         step_id: str = "",
         tags: list[str] = [],
+        estimate: float = 0.0,
         milestone_id: str = "",
         milestone_name: str = "",
         gh_repo: str = "",

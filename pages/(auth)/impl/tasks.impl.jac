@@ -29,6 +29,8 @@ impl TasksPage.loadTasks -> None {
             project_id="" if fProject == "all" else fProject,
             assignee_id="" if fAssignee == "All" else fAssignee,
             category="" if fCategory == "All" else fCategory,
+            tag="" if fTag == "All" else fTag,
+            estimated="" if fEstimate == "All" else fEstimate,
             sort=sort,
             sort_dir=sortDir,
             page=page,
@@ -36,27 +38,27 @@ impl TasksPage.loadTasks -> None {
         );
         data = result.reports[0] if result.reports else None;
         if reqRef.current == seq {
-            rows = data.rows if data else [];
+            fetched: list[TaskView] = data.rows if data else [];
+            rows = fetched;
             total = data.total if data else 0;
             hasMore = data.has_more if data else False;
-            # The distinct categories present, for the filter dropdown. Kept
-            # from the rows on screen; a page with none keeps the last list.
-            seen: list[str] = [];
-            for t in rows {
-                if t.category and t.category not in seen {
-                    seen.append(t.category);
+            # Distinct categories and tags present, for the filter dropdowns.
+            # Read the local `fetched`, not the just-assigned `rows` has,
+            # which is the pre-call value for the rest of this handler.
+            seenCats: list[str] = [];
+            seenTags: list[str] = [];
+            for t in fetched {
+                if t.category and t.category not in seenCats {
+                    seenCats.append(t.category);
                 }
-            }
-            if len(seen) > 0 {
-                merged = [c for c in categories];
-                for c in seen {
-                    if c not in merged {
-                        merged.append(c);
+                for tg in t.tags {
+                    if tg not in seenTags {
+                        seenTags.append(tg);
                     }
                 }
-                merged.sort();
-                categories = merged;
             }
+            categories = mergeSorted(categories, seenCats);
+            tags = mergeSorted(tags, seenTags);
             failed = False;
         }
     } except Exception as e {
@@ -110,6 +112,16 @@ impl TasksPage.setAssignee(value: str) -> None {
 
 impl TasksPage.setCategory(value: str) -> None {
     fCategory = value;
+    page = 1;
+}
+
+impl TasksPage.setTag(value: str) -> None {
+    fTag = value;
+    page = 1;
+}
+
+impl TasksPage.setEstimate(value: str) -> None {
+    fEstimate = value;
     page = 1;
 }
 
