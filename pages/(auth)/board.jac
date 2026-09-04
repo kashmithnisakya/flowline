@@ -27,6 +27,7 @@ import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.ui.button { Button }
+import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
@@ -110,6 +111,9 @@ def:pub BoardPage -> JsxPage {
         # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
         fTag: str = "All",
         fEstimate: str = "All",
+        # Live search over the loaded board: matches a task title or its
+        # issue/PR number, so one box covers "payment" and "412".
+        boardQuery: str = "",
         hideDone: bool = False,
         dialogOpen: bool = False,
         editingId: str = "",
@@ -289,11 +293,26 @@ def:pub BoardPage -> JsxPage {
     }
     allTags.sort();
 
+    # Normalised search query, matched against the title and the issue/PR
+    # numbers, so typing digits finds "#412" and typing words finds a title.
+    bq = boardQuery.strip().lower();
+
     # One filter predicate for both the working set and the older-Done list,
     # so a new condition is added once. hideDone and the older-list's own
     # showAllDone guard stay at the call sites, since they differ per list.
     def matches(t: TaskView) -> bool {
-        return (fProject == "all" or t.project_id == fProject)
+        # The issue/PR number lives in the synced numeric field OR the tail of
+        # a hand-pasted link, so search the number wherever it actually is.
+        issueTail = t.issue_link.split("/")[-1] if t.issue_link else "";
+        prTail = t.pr_link.split("/")[-1] if t.pr_link else "";
+        hit = not bq
+            or bq in t.title.lower()
+            or (t.gh_issue_number > 0 and bq in str(t.gh_issue_number))
+            or (t.pr_number > 0 and bq in str(t.pr_number))
+            or (bool(issueTail) and bq in issueTail.lower())
+            or (bool(prTail) and bq in prTail.lower());
+        return hit
+            and (fProject == "all" or t.project_id == fProject)
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)
@@ -391,7 +410,40 @@ def:pub BoardPage -> JsxPage {
                         <Skeleton className="h-8 w-24"/>
                     </div>
                 } elif not noFlowLine and not nothingLoaded {
-                    <div key="tools" className="flex items-center gap-2">
+                    <div key="tools" className="flex flex-wrap items-center gap-2">
+                        <div key="search" className="relative">
+                            <Input
+                                className="h-8 w-52 pr-7"
+                                placeholder="Search title or #issue"
+                                aria-label="Search the board"
+                                value={boardQuery}
+                                onChange={lambda (e: any) { boardQuery = e.target.value; }}
+                            />
+                            {if boardQuery {
+                                <button
+                                    key="clear"
+                                    type="button"
+                                    aria-label="Clear search"
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                    onClick={lambda { boardQuery = ""; }}
+                                >
+                                    <svg
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M18 6 6 18"/>
+                                        <path d="m6 6 12 12"/>
+                                    </svg>
+                                </button>
+                            }}
+                        </div>
                         <FilterBar
                             projects={activeProjects}
                             members={activeMembers}
