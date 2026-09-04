@@ -709,7 +709,11 @@ def:pub OverviewPage -> JsxPage {
                                     <div
                                         className="flex min-w-0 items-center gap-3 sm:w-52 sm:shrink-0"
                                     >
-                                        <Avatar name={m.name} size="md"/>
+                                        <Avatar
+                                            name={m.name}
+                                            size="md"
+                                            color={m.color}
+                                        />
                                         <div className="min-w-0 flex-1">
                                             <div
                                                 className="truncate text-sm font-medium"

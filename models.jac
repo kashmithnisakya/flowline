@@ -69,6 +69,10 @@ node Member {
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
+        # A manager-picked avatar colour (a step colour key). Empty falls
+        # back to the hue hashed from the name, so existing members keep
+        # the colour they already show.
+        color: str = "",
         active: bool = True;
 }
 
@@ -447,6 +451,7 @@ obj MemberView {
         email: str,
         github_username: str,
         tags: list[str],
+        color: str,
         active: bool,
         project_ids: list[str],
         project_names: list[str];
@@ -693,6 +698,7 @@ def member_view(m: Member) -> MemberView {
         email=m.email,
         github_username=m.github_username,
         tags=m.tags,
+        color=m.color,
         active=m.active,
         project_ids=ids,
         project_names=names
