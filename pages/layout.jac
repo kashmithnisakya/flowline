@@ -10,10 +10,12 @@ import from "react" { useEffect }
 # import constants directly or the client copy is emitted empty once a
 # component in a later page's closure imports it (see CLAUDE.md gotchas).
 import from ..constants { STATUSES }
-# kinds.jac and models.jac need the same pin: their exports drop the same way
-# (CARRY_LABEL / WIRE_TINT killed FlowCanvas, the tally objs killed _entry).
+# kinds.jac, models.jac and lib/utils.jac need the same pin: their exports
+# drop the same way (CARRY_LABEL / WIRE_TINT killed FlowCanvas, the tally
+# objs killed _entry, fmtEstimate killed the card and the table).
 import from ..components.flowlines.kinds { CARRY_LABEL, WIRE_TINT }
 import from ..models { LogTotals, MemberDays, ProjectTally, TaskTotals }
+import from ..lib.utils { fmtEstimate, parseEstimate, normalizeRepoInput }
 import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
@@ -60,6 +62,7 @@ def:pub Shell -> JsxLayout {
         vocabPin: int = len(STATUSES),
         kindsPin: str = CARRY_LABEL["issue"] + WIRE_TINT["sky"],
         modelsPin: list[any] = [LogTotals, MemberDays, ProjectTally, TaskTotals],
+        utilsPin: list[any] = [fmtEstimate, parseEstimate, normalizeRepoInput],
         orgName: str = "",
         fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
