@@ -10,24 +10,19 @@ import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, Tab
 
 glob HEAD_CLS: str = "text-xs uppercase tracking-wider text-muted-foreground";
 
-# "https://github.com/org/repo/pull/42" -> "#42" (falls back to "link").
-def linkRef(url: str) -> str {
+# A GitHub issue/PR URL to its short "#42" ref, "link" otherwise. Local by
+# design: extracting it to a shared module made the 0.36.1 client compiler
+# drop the cross-module export and dynamic-dispatch the call (returns an
+# object, crashing the render); fmtEstimate survives the same path, this
+# does not, so both tables keep their own copy.
+def githubRef(url: str) -> str {
     parts = [
         p
         for p in url.split("/")
         if p
     ];
-    if parts {
-        tail = parts[-1];
-        digits = True;
-        for ch in tail {
-            if ch not in "0123456789" {
-                digits = False;
-            }
-        }
-        if digits and tail {
-            return "#" + tail;
-        }
+    if parts and parts[-1].isdigit() {
+        return "#" + parts[-1];
     }
     return "link";
 }
@@ -210,7 +205,7 @@ def:pub LogTable(
                                             title="Issue"
                                             className="font-medium text-primary underline-offset-2 hover:underline"
                                         >
-                                            {linkRef(en.issue_link)}
+                                            {githubRef(en.issue_link)}
                                         </a>
                                     }}
                                     {if en.issue_link and en.pr_link {
@@ -230,7 +225,7 @@ def:pub LogTable(
                                             title="Pull request"
                                             className="font-medium text-primary underline-offset-2 hover:underline"
                                         >
-                                            {"PR " + linkRef(en.pr_link)}
+                                            {"PR " + githubRef(en.pr_link)}
                                         </a>
                                     }}
                                     {if not en.issue_link and not en.pr_link {

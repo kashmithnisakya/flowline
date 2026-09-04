@@ -27,6 +27,23 @@ glob PRIORITY_TINT: dict[str, str] = {
          ["updated", "Updated"]
      ];
 
+# A GitHub issue/PR URL to its short "#42" ref, "link" otherwise. Local by
+# design: a shared copy in lib/utils gets its cross-module export dropped by
+# the 0.36.1 client compiler and dynamic-dispatched (returns an object that
+# crashes the render), so the log table keeps its own copy too.
+def githubRef(url: str) -> str {
+    parts = [
+        p
+        for p in url.split("/")
+        if p
+    ];
+    if parts and parts[-1].isdigit() {
+        return "#" + parts[-1];
+    }
+    return "link";
+}
+
+
 # A caret showing the active sort direction, or a faint idle mark.
 def sortCaret(active: bool, dir: str) -> str {
     if not active {
@@ -72,6 +89,11 @@ def:pub TaskTable(
                                 className="text-xs uppercase tracking-wider text-muted-foreground"
                             >
                                 Project
+                            </TableHead>
+                            <TableHead
+                                className="text-xs uppercase tracking-wider text-muted-foreground"
+                            >
+                                Links
                             </TableHead>
                             <TableHead
                                 className="text-xs uppercase tracking-wider text-muted-foreground"
@@ -142,6 +164,50 @@ def:pub TaskTable(
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
                                     {t.project_name or "—"}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap text-xs">
+                                    {if t.issue_link {
+                                        <a
+                                            key="issue"
+                                            href={t.issue_link}
+                                            target="_blank"
+                                            rel="noopener"
+                                            title="Issue"
+                                            onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                                            className="font-medium text-primary underline-offset-2 hover:underline"
+                                        >
+                                            {githubRef(t.issue_link)}
+                                        </a>
+                                    }}
+                                    {if t.issue_link and t.pr_link {
+                                        <span
+                                            key="sep"
+                                            className="text-muted-foreground"
+                                        >
+                                            {" · "}
+                                        </span>
+                                    }}
+                                    {if t.pr_link {
+                                        <a
+                                            key="pr"
+                                            href={t.pr_link}
+                                            target="_blank"
+                                            rel="noopener"
+                                            title="Pull request"
+                                            onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                                            className="font-medium text-primary underline-offset-2 hover:underline"
+                                        >
+                                            {"PR " + githubRef(t.pr_link)}
+                                        </a>
+                                    }}
+                                    {if not t.issue_link and not t.pr_link {
+                                        <span
+                                            key="dash"
+                                            className="text-muted-foreground"
+                                        >
+                                            —
+                                        </span>
+                                    }}
                                 </TableCell>
                                 <TableCell>
                                     {if len(t.assignee_names) > 0 {
