@@ -103,6 +103,39 @@ def order_attention(rows: list[Task]) {
 }
 
 
+glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2};
+
+# The table view's user-chosen column sort, over node fields only so it runs
+# on the full match set before paging. Priority sorts by urgency; undated
+# tasks sort last on the due column. The jid pass underneath keeps ties
+# deterministic across pages.
+def sort_tasks(rows: list[Task], field: str, reverse: bool) {
+    rows.sort(key=lambda (t: Task) { jid(t); });
+    if field == "title" {
+        rows.sort(key=lambda (t: Task) { t.title.lower(); }, reverse=reverse);
+    } elif field == "priority" {
+        rows.sort(
+            key=lambda (t: Task) { PRIORITY_RANK[t.priority]
+                if t.priority in PRIORITY_RANK
+                else 1; },
+            reverse=reverse
+        );
+    } elif field == "status" {
+        rows.sort(key=lambda (t: Task) { t.status; }, reverse=reverse);
+    } elif field == "category" {
+        rows.sort(key=lambda (t: Task) { t.category.lower(); }, reverse=reverse);
+    } elif field == "due" {
+        rows.sort(
+            key=lambda (t: Task) { t.due_date or "9999-12-31"; }, reverse=reverse
+        );
+    } elif field == "created" {
+        rows.sort(key=lambda (t: Task) { t.created_at; }, reverse=reverse);
+    } else {
+        rows.sort(key=lambda (t: Task) { t.updated_at; }, reverse=reverse);
+    }
+}
+
+
 walker ListTasks {
     """One page of tasks. `scope` picks the working set the board renders
     ("working": open plus Done touched in the last `done_days`), the history
@@ -120,6 +153,9 @@ walker ListTasks {
         project_id: str = "",
         assignee_id: str = "",
         category: str = "",
+        # The table view's column sort; empty keeps the scope's own order.
+        sort: str = "",
+        sort_dir: str = "asc",
         done_days: int = 7,
         page: int = 1,
         page_size: int = 0,
@@ -172,7 +208,11 @@ walker ListTasks {
         # what makes ties deterministic across two requests: without it a
         # row can sit on page 1 for one call and page 2 for the next.
         picked.sort(key=lambda (t: Task) { jid(t); });
-        if needle {
+        if self.sort {
+            # An explicit column sort wins over the scope default and the
+            # search rank: the table user asked for this order.
+            sort_tasks(picked, self.sort, self.sort_dir == "desc");
+        } elif needle {
             picked.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
             picked.sort(key=lambda (t: Task) { title_rank(t.title, needle); });
         } elif self.scope == "older" or self.scope == "done" {
