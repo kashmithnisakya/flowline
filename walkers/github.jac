@@ -35,7 +35,8 @@ import from walkers.ghutil {
     valid_full_name,
     gh_request,
     exchange_code,
-    user_owns_installation
+    user_owns_installation,
+    clock
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
 
@@ -44,10 +45,11 @@ import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
 glob INSTALL_WINDOW_MINUTES: float = 15.0,
      PAGE_SIZE: int = 50,
      IMPORT_CAP: int = 25,
-     SYNC_PR_CAP: int = 20,
-     # Auto-file reads at most this many 100-issue pages per repo per sync;
-     # the cursor carries a long backfill across syncs instead of one call.
-     AUTO_SYNC_PAGES: int = 3,
+     # One sync call reads at most this many 100-item pages across every
+     # repo, and issues no new request once this many seconds have passed;
+     # the repo cursors carry the rest to the next call (has_more).
+     SYNC_PAGE_BUDGET: int = 5,
+     SYNC_SECONDS_BUDGET: float = 8.0,
      # A board mounts twice on a full page load; the auto pass skips itself
      # when a sync just ran so the double mount costs one GitHub call.
      AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0,
@@ -448,8 +450,14 @@ def repo_from_api_url(url: str) -> str {
 
 # GitHub reports a merged PR as state "closed" with a merged_at timestamp,
 # and a draft as state "open" with draft=true. The board wants those apart.
+# A PR read off the issues stream carries merged_at under `pull_request`.
 def pr_state_of(item: dict[str, any]) -> str {
-    if item.get("merged_at") {
+    merged = item.get("merged_at");
+    pr = item.get("pull_request");
+    if not merged and isinstance(pr, dict) {
+        merged = pr.get("merged_at");
+    }
+    if merged {
         return "merged";
     }
     state = str(item.get("state") or "");
@@ -1088,13 +1096,14 @@ walker SetRepoAutoDone {
 
 
 walker SyncGithub {
-    """File new issues for auto-sync repos, then refresh cached issue and
-    PR state for linked tasks.
-
-    A merged PR or a closed issue moves its card to the done step only for
-    repos that opted in (auto_done); everywhere else it stays a board
-    suggestion. `auto` marks a board-open sync, skipped when one just ran."""
+    """One bounded increment of the GitHub sync. Every tracked repo's issues
+    stream (issues AND pull requests, oldest update first) is read from the
+    repo's cursor: linked tasks refresh, new issues file on auto-sync repos,
+    and the call stops at the page or time budget with `has_more` set."""
     has auto: bool = False,
+        # Pages this call may read, clamped to SYNC_PAGE_BUDGET; 0 means
+        # the cap. The auto pass asks for less so a board open stays light.
+        page_budget: int = 0,
         reports: list[dict[str, any]] = [];
 
     can refresh with Root entry {
@@ -1107,276 +1116,38 @@ walker SyncGithub {
         if self.auto
             and isinstance(c, GithubConnection)
             and minutes_since(c.last_sync_at) < AUTO_SYNC_COOLDOWN_MINUTES {
-            report {
-                "ok": True,
-                "synced": 0,
-                "auto_added": 0,
-                "changed": [],
-                "last_sync_at": c.last_sync_at
-            };
+            report sync_summary([0, 0, 0, 0, 0, 0], False, "", c.last_sync_at);
             disengage;
         }
-        # File new issues first, so a just-created card is already linked
-        # when the state refresh below reads everything back. One list call
-        # per page per repo, oldest update first, so the cursor can walk a
-        # long backfill across several syncs instead of one giant call.
-        auto_added = 0;
-        auto_repos = [
-            r
-            for r in [here-->[?:Repo]]
-            if r.auto_sync and valid_full_name(r.full_name)
-        ];
-        if auto_repos {
-            seen_keys: dict[str, bool] = {};
-            for t in [here-->[?:Task]] {
-                if t.gh_repo and t.gh_issue_number > 0 {
-                    seen_keys[t.gh_repo + "#" + str(t.gh_issue_number)] = True;
-                }
-            }
-            landing = entry_landing(here);
-            done_step = first_done_step(here);
-            members = [here-->[?:Member]];
-            peaks: dict[str, float] = {};
-            for r in auto_repos {
-                attached = [r<-:HasRepo:<-[?:Project]];
-                repo_project = attached[0] if attached else None;
-                newest = r.issue_cursor;
-                page = 1;
-                while page <= AUTO_SYNC_PAGES {
-                    params: dict[str, any] = {
-                        "state": "all",
-                        "per_page": 100,
-                        "page": page,
-                        "sort": "updated",
-                        "direction": "asc"
-                    };
-                    if r.issue_cursor {
-                        params["since"] = r.issue_cursor;
-                    }
-                    result = gh_request(
-                        token, "GET", "/repos/" + r.full_name + "/issues", params
-                    );
-                    if not result["ok"] {
-                        mark_invalid(c, result);
-                        break;
-                    }
-                    data = result["data"];
-                    if not isinstance(data, list) {
-                        break;
-                    }
-                    for item in data {
-                        if not isinstance(item, dict) {
-                            continue;
-                        }
-                        # PRs advance the cursor too, or a PR-heavy stretch
-                        # would pin a backfill in place forever.
-                        updated = str(item.get("updated_at") or "");
-                        if updated > newest {
-                            newest = updated;
-                        }
-                        if item.get("pull_request") {
-                            continue;
-                        }
-                        number = int(item.get("number") or 0);
-                        if number <= 0 {
-                            continue;
-                        }
-                        key = r.full_name + "#" + str(number);
-                        if key in seen_keys {
-                            continue;
-                        }
-                        file_issue_item(
-                            here,
-                            item,
-                            r.full_name,
-                            number,
-                            repo_project,
-                            members,
-                            landing[0],
-                            landing[1],
-                            done_step,
-                            peaks
-                        );
-                        seen_keys[key] = True;
-                        auto_added = auto_added + 1;
-                    }
-                    if len(data) < 100 {
-                        break;
-                    }
-                    page = page + 1;
-                }
-                if newest and newest != r.issue_cursor {
-                    r.issue_cursor = newest;
-                }
-            }
+        budget = SYNC_PAGE_BUDGET;
+        if self.page_budget > 0 and self.page_budget < SYNC_PAGE_BUDGET {
+            budget = self.page_budget;
         }
-        linked = [
-            t
-            for t in [here-->[?:Task]]
-            if t.gh_repo and t.gh_issue_number > 0
-        ];
-        changed: list[TaskView] = [];
+        started = clock();
         stamp = now_iso();
-        # The workspace's repos, and which ones opted into merged-or-closed
-        # means done. The done landing is resolved once for both loops below.
+        # The workspace's repos: which are tracked, which opted into
+        # merged-or-closed means done, and each one's node for the cursor.
         tracked: list[str] = [];
         merge_done: list[str] = [];
+        by_name: dict[str, Repo] = {};
         for r in [here-->[?:Repo]] {
+            if not valid_full_name(r.full_name) {
+                continue;
+            }
             tracked.append(r.full_name);
+            by_name[r.full_name] = r;
             if r.auto_done {
                 merge_done.append(r.full_name);
             }
         }
-        auto_done_step = first_done_step(here);
-        auto_done_name = "Done";
-        if auto_done_step {
-            st = resolve(auto_done_step);
-            if isinstance(st, WorkflowStep) {
-                auto_done_name = st.name;
-            }
-        }
-        done_peak = -1.0;
-        auto_done_moves = 0;
-        # Family lookups for sub-issue stamping: every linked task by its
-        # GitHub identity, and which parents already have a stamped child.
+        # One walk over the tasks builds every lookup the stream needs.
+        # Hand-pasted PR links are adopted here so they join this increment,
+        # but only when they point at a repo the workspace tracks.
         task_by_key: dict[str, Task] = {};
+        task_by_pr: dict[str, Task] = {};
         child_stamped: dict[str, bool] = {};
-        for t in linked {
-            task_by_key[t.gh_repo + "#" + str(t.gh_issue_number)] = t;
-            if t.gh_parent_repo and t.gh_parent_number > 0 {
-                child_stamped[t.gh_parent_repo + "#" + str(t.gh_parent_number)] = True;
-            }
-        }
-        family_calls = 0;
-        # One list call per repo beats one GET per task: a workspace with 60
-        # linked tasks across 3 repos costs 3 requests, not 60.
-        repos: list[str] = [];
-        for t in linked {
-            if t.gh_repo not in repos and valid_full_name(t.gh_repo) {
-                repos.append(t.gh_repo);
-            }
-        }
-        for full_name in repos {
-            states: dict[int, str] = {};
-            sums: dict[int, list[int]] = {};
-            for page in [1, 2] {
-                result = gh_request(
-                    token,
-                    "GET",
-                    "/repos/" + full_name + "/issues",
-                    {"state": "all", "per_page": 100, "page": page}
-                );
-                if not result["ok"] {
-                    mark_invalid(c, result);
-                    break;
-                }
-                data = result["data"];
-                if not isinstance(data, list) {
-                    break;
-                }
-                for item in data {
-                    if isinstance(item, dict) and not item.get("pull_request") {
-                        number = int(item.get("number") or 0);
-                        states[number] = str(item.get("state") or "");
-                        subs = item.get("sub_issues_summary") or {};
-                        if isinstance(subs, dict) {
-                            sums[number] = [
-                                int(subs.get("total") or 0),
-                                int(subs.get("completed") or 0)
-                            ];
-                        }
-                    }
-                }
-                if len(data) < 100 {
-                    break;
-                }
-            }
-            for t in linked {
-                if t.gh_repo != full_name {
-                    continue;
-                }
-                fresh_state = states.get(t.gh_issue_number) or "";
-                if fresh_state and fresh_state != t.gh_issue_state {
-                    t.gh_issue_state = fresh_state;
-                    # A closed issue is terminal on GitHub's side, so an
-                    # opted-in repo moves the card from any open status.
-                    if fresh_state == "closed"
-                        and t.gh_repo in merge_done
-                        and t.status != "Done" {
-                        done_peak = auto_done_land(
-                            here,
-                            t,
-                            auto_done_step,
-                            auto_done_name,
-                            "issue closed",
-                            stamp,
-                            done_peak
-                        );
-                        auto_done_moves = auto_done_moves + 1;
-                    }
-                    changed.append(t.to_view());
-                }
-                # Sub-issue family: refresh the parent's counts, then refetch
-                # the child list when the counts moved or no child is stamped
-                # yet (first sync after this shipped, or children imported
-                # after the parent's last family fetch).
-                key = t.gh_repo + "#" + str(t.gh_issue_number);
-                pair = sums.get(t.gh_issue_number) or [t.gh_sub_total, t.gh_sub_done];
-                moved = pair[0] != t.gh_sub_total or pair[1] != t.gh_sub_done;
-                t.gh_sub_total = pair[0];
-                t.gh_sub_done = pair[1];
-                if moved and pair[0] == 0 {
-                    # The family dissolved on GitHub: unstamp its children.
-                    for kid_t in linked {
-                        if (
-                            kid_t.gh_parent_repo == t.gh_repo
-                            and kid_t.gh_parent_number == t.gh_issue_number
-                        ) {
-                            kid_t.gh_parent_repo = "";
-                            kid_t.gh_parent_number = 0;
-                        }
-                    }
-                }
-                unstamped = pair[0] > 0 and key not in child_stamped;
-                if (
-                    ((moved and pair[0] > 0) or unstamped)
-                    and family_calls < SUB_ISSUE_CAP
-                ) {
-                    family_calls = family_calls + 1;
-                    kids = gh_request(
-                        token,
-                        "GET",
-                        "/repos/"
-                            + full_name
-                            + "/issues/"
-                            + str(t.gh_issue_number)
-                            + "/sub_issues"
-                    );
-                    if kids["ok"] and isinstance(kids["data"], list) {
-                        for kid in kids["data"] {
-                            if not isinstance(kid, dict) {
-                                continue;
-                            }
-                            child_key = repo_from_api_url(
-                                str(kid.get("repository_url") or "")
-                            )
-                                + "#"
-                                + str(int(kid.get("number") or 0));
-                            if child_key in task_by_key {
-                                task_by_key[child_key].gh_parent_repo = t.gh_repo;
-                                task_by_key[child_key].gh_parent_number = t.gh_issue_number;
-                                child_stamped[key] = True;
-                            }
-                        }
-                    } else {
-                        mark_invalid(c, kids);
-                    }
-                }
-                t.gh_synced_at = stamp;
-            }
-        }
-        # Adopt hand-pasted PR links so they sync too, but only when they
-        # point at a repo this workspace tracks.
+        earliest: dict[str, str] = {};
+        linked_tasks: list[Task] = [];
         for t in [here-->[?:Task]] {
             if t.pr_link and t.pr_number == 0 {
                 guess_repo = repo_from_link(t.pr_link);
@@ -1388,64 +1159,284 @@ walker SyncGithub {
                     }
                 }
             }
+            if not t.gh_repo {
+                continue;
+            }
+            if t.gh_issue_number > 0 {
+                task_by_key[t.gh_repo + "#" + str(t.gh_issue_number)] = t;
+                linked_tasks.append(t);
+                if t.gh_parent_repo and t.gh_parent_number > 0 {
+                    child_stamped[t.gh_parent_repo + "#" + str(t.gh_parent_number)] = True;
+                }
+                if t.gh_synced_at
+                    and (
+                        t.gh_repo not in earliest
+                        or t.gh_synced_at < earliest[t.gh_repo]
+                    ) {
+                    earliest[t.gh_repo] = t.gh_synced_at;
+                }
+            }
+            if t.pr_number > 0 {
+                task_by_pr[t.gh_repo + "#" + str(t.pr_number)] = t;
+            }
         }
-        # PRs are per-task GETs, so they are capped and the stalest go first.
-        pr_tasks = [
-            t
-            for t in [here-->[?:Task]]
-            if t.status != "Done" and t.pr_number > 0 and valid_full_name(t.gh_repo)
-        ];
-        pr_tasks.sort(key=lambda (t: Task) { t.gh_synced_at; });
-        checked = 0;
-        for t in pr_tasks {
-            if checked >= SYNC_PR_CAP {
+        landing = entry_landing(here);
+        done_step = first_done_step(here);
+        done_name = "Done";
+        if done_step {
+            st = resolve(done_step);
+            if isinstance(st, WorkflowStep) {
+                done_name = st.name;
+            }
+        }
+        members = [here-->[?:Member]];
+        peaks: dict[str, float] = {};
+        done_peak = -1.0;
+        pages = 0;
+        scanned = 0;
+        refreshed = 0;
+        auto_added = 0;
+        auto_done_moves = 0;
+        family_calls = 0;
+        has_more = False;
+        failure = "";
+        for full_name in tracked {
+            r = by_name[full_name];
+            # An empty cursor means "from the beginning": right for an
+            # auto-sync backfill, wrong for a repo that only holds imported
+            # tasks. Those start from the earliest sync stamp among their
+            # tasks, since everything older was fresh when it was imported.
+            cursor = r.issue_cursor;
+            if not cursor and not r.auto_sync {
+                if full_name not in earliest {
+                    continue;
+                }
+                cursor = earliest[full_name][:19] + "Z";
+            }
+            attached = [r<-:HasRepo:<-[?:Project]];
+            repo_project = attached[0] if attached else None;
+            page = 1;
+            while True {
+                if pages >= budget or clock() - started > SYNC_SECONDS_BUDGET {
+                    has_more = True;
+                    break;
+                }
+                params: dict[str, any] = {
+                    "state": "all",
+                    "per_page": 100,
+                    "page": page,
+                    "sort": "updated",
+                    "direction": "asc"
+                };
+                if cursor {
+                    params["since"] = cursor;
+                }
+                result = gh_request(
+                    token, "GET", "/repos/" + full_name + "/issues", params
+                );
+                pages = pages + 1;
+                if not result["ok"] {
+                    mark_invalid(c, result);
+                    failure = str(result.get("message") or "GitHub did not answer.");
+                    break;
+                }
+                data = result["data"];
+                if not isinstance(data, list) {
+                    break;
+                }
+                newest = cursor;
+                for item in data {
+                    if not isinstance(item, dict) {
+                        continue;
+                    }
+                    scanned = scanned + 1;
+                    updated = str(item.get("updated_at") or "");
+                    if updated > newest {
+                        newest = updated;
+                    }
+                    number = int(item.get("number") or 0);
+                    if number <= 0 {
+                        continue;
+                    }
+                    key = full_name + "#" + str(number);
+                    if item.get("pull_request") {
+                        if key not in task_by_pr {
+                            continue;
+                        }
+                        pt = task_by_pr[key];
+                        fresh_pr = pr_state_of(item);
+                        if fresh_pr and fresh_pr != pt.pr_state {
+                            pt.pr_state = fresh_pr;
+                            refreshed = refreshed + 1;
+                            # Merged means done, but only for opted-in repos
+                            # and only from statuses where the chip would
+                            # suggest it.
+                            if fresh_pr == "merged"
+                                and full_name in merge_done
+                                and pt.status in MERGE_SUGGEST_STATUSES {
+                                done_peak = auto_done_land(
+                                    here,
+                                    pt,
+                                    done_step,
+                                    done_name,
+                                    "PR merged",
+                                    stamp,
+                                    done_peak
+                                );
+                                auto_done_moves = auto_done_moves + 1;
+                            }
+                        }
+                        pt.gh_synced_at = stamp;
+                        continue;
+                    }
+                    if key not in task_by_key {
+                        if r.auto_sync {
+                            fresh = file_issue_item(
+                                here,
+                                item,
+                                full_name,
+                                number,
+                                repo_project,
+                                members,
+                                landing[0],
+                                landing[1],
+                                done_step,
+                                peaks
+                            );
+                            task_by_key[key] = fresh;
+                            auto_added = auto_added + 1;
+                        }
+                        continue;
+                    }
+                    t = task_by_key[key];
+                    fresh_state = str(item.get("state") or "");
+                    if fresh_state and fresh_state != t.gh_issue_state {
+                        t.gh_issue_state = fresh_state;
+                        refreshed = refreshed + 1;
+                        # A closed issue is terminal on GitHub's side, so an
+                        # opted-in repo moves the card from any open status.
+                        if fresh_state == "closed"
+                            and full_name in merge_done
+                            and t.status != "Done" {
+                            done_peak = auto_done_land(
+                                here,
+                                t,
+                                done_step,
+                                done_name,
+                                "issue closed",
+                                stamp,
+                                done_peak
+                            );
+                            auto_done_moves = auto_done_moves + 1;
+                        }
+                    }
+                    # Sub-issue family: counts ride the stream; the child
+                    # list is refetched when they moved or nothing is stamped
+                    # yet, within the family cap and the time budget.
+                    subs = item.get("sub_issues_summary") or {};
+                    pair = [t.gh_sub_total, t.gh_sub_done];
+                    if isinstance(subs, dict) {
+                        pair = [
+                            int(subs.get("total") or 0),
+                            int(subs.get("completed") or 0)
+                        ];
+                    }
+                    moved = pair[0] != t.gh_sub_total or pair[1] != t.gh_sub_done;
+                    t.gh_sub_total = pair[0];
+                    t.gh_sub_done = pair[1];
+                    if moved and pair[0] == 0 {
+                        for kid_t in linked_tasks {
+                            if kid_t.gh_parent_repo == full_name
+                                and kid_t.gh_parent_number == number {
+                                kid_t.gh_parent_repo = "";
+                                kid_t.gh_parent_number = 0;
+                            }
+                        }
+                    }
+                    unstamped = pair[0] > 0 and key not in child_stamped;
+                    if ((moved and pair[0] > 0) or unstamped)
+                        and family_calls < SUB_ISSUE_CAP
+                        and clock() - started <= SYNC_SECONDS_BUDGET {
+                        family_calls = family_calls + 1;
+                        kids = gh_request(
+                            token,
+                            "GET",
+                            "/repos/"
+                                + full_name
+                                + "/issues/"
+                                + str(number)
+                                + "/sub_issues"
+                        );
+                        if kids["ok"] and isinstance(kids["data"], list) {
+                            for kid in kids["data"] {
+                                if not isinstance(kid, dict) {
+                                    continue;
+                                }
+                                child_key = repo_from_api_url(
+                                    str(kid.get("repository_url") or "")
+                                )
+                                    + "#"
+                                    + str(int(kid.get("number") or 0));
+                                if child_key in task_by_key {
+                                    task_by_key[child_key].gh_parent_repo = full_name;
+                                    task_by_key[child_key].gh_parent_number = number;
+                                    child_stamped[key] = True;
+                                }
+                            }
+                        } else {
+                            mark_invalid(c, kids);
+                        }
+                    }
+                    t.gh_synced_at = stamp;
+                }
+                # The cursor moves only once a page is fully applied, so a
+                # budget stop between pages resumes cleanly. A page that did
+                # not move it (100 items updated the same second) pages on
+                # instead, or `since` would return the same page forever.
+                if newest > cursor {
+                    cursor = newest;
+                    r.issue_cursor = newest;
+                    page = 1;
+                } else {
+                    page = page + 1;
+                }
+                if len(data) < 100 {
+                    break;
+                }
+            }
+            if has_more or failure {
                 break;
             }
-            checked = checked + 1;
-            result = gh_request(
-                token, "GET", "/repos/" + t.gh_repo + "/pulls/" + str(t.pr_number)
-            );
-            if not result["ok"] {
-                mark_invalid(c, result);
-                continue;
-            }
-            item = result["data"];
-            if not isinstance(item, dict) {
-                continue;
-            }
-            fresh_state = pr_state_of(item);
-            if fresh_state and fresh_state != t.pr_state {
-                t.pr_state = fresh_state;
-                # Merged means done, but only for opted-in repos and only
-                # from statuses where the board chip would suggest it.
-                if fresh_state == "merged"
-                    and t.gh_repo in merge_done
-                    and t.status in MERGE_SUGGEST_STATUSES {
-                    done_peak = auto_done_land(
-                        here,
-                        t,
-                        auto_done_step,
-                        auto_done_name,
-                        "PR merged",
-                        stamp,
-                        done_peak
-                    );
-                    auto_done_moves = auto_done_moves + 1;
-                }
-                changed.append(t.to_view());
-            }
-            t.gh_synced_at = stamp;
         }
         if isinstance(c, GithubConnection) {
             c.last_sync_at = stamp;
         }
-        report {
-            "ok": True,
-            "synced": len(linked),
-            "auto_added": auto_added,
-            "auto_done": auto_done_moves,
-            "changed": changed,
-            "last_sync_at": stamp
-        };
+        report sync_summary(
+            [len(linked_tasks), refreshed, auto_added, auto_done_moves, scanned, pages],
+            has_more,
+            failure,
+            stamp
+        );
     }
+}
+
+
+# The one report shape every sync path returns, so the client reads the
+# same keys after an increment, a cooldown skip, or a GitHub failure.
+# `counts` is [linked, refreshed, auto_added, auto_done, scanned, pages].
+def sync_summary(
+    counts: list[int], has_more: bool, failure: str, last_sync_at: str
+) -> dict[str, any] {
+    return {
+        "ok": True,
+        "linked": counts[0],
+        "refreshed": counts[1],
+        "auto_added": counts[2],
+        "auto_done": counts[3],
+        "scanned": counts[4],
+        "pages": counts[5],
+        "has_more": has_more,
+        "failure": failure,
+        "last_sync_at": last_sync_at
+    };
 }

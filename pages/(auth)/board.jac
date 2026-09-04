@@ -60,6 +60,12 @@ glob BLANK_TASK: dict[str, str] = {
      # has been passed to someone else, or has stopped.
      HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
 
+# The auto sync's one-shot lives at module level on purpose: a full page
+# load mounts the board twice and each instance owns its own `has` flags.
+glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
+     AUTO_SYNC_ROUNDS: int = 3,
+     SYNC_ROUNDS: int = 40;
+
 
 def:pub BoardPage -> JsxPage {
     has showAllDone: bool = False,
@@ -94,6 +100,7 @@ def:pub BoardPage -> JsxPage {
         repos: list[RepoView] = [],
         ghConnected: bool = False,
         syncing: bool = False,
+        syncNote: str = "",
         loading: bool = True,
         movesRef: Ref[any] = Ref(),
         fProject: str = "all",
@@ -413,7 +420,7 @@ def:pub BoardPage -> JsxPage {
                                 {if syncing {
                                     <Spinner key="sp"/>
                                 }}
-                                {"Syncing…" if syncing else "Sync GitHub"}
+                                {(syncNote or "Syncing…") if syncing else "Sync GitHub"}
                             </Button>
                         }}
                         <Button onClick={lambda { openCreate(""); }}>New task</Button>
