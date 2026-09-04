@@ -169,6 +169,13 @@ def forget_installation(installation_id: int) {
 }
 
 
+# Monotonic seconds for a walker's time budget; kept here with the other
+# Python imports so models.jac and the client bundle never see `time`.
+def clock -> float {
+    return time.monotonic() as float;
+}
+
+
 # ----------------------------------------------------------------- requests
 
 # GitHub's error bodies can echo request context, so only the status code and

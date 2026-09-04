@@ -16,16 +16,35 @@ impl BoardPage.boot -> None {
 
 
 impl BoardPage.autoSyncGithub(connected: bool) -> None {
-    if not connected or syncing {
+    if not connected {
         return;
     }
+    # One shot per page load, shared by both mounts through the module
+    # glob; a `has` flag cannot arbitrate this, each instance owns its own.
+    d = new(Date);
+    now: float = d.getTime() as float;
+    if now - (AUTO_SYNC["at"] as float) < 60000.0 {
+        return;
+    }
+    AUTO_SYNC["at"] = now;
     syncing = True;
     added: int = 0;
+    more = False;
     try {
-        result = root spawn SyncGithub(auto=True);
-        payload = result.reports[0] if result.reports else None;
-        if payload and payload["ok"] and "auto_added" in payload {
-            added = payload["auto_added"] or 0;
+        rounds = 0;
+        more = True;
+        while more and rounds < AUTO_SYNC_ROUNDS {
+            rounds = rounds + 1;
+            # Only the first increment is the cooldown-guarded auto pass; a
+            # follow-up continues work the server just said is pending.
+            result = root spawn SyncGithub(auto=(rounds == 1), page_budget=2);
+            payload = result.reports[0] if result.reports else None;
+            if not payload or not payload["ok"] {
+                more = False;
+                break;
+            }
+            added = added + int(payload["auto_added"] or 0);
+            more = bool(payload["has_more"]) and not payload["failure"];
         }
         if added > 0 {
             await loadAll();
@@ -36,6 +55,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
                             if added == 1
                             else " issues added from GitHub"
                     )
+                    + (", more on the way" if more else "")
             );
         }
     } except Exception as e {
@@ -45,6 +65,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
     }
     syncing = False;
 }
+
 
 impl BoardPage.loadAll -> None {
     await loadBoard(True);
@@ -785,30 +806,60 @@ impl BoardPage.syncGithub -> None {
         return;
     }
     syncing = True;
+    syncNote = "";
+    linked = 0;
+    added = 0;
+    moved = 0;
+    scanned = 0;
+    failure = "";
+    painted = False;
     try {
-        result = root spawn SyncGithub();
-        payload = result.reports[0] if result.reports else None;
-        if payload and payload["ok"] {
-            # loadAll owns the refresh, including the movesRef fence: an
-            # in-flight drag keeps its optimistic state and the next poll
-            # picks the synced values up.
-            await loadAll();
-            msg: str = "Synced " + str(payload["synced"]) + " tasks";
-            if "auto_added" in payload and payload["auto_added"] {
-                msg = msg + " · " + str(payload["auto_added"]) + " issues added";
+        rounds = 0;
+        more = True;
+        while more and rounds < SYNC_ROUNDS {
+            rounds = rounds + 1;
+            result = root spawn SyncGithub();
+            payload = result.reports[0] if result.reports else None;
+            if not payload or not payload["ok"] {
+                failure = str(payload["message"]) if payload else "Sync failed";
+                break;
             }
-            if "auto_done" in payload and payload["auto_done"] {
-                msg = msg + " · " + str(payload["auto_done"]) + " moved to done";
+            linked = int(payload["linked"] or 0);
+            added = added + int(payload["auto_added"] or 0);
+            moved = moved + int(payload["auto_done"] or 0);
+            scanned = scanned + int(payload["scanned"] or 0);
+            failure = str(payload["failure"] or "");
+            more = bool(payload["has_more"]) and not failure;
+            syncNote = "Syncing… " + str(scanned) + " checked";
+            # Paint the first batch of new cards while the rest streams in.
+            if added > 0 and not painted {
+                painted = True;
+                await loadAll();
+            }
+        }
+        # loadAll owns the refresh, including the movesRef fence: an
+        # in-flight drag keeps its optimistic state and the next poll
+        # picks the synced values up.
+        await loadAll();
+        if failure {
+            toast(failure);
+        } else {
+            msg: str = "Synced " + str(linked) + " tasks";
+            if added > 0 {
+                msg = msg + " · " + str(added) + " issues added";
+            }
+            if moved > 0 {
+                msg = msg + " · " + str(moved) + " moved to done";
             }
             toast(msg);
-        } else {
-            toast(str(payload["message"]) if payload else "Sync failed");
         }
     } except Exception as e {
         toast("Failed to sync with GitHub");
     }
     syncing = False;
+    syncNote = "";
 }
+
 
 impl BoardPage.createIssue(repoId: str) -> None {
     if not editingId or not repoId {
