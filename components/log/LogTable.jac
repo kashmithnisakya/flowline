@@ -1,9 +1,9 @@
-"""The activity feed: rows written automatically by board moves."""
+"""The activity feed: rows written automatically by board moves, plus the
+PM's own entries. `onEdit` adds a per-row pencil (hidden in select mode)."""
 
 import from "@jac/runtime" { Link }
 import from ...models { LogEntry }
-import from ...constants { STATUS_KIND, KIND_COLORS }
-import from ..flowlines.kinds { COUNT_TINT }
+import from ..flowlines.kinds { statusChip }
 import from ..ui.card { Card, CardContent }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
@@ -30,14 +30,6 @@ def linkRef(url: str) -> str {
         }
     }
     return "link";
-}
-
-# The legacy status in the board's colour voice: status -> kind -> colour key
-# -> chip classes (literal strings live in constants/kinds tables).
-def statusTint(status: str) -> str {
-    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
-    color = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
-    return COUNT_TINT[color] if color in COUNT_TINT else COUNT_TINT["slate"];
 }
 
 # "2026-08-10" -> "Mon, Aug 10", matching the DatePicker trigger.
@@ -72,7 +64,8 @@ def:pub LogTable(
     selected: list[str] = [],
     onToggleSelect: Callable[[str], None] = None,
     # The day view already names the day in its header; only the time is news.
-    showDate: bool = True
+    showDate: bool = True,
+    onEdit: Callable[[LogEntry], None] = None
 ) -> JsxElement {
     if len(entries) == 0 {
         return
@@ -96,7 +89,7 @@ def:pub LogTable(
                     </svg>
                     <p className="text-sm font-semibold">{emptyLabel}</p>
                     <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                        Entries are written automatically as tasks move on the board.
+                        Most entries are written automatically as tasks move on the board; Add entry logs work that happened off it.
                     </p>
                     <Link
                         to="/board"
@@ -140,6 +133,9 @@ def:pub LogTable(
                             <TableHead className={HEAD_CLS}>Links</TableHead>
                             <TableHead className={HEAD_CLS}>Status</TableHead>
                             <TableHead className={HEAD_CLS}>Note</TableHead>
+                            {if not selecting and onEdit {
+                                <TableHead key="edit" className="w-8"/>
+                            }}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -251,7 +247,7 @@ def:pub LogTable(
                                         <span
                                             key="st"
                                             className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium "
-                                                + statusTint(en.status)}
+                                                + statusChip(en.status)}
                                         >
                                             {en.status}
                                         </span>
@@ -269,6 +265,35 @@ def:pub LogTable(
                                 >
                                     {en.notes}
                                 </TableCell>
+                                {if not selecting and onEdit {
+                                    <TableCell key="edit" className="w-8">
+                                        <button
+                                            type="button"
+                                            aria-label="Edit entry"
+                                            title="Edit entry"
+                                            className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                                            onClick={lambda { if onEdit {
+                                                onEdit(en);
+                                            }}}
+                                        >
+                                            <svg
+                                                width={14}
+                                                height={14}
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path
+                                                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                                                />
+                                                <path d="m15 5 4 4"/>
+                                            </svg>
+                                        </button>
+                                    </TableCell>
+                                }}
                             </TableRow>
                         }}
                     </TableBody>

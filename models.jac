@@ -69,6 +69,10 @@ node Member {
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
+        # A manager-picked avatar colour (a step colour key). Empty falls
+        # back to the hue hashed from the name, so existing members keep
+        # the colour they already show.
+        color: str = "",
         active: bool = True;
 }
 
@@ -78,7 +82,9 @@ node Repo {
         # The cursor is the newest `updated_at` seen, so each sync asks
         # GitHub only for what changed since; empty means backfill.
         auto_sync: bool = False,
-        issue_cursor: str = "";
+        issue_cursor: str = "",
+        # Merged PR moves the linked card to the done step on sync.
+        auto_done: bool = False;
 }
 
 node Task {
@@ -105,6 +111,12 @@ node Task {
         created_at: str = "",
         updated_at: str = "",
         sort_order: float = 0.0,
+        # Free labels beside the single category; GitHub issue labels land
+        # here at import. Additive with a default, so old rows keep working.
+        tags: list[str] = [],
+        # Effort estimate in the org's own unit (points or hours). 0 means
+        # unestimated; additive with a default, so old rows read as such.
+        estimate: float = 0.0,
         # GitHub identity. issue_link/pr_link stay the human URLs anyone can
         # paste by hand; these are the machine key the API syncs against.
         # gh_issue_number == 0 means "not linked to a real issue".
@@ -170,6 +182,8 @@ node Task {
             id=jid(self),
             title=self.title,
             category=self.category,
+            tags=self.tags,
+            estimate=self.estimate,
             priority=self.priority,
             status=self.status,
             step_id=self.step_id,
@@ -349,6 +363,8 @@ obj TaskView {
         project_id: str,
         project_name: str,
         step_id: str = "",
+        tags: list[str] = [],
+        estimate: float = 0.0,
         milestone_id: str = "",
         milestone_name: str = "",
         gh_repo: str = "",
@@ -435,6 +451,7 @@ obj MemberView {
         email: str,
         github_username: str,
         tags: list[str],
+        color: str,
         active: bool,
         project_ids: list[str],
         project_names: list[str];
@@ -445,7 +462,8 @@ obj RepoView {
         full_name: str,
         project_id: str,
         project_name: str,
-        auto_sync: bool = False;
+        auto_sync: bool = False,
+        auto_done: bool = False;
 }
 
 obj RoleView {
@@ -539,70 +557,96 @@ def repo_view(r: Repo) -> RepoView {
         full_name=r.full_name,
         project_id=project_id,
         project_name=project_name,
-        auto_sync=r.auto_sync
+        auto_sync=r.auto_sync,
+        auto_done=r.auto_done
     );
 }
 
 
-# Views for a page of tasks, with the assignee and project links gathered by
-# walking IN from each Member and Project once. A per-task hop is a separate
-# traversal and they dominate everything at list sizes: 50 rows cost three
-# traversals each, while this costs one per member plus one per project no
-# matter how long the page is.
-def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
-    wanted: list[str] = [];
-    for t in rows {
-        wanted.append(jid(t));
+# Task links gathered by walking IN from each Member, Project and Milestone
+# once. A per-task hop is a separate traversal and dominates at list sizes;
+# this costs one walk per holder no matter how many tasks are involved.
+obj TaskLinks {
+    has assignee_ids: dict[str, list[str]] = {},
+        assignee_names: dict[str, list[str]] = {},
+        project_id: dict[str, str] = {},
+        project_name: dict[str, str] = {},
+        milestone_id: dict[str, str] = {},
+        milestone_name: dict[str, str] = {};
+
+    # Comma-joined assignee names for one task, "" when unassigned.
+    def named(task_id: str) -> str {
+        return ", ".join(self.assignee_names[task_id])
+            if task_id in self.assignee_names
+            else "";
     }
-    ids: dict[str, list[str]] = {};
-    names: dict[str, list[str]] = {};
+
+    # Project name for one task, "" when the task is unfiled.
+    def project_of(task_id: str) -> str {
+        return self.project_name[task_id] if task_id in self.project_name else "";
+    }
+}
+
+# One walk IN from every Member, Project and Milestone. Callers that need both
+# views and tallies gather this once and pass it around.
+def task_links(holder: Root) -> TaskLinks {
+    links = TaskLinks();
     for m in [holder-->[?:Member]] {
         who = jid(m);
         for t in [m<-:AssignedTo:<-] {
             key = jid(t);
-            if key not in ids {
-                ids[key] = [];
-                names[key] = [];
+            if key not in links.assignee_ids {
+                links.assignee_ids[key] = [];
+                links.assignee_names[key] = [];
             }
-            ids[key].append(who);
-            names[key].append(m.name);
+            links.assignee_ids[key].append(who);
+            links.assignee_names[key].append(m.name);
         }
     }
-    proj_id: dict[str, str] = {};
-    proj_name: dict[str, str] = {};
     for p in [holder-->[?:Project]] {
         pid = jid(p);
         for t in [p<-:ForProject:<-] {
             key = jid(t);
-            proj_id[key] = pid;
-            proj_name[key] = p.name;
+            links.project_id[key] = pid;
+            links.project_name[key] = p.name;
         }
     }
-    stone_id: dict[str, str] = {};
-    stone_name: dict[str, str] = {};
     for ms in [holder-->[?:Milestone]] {
         sid = jid(ms);
         for t in [ms<-:InMilestone:<-] {
             key = jid(t);
-            stone_id[key] = sid;
-            stone_name[key] = ms.title;
+            links.milestone_id[key] = sid;
+            links.milestone_name[key] = ms.title;
         }
     }
+    return links;
+}
+
+
+# Views for a page of tasks from links already gathered.
+def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
     views: list[TaskView] = [];
     for t in rows {
         key = jid(t);
         views.append(
             t.view_with(
-                ids[key] if key in ids else [],
-                names[key] if key in names else [],
-                proj_id[key] if key in proj_id else "",
-                proj_name[key] if key in proj_name else "",
-                stone_id[key] if key in stone_id else "",
-                stone_name[key] if key in stone_name else ""
+                links.assignee_ids[key] if key in links.assignee_ids else [],
+                links.assignee_names[key] if key in links.assignee_names else [],
+                links.project_id[key] if key in links.project_id else "",
+                links.project_name[key] if key in links.project_name else "",
+                links.milestone_id[key] if key in links.milestone_id else "",
+                links.milestone_name[key] if key in links.milestone_name else ""
             )
         );
     }
     return views;
+}
+
+
+# Views for a page of tasks, gathering the links itself. Use `views_from` when
+# the caller already holds a TaskLinks.
+def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
+    return views_from(task_links(holder), rows);
 }
 
 
@@ -654,6 +698,7 @@ def member_view(m: Member) -> MemberView {
         email=m.email,
         github_username=m.github_username,
         tags=m.tags,
+        color=m.color,
         active=m.active,
         project_ids=ids,
         project_names=names

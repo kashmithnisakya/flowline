@@ -13,7 +13,7 @@ glob STATUSES: list[str] = [
      ],
      ISSUE_STATES: list[str] = ["open", "closed", "all"];
 
-import from ...models { StepView, GhIssueRow }
+import from ...models { Project, StepView, GhIssueRow }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.card { Card, CardContent }
@@ -37,6 +37,8 @@ def:pub IssueImportTable(
     state: str,
     selected: list[int],
     projectName: str,
+    projects: list[Project],
+    projectId: str,
     status: str,
     steps: list[StepView],
     stepId: str,
@@ -44,6 +46,7 @@ def:pub IssueImportTable(
     query: str,
     onState: Callable[[str], None],
     onToggle: Callable[[int], None],
+    onProject: Callable[[str], None],
     onStatus: Callable[[str], None],
     onStep: Callable[[str], None],
     onImport: Callable[[], None],
@@ -238,9 +241,29 @@ def:pub IssueImportTable(
                     >
                         <span className="inline-flex items-center gap-2">
                             <span className="text-muted-foreground">Into</span>
-                            <span className="font-medium">
-                                {projectName or "no project"}
-                            </span>
+                            {if projectName {
+                                <span key="projname" className="font-medium">
+                                    {projectName}
+                                </span>
+                            } else {
+                                <Select
+                                    key="projsel"
+                                    value={projectId}
+                                    onValueChange={onProject}
+                                >
+                                    <SelectTrigger className="h-8 w-44">
+                                        <SelectValue placeholder="Project"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No project</SelectItem>
+                                        {for p in projects {
+                                            <SelectItem key={jid(p)} value={jid(p)}>
+                                                {p.name}
+                                            </SelectItem>
+                                        }}
+                                    </SelectContent>
+                                </Select>
+                            } }
                         </span>
                         <span className="inline-flex items-center gap-2">
                             <span className="text-muted-foreground">as</span>
@@ -301,7 +324,7 @@ def:pub IssueImportTable(
                 }}
                 {if len(rows) > 0 {
                     <p key="importnote" className="text-xs text-muted-foreground">
-                        Imports land in the repo's own project, chosen when attaching (change it under Workspace → Projects). A closed issue always lands in your done step, whichever step you pick. Assignees are matched to roster members by GitHub username, and anyone without a match is left off.
+                        Imports land in the repo's own project, chosen when attaching (change it under Workspace → Projects); a repo without one picks a destination right here. A closed issue always lands in your done step, whichever step you pick. Assignees are matched to roster members by GitHub username, and anyone without a match is left off.
                     </p>
                 }}
             </CardContent>

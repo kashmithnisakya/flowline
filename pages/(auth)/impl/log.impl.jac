@@ -49,14 +49,26 @@ impl DailyLogPage.loadWeek -> None {
             }
             pageNo = pageNo + 1;
         }
-        # Roster only on the first load; it does not change with the week.
+        # Roster and projects only on the first load; they do not change
+        # with the week. The full member views feed the entry dialog.
         if len(memberNames) == 0 {
             mResult = root spawn ListMembers();
             fetched = mResult.reports[0] if mResult.reports else [];
-            memberNames = [
-                m.name
+            active = [
+                m
                 for m in fetched
                 if m.active
+            ];
+            members = active;
+            memberNames = [m.name for m in active];
+        }
+        if len(projects) == 0 {
+            pResult = root spawn ListProjects();
+            allProjects = pResult.reports[0] if pResult.reports else [];
+            projects = [
+                p
+                for p in allProjects
+                if p.active
             ];
         }
     } except Exception as e {
@@ -101,4 +113,114 @@ impl DailyLogPage.deleteSelected -> None {
     } except Exception as e {
         toast("Failed to delete the selected entries");
     }
+}
+
+impl DailyLogPage.openNewEntry -> None {
+    entryEditing = False;
+    entryId = "";
+    entryForm = {
+        "date": selectedDate or todayIso(),
+        "member": "",
+        "member_name": "",
+        "activity": "",
+        "project": "none",
+        "category": "",
+        "status": "none",
+        "issue_link": "",
+        "pr_link": "",
+        "notes": "",
+        "repo": ""
+    };
+    entryOpen = True;
+}
+
+impl DailyLogPage.openEditEntry(en: LogEntry) -> None {
+    entryEditing = True;
+    entryId = jid(en);
+    # Prefill every field: UpdateLogEntry overwrites the whole row, so an
+    # absent value would blank real data on save.
+    entryForm = {
+        "date": en.date,
+        "member": "",
+        "member_name": en.member_name,
+        "activity": en.activity,
+        "project": "none",
+        "category": en.category,
+        "status": en.status or "none",
+        "issue_link": en.issue_link,
+        "pr_link": en.pr_link,
+        "notes": en.notes,
+        "repo": en.repo
+    };
+    entryOpen = True;
+}
+
+impl DailyLogPage.entryField(key: str, value: str) -> None {
+    # A computed key does not survive a dict-literal spread; go through a local.
+    updated = {** entryForm};
+    updated[key] = value;
+    entryForm = updated;
+}
+
+impl DailyLogPage.saveEntry -> None {
+    if not entryForm["activity"].strip() {
+        return;
+    }
+    chosenStatus = "" if entryForm["status"] == "none" else entryForm["status"];
+    try {
+        if entryEditing {
+            entrySaving = True;
+            uResult = root spawn UpdateLogEntry(
+                entry_id=entryId,
+                activity=entryForm["activity"].strip(),
+                category=entryForm["category"],
+                repo=entryForm["repo"],
+                issue_link=entryForm["issue_link"],
+                pr_link=entryForm["pr_link"],
+                status=chosenStatus,
+                notes=entryForm["notes"]
+            );
+            # Patch the row in place from the walker's report: an edit touches
+            # LogEntry, which does not invalidate the week's Root-keyed reader
+            # cache, so a refetch here would render the pre-edit values.
+            updatedRow = uResult.reports[0] if uResult.reports else None;
+            if updatedRow {
+                entries = [(updatedRow if jid(e) == entryId else e) for e in entries];
+            }
+            toast("Entry updated");
+        } else {
+            if not entryForm["member"] {
+                return;
+            }
+            entrySaving = True;
+            root spawn LogActivity(
+                date=entryForm["date"],
+                member_id=entryForm["member"],
+                activity=entryForm["activity"].strip(),
+                project_id=(
+                    "" if entryForm["project"] == "none" else entryForm["project"]
+                ),
+                category=entryForm["category"],
+                issue_link=entryForm["issue_link"],
+                pr_link=entryForm["pr_link"],
+                status=chosenStatus,
+                notes=entryForm["notes"]
+            );
+            toast("Entry added");
+        }
+        entryOpen = False;
+        # A new entry can land outside the loaded week; jumping selectedDate
+        # there lets the [selectedDate] effect fetch and show that day. An
+        # edit already patched `entries` and must not refetch over it.
+        if not entryEditing {
+            if entryForm["date"] != selectedDate {
+                selectedDate = entryForm["date"];
+            } else {
+                await loadWeek();
+            }
+        }
+    } except Exception as e {
+        toast("Could not save the entry");
+    }
+    entrySaving = False;
 }

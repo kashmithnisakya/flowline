@@ -24,12 +24,12 @@ impl Shell.toggleTheme -> None {
     goDark = not themeDark;
     setThemePref("dark" if goDark else "light");
     themeDark = goDark;
-    themePref = "dark" if goDark else "light";
+    themeChoice = "dark" if goDark else "light";
 }
 
 impl Shell.pickTheme(pref: str) -> None {
     setThemePref(pref);
-    themePref = pref;
+    themeChoice = pref;
     doc: any = document;
     themeDark = bool(doc.documentElement.classList.contains("dark"));
 }

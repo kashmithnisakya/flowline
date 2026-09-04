@@ -9,11 +9,10 @@ import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleV
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
-import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.roster { ListMembers, ListRepos, ListRoles }
+import from ...walkers.board { BoardSnapshot }
+import from ...walkers.projects { AssignToProject }
 import from ...walkers.tasks {
     ListTasks,
-    TaskCounts,
     GetTask,
     CreateTask,
     UpdateTask,
@@ -21,24 +20,27 @@ import from ...walkers.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.flowlines { GetFlowLine }
-import from ...walkers.github { GithubStatus, SyncGithub, CreateIssueFromTask }
+import from ...walkers.github { SyncGithub, CreateIssueFromTask }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.ui.button { Button }
+import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
+import from ...lib.utils { fmtEstimate, parseEstimate }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
          "category": "",
+         "estimate": "",
+         "tags": "",
          "project": "none",
          "priority": "Medium",
          "status": "Backlog",
@@ -58,6 +60,12 @@ glob BLANK_TASK: dict[str, str] = {
      # Step kinds whose moves open the optional handoff dialog: work that
      # has been passed to someone else, or has stopped.
      HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
+
+# The auto sync's one-shot lives at module level on purpose: a full page
+# load mounts the board twice and each instance owns its own `has` flags.
+glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
+     AUTO_SYNC_ROUNDS: int = 3,
+     SYNC_ROUNDS: int = 40;
 
 
 def:pub BoardPage -> JsxPage {
@@ -82,7 +90,7 @@ def:pub BoardPage -> JsxPage {
         # The working set is fetched in pages; past the bound the board
         # says so rather than quietly showing part of the workspace.
         workingTruncated: bool = False,
-        # Distinct categories over the whole history, from TaskCounts.
+        # Distinct categories over the whole history, from the snapshot.
         knownCategories: list[str] = [],
         members: list[MemberView] = [],
         # The org's roles, for the lane order and colours in the task
@@ -93,11 +101,19 @@ def:pub BoardPage -> JsxPage {
         repos: list[RepoView] = [],
         ghConnected: bool = False,
         syncing: bool = False,
+        syncNote: str = "",
         loading: bool = True,
         movesRef: Ref[any] = Ref(),
         fProject: str = "all",
         fAssignee: str = "All",
         fCategory: str = "All",
+        # A tag the card must carry, or "All"; the estimate filter is "All",
+        # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
+        fTag: str = "All",
+        fEstimate: str = "All",
+        # Live search over the loaded board: matches a task title or its
+        # issue/PR number, so one box covers "payment" and "412".
+        boardQuery: str = "",
         hideDone: bool = False,
         dialogOpen: bool = False,
         editingId: str = "",
@@ -164,12 +180,13 @@ def:pub BoardPage -> JsxPage {
         [pendingTaskId, loading, len(tasks)]
     );
 
-    # Live-ish board: refetch on tab focus plus a 60s poll. One manual
+    # Live-ish board: refetch on tab focus plus a 60s poll, both through
+    # refreshTasks -- one walker call, no roster refetch. One manual
     # useEffect so the listener/interval handles are visible to the cleanup
     # (entry/exit abilities compile to separate closures).
     useEffect(
         lambda {
-            onFocus = lambda { loadAll(); };
+            onFocus = lambda { refreshTasks(); };
             window.addEventListener("focus", onFocus);
             # The assistant dock lives in the layout, not in this tree, so an
             # applied proposal announces itself with an event rather than leaving
@@ -181,7 +198,7 @@ def:pub BoardPage -> JsxPage {
             onNewTask = lambda { pendingTaskId = "new"; };
             window.addEventListener("standup:open-task", onOpenTask);
             window.addEventListener("standup:new-task", onNewTask);
-            timer = window.setInterval(lambda { loadAll(); }, 60000);
+            timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("standup:refresh", onFocus);
@@ -194,7 +211,12 @@ def:pub BoardPage -> JsxPage {
     );
 
     async def boot -> None;
+    # loadAll refreshes everything (boot, and every write that can touch the
+    # roster); refreshTasks is the poll's path and skips the workspace lists,
+    # which are edited on other pages. Both run through loadBoard.
     async def loadAll -> None;
+    async def refreshTasks -> None;
+    async def loadBoard(withWorkspace: bool) -> dict;
     async def retryLoad -> None;
     # Older Done history: page 1 replaces, later pages append; any filter
     # change or task write starts over so the rows never go stale.
@@ -216,7 +238,10 @@ def:pub BoardPage -> JsxPage {
     def columnKeyOf(t: TaskView) -> str;
     def mappedStatus(key: str) -> str;
     def doneColumnKey -> str;
-    async def moveTo(taskId: str, columnKey: str) -> None;
+    async def moveTo(
+        taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+    ) -> None;
+    def moveBeside(draggedId: str, targetId: str, ahead: bool) -> None;
     def arrowMove(t: TaskView, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
@@ -233,7 +258,6 @@ def:pub BoardPage -> JsxPage {
     async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
     async def createIssue(repoId: str) -> None;
-    def markDoneFromPr(taskId: str) -> None;
 
     activeMembers = [
         m
@@ -256,6 +280,48 @@ def:pub BoardPage -> JsxPage {
         }
     }
     allCategories.sort();
+    # Tags for the filter dropdown, from the loaded set (unlike categories,
+    # tags are not carried in the snapshot; the working set is enough to
+    # filter what the board shows).
+    allTags: list[str] = [];
+    for t in tasks + olderDone {
+        for tg in t.tags {
+            if tg not in allTags {
+                allTags.append(tg);
+            }
+        }
+    }
+    allTags.sort();
+
+    # Normalised search query, matched against the title and the issue/PR
+    # numbers, so typing digits finds "#412" and typing words finds a title.
+    bq = boardQuery.strip().lower();
+
+    # One filter predicate for both the working set and the older-Done list,
+    # so a new condition is added once. hideDone and the older-list's own
+    # showAllDone guard stay at the call sites, since they differ per list.
+    def matches(t: TaskView) -> bool {
+        # The issue/PR number lives in the synced numeric field OR the tail of
+        # a hand-pasted link, so search the number wherever it actually is.
+        issueTail = t.issue_link.split("/")[-1] if t.issue_link else "";
+        prTail = t.pr_link.split("/")[-1] if t.pr_link else "";
+        hit = not bq
+            or bq in t.title.lower()
+            or (t.gh_issue_number > 0 and bq in str(t.gh_issue_number))
+            or (t.pr_number > 0 and bq in str(t.pr_number))
+            or (bool(issueTail) and bq in issueTail.lower())
+            or (bool(prTail) and bq in prTail.lower());
+        return hit
+            and (fProject == "all" or t.project_id == fProject)
+            and (fAssignee == "All" or fAssignee in t.assignee_ids)
+            and (fCategory == "All" or t.category == fCategory)
+            and (fTag == "All" or fTag in t.tags)
+            and (
+                fEstimate == "All"
+                or (fEstimate == "yes" and t.estimate > 0.0)
+                or (fEstimate == "no" and t.estimate <= 0.0)
+            );
+    }
 
     colKeys = columnKeys();
     doneKey = doneColumnKey();
@@ -272,10 +338,7 @@ def:pub BoardPage -> JsxPage {
     visible = [
         t
         for t in tasks
-        if (fProject == "all" or t.project_id == fProject)
-            and (fAssignee == "All" or fAssignee in t.assignee_ids)
-            and (fCategory == "All" or t.category == fCategory)
-            and (not hideDone or t.status != "Done")
+        if matches(t) and (not hideDone or t.status != "Done")
     ];
     # Everything Done in the working set is recent by construction (the
     # server's cutoff); older history is its own list, fetched under the
@@ -289,11 +352,7 @@ def:pub BoardPage -> JsxPage {
     olderShown = [
         t
         for t in olderDone
-        if showAllDone
-            and not hideDone
-            and (fProject == "all" or t.project_id == fProject)
-            and (fAssignee == "All" or fAssignee in t.assignee_ids)
-            and (fCategory == "All" or t.category == fCategory)
+        if showAllDone and not hideDone and matches(t)
     ];
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
@@ -351,7 +410,40 @@ def:pub BoardPage -> JsxPage {
                         <Skeleton className="h-8 w-24"/>
                     </div>
                 } elif not noFlowLine and not nothingLoaded {
-                    <div key="tools" className="flex items-center gap-2">
+                    <div key="tools" className="flex flex-wrap items-center gap-2">
+                        <div key="search" className="relative">
+                            <Input
+                                className="h-8 w-52 pr-7"
+                                placeholder="Search title or #issue"
+                                aria-label="Search the board"
+                                value={boardQuery}
+                                onChange={lambda (e: any) { boardQuery = e.target.value; }}
+                            />
+                            {if boardQuery {
+                                <button
+                                    key="clear"
+                                    type="button"
+                                    aria-label="Clear search"
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                    onClick={lambda { boardQuery = ""; }}
+                                >
+                                    <svg
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M18 6 6 18"/>
+                                        <path d="m6 6 12 12"/>
+                                    </svg>
+                                </button>
+                            }}
+                        </div>
                         <FilterBar
                             projects={activeProjects}
                             members={activeMembers}
@@ -364,6 +456,11 @@ def:pub BoardPage -> JsxPage {
                             onCategory={setCategoryFilter}
                             onHideDone={lambda { hideDone = not hideDone; }}
                             categories={allCategories}
+                            tags={allTags}
+                            tag={fTag}
+                            estimate={fEstimate}
+                            onTag={lambda (v: str) { fTag = v; }}
+                            onEstimate={lambda (v: str) { fEstimate = v; }}
                         />
                         {if ghConnected {
                             <Button
@@ -375,7 +472,7 @@ def:pub BoardPage -> JsxPage {
                                 {if syncing {
                                     <Spinner key="sp"/>
                                 }}
-                                {"Syncing…" if syncing else "Sync GitHub"}
+                                {(syncNote or "Syncing…") if syncing else "Sync GitHub"}
                             </Button>
                         }}
                         <Button onClick={lambda { openCreate(""); }}>New task</Button>
@@ -536,6 +633,7 @@ def:pub BoardPage -> JsxPage {
                             onOpen={openEdit}
                             onArrowMove={arrowMove}
                             onDropTask={moveTo}
+                            onDropBeside={moveBeside}
                             prevKey={colKeys[ci - 1] if ci > 0 else ""}
                             prevLabel={columnLabel(colKeys[ci - 1]) if ci > 0 else ""}
                             nextKey={colKeys[ci + 1] if ci < len(colKeys) - 1 else ""}

@@ -13,12 +13,24 @@ import from models {
     AssignedTo,
     ForProject,
     OnProject,
+    TaskLinks,
+    task_links,
     hydrate_views,
+    views_from,
     resolve,
     on_attached,
     owned
 }
-import from walkers.util { now_iso, today_iso, shift_day, page_bounds }
+import from walkers.util {
+    now_iso,
+    today_iso,
+    shift_day,
+    page_bounds,
+    clean_tags,
+    done_cutoff,
+    is_older,
+    order_working
+}
 import from walkers.log { record_task_event, sync_task_links }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
@@ -74,6 +86,58 @@ def title_rank(title: str, needle: str) -> int {
     return 2;
 }
 
+# The needs-attention rule: an open task that is Blocked or already past due.
+def needs_attention(t: Task, today: str) -> bool {
+    if t.status == "Done" {
+        return False;
+    }
+    return t.status == "Blocked" or bool(t.due_date and t.due_date < today);
+}
+
+
+# Blocked first, then soonest due date; undated last. Callers sort by jid
+# first, so ties stay deterministic across two requests.
+def order_attention(rows: list[Task]) {
+    rows.sort(key=lambda (t: Task) { t.due_date or "9999-12-31"; });
+    rows.sort(key=lambda (t: Task) { 0 if t.status == "Blocked" else 1; });
+}
+
+
+glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2};
+
+# The table view's user-chosen column sort, over node fields only so it runs
+# on the full match set before paging. Priority sorts by urgency; undated
+# tasks sort last on the due column. The jid pass underneath keeps ties
+# deterministic across pages.
+def sort_tasks(rows: list[Task], field: str, reverse: bool) {
+    rows.sort(key=lambda (t: Task) { jid(t); });
+    if field == "title" {
+        rows.sort(key=lambda (t: Task) { t.title.lower(); }, reverse=reverse);
+    } elif field == "priority" {
+        rows.sort(
+            key=lambda (t: Task) { PRIORITY_RANK[t.priority]
+                if t.priority in PRIORITY_RANK
+                else 1; },
+            reverse=reverse
+        );
+    } elif field == "status" {
+        rows.sort(key=lambda (t: Task) { t.status; }, reverse=reverse);
+    } elif field == "category" {
+        rows.sort(key=lambda (t: Task) { t.category.lower(); }, reverse=reverse);
+    } elif field == "estimate" {
+        rows.sort(key=lambda (t: Task) { t.estimate; }, reverse=reverse);
+    } elif field == "due" {
+        rows.sort(
+            key=lambda (t: Task) { t.due_date or "9999-12-31"; }, reverse=reverse
+        );
+    } elif field == "created" {
+        rows.sort(key=lambda (t: Task) { t.created_at; }, reverse=reverse);
+    } else {
+        rows.sort(key=lambda (t: Task) { t.updated_at; }, reverse=reverse);
+    }
+}
+
+
 walker ListTasks {
     """One page of tasks. `scope` picks the working set the board renders
     ("working": open plus Done touched in the last `done_days`), the history
@@ -91,6 +155,13 @@ walker ListTasks {
         project_id: str = "",
         assignee_id: str = "",
         category: str = "",
+        # A tag the task must carry; "estimated" is "" (any), "yes" (has an
+        # estimate) or "no" (unestimated).
+        tag: str = "",
+        estimated: str = "",
+        # The table view's column sort; empty keeps the scope's own order.
+        sort: str = "",
+        sort_dir: str = "asc",
         done_days: int = 7,
         page: int = 1,
         page_size: int = 0,
@@ -100,9 +171,7 @@ walker ListTasks {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         needle = self.q.lower().strip();
         today = today_iso();
-        cutoff = shift_day(today_iso(), 0 - self.done_days)
-            if self.done_days > 0
-            else "";
+        cutoff = done_cutoff(self.done_days);
         picked: list[Task] = [];
         left_out: list[Task] = [];
         for t in [here-->[?:Task]] {
@@ -112,8 +181,17 @@ walker ListTasks {
             if self.category and t.category != self.category {
                 continue;
             }
+            if self.tag and self.tag not in t.tags {
+                continue;
+            }
+            if self.estimated == "yes" and t.estimate <= 0.0 {
+                continue;
+            }
+            if self.estimated == "no" and t.estimate > 0.0 {
+                continue;
+            }
             done = t.status == "Done";
-            old = done and bool(cutoff) and t.updated_at[:10] < cutoff;
+            old = is_older(t, cutoff);
             if self.scope == "working" {
                 if old {
                     left_out.append(t);
@@ -128,10 +206,7 @@ walker ListTasks {
                     continue;
                 }
             } elif self.scope == "attention" {
-                if done {
-                    continue;
-                }
-                if t.status != "Blocked" and not (t.due_date and t.due_date < today) {
+                if not needs_attention(t, today) {
                     continue;
                 }
             }
@@ -148,17 +223,19 @@ walker ListTasks {
         # what makes ties deterministic across two requests: without it a
         # row can sit on page 1 for one call and page 2 for the next.
         picked.sort(key=lambda (t: Task) { jid(t); });
-        if needle {
+        if self.sort {
+            # An explicit column sort wins over the scope default and the
+            # search rank: the table user asked for this order.
+            sort_tasks(picked, self.sort, self.sort_dir == "desc");
+        } elif needle {
             picked.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
             picked.sort(key=lambda (t: Task) { title_rank(t.title, needle); });
         } elif self.scope == "older" or self.scope == "done" {
             picked.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
         } elif self.scope == "attention" {
-            # Blocked first, then the soonest due date; undated last.
-            picked.sort(key=lambda (t: Task) { t.due_date or "9999-12-31"; });
-            picked.sort(key=lambda (t: Task) { 0 if t.status == "Blocked" else 1; });
+            order_attention(picked);
         } else {
-            picked.sort(key=lambda (t: Task) { t.sort_order; });
+            order_working(picked);
         }
         report TaskPage(
             rows=hydrate_views(here, picked[start:end]),
@@ -198,106 +275,130 @@ walker ListTasks {
     }
 }
 
+# Every Overview number, from tasks already gathered. Tallies attribute each
+# task through `links`, so the per-holder edges are read once for the whole
+# call rather than once per tally.
+def task_totals(
+    holder: Root, tasks: list[Task], links: TaskLinks, monday: str
+) -> TaskTotals {
+    week0 = monday if len(monday) >= 10 else today_iso();
+    today = today_iso();
+    # Week bounds up front: shift_day parses a date, so calling it per task
+    # would be four parses per row.
+    starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
+    ends = [shift_day(starts[i], 7) for i in range(4)];
+    by_week = [0, 0, 0, 0];
+    open_count = 0;
+    overdue_count = 0;
+    blocked_count = 0;
+    cats: list[str] = [];
+    by_project: dict[str, list[Task]] = {};
+    by_member: dict[str, list[Task]] = {};
+    for t in tasks {
+        key = jid(t);
+        pid = links.project_id[key] if key in links.project_id else "";
+        if pid {
+            if pid not in by_project {
+                by_project[pid] = [];
+            }
+            by_project[pid].append(t);
+        }
+        for who in (links.assignee_ids[key] if key in links.assignee_ids else []) {
+            if who not in by_member {
+                by_member[who] = [];
+            }
+            by_member[who].append(t);
+        }
+        if t.category and t.category not in cats {
+            cats.append(t.category);
+        }
+        if t.status != "Done" {
+            open_count = open_count + 1;
+            if t.status == "Blocked" {
+                blocked_count = blocked_count + 1;
+            }
+            if t.due_date and t.due_date < today {
+                overdue_count = overdue_count + 1;
+            }
+            continue;
+        }
+        day = t.updated_at[:10];
+        for i in range(4) {
+            if day >= starts[i] and day < ends[i] {
+                by_week[i] = by_week[i] + 1;
+            }
+        }
+    }
+    tallies: list[ProjectTally] = [];
+    for pr in [holder-->[?:Project]] {
+        pid = jid(pr);
+        total = 0;
+        done = 0;
+        blocked = 0;
+        active = 0;
+        for t in (by_project[pid] if pid in by_project else []) {
+            total = total + 1;
+            if t.status == "Done" {
+                done = done + 1;
+            } elif t.status == "Blocked" {
+                blocked = blocked + 1;
+            } elif t.status in ACTIVE_STATUSES {
+                active = active + 1;
+            }
+        }
+        tallies.append(
+            ProjectTally(
+                project_id=pid, total=total, done=done, blocked=blocked, active=active
+            )
+        );
+    }
+    people: list[MemberTally] = [];
+    for m in [holder-->[?:Member]] {
+        mid = jid(m);
+        mine_open = 0;
+        mine_done = 0;
+        for t in (by_member[mid] if mid in by_member else []) {
+            if t.status != "Done" {
+                mine_open = mine_open + 1;
+            } elif t.updated_at[:10] >= week0 {
+                mine_done = mine_done + 1;
+            }
+        }
+        people.append(
+            MemberTally(member_id=mid, open=mine_open, done_in_week=mine_done)
+        );
+    }
+    cats.sort();
+    return TaskTotals(
+        open=open_count,
+        overdue=overdue_count,
+        blocked=blocked_count,
+        done_by_week=by_week,
+        projects=tallies,
+        members=people,
+        categories=cats
+    );
+}
+
+
 walker TaskCounts {
     """The Overview's numbers over the whole history: open tasks, Done per
     week for the four weeks ending in `monday`'s week, and total/done per
-    project. Per-project counts walk in from each Project, so the cost is a
-    handful of edge reads rather than one hop per task."""
+    project."""
     has monday: str = "",
         reports: list[TaskTotals] = [];
 
     can count with Root entry {
-        week0 = self.monday if len(self.monday) >= 10 else today_iso();
-        today = today_iso();
-        # Week bounds up front: shift_day parses a date, so calling it per
-        # task would be four parses per row.
-        starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
-        ends = [shift_day(starts[i], 7) for i in range(4)];
-        by_week = [0, 0, 0, 0];
-        open_count = 0;
-        overdue_count = 0;
-        blocked_count = 0;
-        cats: list[str] = [];
-        for t in [here-->[?:Task]] {
-            if t.category and t.category not in cats {
-                cats.append(t.category);
-            }
-            if t.status != "Done" {
-                open_count = open_count + 1;
-                if t.status == "Blocked" {
-                    blocked_count = blocked_count + 1;
-                }
-                if t.due_date and t.due_date < today {
-                    overdue_count = overdue_count + 1;
-                }
-                continue;
-            }
-            day = t.updated_at[:10];
-            for i in range(4) {
-                if day >= starts[i] and day < ends[i] {
-                    by_week[i] = by_week[i] + 1;
-                }
-            }
-        }
-        # Per project and per member, walking IN from each holder: a handful
-        # of edge reads instead of one hop per task.
-        tallies: list[ProjectTally] = [];
-        for pr in [here-->[?:Project]] {
-            total = 0;
-            done = 0;
-            blocked = 0;
-            active = 0;
-            for t in [pr<-:ForProject:<-] {
-                total = total + 1;
-                if t.status == "Done" {
-                    done = done + 1;
-                } elif t.status == "Blocked" {
-                    blocked = blocked + 1;
-                } elif t.status in ACTIVE_STATUSES {
-                    active = active + 1;
-                }
-            }
-            tallies.append(
-                ProjectTally(
-                    project_id=jid(pr),
-                    total=total,
-                    done=done,
-                    blocked=blocked,
-                    active=active
-                )
-            );
-        }
-        people: list[MemberTally] = [];
-        for m in [here-->[?:Member]] {
-            mine_open = 0;
-            mine_done = 0;
-            for t in [m<-:AssignedTo:<-] {
-                if t.status != "Done" {
-                    mine_open = mine_open + 1;
-                } elif t.updated_at[:10] >= week0 {
-                    mine_done = mine_done + 1;
-                }
-            }
-            people.append(
-                MemberTally(member_id=jid(m), open=mine_open, done_in_week=mine_done)
-            );
-        }
-        cats.sort();
-        report TaskTotals(
-            open=open_count,
-            overdue=overdue_count,
-            blocked=blocked_count,
-            done_by_week=by_week,
-            projects=tallies,
-            members=people,
-            categories=cats
-        );
+        report task_totals(here, [here-->[?:Task]], task_links(here), self.monday);
     }
 }
+
 
 walker CreateTask {
     has title: str,
         category: str = "",
+        tags: list[str] = [],
+        estimate: float = 0.0,
         priority: str = "Medium",
         status: str = "Backlog",
         step_id: str = "",
@@ -334,6 +435,8 @@ walker CreateTask {
         fresh = here ++> Task(
             title=self.title.strip(),
             category=self.category,
+            tags=clean_tags(self.tags),
+            estimate=self.estimate,
             priority=self.priority,
             status=col,
             step_id=step,
@@ -377,6 +480,8 @@ walker find_task {
 walker UpdateTask(find_task) {
     has title: str = "",
         category: str = "",
+        tags: list[str] = [],
+        estimate: float = 0.0,
         priority: str = "",
         status: str = "",
         step_id: str = "",
@@ -405,6 +510,8 @@ walker UpdateTask(find_task) {
         moved = landing and landing != here.status;
         here.title = self.title;
         here.category = self.category;
+        here.tags = clean_tags(self.tags);
+        here.estimate = self.estimate;
         here.priority = self.priority;
         here.status = landing;
         here.due_date = self.due_date;
@@ -481,7 +588,13 @@ walker SetMoveInfo(find_task) {
             here.pr_link = self.pr_link.strip();
         }
         if self.note.strip() {
-            here.notes = self.note.strip();
+            # Prepend, never replace: notes is the task's description (or an
+            # imported issue body). Newest-first keeps the blocked card's
+            # excerpt leading with the reason. Same-line resubmits are no-ops.
+            line = "**" + now_iso()[:10] + ":** " + self.note.strip();
+            if not here.notes.startswith(line) {
+                here.notes = line + ("\n\n" + here.notes if here.notes else "");
+            }
         }
         here.updated_at = now_iso();
         sync_task_links(holder, here, self.note.strip());
@@ -491,12 +604,18 @@ walker SetMoveInfo(find_task) {
 }
 
 walker MoveTask(find_task) {
-    """The drag-drop / arrow-move endpoint. Server-authoritative: a move appends
-    to the end of the target column. `step_id` is the flow line column and its
-    mapped status is written too; without it, the legacy status-only move."""
+    """The drag-drop / arrow-move endpoint. Server-authoritative: a move
+    appends to the end of the target column, unless `before_id`/`after_id`
+    asks for the spot beside that card there (a stale anchor appends). A
+    positioned drop in the card's own column is a pure reorder: no status
+    write, no hand-off, no log row, no updated_at bump. `step_id` is the
+    flow line column and its mapped status is written too; without it, the
+    legacy status-only move."""
     has status: str = "",
         step_id: str = "",
         step_name: str = "",
+        before_id: str = "",
+        after_id: str = "",
         reports: list[TaskView] = [];
 
     can move with Task entry {
@@ -505,6 +624,10 @@ walker MoveTask(find_task) {
         holder = owners[0];
         landing = self.status;
         label = self.status;
+        # Read before step_id is rewritten below: a positioned drop in the
+        # card's own column stays a reorder for the writes further down.
+        positioned = bool(self.before_id or self.after_id);
+        reorder = False;
         # Who the move hands the task to: one member, or empty. A list, not
         # an Optional: the checker does not narrow `Member | None` through
         # `if`, so the connect and the `.name` read would not type.
@@ -517,6 +640,7 @@ walker MoveTask(find_task) {
                 disengage;
             }
             landing = mapped;
+            reorder = positioned and self.step_id == here.step_id;
             # Only a CHANGE of step is a hand-off. Re-dropping a card in its
             # own column (a reorder) must not reassign it.
             if self.step_id != here.step_id {
@@ -528,30 +652,37 @@ walker MoveTask(find_task) {
             here.step_id = self.step_id;
             label = self.step_name or mapped;
         } else {
+            reorder = positioned and not here.step_id and landing == here.status;
             # A status-only move (the assistant, a merged PR, an org with no
             # flow line) must drop whatever step the task was on, or the board
             # keeps drawing it in the old column while the status says
             # otherwise.
             here.step_id = "";
         }
-        # Peak over the column the task is LANDING in, counted the way the
-        # board draws it: step-addressed tasks by step, everything else by
-        # status.
-        peak = 0.0;
+        # The landing column without the moving card, ordered the way the
+        # board draws it. Serves both the anchor lookup and the append peak.
+        col: list[Task] = [];
         for t in [holder-->[?:Task]] {
+            if jid(t) == jid(here) {
+                continue;
+            }
             in_column = (
                 t.step_id == self.step_id
                     if self.step_id
                     else (t.status == landing and not t.step_id)
             );
-            if in_column and t.sort_order > peak {
-                peak = t.sort_order;
+            if in_column {
+                col.append(t);
             }
         }
+        col.sort(key=lambda (t: Task) { jid(t); });
+        col.sort(key=lambda (t: Task) { t.sort_order; });
         was = here.status;
         here.status = landing;
-        here.sort_order = peak + 1024.0;
-        here.updated_at = now_iso();
+        here.sort_order = self.landing_sort(col, here);
+        if not reorder {
+            here.updated_at = now_iso();
+        }
         # A hand-off replaces the assignees: the card changes hands, it does
         # not gain a hand. The log line names who it went to.
         note = "Moved to " + label;
@@ -573,6 +704,47 @@ walker MoveTask(find_task) {
         }
         report here.to_view();
         disengage;
+    }
+
+    # The landing sort: the midpoint beside a valid anchor, the end of the
+    # column otherwise. Two neighbors too close for a float midpoint
+    # re-spread the whole column at 1024 with the card in its slot.
+    def landing_sort(col: list[Task], moving: Task) -> float {
+        anchor_id = self.before_id or self.after_id;
+        slot = -1;
+        for (i, t) in enumerate(col) {
+            if jid(t) == anchor_id {
+                slot = i;
+            }
+        }
+        if anchor_id and slot >= 0 {
+            ahead = bool(self.before_id);
+            if ahead {
+                hi = col[slot].sort_order;
+                lo = col[slot - 1].sort_order if slot > 0 else hi - 2048.0;
+            } else {
+                lo = col[slot].sort_order;
+                hi = col[slot + 1].sort_order if slot + 1 < len(col) else lo + 2048.0;
+            }
+            mid = (lo + hi) / 2.0;
+            if mid > lo and mid < hi {
+                return mid;
+            }
+            at = slot if ahead else slot + 1;
+            spread = col[0:at] + [moving] + col[at:];
+            n = 0.0;
+            out = 0.0;
+            for t in spread {
+                n = n + 1024.0;
+                t.sort_order = n;
+                if jid(t) == jid(moving) {
+                    out = n;
+                }
+            }
+            return out;
+        }
+        peak = col[-1].sort_order if col else 0.0;
+        return peak + 1024.0;
     }
 }
 

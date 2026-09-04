@@ -2,6 +2,8 @@
 stores a colour KEY; class strings stay literal here or Tailwind drops them.
 """
 
+import from ...constants { STATUS_KIND, KIND_COLORS }
+
 glob KIND_LABEL: dict[str, str] = {
          "start": "Start",
          "active": "Active",
@@ -98,6 +100,15 @@ glob COUNT_TINT: dict[str, str] = {
          "emerald": "border-transparent bg-step-emerald/15 text-step-emerald-ink",
          "slate": "border-transparent bg-step-slate/15 text-step-slate-ink"
      };
+
+
+# A legacy status in the board's colour voice: status -> kind -> colour key
+# -> chip classes. Shared by the log and tasks tables.
+def:pub statusChip(status: str) -> str {
+    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
+    color = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
+    return COUNT_TINT[color] if color in COUNT_TINT else COUNT_TINT["slate"];
+}
 
 
 def colorKey(raw: str) -> str {
