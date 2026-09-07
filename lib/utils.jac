@@ -7,7 +7,7 @@ def:pub cn(*inputs: any) -> str {
 
 # A task estimate for display: whole numbers drop the ".0", so "3" not "3.0"
 # and "1.5" stays. Shared by the card and the table so they read alike.
-cl def:pub fmtEstimate(n: float) -> str {
+def:pub fmtEstimate(n: float) -> str {
     whole = int(n);
     if float(whole) == n {
         return str(whole);
@@ -17,7 +17,7 @@ cl def:pub fmtEstimate(n: float) -> str {
 
 # A form estimate string to the float the walker stores. Empty or unparseable
 # reads as 0.0 (unestimated); a number input already keeps out non-numerics.
-cl def:pub parseEstimate(raw: str) -> float {
+def:pub parseEstimate(raw: str) -> float {
     s = raw.strip();
     if not s {
         return 0.0;
@@ -32,7 +32,7 @@ cl def:pub parseEstimate(raw: str) -> float {
 
 # Accepts a pasted GitHub URL (https/ssh, optional .git) or bare org/repo
 # and returns the normalized org/repo form ("" when nothing usable).
-cl def:pub normalizeRepoInput(raw: str) -> str {
+def:pub normalizeRepoInput(raw: str) -> str {
     cleaned = raw.strip();
     cleaned = cleaned.replace("https://github.com/", "");
     cleaned = cleaned.replace("http://github.com/", "");

@@ -72,12 +72,12 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
     for (i, pair) in enumerate(pairs) {
         a = raws[pair[0]];
         b = raws[pair[1]];
-        ax = a["x"] * THUMB_SCALE + THUMB_PAD;
-        ay = a["y"] * THUMB_SCALE + THUMB_PAD;
-        bx = b["x"] * THUMB_SCALE + THUMB_PAD;
-        by = b["y"] * THUMB_SCALE + THUMB_PAD;
-        dx = bx - ax;
-        dy = by - ay;
+        aX = a["x"] * THUMB_SCALE + THUMB_PAD;
+        aY = a["y"] * THUMB_SCALE + THUMB_PAD;
+        bX = b["x"] * THUMB_SCALE + THUMB_PAD;
+        bY = b["y"] * THUMB_SCALE + THUMB_PAD;
+        dx = bX - aX;
+        dy = bY - aY;
         adx = dx if dx >= 0.0 else 0.0 - dx;
         ady = dy if dy >= 0.0 else 0.0 - dy;
         horizontal = adx >= ady;
@@ -103,10 +103,10 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
             if twoWay {
                 shift = -2.5 if dx >= 0.0 else 2.5;
             }
-            sx = ax + nw if dx >= 0.0 else ax;
-            sy = ay + nh / 2.0 + shift;
-            ex = bx if dx >= 0.0 else bx + nw;
-            ey = by + nh / 2.0 + shift;
+            sx = aX + nw if dx >= 0.0 else aX;
+            sy = aY + nh / 2.0 + shift;
+            ex = bX if dx >= 0.0 else bX + nw;
+            ey = bY + nh / 2.0 + shift;
             span = ex - sx;
             if span < 0.0 {
                 span = 0.0 - span;
@@ -131,10 +131,10 @@ def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
             if twoWay {
                 shift = -2.5 if dy >= 0.0 else 2.5;
             }
-            sy = ay + nh if dy >= 0.0 else ay;
-            sx = ax + nw / 2.0 + shift;
-            ey = by if dy >= 0.0 else by + nh;
-            ex = bx + nw / 2.0 + shift;
+            sy = aY + nh if dy >= 0.0 else aY;
+            sx = aX + nw / 2.0 + shift;
+            ey = bY if dy >= 0.0 else bY + nh;
+            ex = bX + nw / 2.0 + shift;
             span = ey - sy;
             if span < 0.0 {
                 span = 0.0 - span;

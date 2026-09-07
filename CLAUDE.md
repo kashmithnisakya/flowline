@@ -11,8 +11,8 @@ writing `.jac`** — the syntax looks like Python/JSX but is neither.
 ```bash
 jac check <file>                    # type-check + lint; run on every file you touch
 jac fmt --lintfix <file>            # format + auto-fix lint; CI enforces this (see Verification)
-jac start main.jac                  # production mode — app and API share one origin
-jac start --dev main.jac            # dev mode with HMR (see caveats below)
+jac run --no-dev main.jac           # production mode — app and API share one origin (:8000)
+jac run main.jac                    # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
 jac run brand/logo.jac              # regenerate the logo into assets/brand/
 jac install --shadcn <name>         # add a UI primitive (writes components/ui/<name>.jac)
 ```
@@ -28,17 +28,20 @@ There is no test runner. Verification is a **hand-written API gate suite** plus
 ```bash
 set -a; . ./.env; set +a
 unset DATABASE_HOST MONGODB_URI     # a stale mongo URI in the shell env aborts startup
-jac start main.jac
+jac run --no-dev main.jac
 ```
+
+`jac start` and `jac dev` were removed in jac 0.37: both hard-error with the
+`jac run` spelling. Serve flags go before the file (`jac run --port 3000 main.jac`).
 
 ### Server hygiene — do this before every restart
 
-A lingering `_bun/bun` child holds the API port, `jac start` then silently
+A lingering `_bun/bun` child holds the API port, `jac run` then silently
 **drifts to the next port pair** (8002/8001 → 8005/8004 …), and every walker
 call from the browser hangs. Always:
 
 ```bash
-pkill -f "jac start"; pkill -f "runtimelib/client/_bun/bun"; sleep 3
+pkill -f "jac run"; pkill -f "_bun/bun"; sleep 3
 for p in 8000 8001 8002 8003 8004 8005; do lsof -ti :$p | xargs kill -9 2>/dev/null; done
 ```
 
@@ -220,7 +223,7 @@ File-based routing with route groups:
   only comments outside the JSX tree; inside it they become a text node and
   ship to the page. Keep notes in the docstring or above the `return`.
 - **A page method named `set<Field>` collides with the state setter.** A
-  `has zoom: float` compiles to `const [zoom, setZoom] = useState(...)`, so a
+  `has zoom: float` compiles to a state cell plus a `setZoom` binding, so a
   `def setZoom` in the same component is a duplicate declaration and the
   whole Vite build fails with a 503 at request time (`jac check` passes —
   the clash only exists in the emitted JS). Name the method something else.
@@ -237,16 +240,22 @@ File-based routing with route groups:
   acts on it (see `pendingTaskId` on the board).
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
-- **A `has` list read after `await` is stale, and so is a `has` read inside a
-  `setInterval` callback**: re-arm a `setTimeout` from an effect keyed on the
-  value instead (see `HeroBoard`).
-- **On jac 0.34.x a pure module imported by both sides can compile to an
-  empty client file** (`"KIND_COLORS" is not exported by compiled/constants.js`).
-  Each page's pre-scan reloads `constants.jac` when a component in its
-  closure imports it, dropping the client stamps; only a page importing it
-  directly re-stamps. `pages/layout.jac` is scanned last and imports
-  `constants` for exactly that reason (`vocabPin`); before it existed the
-  build only survived because `workflow.jac` sorted after `log.jac`.
+- **Placement is inferred and pinned in `jac.toml`, never in source.** Since
+  jac 0.35 the `cl`/`sv` markers are syntax errors; `[placement.pins]` is the
+  override. `models` and every `walkers/*` module carry a module-level
+  `"server"` pin: without it a page's plain import of a walker pulls the
+  whole walker module (abilities included) into the browser bundle and the
+  build dies with "Client pathway failed to lower this edge reference shape".
+  **A new walker module needs its own pin line.** The three `lib/utils`
+  helpers are pinned `"client"` because an evidence-free `def:pub` in a
+  web-app is otherwise a server endpoint. `jac check <page> --placements`
+  prints every verdict with its evidence.
+- **`[placement] default = "server"` is load-bearing for deploys.** At the
+  `"native"` default, `jac build --as client` (the path a jachammer deploy
+  runs) compiles pure `constants.jac` to wasm and the browser reads
+  `STATUSES` through lazy stubs: the board dies with "X is not iterable"
+  on the deployed bundle only. `jac run` never reproduces it, so verify a
+  placement change with `jac build --as client main.jac` too.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.
@@ -275,20 +284,16 @@ File-based routing with route groups:
   only because its own returns are bare; a `return None` added anywhere in a
   function an effect calls turns into that effect's cleanup, with no `return`
   visible at the effect at all.
-- **A `has` you just assigned is still the OLD value for the rest of that
-  handler.** Under the pinned 0.34.14 runtime `has fProject` compiles to
-  `const [fProject, setFProject] = useState(...)`, so `fProject = v;
-  refreshOlder();` sends the PREVIOUS filter — this is not only an
-  after-`await` problem. Pass the new value as an argument, or keep it on a
-  `Ref` (refs are live). Worth knowing: the 0.36.x dev build compiles `has`
-  to a live external-store cell instead, so the same code behaves
-  differently on the two binaries; write for the pinned one.
+- **`has` state is a live cell on jac 0.37.** `has fProject` compiles to
+  `useJacState(...)` read through `.val`, so a write is visible to the next
+  statement, inside helpers and after `await`. Most handlers were written
+  for the 0.34.x runtime, where the same field was a `useState` snapshot
+  that stayed stale for the rest of the handler; they pass the new value as
+  an argument or keep it on a `Ref`, which is still correct and stays.
+  Keep the habit of building a new list in a local and assigning once
+  rather than appending twice around a walker call.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
-  rebind state rather than mutating; a `has` read after `await` is a stale
-  render-time snapshot. That last one bites hardest when a handler appends to
-  a list twice around a walker call: the second `xs = xs + [...]` re-reads the
-  pre-call value and silently drops the first append. Build the new list in a
-  local and assign once.
+  rebind state rather than mutating.
 
 ## Verification
 
@@ -313,18 +318,20 @@ coordinates — a stale `@eN` ref can produce a phantom pass.
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release
 pinned in `jac.toml`. **Format with that exact version.** Release lines
-disagree on line breaking (0.34.x and 0.36.x differ on 39 files here), so a
-dev-build `jac` on PATH can produce output CI rejects. Get the pinned binary
+disagree on line breaking, so a dev-build `jac` on PATH can produce output CI
+rejects. Get the pinned binary
 with `curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash -s -- --version <pin>`
 (lands in `~/.local/bin/jac`), then `~/.local/bin/jac fmt --lintfix <paths>`.
 `jac check main.jac` does not surface errors in imported modules, which is why
-CI checks each file; the type-check step runs twice on purpose (0.34.x reports
-cold-cache E5082 false positives that a seeded `.jac/cache` clears; the
-workflow comment explains).
+CI checks each file; the type-check step runs twice on purpose (0.34.x reported
+cold-cache E5082 false positives that a seeded `.jac/cache` cleared; the
+warm-up is kept as cheap insurance). `jac check` cannot see client codegen
+failures either: only `jac run` (the bundle build) reports a walker module
+that lowered into the client, so boot the app after touching imports or pins.
 
-**SSO** — `jac start --dev` does **not** proxy `/sso` to the API (only
-`/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`, `/assets`,
-`/docs`, `/introspect`), so exercise SSO with a plain `jac start`. The initiate
+**SSO** — the HMR dev server (`jac run main.jac`) has not proxied `/sso` to
+the API (only `/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`,
+`/assets`, `/docs`, `/introspect`), so exercise SSO with `jac run --no-dev`. The initiate
 endpoint requires a `client_callback` query param, which `jacSsoLogin` does not
 send — `components/auth/SsoButtons.jac` builds the URL itself.
 

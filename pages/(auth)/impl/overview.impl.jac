@@ -13,8 +13,8 @@ impl OverviewPage.loadAll -> None {
         # Untyped on purpose: typing the report would pull walkers.insights
         # objs into the client bundle for the queue lists.
         data: any = result.reports[0] if result.reports else None;
-        counts = data["counts"] if data else TaskTotals();
-        logs = data["logs"] if data else LogTotals();
+        counts = data["counts"] if data else None;
+        logs = data["logs"] if data else None;
         attention = data["attention"] if data else [];
         attentionTotal = data["attention_total"] if data else 0;
         members = data["members"] if data else [];

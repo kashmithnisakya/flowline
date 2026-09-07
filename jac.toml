@@ -2,7 +2,7 @@
 name = "flowline"
 entry-point = "main.jac"
 kind = "web-app"
-jac-version = "==0.34.18"
+jac-version = "==0.37.7"
 
 [jac-shadcn]
 style = "nova"
@@ -57,9 +57,6 @@ default_model = "${LLM_MODEL:-gpt-4o-mini}"
 temperature = 0.2
 max_output_retries = 3
 
-[serve]
-base_route_app = "app"
-
 [scale.sso]
 host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
@@ -82,7 +79,7 @@ prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 [scale.kubernetes]
 app_name = "flowline"
 # Sized from a load test against flowline-dev (2026-09-02). Under load an app pod
-# pegs at ~1000m and goes no higher: `jac start` is one process, so the GIL caps
+# pegs at ~1000m and goes no higher: `jac run` is one process, so the GIL caps
 # pure-Python work at one core however many the node has. Capacity is therefore
 # pods, not cores per pod -- hence the higher ceiling and the honest request.
 cpu_request = "500m"
@@ -95,13 +92,40 @@ max_replicas = 10
 cpu_utilization_target = 70
 autoscaler_scale_up_max_pods = 4
 
-[scale.microservices]
-enabled = true
+[scale.gateway]
 http_forward_timeout = 120.0
 
-[scale.microservices.logs]
+[scale.gateway.logs]
 enabled = true
 
 [jacpack]
 name = 'flowline'
 description = 'Jac IDE snapshot for flowline'
+
+# Pure modules stay on the server codespace (dual-emitted to the client by
+# reference). Left at the "native" default, `jac build --as client` (what a
+# deploy runs) compiles constants.jac to wasm and STATUSES reads as undefined
+# in the browser; `jac run` does not reproduce it.
+[placement]
+default = "server"
+
+# Placement overrides (jac 0.37, see CLAUDE.md). Module-level "server" pins make
+# a page's walker import a service-boundary import (RPC stubs + wire types)
+# instead of pulling the walker module into the browser bundle. Every new
+# walkers/* module needs a line here.
+[placement.pins]
+"lib.utils.fmtEstimate" = "client"
+"lib.utils.normalizeRepoInput" = "client"
+"lib.utils.parseEstimate" = "client"
+models = "server"
+"walkers.assistant" = "server"
+"walkers.board" = "server"
+"walkers.flowlines" = "server"
+"walkers.ghutil" = "server"
+"walkers.github" = "server"
+"walkers.insights" = "server"
+"walkers.log" = "server"
+"walkers.projects" = "server"
+"walkers.roster" = "server"
+"walkers.tasks" = "server"
+"walkers.util" = "server"
