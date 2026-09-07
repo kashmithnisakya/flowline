@@ -52,10 +52,10 @@ jobs:
       # those files verbatim from the registry, so holding them to the
       # formatter would go red on the next install. They still get linted and
       # type-checked below.
-      # - name: Format check (jac fmt --check --lintfix)
-      #   run: |
-      #     git ls-files -z -- '*.jac' ':!components/ui/*' \
-      #       | xargs -0 jac fmt --check --lintfix
+      - name: Format check (jac fmt --check --lintfix)
+        run: |
+          git ls-files -z -- '*.jac' ':!components/ui/*' \
+            | xargs -0 jac fmt --check --lintfix
 
       # Lint and type check still run when the format check fails, so one run
       # reports all three signals; the job fails if any step does.
@@ -75,7 +75,7 @@ jobs:
       # exit code is ignored); the second pass is the one that counts, and
       # real errors survive it. --disable-error-code E5082 lets enough of the
       # first pass complete to seed the cache. A genuine E5082 still fails
-      # `jac start` / `jac build`.
+      # `jac run` / `jac build`.
       - name: Type check (jac check)
         if: ${{ !cancelled() }}
         run: |

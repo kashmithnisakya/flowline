@@ -54,11 +54,11 @@ Run `jac` afterwards to confirm it is on your PATH.
 ## Run the app
 
 ```bash
-jac install          # dependencies (Python + npm) from jac.toml
-jac start main.jac   # serve at http://localhost:8000
+jac install                 # dependencies (Python + npm) from jac.toml
+jac run --no-dev main.jac   # serve at http://localhost:8000
 ```
 
-Use `jac start --dev main.jac` for hot reload while developing.
+Use `jac run main.jac` for hot reload while developing (app on :8000, API on :8001).
 
 Copy `.env.example` to `.env` and fill in what you need. Everything in it is
 optional: without `OPENAI_API_KEY` the app runs fine and only the assistant is
