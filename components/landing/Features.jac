@@ -185,7 +185,9 @@ def:pub Features -> JsxElement {
                                 <div
                                     className="mt-1.5 h-1.5 rounded-full bg-primary/25"
                                 ></div>
-                                <div className="mt-1 h-1.5 w-2/3 rounded-full bg-muted"></div>
+                                <div
+                                    className="mt-1 h-1.5 w-2/3 rounded-full bg-muted"
+                                ></div>
                             </div>
                             <span className="text-sm font-bold text-muted-foreground">
                                 ×
@@ -196,8 +198,12 @@ def:pub Features -> JsxElement {
                                 >
                                     anyone else
                                 </div>
-                                <div className="mt-1.5 h-1.5 rounded-full bg-muted"></div>
-                                <div className="mt-1 h-1.5 w-3/5 rounded-full bg-muted"></div>
+                                <div
+                                    className="mt-1.5 h-1.5 rounded-full bg-muted"
+                                ></div>
+                                <div
+                                    className="mt-1 h-1.5 w-3/5 rounded-full bg-muted"
+                                ></div>
                             </div>
                         </div>
                     </CardContent>

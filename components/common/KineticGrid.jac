@@ -15,7 +15,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
             win: any = window;
             doc: any = document;
             if not canvas {
-                return lambda { };
+                return lambda {};
             }
             ctx: any = canvas.getContext("2d");
             st: dict[str, any] = {

@@ -102,9 +102,11 @@ def:pub OverviewPage -> JsxPage {
         attentionTotal: int = 0,
         members: list[MemberView] = [],
         projects: list[Project] = [],
-        # Every number on the page, counted over the whole history.
-        counts: TaskTotals = TaskTotals(),
-        logs: LogTotals = LogTotals(),
+        # Every number on the page, counted over the whole history. None until
+        # the snapshot lands: a models obj cannot be constructed client-side
+        # (it crosses the wire as plain data), so the render guards the reads.
+        counts: TaskTotals | None = None,
+        logs: LogTotals | None = None,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
         # objs would pull walkers.insights types into the client bundle.
         reviewQueue: list[dict] = [],
@@ -133,38 +135,45 @@ def:pub OverviewPage -> JsxPage {
     ];
     # Weekly counts, oldest first, four weeks ending in this one. Guarded
     # with len(): both lists are empty until the counts land.
-    doneSpark = counts.done_by_week if len(counts.done_by_week) == 4 else [0, 0, 0, 0];
-    entrySpark = logs.by_week if len(logs.by_week) == 4 else [0, 0, 0, 0];
+    doneSpark = counts.done_by_week
+        if counts and len(counts.done_by_week) == 4
+        else [0, 0, 0, 0];
+    entrySpark = logs.by_week if logs and len(logs.by_week) == 4 else [0, 0, 0, 0];
     doneWeekCount = doneSpark[3];
     doneLastWeekCount = doneSpark[2];
     entriesWeekCount = entrySpark[3];
     entriesLastWeekCount = entrySpark[2];
-    dayCounts = logs.by_day if len(logs.by_day) == 7 else [0, 0, 0, 0, 0, 0, 0];
+    dayCounts = logs.by_day
+        if logs and len(logs.by_day) == 7
+        else [0, 0, 0, 0, 0, 0, 0];
+    openCount = counts.open if counts else 0;
+    overdueCount = counts.overdue if counts else 0;
+    blockedCount = counts.blocked if counts else 0;
     # Per project over the whole history (server), and over the working set
     # for the two states that only open work can be in.
     projTotal: dict[str, int] = {};
     projDone: dict[str, int] = {};
-    for tally in counts.projects {
+    for tally in (counts.projects if counts else []) {
         projTotal[tally.project_id] = tally.total;
         projDone[tally.project_id] = tally.done;
     }
     projBlocked: dict[str, int] = {};
     projActive: dict[str, int] = {};
-    for tally in counts.projects {
+    for tally in (counts.projects if counts else []) {
         projBlocked[tally.project_id] = tally.blocked;
         projActive[tally.project_id] = tally.active;
     }
     # Per person, by member jid, over the whole history.
     personOpen: dict[str, int] = {};
     personDone: dict[str, int] = {};
-    for mt in counts.members {
+    for mt in (counts.members if counts else []) {
         personOpen[mt.member_id] = mt.open;
         personDone[mt.member_id] = mt.done_in_week;
     }
     # Per person this week: a count per weekday and the total, by name.
     personDays: dict[str, list[int]] = {};
     personTotal: dict[str, int] = {};
-    for md in logs.members {
+    for md in (logs.members if logs else []) {
         personDays[md.name] = md.by_day;
         personTotal[md.name] = md.total;
     }
@@ -313,7 +322,7 @@ def:pub OverviewPage -> JsxPage {
                     <div
                         className="anim-fade-up anim-d1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
                     >
-                        <StatTile label="Open" value={str(counts.open)}/>
+                        <StatTile label="Open" value={str(openCount)}/>
                         <StatTile
                             label="Done this week"
                             value={str(doneWeekCount)}
@@ -324,18 +333,18 @@ def:pub OverviewPage -> JsxPage {
                         />
                         <StatTile
                             label="Overdue"
-                            value={str(counts.overdue)}
-                            accent={"text-destructive" if counts.overdue > 0 else ""}
+                            value={str(overdueCount)}
+                            accent={"text-destructive" if overdueCount > 0 else ""}
                             hint={"all clear"
-                                if counts.overdue == 0
+                                if overdueCount == 0
                                 else "past due, still open"}
                         />
                         <StatTile
                             label="Blocked"
-                            value={str(counts.blocked)}
-                            accent={"text-destructive" if counts.blocked > 0 else ""}
+                            value={str(blockedCount)}
+                            accent={"text-destructive" if blockedCount > 0 else ""}
                             hint={"all clear"
-                                if counts.blocked == 0
+                                if blockedCount == 0
                                 else "needs a decision"}
                         />
                         <StatTile
