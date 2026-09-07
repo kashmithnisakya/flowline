@@ -1,8 +1,9 @@
 """GitHub state on a kanban card: the linked issue, its PR, and the nudge. A
-merged PR only ever *suggests* Done; the board never moves a card on its own.
-"""
+merged PR *suggests* Done here; auto-done repos move the card server-side
+on sync instead, from the same statuses (MERGE_SUGGEST_STATUSES)."""
 
 import from ...models { TaskView }
+import from ...constants { MERGE_SUGGEST_STATUSES }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 
@@ -13,8 +14,7 @@ glob PR_TINT: dict[str, str] = {
          "draft": "border-border bg-muted text-muted-foreground",
          "merged": "border-primary/40 bg-primary/10 text-primary",
          "closed": "border-destructive/40 bg-destructive/10 text-destructive"
-     },
-     SUGGEST_STATUSES: list[str] = ["In Progress", "Review"];
+     };
 
 # Columns where "the PR merged" is news. A card already in Done or Backlog
 # does not need telling.
@@ -28,7 +28,7 @@ def:pub GitHubChip(task: TaskView, onMarkDone: Callable[[str], None]) -> JsxElem
     prTitle = (
         (task.gh_repo + " #" + str(task.pr_number)) if task.pr_number > 0 else prLabel
     );
-    suggestDone = task.pr_state == "merged" and task.status in SUGGEST_STATUSES;
+    suggestDone = task.pr_state == "merged" and task.status in MERGE_SUGGEST_STATUSES;
 
     return
         <div className="space-y-1.5">

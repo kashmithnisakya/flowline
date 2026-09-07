@@ -17,6 +17,8 @@ import from ..ui.dialog {
 import from ..ui.input { Input }
 import from ..ui.label { Label }
 import from ..common.glyphs { Spinner }
+import from ..common.Avatar { Avatar }
+import from ..flowlines.kinds { COLOR_KEYS, DOT_FILL }
 
 def:pub MemberDialog(
     open: bool,
@@ -67,13 +69,55 @@ def:pub MemberDialog(
                 <div className="grid gap-4 py-2">
                     <div className="grid gap-2">
                         <Label>Name</Label>
-                        <Input
-                            placeholder="Full name"
-                            value={form["name"]}
-                            onChange={lambda (e: ChangeEvent) { onField(
-                                "name", e.target.value
-                            ); }}
-                        />
+                        <div className="flex items-center gap-3">
+                            <Avatar
+                                name={form["name"] or "?"}
+                                size="md"
+                                color={form["color"]}
+                            />
+                            <Input
+                                className="flex-1"
+                                placeholder="Full name"
+                                value={form["name"]}
+                                onChange={lambda (e: ChangeEvent) { onField(
+                                    "name", e.target.value
+                                ); }}
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Colour</Label>
+                        <div className="flex items-center gap-2">
+                            {for c in COLOR_KEYS {
+                                <button
+                                    key={c}
+                                    type="button"
+                                    title={c}
+                                    className={"h-6 w-6 rounded-full "
+                                        + DOT_FILL[c]
+                                        + (
+                                            " ring-2 ring-ring ring-offset-2 ring-offset-card"
+                                                if form["color"] == c
+                                                else ""
+                                        )}
+                                    onClick={lambda { onField("color", c); }}
+                                />
+                            }}
+                            <button
+                                key="auto"
+                                type="button"
+                                title="Auto (from the name)"
+                                className={"h-6 rounded-full border border-dashed px-2 text-xs text-muted-foreground "
+                                    + (
+                                        "border-ring text-foreground"
+                                            if not form["color"]
+                                            else "border-border"
+                                    )}
+                                onClick={lambda { onField("color", ""); }}
+                            >
+                                Auto
+                            </button>
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label>Roles</Label>

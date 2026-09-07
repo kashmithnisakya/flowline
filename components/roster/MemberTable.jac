@@ -1,6 +1,7 @@
 """Org roster table with inline project assignment."""
 
 import from ...models { Project, MemberView }
+import from ..common.Avatar { Avatar }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
 import from ..ui.card { Card, CardContent }
@@ -11,36 +12,6 @@ import from ..ui.select {
     SelectValue,
     SelectContent,
     SelectItem
-}
-
-# Avatar hue pairs picked by name hash; whole literal strings so Tailwind scans them.
-glob AVATAR_HUES: list[str] = [
-         "bg-chart-1/15 text-chart-1",
-         "bg-chart-2/15 text-chart-2",
-         "bg-chart-3/15 text-chart-3",
-         "bg-chart-4/15 text-chart-4",
-         "bg-chart-5/15 text-chart-5"
-     ];
-
-# "Ishara Perera" -> "IP" for the avatar circle.
-def initialsOf(name: str) -> str {
-    parts = [
-        w
-        for w in name.split()
-        if w
-    ];
-    first = parts[0][:1] if len(parts) > 0 else "?";
-    second = parts[1][:1] if len(parts) > 1 else "";
-    return (first + second).upper();
-}
-
-# Deterministic avatar hue: sum of character codes into the hue table.
-def hueFor(name: any) -> str {
-    total = 0;
-    for i in range(len(name)) {
-        total = total + name.charCodeAt(i);
-    }
-    return AVATAR_HUES[total % 5];
 }
 
 def:pub MemberTable(
@@ -127,12 +98,11 @@ def:pub MemberTable(
                             <TableRow key={m.id} className="transition-colors">
                                 <TableCell>
                                     <div className="flex items-center gap-3">
-                                        <span
-                                            className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold "
-                                                + hueFor(m.name)}
-                                        >
-                                            {initialsOf(m.name)}
-                                        </span>
+                                        <Avatar
+                                            name={m.name}
+                                            size="md"
+                                            color={m.color}
+                                        />
                                         <div className="min-w-0">
                                             <div className="truncate font-medium">
                                                 {m.name}

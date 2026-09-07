@@ -1,48 +1,50 @@
 """Implementations for the Board page."""
 
 impl BoardPage.boot -> None {
-    # Onboarding gate: a workspace with no projects yet goes to the wizard.
-    # (The organization itself is created at signup.)
-    try {
-        projResult = root spawn ListProjects();
-        existing = projResult.reports[0] if projResult.reports else [];
-        if len(existing) == 0 {
-            window.location.href = "/setup";
-            return;
-        }
-    } except Exception as e {
-        toast("Failed to load your workspace");
-    }
-    # Cheap and never fails on its own: it only decides whether the board
-    # offers the GitHub affordances at all.
-    connected: bool = False;
-    try {
-        gResult = root spawn GithubStatus();
-        if gResult.reports {
-            connected = gResult.reports[0].connected;
-        }
-        ghConnected = connected;
-    } except Exception as e {
-        ghConnected = False;
-    }
-    await loadAll();
-    # Opening the board IS the sync trigger: auto-file new issues from
-    # auto-sync repos after first paint. Passed as an argument because the
-    # `ghConnected` just assigned is a stale read in this same handler.
-    await autoSyncGithub(connected);
-}
-
-impl BoardPage.autoSyncGithub(connected: bool) -> None {
-    if not connected or syncing {
+    # One load carries the onboarding gate too: the wizard opens when the
+    # snapshot comes back with no projects.
+    info = await loadBoard(True);
+    if info["ok"] and int(info["projects"]) == 0 {
+        window.location.href = "/setup";
         return;
     }
+    # Opening the board IS the sync trigger: auto-file new issues from
+    # auto-sync repos after first paint. Passed as an argument because the
+    # `ghConnected` loadBoard just assigned is a stale read in this handler.
+    await autoSyncGithub(bool(info["connected"]));
+}
+
+
+impl BoardPage.autoSyncGithub(connected: bool) -> None {
+    if not connected {
+        return;
+    }
+    # One shot per page load, shared by both mounts through the module
+    # glob; a `has` flag cannot arbitrate this, each instance owns its own.
+    d = new(Date);
+    now: float = d.getTime() as float;
+    if now - (AUTO_SYNC["at"] as float) < 60000.0 {
+        return;
+    }
+    AUTO_SYNC["at"] = now;
     syncing = True;
     added: int = 0;
+    more = False;
     try {
-        result = root spawn SyncGithub(auto=True);
-        payload = result.reports[0] if result.reports else None;
-        if payload and payload["ok"] and "auto_added" in payload {
-            added = payload["auto_added"] or 0;
+        rounds = 0;
+        more = True;
+        while more and rounds < AUTO_SYNC_ROUNDS {
+            rounds = rounds + 1;
+            # Only the first increment is the cooldown-guarded auto pass; a
+            # follow-up continues work the server just said is pending.
+            result = root spawn SyncGithub(auto=(rounds == 1), page_budget=2);
+            payload = result.reports[0] if result.reports else None;
+            if not payload or not payload["ok"] {
+                more = False;
+                break;
+            }
+            added = added + int(payload["auto_added"] or 0);
+            more = bool(payload["has_more"]) and not payload["failure"];
         }
         if added > 0 {
             await loadAll();
@@ -53,6 +55,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
                             if added == 1
                             else " issues added from GitHub"
                     )
+                    + (", more on the way" if more else "")
             );
         }
     } except Exception as e {
@@ -63,56 +66,81 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
     syncing = False;
 }
 
+
 impl BoardPage.loadAll -> None {
+    await loadBoard(True);
+}
+
+
+impl BoardPage.refreshTasks -> None {
+    await loadBoard(False);
+}
+
+
+impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
     # While a move is in flight its optimistic state is newer than anything
     # a concurrent fetch started earlier could return, skip.
     if movesRef.current {
-        return;
+        return {"ok": False, "projects": 0, "connected": ghConnected};
     }
+    projectCount = 0;
+    connected = ghConnected;
     try {
-        # The working set comes in pages of 500 so a big board still paints
-        # after the first. The loop is bounded; if the server still has more
-        # at the bound the board says so rather than quietly showing part of
-        # the workspace. Filters stay client-side (instant to flip), so
-        # `older` here is the unfiltered count of what the cutoff left out.
+        # Pages of 500 so a big board paints after the first; the loop is
+        # bounded and says so rather than showing part of the workspace.
+        # Only page 1 carries the workspace lists.
         fetchedTasks: list[TaskView] = [];
         olderUnfiltered = 0;
+        cats: list[str] = [];
+        fetchedMembers: list[MemberView] = [];
+        fetchedProjects: list[Project] = [];
+        fetchedSteps: list[StepView] = [];
+        fetchedRepos: list[RepoView] = [];
+        fetchedRoles: list[RoleView] = [];
         pageNo = 1;
         more = True;
+        gotPage = False;
         while more and pageNo <= 20 {
-            tResult = root spawn ListTasks(scope="working", page=pageNo, page_size=500);
-            tPage = tResult.reports[0] if tResult.reports else None;
-            if not tPage {
+            bResult = root spawn BoardSnapshot(
+                page=pageNo, page_size=500, with_workspace=withWorkspace and pageNo == 1
+            );
+            data = bResult.reports[0] if bResult.reports else None;
+            if not data {
                 more = False;
             } else {
-                fetchedTasks = fetchedTasks + tPage.rows;
-                more = tPage.has_more;
-                olderUnfiltered = tPage.older;
+                gotPage = True;
+                fetchedTasks = fetchedTasks + data.rows;
+                more = data.has_more;
+                olderUnfiltered = data.older;
+                cats = data.categories;
+                if withWorkspace and pageNo == 1 {
+                    fetchedMembers = data.members;
+                    fetchedProjects = data.projects;
+                    fetchedSteps = data.steps;
+                    fetchedRepos = data.repos;
+                    fetchedRoles = data.roles;
+                    connected = data.github_connected;
+                    projectCount = len(data.projects);
+                }
             }
             pageNo = pageNo + 1;
         }
         truncated = more;
-        cResult = root spawn TaskCounts();
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
-        # The board counts its own columns; skipping the server's per-step
-        # count spares a walk over every task on each poll.
-        sResult = root spawn GetFlowLine(with_counts=False);
-        rResult = root spawn ListRepos();
-        roResult = root spawn ListRoles();
-        fetchedMembers = mResult.reports[0] if mResult.reports else [];
-        fetchedProjects = pResult.reports[0] if pResult.reports else [];
         if not movesRef.current {
             tasks = fetchedTasks;
-            members = fetchedMembers;
-            projects = fetchedProjects;
-            steps = sResult.reports[0] if sResult.reports else [];
-            repos = rResult.reports[0] if rResult.reports else [];
-            roleRows = roResult.reports[0] if roResult.reports else [];
             workingTruncated = truncated;
-            cPayload = cResult.reports[0] if cResult.reports else None;
-            if cPayload {
-                knownCategories = cPayload.categories;
+            # An empty answer must not wipe the category list the filter bar
+            # is built from: an empty page keeps the list it already had.
+            if gotPage {
+                knownCategories = cats;
+            }
+            if withWorkspace {
+                members = fetchedMembers;
+                projects = fetchedProjects;
+                steps = fetchedSteps;
+                repos = fetchedRepos;
+                roleRows = fetchedRoles;
+                ghConnected = connected;
             }
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`
@@ -132,10 +160,10 @@ impl BoardPage.loadAll -> None {
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
         stored = localStorage.getItem("standup_project") or "";
-        if stored and stored != "all" {
+        if withWorkspace and stored and stored != "all" {
             found = False;
-            for p in fetchedProjects {
-                if jid(p) == stored and p.active {
+            for pr in fetchedProjects {
+                if jid(pr) == stored and pr.active {
                     found = True;
                 }
             }
@@ -147,12 +175,17 @@ impl BoardPage.loadAll -> None {
     } except Exception as e {
         # No toast: the page itself says so (full panel with nothing on
         # screen, a strip with data still showing), and a toast per failed
-        # 60s poll would only nag.
+        # poll would only nag.
         loadFailed = True;
+        loading = False;
+        retrying = False;
+        return {"ok": False, "projects": 0, "connected": connected};
     }
     loading = False;
     retrying = False;
+    return {"ok": True, "projects": projectCount, "connected": connected};
 }
+
 
 impl BoardPage.retryLoad -> None {
     if movesRef.current {
@@ -313,6 +346,8 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     form = {
         "title": t.title,
         "category": t.category,
+        "tags": ", ".join(t.tags),
+        "estimate": fmtEstimate(t.estimate) if t.estimate > 0.0 else "",
         "project": t.project_id or "none",
         "priority": t.priority,
         "status": columnKeyOf(t),
@@ -345,6 +380,12 @@ impl BoardPage.saveTask -> None {
     saving = True;
     project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
+    tagList = [
+        s.strip()
+        for s in form["tags"].split(",")
+        if s.strip()
+    ];
+    est = parseEstimate(form["estimate"]);
     try {
         # Assigning people who are not on the task's project pulls them in.
         if project {
@@ -370,6 +411,8 @@ impl BoardPage.saveTask -> None {
                 task_id=editingId,
                 title=title,
                 category=form["category"],
+                tags=tagList,
+                estimate=est,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
@@ -386,6 +429,8 @@ impl BoardPage.saveTask -> None {
             root spawn CreateTask(
                 title=title,
                 category=form["category"],
+                tags=tagList,
+                estimate=est,
                 priority=form["priority"],
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
@@ -524,10 +569,14 @@ impl BoardPage.columnKeyOf(t: TaskView) -> str {
     return keys[0] if keys else "";
 }
 
-impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
+impl BoardPage.moveTo(
+    taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+) -> None {
     # Optimistic: mutate the card in state and rebind; the server owns the
-    # end-of-column order. movesRef fences the poll so a stale fetch cannot
-    # snap the card back; on failure the board refetches server truth.
+    # order. movesRef fences the poll so a stale fetch cannot snap the card
+    # back; on failure the board refetches server truth. An anchorId asks
+    # for the spot beside that card; in the card's own column that is a
+    # pure reorder (no toast, no handoff dialog, no log on the server).
     # A column key is a step jid, or a legacy status when there is no flow line.
     onFlowLine = len(steps) > 0;
     label = columnLabel(columnKey);
@@ -547,25 +596,52 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     oldKey = "";
     oldLabel = "";
     peak = 0.0;
+    positioned = False;
     for t in working {
         if t.id == taskId {
             oldKey = columnKeyOf(t);
             oldLabel = columnLabel(oldKey);
         }
+        if anchorId and t.id == anchorId and columnKeyOf(t) == columnKey {
+            positioned = True;
+        }
         if columnKeyOf(t) == columnKey and t.sort_order > peak {
             peak = t.sort_order;
         }
     }
-    if not oldKey or oldKey == columnKey {
+    if not oldKey or (oldKey == columnKey and not positioned) {
         return;
     }
+    reorder = positioned and oldKey == columnKey;
     landing = mappedStatus(columnKey);
+    # The rendered order is the array order, so a positioned drop splices
+    # the row beside its anchor; an append keeps the sort_order patch.
+    row: list[TaskView] = [];
+    rest: list[TaskView] = [];
     for t in working {
         if t.id == taskId {
             t.status = landing;
             t.step_id = columnKey if onFlowLine else "";
-            t.sort_order = peak + 1024.0;
+            if not positioned {
+                t.sort_order = peak + 1024.0;
+            }
+            row.append(t);
+        } else {
+            rest.append(t);
         }
+    }
+    if positioned and len(row) > 0 {
+        spliced: list[TaskView] = [];
+        for t in rest {
+            if ahead and t.id == anchorId {
+                spliced.append(row[0]);
+            }
+            spliced.append(t);
+            if not ahead and t.id == anchorId {
+                spliced.append(row[0]);
+            }
+        }
+        working = spliced;
     }
     tasks = working;
     olderDone = [
@@ -580,12 +656,20 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
     # whole story: the reported row replaces it.
     landed: list[TaskView] = [];
     try {
+        beforeId = anchorId if positioned and ahead else "";
+        afterId = anchorId if positioned and not ahead else "";
         if onFlowLine {
             result = root spawn MoveTask(
-                task_id=taskId, step_id=columnKey, step_name=label
+                task_id=taskId,
+                step_id=columnKey,
+                step_name=label,
+                before_id=beforeId,
+                after_id=afterId
             );
         } else {
-            result = root spawn MoveTask(task_id=taskId, status=columnKey);
+            result = root spawn MoveTask(
+                task_id=taskId, status=columnKey, before_id=beforeId, after_id=afterId
+            );
         }
         landed = result.reports or [];
     } except Exception as e {
@@ -630,6 +714,11 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         }
         tasks = swapped;
     }
+    # A reorder is its own feedback: the card visibly sits where it was
+    # dropped, and dragging it back is the undo.
+    if reorder {
+        return;
+    }
     # Every successful move confirms itself and offers the undo: a card can
     # land out of sight (Hide Done, or a column below the fold), and the
     # handoff dialog is skippable, so it cannot be the only feedback.
@@ -650,6 +739,23 @@ impl BoardPage.moveTo(taskId: str, columnKey: str) -> None {
         moveKind = columnKind(columnKey);
         moveTaskTitle = title;
         moveTaskId = taskId;
+    }
+}
+
+impl BoardPage.moveBeside(draggedId: str, targetId: str, ahead: bool) -> None {
+    # The target names the landing column; a target outside the working set
+    # (older history rows) keeps today's append-to-column behavior.
+    if draggedId == targetId {
+        return;
+    }
+    key = "";
+    for t in tasks {
+        if t.id == targetId {
+            key = columnKeyOf(t);
+        }
+    }
+    if key {
+        moveTo(draggedId, key, targetId, ahead);
     }
 }
 
@@ -695,43 +801,65 @@ impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
     }
 }
 
-impl BoardPage.markDoneFromPr(taskId: str) -> None {
-    # Routed through the normal move so the card still gets its log entry
-    # and its undo toast. A merged PR suggests done, it never forces it.
-    for key in columnKeys() {
-        if columnKind(key) == "done" {
-            moveTo(taskId, key);
-            return;
-        }
-    }
-}
-
 impl BoardPage.syncGithub -> None {
     if syncing {
         return;
     }
     syncing = True;
+    syncNote = "";
+    linked = 0;
+    added = 0;
+    moved = 0;
+    scanned = 0;
+    failure = "";
+    painted = False;
     try {
-        result = root spawn SyncGithub();
-        payload = result.reports[0] if result.reports else None;
-        if payload and payload["ok"] {
-            # loadAll owns the refresh, including the movesRef fence: an
-            # in-flight drag keeps its optimistic state and the next poll
-            # picks the synced values up.
-            await loadAll();
-            msg: str = "Synced " + str(payload["synced"]) + " tasks";
-            if "auto_added" in payload and payload["auto_added"] {
-                msg = msg + " · " + str(payload["auto_added"]) + " issues added";
+        rounds = 0;
+        more = True;
+        while more and rounds < SYNC_ROUNDS {
+            rounds = rounds + 1;
+            result = root spawn SyncGithub();
+            payload = result.reports[0] if result.reports else None;
+            if not payload or not payload["ok"] {
+                failure = str(payload["message"]) if payload else "Sync failed";
+                break;
+            }
+            linked = int(payload["linked"] or 0);
+            added = added + int(payload["auto_added"] or 0);
+            moved = moved + int(payload["auto_done"] or 0);
+            scanned = scanned + int(payload["scanned"] or 0);
+            failure = str(payload["failure"] or "");
+            more = bool(payload["has_more"]) and not failure;
+            syncNote = "Syncing… " + str(scanned) + " checked";
+            # Paint the first batch of new cards while the rest streams in.
+            if added > 0 and not painted {
+                painted = True;
+                await loadAll();
+            }
+        }
+        # loadAll owns the refresh, including the movesRef fence: an
+        # in-flight drag keeps its optimistic state and the next poll
+        # picks the synced values up.
+        await loadAll();
+        if failure {
+            toast(failure);
+        } else {
+            msg: str = "Synced " + str(linked) + " tasks";
+            if added > 0 {
+                msg = msg + " · " + str(added) + " issues added";
+            }
+            if moved > 0 {
+                msg = msg + " · " + str(moved) + " moved to done";
             }
             toast(msg);
-        } else {
-            toast(str(payload["message"]) if payload else "Sync failed");
         }
     } except Exception as e {
         toast("Failed to sync with GitHub");
     }
     syncing = False;
+    syncNote = "";
 }
+
 
 impl BoardPage.createIssue(repoId: str) -> None {
     if not editingId or not repoId {

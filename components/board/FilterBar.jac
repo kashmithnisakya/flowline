@@ -1,4 +1,5 @@
-"""Board filters: project (persisted), assignee, category, hide-Done."""
+"""Board filters: project (persisted), assignee, category, tag, estimate,
+hide-Done."""
 
 import from ...models { Project, MemberView }
 import from ..ui.select {
@@ -21,7 +22,12 @@ def:pub FilterBar(
     onAssignee: Callable[[str], None],
     onCategory: Callable[[str], None],
     onHideDone: Callable[[], None],
-    categories: list[str] = []
+    categories: list[str] = [],
+    tags: list[str] = [],
+    tag: str = "All",
+    estimate: str = "All",
+    onTag: Callable[[str], None] = None,
+    onEstimate: Callable[[str], None] = None
 ) -> JsxElement {
     shownMembers = [
         m
@@ -73,6 +79,37 @@ def:pub FilterBar(
                     {for c in categories {
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                     }}
+                </SelectContent>
+            </Select>
+            {if len(tags) > 0 {
+                <Select key="tag" value={tag} onValueChange={onTag}>
+                    <SelectTrigger
+                        className="h-8 w-36"
+                        size="sm"
+                        aria-label="Filter by tag"
+                    >
+                        <SelectValue placeholder="Tag"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">All tags</SelectItem>
+                        {for tg in tags {
+                            <SelectItem key={tg} value={tg}>{tg}</SelectItem>
+                        }}
+                    </SelectContent>
+                </Select>
+            }}
+            <Select value={estimate} onValueChange={onEstimate}>
+                <SelectTrigger
+                    className="h-8 w-36"
+                    size="sm"
+                    aria-label="Filter by estimate"
+                >
+                    <SelectValue placeholder="Estimate"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="All">Any estimate</SelectItem>
+                    <SelectItem value="yes">Estimated</SelectItem>
+                    <SelectItem value="no">Unestimated</SelectItem>
                 </SelectContent>
             </Select>
             <Button

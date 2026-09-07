@@ -45,6 +45,7 @@ walker SaveMember {
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
+        color: str = "",
         reports: list[MemberView] = [];
 
     can save with Root entry {
@@ -67,6 +68,7 @@ walker SaveMember {
                     for t in self.tags
                     if t.strip()
                 ];
+                target.color = self.color;
                 report member_view(target);
             }
         } else {
@@ -83,7 +85,8 @@ walker SaveMember {
                     t.strip()
                     for t in self.tags
                     if t.strip()
-                ]
+                ],
+                color=self.color
             );
             on_attached(here, fresh);
             report member_view(fresh);

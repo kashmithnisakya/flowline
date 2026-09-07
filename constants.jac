@@ -12,6 +12,9 @@ glob STATUSES: list[str] = [
      # Open work that someone has actually picked up, as opposed to Backlog
      # (not started) or Blocked (stopped). The Overview reads it as "active".
      ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
+     # Statuses where "the PR merged" means the work is done: the board chip
+     # suggests Done here, and auto-done repos move the card here on sync.
+     MERGE_SUGGEST_STATUSES: list[str] = ["In Progress", "Review"],
      # What a step MEANS independent of its name; the app keys behaviour on
      # the kind, so renaming a step is always safe.
      STEP_KINDS: list[str] = ["start", "active", "handoff", "blocked", "done"],

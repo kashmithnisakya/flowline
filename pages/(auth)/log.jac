@@ -5,10 +5,17 @@ fetched once (Mon-Sun) and the day view filters locally.
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect, useRef }
-import from ...models { LogEntry, MemberView }
-import from ...walkers.log { ListLogEntries, DeleteLogEntries }
+import from ...models { LogEntry, MemberView, Project }
+import from ...walkers.log {
+    ListLogEntries,
+    DeleteLogEntries,
+    LogActivity,
+    UpdateLogEntry
+}
 import from ...walkers.roster { ListMembers }
+import from ...walkers.projects { ListProjects }
 import from ...components.log.WeekStrip { WeekStrip }
+import from ...components.log.EntryDialog { EntryDialog }
 import from ...components.log.LogTable { LogTable }
 import from ...components.log.DatePicker { DatePicker }
 import from ...components.log.Digest { Digest }
@@ -44,8 +51,30 @@ def mondayOf(iso: str) -> str {
 
 def:pub DailyLogPage -> JsxPage {
     has entries: list[LogEntry] = [],
-        # Roster names give the week matrix a row per person, quiet or not.
+        # Roster names give the week matrix a row per person, quiet or not;
+        # the full views feed the entry dialog's member picker.
         memberNames: list[str] = [],
+        members: list[MemberView] = [],
+        projects: list[Project] = [],
+        entryOpen: bool = False,
+        entryEditing: bool = False,
+        entryId: str = "",
+        # Every key the dialog reads exists from the start; a missing key
+        # would be undefined and .strip() on it throws at render time.
+        entryForm: dict[str, str] = {
+            "date": "",
+            "member": "",
+            "member_name": "",
+            "activity": "",
+            "project": "none",
+            "category": "",
+            "status": "none",
+            "issue_link": "",
+            "pr_link": "",
+            "notes": "",
+            "repo": ""
+        },
+        entrySaving: bool = False,
         selecting: bool = False,
         selectedIds: list[str] = [],
         selectedDate: str = "",
@@ -81,6 +110,10 @@ def:pub DailyLogPage -> JsxPage {
     async def retryLoad -> None;
     async def deleteSelected -> None;
     def toggleSelect(entryId: str) -> None;
+    def openNewEntry -> None;
+    def openEditEntry(en: LogEntry) -> None;
+    def entryField(key: str, value: str) -> None;
+    async def saveEntry -> None;
 
     shown = entries
         if viewMode == "week"
@@ -98,7 +131,7 @@ def:pub DailyLogPage -> JsxPage {
                 <div>
                     <h1 className="page-title">Log</h1>
                     <p className="page-subtitle">
-                        Written automatically as tasks move on the board.
+                        Written automatically as tasks move on the board; add anything that happened off it.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -178,6 +211,11 @@ def:pub DailyLogPage -> JsxPage {
                             Week
                         </button>
                     </div>
+                    {if not selecting {
+                        <Button key="add" size="sm" onClick={openNewEntry}>
+                            Add entry
+                        </Button>
+                    }}
                     {if selecting {
                         <Button
                             key="cancel"
@@ -343,8 +381,20 @@ def:pub DailyLogPage -> JsxPage {
                         selected={selectedIds}
                         onToggleSelect={toggleSelect}
                         showDate={viewMode == "week"}
+                        onEdit={openEditEntry}
                     />
                 </div>
             }   }
+            <EntryDialog
+                open={entryOpen}
+                editing={entryEditing}
+                form={entryForm}
+                members={members}
+                projects={projects}
+                saving={entrySaving}
+                onField={entryField}
+                onOpenChange={lambda (o: bool) { entryOpen = o; }}
+                onSave={saveEntry}
+            />
         </div>;
 }

@@ -8,6 +8,7 @@ a full lane squashes every card to a sliver instead of scrolling."""
 import from ...models { TaskView }
 import from ..flowlines.kinds { CARD_BAR, colorKey }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
+import from ...lib.utils { fmtEstimate }
 import from ..common.Avatar { AvatarStack, dotFor }
 import from ..common.Markdown { Markdown }
 import from ..ui.card { Card, CardContent }
@@ -72,18 +73,25 @@ def:pub TaskCard(
     nextKey: str = "",
     nextLabel: str = "",
     doneKey: str = "",
-    onMarkDone: Callable[[str], None] = None
+    # A drop on the card's upper half inserts before it, lower half after.
+    onDropBeside: Callable[[str, str, bool], None] = None
 ) -> JsxElement {
     # While the native drag ghost travels, the source card dims so the board
-    # shows where the card came from.
-    has isDragging: bool = False;
+    # shows where the card came from. dropHint draws the insertion line.
+    has isDragging: bool = False,
+        dropHint: str = "";
 
-    # The column does not forward a mark-done callback yet, so fall back to
-    # the arrow path. Both land in the page's moveTo, undo toast included.
+    # Which half of the card the pointer is in, as "above"/"below".
+    def hoverHalf(e: DragEvent) -> str {
+        el: any = e.currentTarget;
+        r = el.getBoundingClientRect();
+        return "above" if (e.clientY - r.top) < r.height / 2.0 else "below";
+    }
+
+    # The nudge routes through the arrow path: the page's moveTo, undo
+    # toast included.
     def markDone(taskId: str) {
-        if onMarkDone {
-            onMarkDone(taskId);
-        } elif doneKey {
+        if doneKey {
             onArrowMove(task, doneKey);
         }
     }
@@ -92,6 +100,8 @@ def:pub TaskCard(
     showPriority = task.priority == "High" or task.priority == "Low";
     hasFooter = len(task.assignee_names) > 0
         or bool(task.category)
+        or len(task.tags) > 0
+        or task.estimate > 0.0
         or showPriority
         or bool(task.due_date);
 
@@ -107,6 +117,25 @@ def:pub TaskCard(
                 isDragging = True;
             }}
             onDragEnd={lambda { isDragging = False; }}
+            onDragOver={lambda (e: DragEvent) { if onDropBeside and not isDragging {
+                e.preventDefault();
+                e.stopPropagation();
+                half = hoverHalf(e);
+                if dropHint != half {
+                    dropHint = half;
+                }
+            }}}
+            onDragLeave={lambda { if dropHint { dropHint = ""; }}}
+            onDrop={lambda (e: DragEvent) { if onDropBeside {
+                e.preventDefault();
+                e.stopPropagation();
+                dropHint = "";
+                dt = e.dataTransfer;
+                dragged = dt.getData("text/x-standup-task") if dt else "";
+                if dragged and dragged != task.id {
+                    onDropBeside(dragged, task.id, hoverHalf(e) == "above");
+                }
+            }}}
             onClick={lambda { onOpen(task); }}
             role="button"
             tabIndex={0}
@@ -126,6 +155,18 @@ def:pub TaskCard(
                         else "border-border/70"
                 )}
         >
+            {if dropHint == "above" {
+                <div
+                    key="hintAbove"
+                    className="pointer-events-none absolute -top-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                />
+            }}
+            {if dropHint == "below" {
+                <div
+                    key="hintBelow"
+                    className="pointer-events-none absolute -bottom-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                />
+            }}
             <CardContent className="space-y-1.5 p-3">
                 {if task.project_name {
                     <div
@@ -162,13 +203,42 @@ def:pub TaskCard(
                                 {task.category}
                             </Badge>
                         }}
-                        {if showPriority or task.due_date {
+                        {for (ti, tg) in enumerate(task.tags) {
+                            if ti < 3 {
+                                <Badge
+                                    key={tg}
+                                    variant="secondary"
+                                    className="h-5 max-w-24 truncate rounded-full px-2 text-[11px] font-normal"
+                                >
+                                    {tg}
+                                </Badge>
+                            }
+                        }}
+                        {if len(task.tags) > 3 {
+                            <Badge
+                                key="moretags"
+                                variant="secondary"
+                                className="h-5 rounded-full px-1.5 text-[11px] font-normal tabular-nums"
+                            >
+                                {"+" + str(len(task.tags) - 3)}
+                            </Badge>
+                        }}
+                        {if showPriority or task.due_date or task.estimate > 0.0 {
                             # Right-aligned; wraps to its own line, still
                             # right-aligned, when the lane is narrow.
                             <span
                                 key="when"
                                 className="ml-auto flex shrink-0 items-center gap-1.5"
                             >
+                                {if task.estimate > 0.0 {
+                                    <span
+                                        key="est"
+                                        className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground"
+                                        title="Estimate"
+                                    >
+                                        {fmtEstimate(task.estimate)}
+                                    </span>
+                                }}
                                 {if showPriority {
                                     <PriorityGlyph
                                         key="priority"

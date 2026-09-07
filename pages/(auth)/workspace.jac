@@ -22,6 +22,7 @@ glob BLANK_MEMBER: dict[str, str] = {
          "name": "",
          "email": "",
          "github": "",
+         "color": "",
          "roleDraft": "",
          "tagDraft": ""
      },
