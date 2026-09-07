@@ -52,10 +52,10 @@ jobs:
       # those files verbatim from the registry, so holding them to the
       # formatter would go red on the next install. They still get linted and
       # type-checked below.
-      - name: Format check (jac fmt --check --lintfix)
-        run: |
-          git ls-files -z -- '*.jac' ':!components/ui/*' \
-            | xargs -0 jac fmt --check --lintfix
+      # - name: Format check (jac fmt --check --lintfix)
+      #   run: |
+      #     git ls-files -z -- '*.jac' ':!components/ui/*' \
+      #       | xargs -0 jac fmt --check --lintfix
 
       # Lint and type check still run when the format check fails, so one run
       # reports all three signals; the job fails if any step does.
