@@ -250,6 +250,12 @@ File-based routing with route groups:
   helpers are pinned `"client"` because an evidence-free `def:pub` in a
   web-app is otherwise a server endpoint. `jac check <page> --placements`
   prints every verdict with its evidence.
+- **`[placement] default = "server"` is load-bearing for deploys.** At the
+  `"native"` default, `jac build --as client` (the path a jachammer deploy
+  runs) compiles pure `constants.jac` to wasm and the browser reads
+  `STATUSES` through lazy stubs: the board dies with "X is not iterable"
+  on the deployed bundle only. `jac run` never reproduces it, so verify a
+  placement change with `jac build --as client main.jac` too.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.

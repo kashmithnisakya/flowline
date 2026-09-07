@@ -102,6 +102,13 @@ enabled = true
 name = 'flowline'
 description = 'Jac IDE snapshot for flowline'
 
+# Pure modules stay on the server codespace (dual-emitted to the client by
+# reference). Left at the "native" default, `jac build --as client` (what a
+# deploy runs) compiles constants.jac to wasm and STATUSES reads as undefined
+# in the browser; `jac run` does not reproduce it.
+[placement]
+default = "server"
+
 # Placement overrides (jac 0.37, see CLAUDE.md). Module-level "server" pins make
 # a page's walker import a service-boundary import (RPC stubs + wire types)
 # instead of pulling the walker module into the browser bundle. Every new
