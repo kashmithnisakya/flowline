@@ -1,17 +1,8 @@
 [project]
 name = "flowline"
-jac-version = "==0.37.7"
-
-[apps.flowline]
-kind = "web-app"
 entry-point = "main.jac"
-
-[apps.flowline.scale]
-workers = "auto"
-cpu_request = "1000m"
-cpu_limit = "2000m"
-memory_request = "3Gi"
-memory_limit = "6Gi"
+kind = "web-app"
+jac-version = "==0.37.7"
 
 [jac-shadcn]
 style = "nova"
@@ -87,6 +78,13 @@ prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 
 [scale.kubernetes]
 app_name = "flowline"
+# App pod sizing. Only [apps.flowline.scale] can set workers = "auto", but on
+# jac 0.37.7 an [apps] table makes the deploy skip the client bundle (API-only
+# pods, / is a JSON 404), so the app stays under [project] with one worker.
+cpu_request = "1000m"
+cpu_limit = "2000m"
+memory_request = "3Gi"
+memory_limit = "6Gi"
 min_replicas = 2
 max_replicas = 6
 cpu_utilization_target = 70

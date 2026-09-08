@@ -200,17 +200,23 @@ File-based routing with route groups:
 
 ### Deploy sizing
 
-The app is declared as `[apps.flowline]` in `jac.toml`, not `[project]
-kind/entry-point`, because per-app pod sizing is read only from
-`[apps.<name>.scale]`. `workers = "auto"` there forks one worker process per
-core of `cpu_limit`, so the limit is the capacity knob; before jac 0.37 a pod
-was one process and pegged at ~1000m however many cores the node had (#140).
-`[scale.kubernetes]` keeps only the HPA bounds; the gateway pod is sized in
-`[scale.gateway]`. The HPA scales on memory too (80% of the request), so a
-request below the idle footprint (1.7Gi at one worker on 0.37.7) pins the
-deployment at `max_replicas`. The dry-run command above renders the manifests
-locally once `bundle_storage_class` is set to any name (a placeholder for the
-RWX check that a real deploy satisfies on the platform).
+The app stays declared as `[project] kind/entry-point`, and the app pod is
+sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`, `memory_request`,
+`memory_limit` are all honoured there; the gateway pod is sized in
+`[scale.gateway]`). **Do not move it to `[apps.flowline]`.** On jac 0.37.7 an
+`[apps]` table makes `jac scale deploy` skip the client bundle build (the
+dry run's third line says "The served app has no client target"), so the
+pods come up API-only and `/` is a JSON 404 while `jac run` still serves
+the app locally (this took flowline-dev down on 2026-09-08, PR #176). That
+table is also the only place `workers = "auto"` (one worker per core of
+`cpu_limit`, #140) can be set, so pods run one worker until the runtime is
+fixed. `[serve.workers] count` is no substitute: `auto` resolves on the
+deploying machine (this Mac renders `JAC_SERVE_WORKERS=10`) and a fixed
+count also refuses `jac run` dev mode. The HPA scales on memory too (80% of
+the request), so a request below the idle footprint pins the deployment at
+`max_replicas`. The dry-run command above renders the manifests locally
+once `bundle_storage_class` is set to any name (a placeholder for the RWX
+check that a real deploy satisfies on the platform).
 
 ## Jac gotchas that have already cost real debugging time
 
