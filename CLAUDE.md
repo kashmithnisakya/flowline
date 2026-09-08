@@ -15,6 +15,7 @@ jac run --no-dev main.jac           # production mode — app and API share one 
 jac run main.jac                    # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
 jac run brand/logo.jac              # regenerate the logo into assets/brand/
 jac install --shadcn <name>         # add a UI primitive (writes components/ui/<name>.jac)
+jac scale deploy --dry-run --show-yaml main.jac   # render the k8s manifests (see Deploy sizing)
 ```
 
 There is no test runner. Verification is a **hand-written API gate suite** plus
@@ -196,6 +197,20 @@ File-based routing with route groups:
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
   the generator, not the SVGs. Reference brand assets as **`/static/...`**, not
   `/assets/...` — Vite owns `/assets/*` at build time.
+
+### Deploy sizing
+
+The app is declared as `[apps.flowline]` in `jac.toml`, not `[project]
+kind/entry-point`, because per-app pod sizing is read only from
+`[apps.<name>.scale]`. `workers = "auto"` there forks one worker process per
+core of `cpu_limit`, so the limit is the capacity knob; before jac 0.37 a pod
+was one process and pegged at ~1000m however many cores the node had (#140).
+`[scale.kubernetes]` keeps only the HPA bounds; the gateway pod is sized in
+`[scale.gateway]`. The HPA scales on memory too (80% of the request), so a
+request below the idle footprint (1.7Gi at one worker on 0.37.7) pins the
+deployment at `max_replicas`. The dry-run command above renders the manifests
+locally once `bundle_storage_class` is set to any name (a placeholder for the
+RWX check that a real deploy satisfies on the platform).
 
 ## Jac gotchas that have already cost real debugging time
 
