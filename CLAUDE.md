@@ -205,8 +205,8 @@ kind/entry-point`, because per-app pod sizing is read only from
 `[apps.<name>.scale]`. `workers = "auto"` there forks one worker process per
 core of `cpu_limit`, so the limit is the capacity knob; before jac 0.37 a pod
 was one process and pegged at ~1000m however many cores the node had (#140).
-`[scale.kubernetes]` keeps the HPA bounds and the defaults every pod inherits,
-the gateway included. The HPA scales on memory too (80% of the request), so a
+`[scale.kubernetes]` keeps only the HPA bounds; the gateway pod is sized in
+`[scale.gateway]`. The HPA scales on memory too (80% of the request), so a
 request below the idle footprint (1.7Gi at one worker on 0.37.7) pins the
 deployment at `max_replicas`. The dry-run command above renders the manifests
 locally once `bundle_storage_class` is set to any name (a placeholder for the
