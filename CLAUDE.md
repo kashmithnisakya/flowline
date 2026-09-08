@@ -12,7 +12,7 @@ writing `.jac`** — the syntax looks like Python/JSX but is neither.
 jac check <file>                    # type-check + lint; run on every file you touch
 jac fmt --lintfix <file>            # format + auto-fix lint; CI enforces this (see Verification)
 jac run --no-dev main.jac           # production mode — app and API share one origin (:8000)
-jac run main.jac                    # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
+jac run -w 1 main.jac               # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
 jac run brand/logo.jac              # regenerate the logo into assets/brand/
 jac install --shadcn <name>         # add a UI primitive (writes components/ui/<name>.jac)
 jac scale deploy --dry-run --show-yaml main.jac   # render the k8s manifests (see Deploy sizing)
@@ -34,6 +34,9 @@ jac run --no-dev main.jac
 
 `jac start` and `jac dev` were removed in jac 0.37: both hard-error with the
 `jac run` spelling. Serve flags go before the file (`jac run --port 3000 main.jac`).
+`[serve.workers] count = "2"` sizes the deployed pods, and dev mode (HMR) is
+single-process, so it refuses to start without `-w 1` or `JAC_SERVE_WORKERS=1`
+(`.env.example` carries it; CLI beats env beats jac.toml).
 
 ### Server hygiene — do this before every restart
 
@@ -200,17 +203,25 @@ File-based routing with route groups:
 
 ### Deploy sizing
 
-The app is declared as `[apps.flowline]` in `jac.toml`, not `[project]
-kind/entry-point`, because per-app pod sizing is read only from
-`[apps.<name>.scale]`. `workers = "auto"` there forks one worker process per
-core of `cpu_limit`, so the limit is the capacity knob; before jac 0.37 a pod
-was one process and pegged at ~1000m however many cores the node had (#140).
-`[scale.kubernetes]` keeps only the HPA bounds; the gateway pod is sized in
-`[scale.gateway]`. The HPA scales on memory too (80% of the request), so a
-request below the idle footprint (1.7Gi at one worker on 0.37.7) pins the
-deployment at `max_replicas`. The dry-run command above renders the manifests
-locally once `bundle_storage_class` is set to any name (a placeholder for the
-RWX check that a real deploy satisfies on the platform).
+The app stays declared as `[project] kind/entry-point`, and the app pod is
+sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`, `memory_request`,
+`memory_limit` are all honoured there; the gateway pod is sized in
+`[scale.gateway]`). **Do not move it to `[apps.flowline]`.** On jac 0.37.7 an
+`[apps]` table makes `jac scale deploy` skip the client bundle build (the
+dry run's third line says "The served app has no client target"), so the
+pods come up API-only and `/` is a JSON 404 while `jac run` still serves
+the app locally (this took flowline-dev down on 2026-09-08, PR #176). That
+table is also the only home of `workers = "auto"`, so the worker count is
+fixed instead: `[serve.workers] count = "2"` becomes `JAC_SERVE_WORKERS=2`
+on the app pod (and on the gateway pod, which has no override of its own);
+keep it equal to the cores in `cpu_limit` (#140). Never write `"auto"`
+there: the manifest builder resolves it on the deploying machine, not in
+the pod (this Mac renders 10). The HPA scales on memory too (80% of the
+request), so a request below the idle footprint pins the deployment at
+`max_replicas`. The dry-run command above renders the manifests locally
+once `bundle_storage_class` is set to any name (a placeholder for the RWX
+check that a real deploy satisfies on the platform); `tests/smoke/
+deploy_gate.py` asserts its transcript in CI.
 
 ## Jac gotchas that have already cost real debugging time
 
@@ -329,7 +340,13 @@ keyboard type` for real key events. Assert on rendered text, not just
 coordinates — a stale `@eN` ref can produce a phantom pass.
 
 **CI** (`.github/workflows/ci.yml`) runs on every PR and on pushes to
-`main`/`dev`: `jac fmt --check --lintfix` over every tracked `.jac` except
+`main`/`dev`. The `serve` job installs the pinned jac, runs `jac install`,
+asserts the deploy dry run would build the client bundle with two workers
+(`tests/smoke/deploy_gate.py`), boots `jac run --no-dev` and drives it:
+`tests/smoke/api_gate.py` (shell, bundle, register, login, walkers, a
+concurrent burst) and `tests/smoke/browser_gate.py` (Playwright: sign up,
+create a task from the board, see the card). The `jac` job runs
+`jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release
 pinned in `jac.toml`. **Format with that exact version.** Release lines
