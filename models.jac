@@ -124,6 +124,9 @@ node Task {
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
         gh_synced_at: str = "",
+        # GitHub's updated_at of the newest item applied here; the sync keeps
+        # it monotonic so an older event can never roll a newer one back.
+        gh_updated_at: str = "",
         # GitHub sub-issue family, stamped by the sync. A parent carries its
         # summary counts; a child carries its parent's identity. Fields, not
         # edges: an edge would cost a traversal per row in every list.
