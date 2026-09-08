@@ -36,7 +36,10 @@ import from walkers.ghutil {
     gh_request,
     exchange_code,
     user_owns_installation,
-    clock
+    clock,
+    bind_installation,
+    unbind_installation,
+    root_for_installation
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
 
@@ -56,7 +59,10 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # Sub-issue child lists fetched per sync, stalest families first by
      # walk order. Counts are free (they ride the issue list); only the
      # child links cost a call, and only when a family changed.
-     SUB_ISSUE_CAP: int = 20;
+     SUB_ISSUE_CAP: int = 20,
+     # Installations this process has already seen in the index, so the
+     # status call costs a store read once rather than every page open.
+     BOUND_SEEN: dict[str, bool] = {};
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -87,6 +93,24 @@ def connection_view(c: any) -> GithubConnectionView {
         configured=configured,
         missing_config=gaps
     );
+}
+
+
+# Workspaces connected before the installation index existed get their
+# row on the next status call, once per process; no migration step. A store
+# hiccup leaves the memo unset so the next call tries again.
+def ensure_bound(holder: Root, c: any) -> None {
+    if not isinstance(c, GithubConnection) or c.installation_id == 0 {
+        return;
+    }
+    key = str(c.installation_id);
+    if key in BOUND_SEEN {
+        return;
+    }
+    if root_for_installation(c.installation_id)
+        or bind_installation(c.installation_id, jid(holder)) {
+        BOUND_SEEN[key] = True;
+    }
 }
 
 
@@ -125,7 +149,9 @@ walker GithubStatus {
     has reports: list[GithubConnectionView] = [];
 
     can look with Root entry {
-        report connection_view(connection_of(here));
+        c = connection_of(here);
+        ensure_bound(here, c);
+        report connection_view(c);
     }
 }
 
@@ -241,6 +267,7 @@ walker CompleteGithubInstall {
         target.account_avatar = avatar;
         target.status = "ok";
         target.connected_at = now_iso();
+        bind_installation(self.installation_id, jid(here));
         report {"ok": True, "connection": connection_view(target)};
     }
 }
@@ -257,6 +284,7 @@ walker DisconnectGithub {
         existing = [here-->[?:GithubConnection]];
         for c in existing {
             forget_installation(c.installation_id);
+            unbind_installation(c.installation_id);
             del c;
         }
         report {"ok": True, "disconnected": True};

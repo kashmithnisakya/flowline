@@ -9,14 +9,19 @@ import base64;
 import secrets;
 import requests;
 import jwt;
+import json;
+import logging;
 
 # Re-exported so callers get the guard and the request helpers from one
 # place; the definition itself is Python-free and lives in models.jac.
 import from models { valid_full_name }
+import from jaclang.server.shared_store { open_docs_store }
 
 glob GITHUB_API: str = "https://api.github.com",
      GITHUB_WEB: str = "https://github.com",
-     TOKEN_CACHE: dict[str, dict[str, any]] = {};
+     TOKEN_CACHE: dict[str, dict[str, any]] = {},
+     INSTALL_INDEX: str = "gh_installations",
+     log: logging.Logger = logging.getLogger("flowline.github");
 
 
 # Installation tokens live ~1h. Cache them in process memory rather than on
@@ -166,6 +171,96 @@ def forget_installation(installation_id: int) {
     if key in TOKEN_CACHE {
         TOKEN_CACHE.pop(key);
     }
+}
+
+
+# ------------------------------------------------------ installation index
+
+# A GitHub App has one webhook URL for every installation, and a delivery
+# names its tenant only by installation id. Walkers run on the caller's
+# root, so this shared table is the one map from an id back to the
+# workspace that connected it: id = installation id, doc = the root jid.
+def bind_installation(installation_id: int, root_jid: str) -> bool {
+    if installation_id <= 0 or not root_jid {
+        return False;
+    }
+    doc = {
+        "root_jid": root_jid,
+        "bound_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    };
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        db.rows(
+            "INSERT INTO jac_docs (collection, id, doc) "
+                + "VALUES (:c, :i, CAST(:d AS jsonb)) "
+                + "ON CONFLICT (collection, id) DO UPDATE SET doc = EXCLUDED.doc",
+            {"c": INSTALL_INDEX, "i": str(installation_id), "d": json.dumps(doc)}
+        );
+        return True;
+    } except Exception as e {
+        log.warning("installation index: bind failed: " + str(e));
+        return False;
+    }
+}
+
+
+def unbind_installation(installation_id: int) -> bool {
+    if installation_id <= 0 {
+        return False;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        return True;
+    } except Exception as e {
+        log.warning("installation index: unbind failed: " + str(e));
+        return False;
+    }
+}
+
+
+# The root jid bound to an installation, or "" when none is. Never raises:
+# a store hiccup reads as unknown, and callers treat unknown as ignore.
+def root_for_installation(installation_id: int) -> str {
+    if installation_id <= 0 {
+        return "";
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "";
+        }
+        rows = db.rows(
+            "SELECT doc FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        if not rows {
+            return "";
+        }
+        raw = rows[0][0];
+        doc = raw if isinstance(raw, dict) else json.loads(str(raw));
+        return str(doc.get("root_jid") or "");
+    } except Exception as e {
+        log.warning("installation index: lookup failed: " + str(e));
+        return "";
+    }
+}
+
+
+# The login GitHub stamps on this app's own writes, so a delivery echoing
+# them can be told apart from a person's change.
+def bot_login -> str {
+    slug = app_slug();
+    return slug + "[bot]" if slug else "";
 }
 
 
