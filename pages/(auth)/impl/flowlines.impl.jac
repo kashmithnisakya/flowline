@@ -8,12 +8,16 @@ impl FlowLinePage.boot -> None {
     # The board persists its project filter under the same key, so the two
     # tabs stay on the same project rather than each keeping a private idea
     # of what you are looking at.
-    stored = localStorage.getItem("standup_project") or "";
+    stored = localStorage.getItem("flowline_project")
+        or localStorage.getItem("standup_project")
+        or "";
     picked = stored or "all";
     projectId = picked;
     # The viewer projection survives reloads the same way the project
     # filter does. Anything but the exact "lanes" token means flow.
-    storedView = localStorage.getItem("standup_wf_view") or "";
+    storedView = localStorage.getItem("flowline_wf_view")
+        or localStorage.getItem("standup_wf_view")
+        or "";
     if storedView == "lanes" {
         lineView = "lanes";
     }
@@ -310,7 +314,7 @@ impl FlowLinePage.deleteTask -> None {
 impl FlowLinePage.selectProject(v: str) -> None {
     openStep = peekId;
     projectId = v;
-    localStorage.setItem("standup_project", v);
+    localStorage.setItem("flowline_project", v);
     await reload(v);
     # The panel obeys the filter too, so it reloads with the diagram.
     await refreshPeek(openStep, v);
@@ -331,7 +335,7 @@ impl FlowLinePage.loadMeta -> None {
 impl FlowLinePage.switchView(v: str) -> None {
     chosen = "lanes" if v == "lanes" else "flow";
     lineView = chosen;
-    localStorage.setItem("standup_wf_view", chosen);
+    localStorage.setItem("flowline_wf_view", chosen);
 }
 
 impl FlowLinePage.lanePlan -> dict[str, any] {

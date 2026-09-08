@@ -189,8 +189,8 @@ File-based routing with route groups:
   and a row opens `components/board/TaskDialog` on the same form dict and the
   same `UpdateTask` / `DeleteTask` walkers the board drives it with.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
-  create dialog; an already mounted board listens for `standup:open-task` /
-  `standup:new-task` instead (the palette uses both paths).
+  create dialog; an already mounted board listens for `flowline:open-task` /
+  `flowline:new-task` instead (the palette uses both paths).
 - **A log entry's `member_name` is every assignee comma-joined**, so split
   it before comparing to a member.
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit

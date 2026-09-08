@@ -49,7 +49,7 @@ def isoDaysAgo(back: int) -> str {
 # dispatchEvent and CustomEvent are absent from the checker's DOM typings.
 def announceRefresh {
     w: any = window;
-    w.dispatchEvent(new(w.CustomEvent, "standup:refresh"));
+    w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
 }
 
 

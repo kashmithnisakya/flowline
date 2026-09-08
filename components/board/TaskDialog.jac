@@ -396,7 +396,7 @@ def:pub TaskDialog(
                             <Label htmlFor="task-category">Category</Label>
                             <Input
                                 id="task-category"
-                                list="standup-categories"
+                                list="flowline-categories"
                                 className={FIELD}
                                 placeholder="Type or pick"
                                 value={form["category"]}
@@ -404,7 +404,7 @@ def:pub TaskDialog(
                                     "category", e.target.value
                                 ); }}
                             />
-                            <datalist id="standup-categories">
+                            <datalist id="flowline-categories">
                                 {for c in categories {
                                     <option key={c} value={c}/>
                                 }}

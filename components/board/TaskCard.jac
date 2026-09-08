@@ -111,7 +111,7 @@ def:pub TaskCard(
             onDragStart={lambda (e: DragEvent) {
                 dt = e.dataTransfer;
                 if dt {
-                    dt.setData("text/x-standup-task", task.id);
+                    dt.setData("text/x-flowline-task", task.id);
                     dt.effectAllowed = "move";
                 }
                 isDragging = True;
@@ -131,7 +131,7 @@ def:pub TaskCard(
                 e.stopPropagation();
                 dropHint = "";
                 dt = e.dataTransfer;
-                dragged = dt.getData("text/x-standup-task") if dt else "";
+                dragged = dt.getData("text/x-flowline-task") if dt else "";
                 if dragged and dragged != task.id {
                     onDropBeside(dragged, task.id, hoverHalf(e) == "above");
                 }
