@@ -57,6 +57,12 @@ default_model = "${LLM_MODEL:-gpt-4o-mini}"
 temperature = 0.2
 max_output_retries = 3
 
+# Two worker processes per app pod (matches the 2000m cpu_limit below); the
+# gateway pod gets the same count. Dev mode is single-process: run
+# `jac run -w 1 main.jac`, or keep JAC_SERVE_WORKERS=1 in .env.
+[serve.workers]
+count = "2"
+
 [scale.sso]
 host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
@@ -80,7 +86,8 @@ prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 app_name = "flowline"
 # App pod sizing. Only [apps.flowline.scale] can set workers = "auto", but on
 # jac 0.37.7 an [apps] table makes the deploy skip the client bundle (API-only
-# pods, / is a JSON 404), so the app stays under [project] with one worker.
+# pods, / is a JSON 404), so the app stays under [project] and the worker
+# count is fixed in [serve.workers] instead.
 cpu_request = "1000m"
 cpu_limit = "2000m"
 memory_request = "3Gi"
