@@ -5,6 +5,7 @@ New task button and see its card survive a reload. Every step is a real
 click or keystroke, so a dead button fails here. Usage: browser_gate.py [base_url]"""
 import re
 import sys
+import time
 import uuid
 
 from playwright.sync_api import expect, sync_playwright
@@ -18,14 +19,40 @@ def step(name: str) -> None:
 
 
 def settle(page, url_tail: str, title: str) -> None:
-    # A hard navigation can fire twice (an app page mounts twice on a full
-    # load), which aborts the first document; wait for the final one to render.
-    page.wait_for_url(re.compile(url_tail + "$"))
+    # A hard navigation can fire more than once (an app page mounts twice on
+    # a full load and repeats its redirect), which aborts the earlier document.
+    # Act only on a document that survives a quiet moment.
+    # page.url is a plain property: wait_for_url tracks a navigation and
+    # raises ERR_ABORTED when the app's repeated redirect cancels it.
+    deadline = time.time() + STEP_TIMEOUT_MS / 1000
+    while not re.search(url_tail + "$", page.url):
+        if time.time() > deadline:
+            raise TimeoutError(f"still on {page.url}, expected {url_tail}")
+        page.wait_for_timeout(250)
+    for _ in range(20):
+        token = uuid.uuid4().hex
+        try:
+            page.evaluate("t => { window.__gate_token = t; }", token)
+            page.wait_for_timeout(1500)
+            if page.evaluate("() => window.__gate_token") == token:
+                break
+        except Exception:
+            page.wait_for_timeout(500)
     expect(page.get_by_text(title).first).to_be_visible()
-    try:
-        page.wait_for_load_state("networkidle", timeout=8_000)
-    except Exception:
-        pass
+
+
+TRANSIENT = ("ERR_ABORTED", "detached", "context was destroyed", "navigating")
+
+
+def act(page, fn, tries: int = 3):
+    # Retry an action the page replaced out from under us.
+    for attempt in range(tries):
+        try:
+            return fn()
+        except Exception as exc:
+            if attempt == tries - 1 or not any(k in str(exc) for k in TRANSIENT):
+                raise
+            page.wait_for_timeout(1500)
 
 
 def run(page, tag: str) -> list[str]:
@@ -42,7 +69,7 @@ def run(page, tag: str) -> list[str]:
 
     step("setup wizard: organization")
     settle(page, "/setup", "Name your workspace")
-    page.get_by_placeholder("Acme Robotics").fill("CI Org")
+    act(page, lambda: page.get_by_placeholder("Acme Robotics").fill("CI Org"))
     page.get_by_placeholder("Priya Raman").fill("CI Runner")
     page.get_by_role("button", name="Continue", exact=True).click()
 
@@ -57,7 +84,7 @@ def run(page, tag: str) -> list[str]:
     settle(page, "/flowlines", "How does your team move work?")
 
     step("flow line: apply the template")
-    page.get_by_role("button", name="Use template", exact=True).click()
+    act(page, lambda: page.get_by_role("button", name="Use template", exact=True).click())
     expect(page.get_by_text("Your flow line is in")).to_be_visible()
     page.get_by_role("button", name="Done editing", exact=True).click()
 
@@ -66,7 +93,7 @@ def run(page, tag: str) -> list[str]:
     settle(page, "/board", "Board")
 
     step("board: create a task")
-    page.get_by_role("button", name="New task", exact=True).click()
+    act(page, lambda: page.get_by_role("button", name="New task", exact=True).click())
     dialog = page.locator("[role=dialog][data-state=open]")
     expect(dialog).to_be_visible()
     expect(dialog.get_by_text("New task", exact=True)).to_be_visible()
