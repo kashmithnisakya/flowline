@@ -2,17 +2,10 @@
 name = "flowline"
 jac-version = "==0.37.7"
 
-# The one app, declared as an [apps] table rather than [project] kind/entry-point:
-# per-app pod sizing (workers above all) is read only from [apps.<name>.scale],
-# and the implicit app has no such table.
 [apps.flowline]
 kind = "web-app"
 entry-point = "main.jac"
 
-# App pod sizing. `workers = "auto"` forks one worker per core of the CPU limit,
-# so the limit is the one knob: 2000m is 2 workers, each escaping the GIL that
-# capped a pod at ~1000m before jac 0.37 (#140). A pod idles at ~1.7Gi on 0.37.7;
-# keep the memory request above that or the HPA memory metric pins max_replicas.
 [apps.flowline.scale]
 workers = "auto"
 cpu_request = "1000m"
@@ -94,20 +87,13 @@ prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 
 [scale.kubernetes]
 app_name = "flowline"
-# HPA bounds, shared by the app and gateway deployments. Pod sizing lives with
-# each pod instead: [apps.flowline.scale] and [scale.gateway].
 min_replicas = 2
-# 6 pods x 2 workers is 12 cores, above the 10 x 1 ceiling before, on fewer pods
-# (the dev cluster already reports "Too many pods" when scheduling).
 max_replicas = 6
-# 70% of the app's 1000m request scales out at ~700m, a third of the 2000m limit.
-# Against the 50m default request the HPA sat at 1811%/50%, pinned at max.
 cpu_utilization_target = 70
 autoscaler_scale_up_max_pods = 4
 
 [scale.gateway]
 http_forward_timeout = 120.0
-# The gateway only proxies: 161Mi and ~1m CPU on dev under a 25 req/s load.
 cpu_request = "100m"
 memory_request = "512Mi"
 memory_limit = "2Gi"
@@ -119,17 +105,9 @@ enabled = true
 name = 'flowline'
 description = 'Jac IDE snapshot for flowline'
 
-# Pure modules stay on the server codespace (dual-emitted to the client by
-# reference). Left at the "native" default, `jac build --as client` (what a
-# deploy runs) compiles constants.jac to wasm and STATUSES reads as undefined
-# in the browser; `jac run` does not reproduce it.
 [placement]
 default = "server"
 
-# Placement overrides (jac 0.37, see CLAUDE.md). Module-level "server" pins make
-# a page's walker import a service-boundary import (RPC stubs + wire types)
-# instead of pulling the walker module into the browser bundle. Every new
-# walkers/* module needs a line here.
 [placement.pins]
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
