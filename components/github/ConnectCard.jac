@@ -1,5 +1,5 @@
 """The disconnected state: what connecting buys, and the button that starts it.
-No token field anywhere: standup connects through a GitHub App installation,
+No token field anywhere: Flowline connects through a GitHub App installation,
 so the credential is minted per request server-side and never typed or stored.
 """
 

@@ -138,7 +138,9 @@ def:pub BoardPage -> JsxPage {
 
     async can with entry {
         movesRef.current = 0;
-        stored = localStorage.getItem("standup_project") or "";
+        stored = localStorage.getItem("flowline_project")
+            or localStorage.getItem("standup_project")
+            or "";
         if stored {
             fProject = stored;
             # boot() runs in this same tick, where `fProject` still reads
@@ -191,19 +193,19 @@ def:pub BoardPage -> JsxPage {
             # The assistant dock lives in the layout, not in this tree, so an
             # applied proposal announces itself with an event rather than leaving
             # the new card invisible until the next poll.
-            window.addEventListener("standup:refresh", onFocus);
+            window.addEventListener("flowline:refresh", onFocus);
             # The command palette, mounted in the layout, asks an already
             # mounted board to open a card or the new-task dialog.
             onOpenTask = lambda (e: any) { pendingTaskId = str(e.detail or ""); };
             onNewTask = lambda { pendingTaskId = "new"; };
-            window.addEventListener("standup:open-task", onOpenTask);
-            window.addEventListener("standup:new-task", onNewTask);
+            window.addEventListener("flowline:open-task", onOpenTask);
+            window.addEventListener("flowline:new-task", onNewTask);
             timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
-                window.removeEventListener("standup:refresh", onFocus);
-                window.removeEventListener("standup:open-task", onOpenTask);
-                window.removeEventListener("standup:new-task", onNewTask);
+                window.removeEventListener("flowline:refresh", onFocus);
+                window.removeEventListener("flowline:open-task", onOpenTask);
+                window.removeEventListener("flowline:new-task", onNewTask);
                 window.clearInterval(timer);
             };
         },

@@ -159,7 +159,9 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
             + ("0" + mm if len(mm) < 2 else mm);
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
-        stored = localStorage.getItem("standup_project") or "";
+        stored = localStorage.getItem("flowline_project")
+            or localStorage.getItem("standup_project")
+            or "";
         if withWorkspace and stored and stored != "all" {
             found = False;
             for pr in fetchedProjects {
@@ -168,7 +170,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                 }
             }
             if not found {
-                localStorage.setItem("standup_project", "all");
+                localStorage.setItem("flowline_project", "all");
                 fProject = "all";
             }
         }
@@ -203,7 +205,7 @@ impl BoardPage.setProjectFilter(v: str) -> None {
     # The new value is handed to refreshOlder rather than read back: a
     # `has` assigned here is still the old value for the rest of this call.
     fProject = v;
-    localStorage.setItem("standup_project", v);
+    localStorage.setItem("flowline_project", v);
     refreshOlder(v, fAssignee, fCategory);
 }
 

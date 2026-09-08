@@ -433,7 +433,7 @@ impl GithubSection.importSelected -> None {
             # The board is a separate tree; without this it would not show the
             # new cards until its next poll.
             w: any = window;
-            w.dispatchEvent(new(w.CustomEvent, "standup:refresh"));
+            w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
         } else {
             toast(payload["message"] or "Could not import those issues");
         }

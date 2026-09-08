@@ -89,7 +89,7 @@ def:pub KanbanColumn(
             onDrop={lambda (e: DragEvent) {
                 e.preventDefault();
                 dt = e.dataTransfer;
-                taskId = dt.getData("text/x-standup-task") if dt else "";
+                taskId = dt.getData("text/x-flowline-task") if dt else "";
                 dragOver = False;
                 if taskId {
                     onDropTask(taskId, columnKey);

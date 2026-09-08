@@ -3,7 +3,7 @@ are searched on the server (ListTasks with `q`) once the query has two
 characters, debounced a beat, so the empty palette stays a short list of
 places and a big workspace never loads its history to open one card.
 Navigation goes through the runtime's navigate(); the board reacts to
-`standup:new-task` / `standup:open-task` when it is already mounted.
+`flowline:new-task` / `flowline:open-task` when it is already mounted.
 """
 
 import from "@jac/runtime" { navigate, useLocation, jacLogout }
@@ -175,7 +175,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
         if index < len(actionItems) {
             a = actionItems[index];
             if a["kind"] == "new-task" {
-                go("/board?new=1", "standup:new-task", "");
+                go("/board?new=1", "flowline:new-task", "");
             } elif a["kind"] == "theme" {
                 pref = getThemePref();
                 doc: any = document;
@@ -192,7 +192,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
         index = index - len(actionItems);
         if index < len(taskItems) {
             t = taskItems[index];
-            go("/board?task=" + t.id, "standup:open-task", t.id);
+            go("/board?task=" + t.id, "flowline:open-task", t.id);
         }
     }
 
