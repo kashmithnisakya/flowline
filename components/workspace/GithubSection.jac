@@ -210,8 +210,10 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     avatar = "";
     connectedAt = "";
     lastSync = "";
+    lastEvent = "";
     connectedAgo = "";
     lastSyncAgo = "";
+    lastEventAgo = "";
     if conn {
         connected = conn.connected;
         invalid = conn.status == "invalid";
@@ -219,13 +221,21 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         avatar = conn.account_avatar;
         connectedAt = shortStamp(conn.connected_at);
         lastSync = shortStamp(conn.last_sync_at);
+        lastEvent = shortStamp(conn.webhook_seen_at);
         connectedAgo = timeAgo(conn.connected_at);
         lastSyncAgo = timeAgo(conn.last_sync_at);
+        lastEventAgo = timeAgo(conn.webhook_seen_at);
     }
     exactStamps = connectedAt;
     if lastSync {
         exactStamps = exactStamps + " · last sync " + lastSync;
     }
+    if lastEvent {
+        exactStamps = exactStamps + " · last event " + lastEvent;
+    }
+    # Where the App's webhook must point; the receiver is served on the same
+    # origin as the app, so the page can spell it out.
+    webhookUrl = window.location.origin + "/webhook/GithubEvent";
 
     # The import destination is the repo's own project, chosen when the repo
     # was attached; the import bar shows it instead of asking every time.
@@ -299,6 +309,31 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 if lastSyncAgo
                                                 else " · not synced yet"}
                                         </p>
+                                        {if lastEventAgo {
+                                            <p
+                                                key="live"
+                                                className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                                            >
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+                                                />
+                                                {"Live · last event " + lastEventAgo}
+                                            </p>
+                                        } else {
+                                            <p
+                                                key="quiet"
+                                                className="mt-1 text-xs text-muted-foreground"
+                                            >
+                                                {"No events yet. In the GitHub App's settings, point the webhook at "}
+                                                <code
+                                                    className="rounded bg-muted px-1 py-0.5 text-[11px]"
+                                                >
+                                                    {webhookUrl}
+                                                </code>
+                                                {" and give it the secret from GITHUB_APP_WEBHOOK_SECRET."}
+                                            </p>
+                                        } }
                                     </div>
                                     <div className="ml-auto flex items-center gap-3">
                                         <span
