@@ -29,6 +29,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
     AUTO_SYNC["at"] = now;
     syncing = True;
     added: int = 0;
+    landed: int = 0;
     more = False;
     try {
         rounds = 0;
@@ -44,10 +45,13 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
                 break;
             }
             added = added + int(payload["auto_added"] or 0);
+            landed = landed + int(payload["drained"] or 0);
             more = bool(payload["has_more"]) and not payload["failure"];
         }
-        if added > 0 {
+        if added > 0 or landed > 0 {
             await loadAll();
+        }
+        if added > 0 {
             toast(
                 str(added)
                     + (

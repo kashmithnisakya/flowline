@@ -110,6 +110,13 @@ enabled = true
 name = 'flowline'
 description = 'Jac IDE snapshot for flowline'
 
+# GitHub App deliveries land on /webhook/GithubEvent. The runtime verifies
+# X-Hub-Signature-256 against this secret before the walker runs, so an
+# empty or wrong value means every delivery is refused, never applied.
+[scale.webhook]
+github_secret = "${GITHUB_APP_WEBHOOK_SECRET}"
+max_body_bytes = 2097152
+
 [placement]
 default = "server"
 
@@ -121,6 +128,7 @@ models = "server"
 "walkers.assistant" = "server"
 "walkers.board" = "server"
 "walkers.flowlines" = "server"
+"walkers.ghevents" = "server"
 "walkers.ghutil" = "server"
 "walkers.github" = "server"
 "walkers.insights" = "server"
