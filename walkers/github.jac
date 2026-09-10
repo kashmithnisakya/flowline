@@ -61,6 +61,11 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # A board mounts twice on a full page load; the auto pass skips itself
      # when a sync just ran so the double mount costs one GitHub call.
      AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0,
+     # While deliveries are flowing the poll is only a catch-up, so the auto
+     # pass waits this long instead; a workspace goes back to the short
+     # cooldown once the newest delivery is older than the window.
+     LIVE_SYNC_COOLDOWN_MINUTES: float = 15.0,
+     LIVE_WINDOW_MINUTES: float = 60.0,
      # Sub-issue child lists fetched per sync, stalest families first by
      # walk order. Counts are free (they ride the issue list); only the
      # child links cost a call, and only when a family changed.
@@ -1645,8 +1650,15 @@ walker SyncGithub {
             report not_connected();
             disengage;
         }
-        if self.auto and minutes_since(c.last_sync_at) < AUTO_SYNC_COOLDOWN_MINUTES {
-            report sync_summary([0, 0, 0, 0, 0, 0], False, "", c.last_sync_at, drained);
+        cooldown = AUTO_SYNC_COOLDOWN_MINUTES;
+        if minutes_since(installation_seen_at(c.installation_id))
+            < LIVE_WINDOW_MINUTES {
+            cooldown = LIVE_SYNC_COOLDOWN_MINUTES;
+        }
+        if self.auto and minutes_since(c.last_sync_at) < cooldown {
+            report sync_summary(
+                [0, 0, 0, 0, 0, 0], False, "", c.last_sync_at, drained, cooldown
+            );
             disengage;
         }
         budget = SYNC_PAGE_BUDGET;
@@ -1764,7 +1776,8 @@ walker SyncGithub {
             has_more,
             failure,
             ctx.stamp,
-            drained
+            drained,
+            cooldown
         );
     }
 }
@@ -1774,7 +1787,12 @@ walker SyncGithub {
 # same keys after an increment, a cooldown skip, or a GitHub failure.
 # `counts` is [linked, refreshed, auto_added, auto_done, scanned, pages].
 def sync_summary(
-    counts: list[int], has_more: bool, failure: str, last_sync_at: str, drained: int = 0
+    counts: list[int],
+    has_more: bool,
+    failure: str,
+    last_sync_at: str,
+    drained: int = 0,
+    cooldown: float = 0.0
 ) -> dict[str, any] {
     return {
         "ok": True,
@@ -1785,6 +1803,7 @@ def sync_summary(
         "scanned": counts[4],
         "pages": counts[5],
         "drained": drained,
+        "cooldown_minutes": cooldown,
         "has_more": has_more,
         "failure": failure,
         "last_sync_at": last_sync_at
