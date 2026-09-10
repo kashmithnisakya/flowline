@@ -76,6 +76,27 @@ impl BoardPage.loadAll -> None {
 }
 
 
+impl BoardPage.drainDeliveries -> None {
+    # A hidden tab and a running sync both skip the tick but keep the
+    # timer going; the sync drains on its own and would race this one.
+    d: any = document;
+    if not d.hidden and not syncing {
+        try {
+            result = root spawn DrainGithubEvents();
+            payload = result.reports[0] if result.reports else None;
+            if payload and payload["ok"] and int(payload["applied"] or 0) > 0 {
+                await refreshTasks();
+            }
+        } except Exception as e {
+            # Quiet: nothing was asked for, and the queue keeps the row for
+            # the next tick.
+            payload = None;
+        }
+    }
+    drainTick = drainTick + 1;
+}
+
+
 impl BoardPage.refreshTasks -> None {
     await loadBoard(False);
 }

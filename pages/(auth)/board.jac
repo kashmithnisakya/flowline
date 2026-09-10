@@ -21,6 +21,7 @@ import from ...walkers.tasks {
     DeleteTask
 }
 import from ...walkers.github { SyncGithub, CreateIssueFromTask }
+import from ...walkers.ghevents { DrainGithubEvents }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
@@ -65,7 +66,11 @@ glob BLANK_TASK: dict[str, str] = {
 # load mounts the board twice and each instance owns its own `has` flags.
 glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
      AUTO_SYNC_ROUNDS: int = 3,
-     SYNC_ROUNDS: int = 40;
+     SYNC_ROUNDS: int = 40,
+     # How often an open board applies queued webhook deliveries: one keyed
+     # store read per tick, no GitHub call, so it can be far shorter than
+     # the 60s task poll.
+     DRAIN_MS: int = 20000;
 
 
 def:pub BoardPage -> JsxPage {
@@ -100,6 +105,9 @@ def:pub BoardPage -> JsxPage {
         steps: list[StepView] = [],
         repos: list[RepoView] = [],
         ghConnected: bool = False,
+        # Bumped after each drain so the effect below re-arms its timer with
+        # the current state (a setInterval closure would keep the first one).
+        drainTick: int = 0,
         syncing: bool = False,
         syncNote: str = "",
         loading: bool = True,
@@ -212,7 +220,22 @@ def:pub BoardPage -> JsxPage {
         []
     );
 
+    # Webhook deliveries queue on the server until the workspace applies
+    # them; while the board is open that is this timer, so a merged PR moves
+    # its card within a tick rather than on the next visit.
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if ghConnected and not loading {
+                timer = window.setTimeout(lambda { drainDeliveries(); }, DRAIN_MS);
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [ghConnected, loading, drainTick]
+    );
+
     async def boot -> None;
+    async def drainDeliveries -> None;
     # loadAll refreshes everything (boot, and every write that can touch the
     # roster); refreshTasks is the poll's path and skips the workspace lists,
     # which are edited on other pages. Both run through loadBoard.
