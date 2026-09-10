@@ -365,8 +365,14 @@ coordinates — a stale `@eN` ref can produce a phantom pass.
 asserts the deploy dry run would build the client bundle with two workers
 (`tests/smoke/deploy_gate.py`), boots `jac run --no-dev` and drives it:
 `tests/smoke/api_gate.py` (shell, bundle, register, login, walkers, a
-concurrent burst) and `tests/smoke/browser_gate.py` (Playwright: sign up,
-create a task from the board, see the card). The `jac` job runs
+concurrent burst), `tests/smoke/webhook_gate.py` (the GitHub integration end
+to end against `tests/smoke/github_stub.py`, a local stand-in for the few
+GitHub endpoints the app calls: the connect round trip binds the
+installation, the poll back-fills, signed deliveries are queued by the
+receiver and applied by the drain, three workspaces stay isolated; the App
+env and `GITHUB_API_BASE` / `GITHUB_WEB_BASE` come from the workflow, no
+secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, create a
+task from the board, see the card). The `jac` job runs
 `jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release

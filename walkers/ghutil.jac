@@ -17,8 +17,11 @@ import logging;
 import from models { valid_full_name }
 import from jaclang.server.shared_store { open_docs_store }
 
-glob GITHUB_API: str = "https://api.github.com",
-     GITHUB_WEB: str = "https://github.com",
+# The two bases are overridable so the smoke suite can point the app at
+# tests/smoke/github_stub.py; a deployment never sets them.
+glob GITHUB_API: str = os.environ.get("GITHUB_API_BASE")
+         or "https://api.github.com",
+     GITHUB_WEB: str = os.environ.get("GITHUB_WEB_BASE") or "https://github.com",
      TOKEN_CACHE: dict[str, dict[str, any]] = {},
      INSTALL_INDEX: str = "gh_installations",
      DELIVERIES: str = "gh_deliveries",
