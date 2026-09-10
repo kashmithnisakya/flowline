@@ -71,7 +71,13 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   orphans whatever production still has.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
-  Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+  Walkers are **bare (JWT-required)**; there are no `:pub` walkers. The one
+  exception is `walkers/ghevents.jac`: `GithubEvent` is a webhook-protocol
+  walker (`/webhook/GithubEvent`, never `/walker/`) whose caller is GitHub,
+  authenticated by the runtime's signature check before the walker exists.
+  It runs as the system identity and only queues the delivery in the shared
+  docs store; `DrainGithubEvents` (and every `SyncGithub`) applies the queue
+  in the workspace's own session, so no walker ever writes a foreign root.
 - **A per-task edge hop is a separate traversal; one traversal yielding many
   edges is not.** `Task.to_view()` hops three times (assignees, project,
   milestone), and at 2,000 tasks on the pinned runtime that measured ~113ms
@@ -132,10 +138,13 @@ fallbacks are load-bearing — do not assume a task has a step.
 ### Security model — the one thing not to regress
 
 Isolation is structural: authenticated walkers run on the caller's own root, so
-`[root --> …]` cannot reach another tenant. **But `jobj(id)` resolves any node
-id regardless of owner — resolution is not authorization.** Every jid-addressed
+`[root --> …]` cannot reach another tenant. `jobj(id)` is owner-gated on
+0.37.7 (a foreign root or node resolves to `None`, even for the system
+identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task` /
-`find_log_entry` lookup bases) before touching anything.
+`find_log_entry` lookup bases) before touching anything. That gate is also why
+the webhook receiver cannot apply a delivery itself: it queues, the tenant
+drains (see `walkers/ghevents.jac`).
 
 **An uncaught walker exception is returned to the browser with its Python
 traceback** (the runtime sets `include_traceback` unconditionally, no config
@@ -149,6 +158,18 @@ Watch the container variable inside abilities: in a `Task`/`LogDay` entry
 ability `here` is the *task or day*, not the root, so ownership checks use the
 holder reached via `[here<--]`. Getting this wrong silently drops assignee and
 project links rather than erroring.
+
+**Webhook deliveries never touch a tenant graph from the receiver.**
+`GithubEvent` (system identity) checks the `installation.id` against the
+`gh_installations` index that `CompleteGithubInstall` writes, drops the App's
+own echoes, and inserts the delivery into `gh_deliveries` keyed by GitHub's
+delivery id, so a redelivery is a primary-key no-op. `drain_deliveries` runs
+in the tenant's session (from `DrainGithubEvents` or the start of
+`SyncGithub`), reads only its own installation's rows and only when the index
+binds that installation to this root (the workspace that last connected it),
+drops items older than the task's last applied `updated_at`, stamps the log
+with the event's own time, and applies through the helpers the poll uses.
+Neither side calls GitHub.
 
 ### Client
 

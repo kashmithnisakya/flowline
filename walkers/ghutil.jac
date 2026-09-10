@@ -21,6 +21,7 @@ glob GITHUB_API: str = "https://api.github.com",
      GITHUB_WEB: str = "https://github.com",
      TOKEN_CACHE: dict[str, dict[str, any]] = {},
      INSTALL_INDEX: str = "gh_installations",
+     DELIVERIES: str = "gh_deliveries",
      log: logging.Logger = logging.getLogger("flowline.github");
 
 
@@ -220,6 +221,7 @@ def unbind_installation(installation_id: int) -> bool {
             "DELETE FROM jac_docs WHERE collection = :c AND id = :i",
             {"c": INSTALL_INDEX, "i": str(installation_id)}
         );
+        drop_deliveries(installation_id);
         return True;
     } except Exception as e {
         log.warning("installation index: unbind failed: " + str(e));
@@ -261,6 +263,178 @@ def root_for_installation(installation_id: int) -> str {
 def bot_login -> str {
     slug = app_slug();
     return slug + "[bot]" if slug else "";
+}
+
+
+# ------------------------------------------------------------- deliveries
+
+# Verified deliveries wait here until the workspace's own session applies
+# them: the receiver runs as the system identity, which must never write a
+# tenant's graph. The row id is GitHub's delivery id, so a redelivery is
+# refused by the primary key rather than by anything remembered.
+def utc_stamp -> str {
+    now = time.time();
+    frac = int((now - int(now)) * 1000000);
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now))
+        + "."
+        + str(frac).rjust(6, "0")
+        + "Z";
+}
+
+
+def enqueue_delivery(
+    installation_id: int, delivery_id: str, payload: dict[str, any]
+) -> str {
+    key = delivery_id or "local-" + secrets.token_hex(12);
+    doc = {
+        "installation_id": str(installation_id),
+        "received_at": utc_stamp(),
+        "applied_at": "",
+        "outcome": "",
+        "payload": payload
+    };
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "unavailable";
+        }
+        rows = db.rows(
+            "INSERT INTO jac_docs (collection, id, doc) "
+                + "VALUES (:c, :i, CAST(:d AS jsonb)) "
+                + "ON CONFLICT (collection, id) DO NOTHING RETURNING id",
+            {"c": DELIVERIES, "i": key, "d": json.dumps(doc)}
+        );
+        return "queued" if rows else "duplicate";
+    } except Exception as e {
+        log.warning("deliveries: enqueue failed: " + str(e));
+        return "unavailable";
+    }
+}
+
+
+def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]] {
+    found: list[dict[str, any]] = [];
+    try {
+        db = open_docs_store();
+        if db is None {
+            return found;
+        }
+        rows = db.rows(
+            "SELECT id, doc FROM jac_docs WHERE collection = :c "
+                + "AND doc->>'installation_id' = :i AND doc->>'applied_at' = '' "
+                + "ORDER BY doc->>'received_at', id LIMIT "
+                + str(int(limit)),
+            {"c": DELIVERIES, "i": str(installation_id)}
+        );
+        for (rid, raw) in rows {
+            doc = raw if isinstance(raw, dict) else json.loads(str(raw));
+            doc["id"] = str(rid);
+            found.append(doc);
+        }
+    } except Exception as e {
+        log.warning("deliveries: read failed: " + str(e));
+    }
+    return found;
+}
+
+
+def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps({"applied_at": applied_at, "outcome": outcome}),
+                "c": DELIVERIES,
+                "i": delivery_id
+            }
+        );
+    } except Exception as e {
+        log.warning("deliveries: mark failed: " + str(e));
+    }
+}
+
+
+# Applied rows stay a week as the delivery log, then go.
+def purge_deliveries(installation_id: int, before: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c "
+                + "AND doc->>'installation_id' = :i "
+                + "AND doc->>'applied_at' <> '' AND doc->>'applied_at' < :b",
+            {"c": DELIVERIES, "i": str(installation_id), "b": before}
+        );
+    } except Exception as e {
+        log.warning("deliveries: purge failed: " + str(e));
+    }
+}
+
+
+def drop_deliveries(installation_id: int) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND doc->>'installation_id' = :i",
+            {"c": DELIVERIES, "i": str(installation_id)}
+        );
+    } except Exception as e {
+        log.warning("deliveries: drop failed: " + str(e));
+    }
+}
+
+
+# The newest verified delivery for an installation, which is what "live"
+# means on the GitHub tab even while the deliveries wait in the queue.
+def touch_installation(installation_id: int, seen_at: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps({"webhook_seen_at": seen_at}),
+                "c": INSTALL_INDEX,
+                "i": str(installation_id)
+            }
+        );
+    } except Exception as e {
+        log.warning("installation index: touch failed: " + str(e));
+    }
+}
+
+
+def installation_seen_at(installation_id: int) -> str {
+    if installation_id <= 0 {
+        return "";
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "";
+        }
+        rows = db.rows(
+            "SELECT doc->>'webhook_seen_at' FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        return str(rows[0][0] or "") if rows else "";
+    } except Exception as e {
+        log.warning("installation index: seen lookup failed: " + str(e));
+        return "";
+    }
 }
 
 

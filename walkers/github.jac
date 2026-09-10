@@ -23,7 +23,7 @@ import from models {
     owned,
     repo_view
 }
-import from walkers.util { now_iso, minutes_since, clean_tags }
+import from walkers.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from walkers.log { record_task_event }
 import from walkers.tasks { find_task, status_for_step }
 import from walkers.ghutil {
@@ -39,7 +39,12 @@ import from walkers.ghutil {
     clock,
     bind_installation,
     unbind_installation,
-    root_for_installation
+    root_for_installation,
+    installation_seen_at,
+    pending_deliveries,
+    mark_delivered,
+    purge_deliveries,
+    log
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
 
@@ -62,7 +67,10 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      SUB_ISSUE_CAP: int = 20,
      # Installations this process has already seen in the index, so the
      # status call costs a store read once rather than every page open.
-     BOUND_SEEN: dict[str, bool] = {};
+     BOUND_SEEN: dict[str, bool] = {},
+     # Queued webhook deliveries applied per drain; a longer backlog drains
+     # over successive calls.
+     DRAIN_LIMIT: int = 200;
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -90,6 +98,7 @@ def connection_view(c: any) -> GithubConnectionView {
         status=c.status,
         connected_at=c.connected_at,
         last_sync_at=c.last_sync_at,
+        webhook_seen_at=installation_seen_at(c.installation_id),
         configured=configured,
         missing_config=gaps
     );
@@ -1228,6 +1237,14 @@ def stamp_updated(t: Task, item: dict[str, any]) {
 }
 
 
+def stamp_pr_updated(t: Task, item: dict[str, any]) {
+    updated = str(item.get("updated_at") or "");
+    if updated > t.pr_updated_at {
+        t.pr_updated_at = updated;
+    }
+}
+
+
 # One PR off the stream: refresh the linked task's PR state and, for an
 # opted-in repo, land a merge on the done step. Unlinked PRs are skipped.
 def apply_pr_item(
@@ -1259,7 +1276,7 @@ def apply_pr_item(
         }
     }
     pt.gh_synced_at = ctx.stamp;
-    stamp_updated(pt, item);
+    stamp_pr_updated(pt, item);
 }
 
 
@@ -1373,6 +1390,239 @@ def refresh_family(ctx: SyncContext, full_name: str, key: str, number: int) {
 }
 
 
+# ------------------------------------------------------------- deliveries
+
+# Everything below applies the webhook deliveries the receiver queued, in the
+# workspace's own session and through the helpers the poll uses; nothing
+# here calls GitHub.
+def delivery_outcome(kind: str, detail: str = "") -> dict[str, any] {
+    return {"ok": True, "outcome": kind, "detail": detail};
+}
+
+
+# When GitHub says the change happened, so the log files it under that day
+# rather than under the delivery's arrival.
+def event_time(item: dict[str, any]) -> str {
+    stamp = str(
+        item.get("merged_at") or item.get("closed_at") or item.get("updated_at") or ""
+    );
+    return stamp or now_iso();
+}
+
+
+# Deliveries arrive out of order; an item no newer than the last one applied
+# to the task would roll state back.
+def stale(item: dict[str, any], seen: str) -> bool {
+    updated = str(item.get("updated_at") or "");
+    return bool(updated) and bool(seen) and updated <= seen;
+}
+
+
+def repo_of(repo: dict[str, any], item: dict[str, any]) -> str {
+    named = str(repo.get("full_name") or "");
+    return named or repo_from_api_url(str(item.get("repository_url") or ""));
+}
+
+
+def repo_project_of(ctx: SyncContext, full_name: str) -> any {
+    attached = [ctx.by_name[full_name]<-:HasRepo:<-[?:Project]];
+    return attached[0] if attached else None;
+}
+
+
+def apply_issue(
+    ctx: SyncContext, full_name: str, action: str, item: dict[str, any]
+) -> dict[str, any] {
+    number = int(item.get("number") or 0);
+    if number <= 0 {
+        return delivery_outcome("ignored", "no issue number");
+    }
+    key = full_name + "#" + str(number);
+    if item.get("pull_request") {
+        return apply_pull(ctx, full_name, item);
+    }
+    if action == "deleted" or action == "transferred" {
+        if key in ctx.task_by_key {
+            t = ctx.task_by_key[key];
+            t.gh_issue_number = 0;
+            t.gh_issue_state = "";
+            t.gh_synced_at = ctx.stamp;
+            return delivery_outcome("unlinked", key);
+        }
+        return delivery_outcome("ignored", key);
+    }
+    if key in ctx.task_by_key and stale(item, ctx.task_by_key[key].gh_updated_at) {
+        return delivery_outcome("stale", key);
+    }
+    apply_issue_item(
+        ctx, ctx.by_name[full_name], repo_project_of(ctx, full_name), key, number, item
+    );
+    return delivery_outcome("applied", key);
+}
+
+
+def apply_pull(
+    ctx: SyncContext, full_name: str, item: dict[str, any]
+) -> dict[str, any] {
+    number = int(item.get("number") or 0);
+    key = full_name + "#" + str(number);
+    if number <= 0 or key not in ctx.task_by_pr {
+        return delivery_outcome("unlinked", key);
+    }
+    if stale(item, ctx.task_by_pr[key].pr_updated_at) {
+        return delivery_outcome("stale", key);
+    }
+    apply_pr_item(ctx, full_name, key, item);
+    return delivery_outcome("applied", key);
+}
+
+
+# Family edges arrive as their own event, so the counts and the parent link
+# come straight from the payload instead of the poll's child-list refetch.
+def apply_family(
+    ctx: SyncContext,
+    action: str,
+    parent: dict[str, any],
+    parent_repo: dict[str, any],
+    child: dict[str, any],
+    child_repo: dict[str, any]
+) -> dict[str, any] {
+    p_repo = repo_of(parent_repo, parent);
+    c_repo = repo_of(child_repo, child);
+    p_num = int(parent.get("number") or 0);
+    c_num = int(child.get("number") or 0);
+    if not p_repo or not c_repo or p_num <= 0 or c_num <= 0 {
+        return delivery_outcome("ignored", "family payload incomplete");
+    }
+    if p_repo not in ctx.tracked and c_repo not in ctx.tracked {
+        return delivery_outcome("untracked", p_repo + " / " + c_repo);
+    }
+    added = action.endswith("_added");
+    touched = 0;
+    child_key = c_repo + "#" + str(c_num);
+    if child_key in ctx.task_by_key {
+        kid = ctx.task_by_key[child_key];
+        if added {
+            kid.gh_parent_repo = p_repo;
+            kid.gh_parent_number = p_num;
+        } elif kid.gh_parent_repo == p_repo and kid.gh_parent_number == p_num {
+            kid.gh_parent_repo = "";
+            kid.gh_parent_number = 0;
+        }
+        kid.gh_synced_at = ctx.stamp;
+        touched = touched + 1;
+    }
+    parent_key = p_repo + "#" + str(p_num);
+    if parent_key in ctx.task_by_key {
+        par = ctx.task_by_key[parent_key];
+        subs = parent.get("sub_issues_summary") or {};
+        if isinstance(subs, dict) and subs {
+            par.gh_sub_total = int(subs.get("total") or 0);
+            par.gh_sub_done = int(subs.get("completed") or 0);
+        } elif added {
+            par.gh_sub_total = par.gh_sub_total + 1;
+        } elif par.gh_sub_total > 0 {
+            par.gh_sub_total = par.gh_sub_total - 1;
+        }
+        par.gh_synced_at = ctx.stamp;
+        touched = touched + 1;
+    }
+    if touched == 0 {
+        return delivery_outcome("unlinked", parent_key + " > " + child_key);
+    }
+    return delivery_outcome("applied", parent_key + " > " + child_key);
+}
+
+
+def apply_delivery(ctx: SyncContext, payload: dict[str, any]) -> dict[str, any] {
+    kind = str(payload.get("event") or "");
+    action = str(payload.get("action") or "");
+    item = payload.get("issue") or {};
+    if kind == "pull_request" {
+        item = payload.get("pull_request") or {};
+    } elif kind == "sub_issues" {
+        item = payload.get("parent_issue") or {};
+    }
+    ctx.stamp = event_time(item if isinstance(item, dict) else {});
+    if kind == "sub_issues" {
+        return apply_family(
+            ctx,
+            action,
+            payload.get("parent_issue") or {},
+            payload.get("parent_issue_repo") or {},
+            payload.get("sub_issue") or {},
+            payload.get("sub_issue_repo") or {}
+        );
+    }
+    repo = payload.get("repository") or {};
+    full_name = str(repo.get("full_name") or "") if isinstance(repo, dict) else "";
+    if full_name not in ctx.tracked {
+        return delivery_outcome("untracked", full_name);
+    }
+    if kind == "issues" {
+        return apply_issue(ctx, full_name, action, payload.get("issue") or {});
+    }
+    if kind == "pull_request" {
+        return apply_pull(ctx, full_name, payload.get("pull_request") or {});
+    }
+    return delivery_outcome("unsupported", kind + "." + action);
+}
+
+
+# Apply what the receiver queued for this workspace, oldest first. The index
+# names one workspace per installation, and only that one drains, so two
+# accounts holding the same installation cannot race for the queue. One
+# context serves the batch; each delivery sets the stamp to its own event
+# time; a delivery that raises is marked failed so it cannot block the rest.
+def drain_deliveries(holder: Root, c: any, limit: int) -> dict[str, any] {
+    counts: dict[str, any] = {
+        "drained": 0,
+        "applied": 0,
+        "added": 0,
+        "moved": 0,
+        "failed": 0
+    };
+    if not isinstance(c, GithubConnection) or c.installation_id == 0 {
+        return counts;
+    }
+    if root_for_installation(c.installation_id) != jid(holder) {
+        return counts;
+    }
+    rows = pending_deliveries(c.installation_id, limit);
+    if not rows {
+        return counts;
+    }
+    ctx = sync_context(holder, c, "", now_iso());
+    for row in rows {
+        payload = row.get("payload") or {};
+        kind = "";
+        try {
+            result = apply_delivery(ctx, payload if isinstance(payload, dict) else {});
+            kind = str(result.get("outcome") or "");
+            if kind == "applied" {
+                counts["applied"] = counts["applied"] + 1;
+            }
+        } except Exception as e {
+            kind = "failed";
+            counts["failed"] = counts["failed"] + 1;
+            log.warning(
+                "deliveries: apply failed for "
+                    + str(row.get("id"))
+                    + ": "
+                    + str(e)
+                    + "; the poll repairs the row on the next sync"
+            );
+        }
+        mark_delivered(str(row.get("id")), now_iso(), kind);
+        counts["drained"] = counts["drained"] + 1;
+    }
+    counts["added"] = ctx.auto_added;
+    counts["moved"] = ctx.auto_done_moves;
+    purge_deliveries(c.installation_id, shift_day(today_iso(), -7));
+    return counts;
+}
+
+
 walker SyncGithub {
     """One bounded increment of the GitHub sync. Every tracked repo's issues
     stream (issues AND pull requests, oldest update first) is read from the
@@ -1386,15 +1636,20 @@ walker SyncGithub {
 
     can refresh with Root entry {
         c = connection_of(here);
+        if not isinstance(c, GithubConnection) or c.installation_id == 0 {
+            report not_connected();
+            disengage;
+        }
+        # Queued deliveries first: they need no token, no budget and no
+        # cooldown, and a board open is exactly when they should land.
+        drained = int(drain_deliveries(here, c, DRAIN_LIMIT)["applied"]);
         token = token_of(c);
         if not token {
             report not_connected();
             disengage;
         }
-        if self.auto
-            and isinstance(c, GithubConnection)
-            and minutes_since(c.last_sync_at) < AUTO_SYNC_COOLDOWN_MINUTES {
-            report sync_summary([0, 0, 0, 0, 0, 0], False, "", c.last_sync_at);
+        if self.auto and minutes_since(c.last_sync_at) < AUTO_SYNC_COOLDOWN_MINUTES {
+            report sync_summary([0, 0, 0, 0, 0, 0], False, "", c.last_sync_at, drained);
             disengage;
         }
         budget = SYNC_PAGE_BUDGET;
@@ -1511,7 +1766,8 @@ walker SyncGithub {
             ],
             has_more,
             failure,
-            ctx.stamp
+            ctx.stamp,
+            drained
         );
     }
 }
@@ -1521,7 +1777,7 @@ walker SyncGithub {
 # same keys after an increment, a cooldown skip, or a GitHub failure.
 # `counts` is [linked, refreshed, auto_added, auto_done, scanned, pages].
 def sync_summary(
-    counts: list[int], has_more: bool, failure: str, last_sync_at: str
+    counts: list[int], has_more: bool, failure: str, last_sync_at: str, drained: int = 0
 ) -> dict[str, any] {
     return {
         "ok": True,
@@ -1531,6 +1787,7 @@ def sync_summary(
         "auto_done": counts[3],
         "scanned": counts[4],
         "pages": counts[5],
+        "drained": drained,
         "has_more": has_more,
         "failure": failure,
         "last_sync_at": last_sync_at
