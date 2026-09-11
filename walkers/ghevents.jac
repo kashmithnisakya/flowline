@@ -22,7 +22,13 @@ import from walkers.ghutil {
 }
 
 glob log: logging.Logger = logging.getLogger("flowline.github"),
-     QUEUED_EVENTS: list[str] = ["issues", "pull_request", "sub_issues"];
+     QUEUED_EVENTS: list[str] = [
+         "issues",
+         "pull_request",
+         "sub_issues",
+         "installation",
+         "installation_repositories"
+     ];
 
 
 def outcome(kind: str, detail: str = "") -> dict[str, any] {
@@ -47,6 +53,7 @@ walker GithubEvent {
         parent_issue: dict[str, any] = {},
         sub_issue_repo: dict[str, any] = {},
         parent_issue_repo: dict[str, any] = {},
+        repositories_removed: list[dict[str, any]] = [],
         reports: list[dict[str, any]] = [];
 
     def event_kind -> str {
@@ -103,7 +110,12 @@ walker GithubEvent {
             "sub_issue": self.sub_issue,
             "parent_issue": self.parent_issue,
             "sub_issue_repo": self.sub_issue_repo,
-            "parent_issue_repo": self.parent_issue_repo
+            "parent_issue_repo": self.parent_issue_repo,
+            "repositories_removed": [
+                {"full_name": str(r.get("full_name") or "")}
+                for r in self.repositories_removed
+                if isinstance(r, dict)
+            ]
         };
         state = enqueue_delivery(inst, self.delivery, payload);
         if state == "unavailable" {
