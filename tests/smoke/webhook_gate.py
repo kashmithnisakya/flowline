@@ -162,6 +162,16 @@ def task_by_title(title):
     return next((r for r in tasks_all() if r.get("title") == title), None)
 
 
+def repo_flags(full_name):
+    status, raw = req(BASE, "POST", "/walker/ListRepos", {})
+    reps = (json.loads(raw).get("data") or {}).get("reports") or []
+    rows = reps[0] if reps and isinstance(reps[0], list) else reps
+    for r in rows:
+        if r.get("full_name") == full_name:
+            return (bool(r.get("auto_sync")), bool(r.get("auto_done")))
+    return None
+
+
 def log_rows():
     rows, page = [], 1
     while True:
@@ -367,6 +377,35 @@ def main() -> int:
           s.get("ok") and s.get("cooldown_minutes") == 1.0 and s.get("pages", 0) >= 1, s)
     s = walker("SyncGithub", {"auto": True})
     check("  second auto pass inside the minute is skipped", s.get("ok") and s.get("pages") == 0 and s.get("cooldown_minutes") == 1.0, s)
+
+    # ---------------------------------------------------------- the App's lifecycle, on D
+    print("== installation lifecycle (D)")
+    walker("SetRepoAutoDone", {"repo_id": rid_d, "enabled": True})
+    check("repo starts with auto-sync and auto-done on", repo_flags(REPO) == (True, True), repo_flags(REPO))
+    rep, dr = push("installation_repositories", envelope("removed", inst=INST_D, repositories_removed=[{"full_name": REPO}, {"full_name": "someone/else"}]))
+    check("installation_repositories.removed turns auto-sync and auto-done off", dr.get("applied") == 1 and repo_flags(REPO) == (False, False), (dr, repo_flags(REPO)))
+    req(STUB, "POST", "/_stub/reset", {
+        "installations": [INST_A, INST_B, INST_A2, INST_D],
+        "repos": {REPO: [
+            issue(1, "open", "2026-09-02T10:00:00Z", title="Stub issue one"),
+            issue(2, "open", "2026-09-02T11:00:00Z", title="Stub issue two"),
+            issue(3, "closed", "2026-09-02T12:00:00Z", "2026-09-02T12:00:00Z", title="Stub issue three"),
+            issue(4, "open", "2026-09-03T09:00:00Z", title="Stub issue four"),
+        ]},
+    }, auth=False)
+    s = walker("SyncGithub")
+    check("  the next sync scans the repo but files nothing", s.get("ok") and s.get("scanned", 0) >= 1 and s.get("auto_added") == 0 and task_by_issue(4) is None, s)
+    rep, dr = push("installation", envelope("suspend", inst=INST_D))
+    check("installation.suspend marks the connection invalid", dr.get("applied") == 1 and walker("GithubStatus").get("status") == "invalid", (dr, walker("GithubStatus")))
+    rep, dr = push("installation", envelope("unsuspend", inst=INST_D))
+    check("installation.unsuspend restores it", dr.get("applied") == 1 and walker("GithubStatus").get("status") == "ok", (dr, walker("GithubStatus")))
+    rep, dr = push("installation", envelope("deleted", inst=INST_D))
+    check("installation.deleted marks the connection invalid", dr.get("applied") == 1 and walker("GithubStatus").get("status") == "invalid", (dr, walker("GithubStatus")))
+    status, rep = deliver("issues", envelope("opened", inst=INST_D, issue=issue(777007, "open", iso(0), title="After delete probe")))
+    check("  later deliveries for it are dropped at the receiver", rep.get("outcome") == "unknown_installation", rep)
+    walker("GithubStatus")
+    status, rep = deliver("issues", envelope("opened", inst=INST_D, issue=issue(777008, "open", iso(0), title="After status probe")))
+    check("  and the status call does not rebind it", rep.get("outcome") == "unknown_installation" and drain().get("drained") == 0, rep)
 
     print("webhook gate: " + ("PASS" if not FAILS else f"FAIL ({len(FAILS)})"))
     return 1 if FAILS else 0
