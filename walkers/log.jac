@@ -12,7 +12,6 @@ import from models {
     Logged,
     By,
     AssignedTo,
-    ForProject,
     resolve,
     on_attached,
     owned
@@ -161,7 +160,7 @@ walker LogActivity {
         tags_snap = "";
         m = resolve(self.member_id);
         if isinstance(m, Member) {
-            member_name = m.name;
+            member_name = m.full_name();
             tags_snap = ", ".join(m.tags);
         }
         project_name = "";
@@ -212,14 +211,14 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     names: list[str] = [];
     tag_pool: list[str] = [];
     for a in [task->:AssignedTo:->] {
-        names.append(a.name);
+        names.append(a.full_name());
         for t in a.tags {
             if t not in tag_pool {
                 tag_pool.append(t);
             }
         }
     }
-    projects = [task->:ForProject:->];
+    projects = [task<--[?:Project]];
     day +>:Logged():+> LogEntry(
         date=today,
         at=stamp,

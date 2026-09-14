@@ -12,12 +12,15 @@ import from models {
     TaskView,
     TaskPage,
     FlowsTo,
-    ForProject,
     hydrate_views,
     step_view,
     resolve,
     on_attached,
-    owned
+    owned,
+    all_tasks,
+    project_tasks,
+    roles_of,
+    ensure_layout
 }
 import from walkers.util { now_iso, page_bounds }
 import from constants {
@@ -37,7 +40,7 @@ import from constants {
 def restatus_tasks(holder: Root, step: WorkflowStep) {
     landing = KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
     target = jid(step);
-    for t in [holder-->[?:Task]] {
+    for t in all_tasks(holder) {
         if t.step_id == target and t.status != landing {
             t.status = landing;
         }
@@ -154,13 +157,10 @@ walker GetFlowLine {
                 first_of_kind[v.kind] = v.id;
             }
         }
-        for t in [here-->[?:Task]] {
-            if self.project_id {
-                owning = [t->:ForProject:->];
-                if not owning or jid(owning[0]) != self.project_id {
-                    continue;
-                }
-            }
+        pool = (
+            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
+        );
+        for t in pool {
             landing = landing_step(t, known, first_of_kind);
             if landing {
                 counts[landing] = int(counts[landing]) + 1;
@@ -203,15 +203,12 @@ walker ListStepTasks {
             }
         }
         picked: list[Task] = [];
-        for t in [here-->[?:Task]] {
+        pool = (
+            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
+        );
+        for t in pool {
             if landing_step(t, known, first_of_kind) != wanted {
                 continue;
-            }
-            if self.project_id {
-                owning = [t->:ForProject:->];
-                if not owning or jid(owning[0]) != self.project_id {
-                    continue;
-                }
             }
             picked.append(t);
         }
@@ -310,16 +307,19 @@ walker ApplyTemplate {
         # keeps whatever it says.
         if "roles" in chosen {
             raw_roles: list[dict[str, str]] = chosen["roles"];
+            (pbox, mbox, rbox) = ensure_layout(here);
+            held = [r.name for r in roles_of(here)];
             r_order = 1024.0;
             for rr in raw_roles {
-                if not [here-->[?:Role, name==rr["name"]]] {
-                    fresh_role = here ++> Role(
+                if rr["name"] not in held {
+                    fresh_role = rbox ++> Role(
                         name=rr["name"],
                         blurb=rr["blurb"] if "blurb" in rr else "",
                         color=rr["color"] if "color" in rr else "",
                         sort_order=r_order
                     );
                     on_attached(here, fresh_role);
+                    held.append(rr["name"]);
                 }
                 r_order = r_order + 1024.0;
             }
@@ -482,7 +482,7 @@ walker DeleteStep(find_step) {
         gone = jid(here);
         # Tasks keep their status, so they land by kind rather than vanishing
         # into whichever column happens to be first.
-        for t in [holder-->[?:Task]] {
+        for t in all_tasks(holder) {
             if t.step_id == gone {
                 t.step_id = "";
             }
@@ -507,7 +507,7 @@ walker DeleteFlowLine {
         for s in steps {
             gone.append(jid(s));
         }
-        for t in [here-->[?:Task]] {
+        for t in all_tasks(here) {
             if t.step_id and t.step_id in gone {
                 t.step_id = "";
             }

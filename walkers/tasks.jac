@@ -11,7 +11,6 @@ import from models {
     MemberTally,
     WorkflowStep,
     AssignedTo,
-    ForProject,
     OnProject,
     TaskLinks,
     task_links,
@@ -19,7 +18,12 @@ import from models {
     views_from,
     resolve,
     on_attached,
-    owned
+    owned,
+    all_tasks,
+    project_tasks,
+    projects_of,
+    members_of,
+    rehome_task
 }
 import from walkers.util {
     now_iso,
@@ -54,13 +58,13 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
     if not role or role == "anyone" {
         return [];
     }
-    owning = [task->:ForProject:->];
+    owning = [task<--[?:Project]];
     if not owning {
         return [];
     }
     project = owning[0];
     holders: list[Member] = [];
-    for m in [holder-->[?:Member]] {
+    for m in members_of(holder) {
         if m.active and role in m.roles and [edge m->:OnProject:->project] {
             holders.append(m);
         }
@@ -174,7 +178,12 @@ walker ListTasks {
         cutoff = done_cutoff(self.done_days);
         picked: list[Task] = [];
         left_out: list[Task] = [];
-        for t in [here-->[?:Task]] {
+        # A project filter reads that project's own children; anything else
+        # walks every project once.
+        pool = (
+            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
+        );
+        for t in pool {
             if needle and needle not in t.title.lower() {
                 continue;
             }
@@ -213,10 +222,11 @@ walker ListTasks {
             picked.append(t);
         }
         if self.project_id or self.assignee_id {
-            picked = self.linked(picked);
+            if self.assignee_id {
+                picked = self.assigned_to(here, picked);
+            }
             # `older` is only read on an unfiltered working page (the board
-            # asks the "older" scope itself once a filter is on), so the
-            # edge hops over the whole pre-cutoff history are skipped here.
+            # asks the "older" scope itself once a filter is on).
             left_out = [];
         }
         # Sorts are stable, so the jid pass underneath every other pass is
@@ -247,31 +257,23 @@ walker ListTasks {
         );
     }
 
-    # The two edge-hop filters, applied after the node-field ones so the
-    # hops run for candidates only.
-    def linked(found: list[Task]) -> list[Task] {
-        kept: list[Task] = [];
-        for t in found {
-            if self.project_id {
-                owning = [t->:ForProject:->];
-                if not owning or jid(owning[0]) != self.project_id {
-                    continue;
-                }
-            }
-            if self.assignee_id {
-                hit = False;
-                for m in [t->:AssignedTo:->] {
-                    if jid(m) == self.assignee_id {
-                        hit = True;
-                    }
-                }
-                if not hit {
-                    continue;
-                }
-            }
-            kept.append(t);
+    # The assignee filter, walked IN from the member once: one traversal
+    # for the whole candidate list, not a hop per row. A foreign or unknown
+    # id matches nothing.
+    def assigned_to(holder: Root, found: list[Task]) -> list[Task] {
+        m = resolve(self.assignee_id);
+        if not isinstance(m, Member) or not owned(holder, m) {
+            return [];
         }
-        return kept;
+        mine: dict[str, bool] = {};
+        for t in [m<-:AssignedTo:<-] {
+            mine[jid(t)] = True;
+        }
+        return [
+            t
+            for t in found
+            if jid(t) in mine
+        ];
     }
 }
 
@@ -330,7 +332,7 @@ def task_totals(
         }
     }
     tallies: list[ProjectTally] = [];
-    for pr in [holder-->[?:Project]] {
+    for pr in projects_of(holder) {
         pid = jid(pr);
         total = 0;
         done = 0;
@@ -353,7 +355,7 @@ def task_totals(
         );
     }
     people: list[MemberTally] = [];
-    for m in [holder-->[?:Member]] {
+    for m in members_of(holder) {
         mid = jid(m);
         mine_open = 0;
         mine_done = 0;
@@ -389,7 +391,7 @@ walker TaskCounts {
         reports: list[TaskTotals] = [];
 
     can count with Root entry {
-        report task_totals(here, [here-->[?:Task]], task_links(here), self.monday);
+        report task_totals(here, all_tasks(here), task_links(here), self.monday);
     }
 }
 
@@ -413,6 +415,12 @@ walker CreateTask {
         if not self.title.strip() {
             disengage;
         }
+        # Every task lives under a project. An empty, unknown, foreign or
+        # archived project id creates nothing.
+        p = resolve(self.project_id);
+        if not isinstance(p, Project) or not owned(here, p) or not p.active {
+            disengage;
+        }
         col = self.status if self.status in STATUSES else "Backlog";
         step = "";
         if self.step_id {
@@ -423,7 +431,7 @@ walker CreateTask {
             }
         }
         peak = 0.0;
-        for t in [here-->[?:Task]] {
+        for t in all_tasks(here) {
             in_column = (
                 t.step_id == step if step else (t.status == col and not t.step_id)
             );
@@ -432,7 +440,7 @@ walker CreateTask {
             }
         }
         stamp = now_iso();
-        fresh = here ++> Task(
+        fresh = p ++> Task(
             title=self.title.strip(),
             category=self.category,
             tags=clean_tags(self.tags),
@@ -453,10 +461,6 @@ walker CreateTask {
             if isinstance(m, Member) and owned(here, m) {
                 fresh +>:AssignedTo():+> m;
             }
-        }
-        p = resolve(self.project_id);
-        if isinstance(p, Project) and owned(here, p) {
-            fresh +>:ForProject():+> p;
         }
         record_task_event(here, fresh, "Added to " + col, stamp);
         report fresh.to_view();
@@ -496,9 +500,8 @@ walker UpdateTask(find_task) {
         reports: list[TaskView] = [];
 
     can apply with Task entry {
-        # The task's container is the caller's root (root ++> Task).
-        owners = [here<--];
-        holder = owners[0];
+        # `here` is the task; `root` is the caller's own root.
+        holder = root;
         landing = self.status;
         if self.step_id {
             mapped = status_for_step(holder, self.step_id);
@@ -522,7 +525,7 @@ walker UpdateTask(find_task) {
         rev = resolve(self.reviewer_id);
         if isinstance(rev, Member) and owned(holder, rev) {
             here.reviewer_id = self.reviewer_id;
-            here.reviewer_name = rev.name;
+            here.reviewer_name = rev.full_name();
         } else {
             here.reviewer_id = "";
             here.reviewer_name = "";
@@ -537,12 +540,14 @@ walker UpdateTask(find_task) {
                 here +>:AssignedTo():+> m;
             }
         }
-        for e in [edge here->:ForProject:->] {
-            del e;
-        }
+        # A change of project re-homes the card. An empty, unknown or
+        # foreign id leaves it where it is: a task always has a project.
         p = resolve(self.project_id);
         if isinstance(p, Project) and owned(holder, p) {
-            here +>:ForProject():+> p;
+            current = [here<--[?:Project]];
+            if not current or jid(current[0]) != jid(p) {
+                rehome_task(here, p);
+            }
         }
         if moved {
             record_task_event(holder, here, "Moved to " + here.status, here.updated_at);
@@ -574,12 +579,11 @@ walker SetMoveInfo(find_task) {
         reports: list[TaskView] = [];
 
     can apply with Task entry {
-        owners = [here<--];
-        holder = owners[0];
+        holder = root;
         rev = resolve(self.reviewer_id);
         if isinstance(rev, Member) and owned(holder, rev) {
             here.reviewer_id = self.reviewer_id;
-            here.reviewer_name = rev.name;
+            here.reviewer_name = rev.full_name();
         }
         if self.review_due {
             here.review_due = self.review_due;
@@ -619,9 +623,8 @@ walker MoveTask(find_task) {
         reports: list[TaskView] = [];
 
     can move with Task entry {
-        # The task's container is the caller's root (root ++> Task).
-        owners = [here<--];
-        holder = owners[0];
+        # `here` is the task; `root` is the caller's own root.
+        holder = root;
         landing = self.status;
         label = self.status;
         # Read before step_id is rewritten below: a positioned drop in the
@@ -662,7 +665,7 @@ walker MoveTask(find_task) {
         # The landing column without the moving card, ordered the way the
         # board draws it. Serves both the anchor lookup and the append peak.
         col: list[Task] = [];
-        for t in [holder-->[?:Task]] {
+        for t in all_tasks(holder) {
             if jid(t) == jid(here) {
                 continue;
             }
@@ -695,7 +698,7 @@ walker MoveTask(find_task) {
                     del e;
                 }
                 here +>:AssignedTo():+> target;
-                note = note + " · " + target.name;
+                note = note + " · " + target.full_name();
                 took = True;
             }
         }

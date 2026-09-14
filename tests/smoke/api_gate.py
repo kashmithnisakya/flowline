@@ -150,11 +150,19 @@ def main() -> int:
     check("CreateTask reports the task", status == 200 and bool(task_id)
           and task.get("title") == f"CI task {tag}", f"{status} {payload}")
 
+    status, payload, reports = walker("CreateTask", {"title": "no project", "priority": "High"})
+    check("CreateTask without a project creates nothing", status == 200 and not reports, f"{status} {payload}")
+
     status, payload, reports = walker("ListTasks", {"scope": "working"})
     page = reports[0] if reports else {}
     titles = [r.get("title") for r in page.get("rows", [])]
     check("ListTasks pages the new task", status == 200 and page.get("total") == 1
           and titles == [f"CI task {tag}"], f"{status} {payload}")
+
+    status, payload, reports = walker("SaveMember", {"first_name": "Priya", "last_name": "Raman"})
+    member = reports[0] if reports else {}
+    check("SaveMember stores first and last name", status == 200 and member.get("first_name") == "Priya"
+          and member.get("last_name") == "Raman" and member.get("name") == "Priya Raman", f"{status} {payload}")
 
     status, payload, reports = walker("ListTasks", {"scope": "working", "project_id": project_id})
     page = reports[0] if reports else {}

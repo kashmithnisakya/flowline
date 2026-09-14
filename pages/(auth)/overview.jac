@@ -15,8 +15,7 @@ import from ...models {
     TaskTotals,
     ProjectTally,
     LogTotals,
-    MemberDays,
-    VocabTerm
+    MemberDays
 }
 import from ...walkers.insights { OverviewSnapshot }
 import from ...components.dashboard.StatTile { StatTile }

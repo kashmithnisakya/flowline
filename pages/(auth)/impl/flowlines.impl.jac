@@ -230,8 +230,12 @@ impl FlowLinePage.saveTask -> None {
     if not title or not editTaskId {
         return;
     }
-    taskSaving = True;
     project = taskForm["project"] if taskForm["project"] != "none" else "";
+    if not project {
+        toast("Pick a project for this task");
+        return;
+    }
+    taskSaving = True;
     reviewer = taskForm["reviewer"] if taskForm["reviewer"] != "none" else "";
     landing = taskForm["status"];
     # Read before any await: where the task was, and where it is going.

@@ -55,6 +55,7 @@ def:pub MemberDialog(
         for r in roles
         if r not in roleOptions
     ];
+    shown = (form["first_name"] + " " + form["last_name"]).strip();
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-xl">
@@ -71,16 +72,24 @@ def:pub MemberDialog(
                         <Label>Name</Label>
                         <div className="flex items-center gap-3">
                             <Avatar
-                                name={form["name"] or "?"}
+                                name={shown or "?"}
                                 size="md"
                                 color={form["color"]}
                             />
                             <Input
-                                className="flex-1"
-                                placeholder="Full name"
-                                value={form["name"]}
+                                className="min-w-0 flex-1"
+                                placeholder="First name"
+                                value={form["first_name"]}
                                 onChange={lambda (e: ChangeEvent) { onField(
-                                    "name", e.target.value
+                                    "first_name", e.target.value
+                                ); }}
+                            />
+                            <Input
+                                className="min-w-0 flex-1"
+                                placeholder="Last name"
+                                value={form["last_name"]}
+                                onChange={lambda (e: ChangeEvent) { onField(
+                                    "last_name", e.target.value
                                 ); }}
                             />
                         </div>
@@ -293,7 +302,7 @@ def:pub MemberDialog(
                     </Button>
                     <Button
                         onClick={onSave}
-                        disabled={saving or not form["name"].strip()}
+                        disabled={saving or not form["first_name"].strip()}
                     >
                         {if saving {
                             <Spinner key="sp"/>

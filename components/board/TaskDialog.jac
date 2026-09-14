@@ -143,6 +143,8 @@ def:pub TaskDialog(
     hasNotes = bool(form["notes"] and form["notes"].strip());
 
     selectedProject = form["project"];
+    # Every task belongs to a project; Save waits for one.
+    hasProject = bool(selectedProject) and selectedProject != "none";
     inProject = [
         m
         for m in members
@@ -342,10 +344,9 @@ def:pub TaskDialog(
                                 ); }}
                             >
                                 <SelectTrigger className={FIELD}>
-                                    <SelectValue placeholder="No project"/>
+                                    <SelectValue placeholder="Pick a project"/>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none">No project</SelectItem>
                                     {for p in projects {
                                         <SelectItem key={jid(p)} value={jid(p)}>
                                             {p.name}
@@ -747,7 +748,9 @@ def:pub TaskDialog(
                                 pendingAction = "save";
                                 onSave();
                             }}
-                            disabled={saving or not form["title"].strip()}
+                            disabled={saving
+                                or not form["title"].strip()
+                                or not hasProject}
                         >
                             {if saving and pendingAction == "save" {
                                 <Spinner key="sp"/>

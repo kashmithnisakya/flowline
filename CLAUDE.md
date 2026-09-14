@@ -63,12 +63,18 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
 - **`models.jac`** — every `node`/`edge`/`obj` archetype **and nothing else**.
   Archetype identity includes the module path, so **moving a declaration
   orphans persisted data**. It must also stay free of Python imports (see
-  gotchas). Everything hangs off the caller's `root`: `root ++> Project /
-  Member / Repo / Task / LogDay / WorkflowStep`, with typed edges
-  `AssignedTo`, `ForProject`, `OnProject`, `Logged`, `By`, `FlowsTo`.
-  `Milestone`, `VocabTerm` and their edges remain declared although the
-  roadmap and vocabulary features were removed: deleting an archetype
-  orphans whatever production still has.
+  gotchas). The graph is boxed: `root ++> Projects ++> Project ++> Task`,
+  `root ++> Members ++> Member`, `root ++> Roles ++> Role`; `Repo`,
+  `LogDay`, `WorkflowStep` and the singletons hang off the root directly.
+  Typed edges: `AssignedTo`, `OnProject`, `HasRepo`, `Logged`, `By`,
+  `FlowsTo`. **A task's project is its container** (no project edge), so
+  every task has exactly one project and `CreateTask` refuses to create
+  without an owned, active one; `AddRepo` needs a project for the same
+  reason (the sync files issues under the repo's project). The boxes are
+  made on first write by `ensure_layout(root)` (call it once per request
+  and keep the handles); reads go through `projects_of`, `members_of`,
+  `roles_of`, `all_tasks` and `project_tasks`. A `Member` stores
+  `first_name` and `last_name`; `full_name()` is the display name.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
   Walkers are **bare (JWT-required)**; there are no `:pub` walkers. The one
@@ -79,8 +85,8 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   docs store; `DrainGithubEvents` (and every `SyncGithub`) applies the queue
   in the workspace's own session, so no walker ever writes a foreign root.
 - **A per-task edge hop is a separate traversal; one traversal yielding many
-  edges is not.** `Task.to_view()` hops three times (assignees, project,
-  milestone), and at 2,000 tasks on the pinned runtime that measured ~113ms
+  edges is not.** `Task.to_view()` hops twice (assignees, project), and
+  at 2,000 tasks on the pinned runtime the three-hop version measured ~113ms
   PER ROW: a 500-row page took 56s. Walking IN from each Member and Project
   once costs a handful of traversals no matter how long the page is, and the
   same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
@@ -142,7 +148,10 @@ Isolation is structural: authenticated walkers run on the caller's own root, so
 0.37.7 (a foreign root or node resolves to `None`, even for the system
 identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task` /
-`find_log_entry` lookup bases) before touching anything. That gate is also why
+`find_log_entry` lookup bases) before touching anything. `owned` climbs
+container edges (at most three hops: task, project, box) and compares each
+parent's jid with the caller's root. `Root` is not a runtime name in
+`models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
 the webhook receiver cannot apply a delivery itself: it queues, the tenant
 drains (see `walkers/ghevents.jac`).
 
@@ -155,9 +164,9 @@ reported as an empty or `{"ok": False, ...}` result; the client shows a plain
 `gh_request` in `walkers/ghutil.jac`.
 
 Watch the container variable inside abilities: in a `Task`/`LogDay` entry
-ability `here` is the *task or day*, not the root, so ownership checks use the
-holder reached via `[here<--]`. Getting this wrong silently drops assignee and
-project links rather than erroring.
+ability `here` is the *task or day*, not the root; the caller's root is
+`root`. Getting this wrong silently drops assignee and project links rather
+than erroring.
 
 **Webhook deliveries never touch a tenant graph from the receiver.**
 `GithubEvent` (system identity) checks the `installation.id` against the

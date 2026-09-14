@@ -274,8 +274,12 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;
     }
-    attaching = fullName;
     project = pickerProject if pickerProject != "none" else "";
+    if not project {
+        toast("Pick a project for this repo");
+        return;
+    }
+    attaching = fullName;
     try {
         root spawn AddRepo(full_name=fullName, project_id=project);
         await loadWorkspace();

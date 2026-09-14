@@ -103,8 +103,18 @@ impl WorkspacePage.openCreate -> None {
 
 impl WorkspacePage.openEdit(m: MemberView) -> None {
     editingId = m.id;
+    # A row saved before names were split shows its display name as the
+    # first name until it is saved again.
+    first = m.first_name;
+    last = m.last_name;
+    if not first and not last {
+        bits = m.name.strip().split(" ");
+        first = bits[0];
+        last = " ".join(bits[1:]);
+    }
     form = {
-        "name": m.name,
+        "first_name": first,
+        "last_name": last,
         "email": m.email,
         "github": m.github_username,
         "color": m.color,
@@ -117,8 +127,8 @@ impl WorkspacePage.openEdit(m: MemberView) -> None {
 }
 
 impl WorkspacePage.saveMember -> None {
-    name = form["name"].strip();
-    if not name {
+    first = form["first_name"].strip();
+    if not first {
         return;
     }
     saving = True;
@@ -132,7 +142,8 @@ impl WorkspacePage.saveMember -> None {
     try {
         result = root spawn SaveMember(
             member_id=editingId,
-            name=name,
+            first_name=first,
+            last_name=form["last_name"].strip(),
             roles=roles,
             email=form["email"].strip(),
             github_username=form["github"].strip(),

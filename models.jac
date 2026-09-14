@@ -1,6 +1,10 @@
 """flowline - persisted graph model and shared helpers. EVERY node/edge/obj
 archetype lives HERE and must not move: archetype identity includes the module
 path, so relocating a declaration orphans persisted data.
+
+Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member
+and root ++> Roles ++> Role; repos, days, steps and the singletons hang off
+the root directly. `owned()` climbs those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -42,15 +46,37 @@ def valid_full_name(full_name: str) -> bool {
     return True;
 }
 
-# Parentage check: does this node hang directly off the caller's root?
-# jobj/jid resolution is NOT authorization — every jid-addressed mutation
-# calls this first, or a guessed/leaked jid from another account would be
-# mutable. The account IS the organization, so "my root" is the tenant line.
+# The nodes a row may sit under on its way to the root: the three boxes
+# and, for a task, its project. Anything else hangs off the root.
+def is_container(owner: any) -> bool {
+    return (
+        isinstance(owner, Projects)
+        or isinstance(owner, Project)
+        or isinstance(owner, Members)
+        or isinstance(owner, Roles)
+    );
+}
+
+
+# Does this node belong to the caller's root? Climbs container edges, at
+# most three hops (task, project, Projects box); typed in-edges never lead
+# to a container, so they drop out. jobj/jid resolution is NOT authorization:
+# every jid-addressed mutation calls this first. "My root" is the tenant line.
 def owned(holder: any, target: any) -> bool {
-    for owner in [target<--] {
-        if jid(owner) == jid(holder) {
-            return True;
+    frontier: list[any] = [target];
+    for hop in range(3) {
+        higher: list[any] = [];
+        for node_ in frontier {
+            for owner in [node_<--] {
+                if jid(owner) == jid(holder) {
+                    return True;
+                }
+                if is_container(owner) {
+                    higher.append(owner);
+                }
+            }
         }
+        frontier = higher;
     }
     return False;
 }
@@ -64,7 +90,8 @@ node Project {
 }
 
 node Member {
-    has name: str,
+    has first_name: str,
+        last_name: str = "",
         roles: list[str] = [],
         email: str = "",
         github_username: str = "",
@@ -74,6 +101,11 @@ node Member {
         # the colour they already show.
         color: str = "",
         active: bool = True;
+
+    # The display name; the log and every view show this.
+    def full_name -> str {
+        return (self.first_name + " " + self.last_name).strip();
+    }
 }
 
 node Repo {
@@ -147,30 +179,16 @@ node Task {
         assignee_names: list[str] = [];
         for a in [self->:AssignedTo:->] {
             assignee_ids.append(jid(a));
-            assignee_names.append(a.name);
+            assignee_names.append(a.full_name());
         }
         project_id = "";
         project_name = "";
-        projects = [self->:ForProject:->];
+        projects = [self<--[?:Project]];
         if projects {
             project_id = jid(projects[0]);
             project_name = projects[0].name;
         }
-        milestone_id = "";
-        milestone_name = "";
-        stones = [self->:InMilestone:->];
-        if stones {
-            milestone_id = jid(stones[0]);
-            milestone_name = stones[0].title;
-        }
-        return self.view_with(
-            assignee_ids,
-            assignee_names,
-            project_id,
-            project_name,
-            milestone_id,
-            milestone_name
-        );
+        return self.view_with(assignee_ids, assignee_names, project_id, project_name);
     }
 
     # The view given links the caller already has. The field list lives here
@@ -179,9 +197,7 @@ node Task {
         assignee_ids: list[str],
         assignee_names: list[str],
         project_id: str,
-        project_name: str,
-        milestone_id: str,
-        milestone_name: str
+        project_name: str
     ) -> TaskView {
         return TaskView(
             id=jid(self),
@@ -206,8 +222,6 @@ node Task {
             review_due=self.review_due,
             project_id=project_id,
             project_name=project_name,
-            milestone_id=milestone_id,
-            milestone_name=milestone_name,
             gh_repo=self.gh_repo,
             gh_issue_number=self.gh_issue_number,
             gh_issue_state=self.gh_issue_state,
@@ -243,27 +257,6 @@ node LogEntry {
         project_name: str = "";
 }
 
-# An org-defined vocabulary term (kind: "category" or "tag"), seeded in
-# the setup wizard and managed on the Workspace tab.
-node VocabTerm {
-    has kind: str,
-        value: str;
-}
-
-# A phase on a project's roadmap. Dates are optional: an undated milestone
-# is a named bucket of work that has not been scheduled yet, and the
-# timeline lists those separately rather than guessing a position.
-node Milestone {
-    has title: str,
-        description: str = "",
-        start_date: str = "",
-        due_date: str = "",
-        status: str = "Planned",
-        color: str = "",
-        sort_order: float = 0.0,
-        created_at: str = "",
-        updated_at: str = "";
-}
 
 # The org's GitHub App installation, singleton per root. It stores an
 # installation id, NOT a credential: tokens are minted on demand in ghutil.
@@ -325,18 +318,19 @@ node WorkflowMeta {
         template_key: str = "";
 }
 
+# Boxes, one of each per root, made on first use by ensure_layout. Every
+# project, member and role hangs off its box, never off the root.
+node Projects {}
+
+node Members {}
+
+node Roles {}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
-edge ForProject: Task --> Project {}
 edge OnProject: Member --> Project {}
-edge OnRoadmap: Milestone --> Project {}
-edge InMilestone: Task --> Milestone {}
-# The arrow on the roadmap: this step leads to that one. The graph must stay
-# acyclic (LinkSteps refuses anything that would close a loop), because both
-# the layout and the "ready to start" signal are derived from depth.
-edge LeadsTo: Milestone --> Milestone {}
 # A flow line transition. Cycles are ALLOWED by design (review looping back
 # to development is the point); only self-loops are refused, at link time.
 # `label` is what has to be true to cross; empty on older transitions.
@@ -370,8 +364,6 @@ obj TaskView {
         step_id: str = "",
         tags: list[str] = [],
         estimate: float = 0.0,
-        milestone_id: str = "",
-        milestone_name: str = "",
         gh_repo: str = "",
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
@@ -452,6 +444,8 @@ obj LogTotals {
 obj MemberView {
     has id: str,
         name: str,
+        first_name: str,
+        last_name: str,
         roles: list[str],
         email: str,
         github_username: str,
@@ -569,16 +563,103 @@ def repo_view(r: Repo) -> RepoView {
 }
 
 
-# Task links gathered by walking IN from each Member, Project and Milestone
-# once. A per-task hop is a separate traversal and dominates at list sizes;
+# ------------------------------------------------------------------ layout
+# One box per kind under the root; the box is the one traversal that yields
+# every row of that kind. A box is made on first write by ensure_layout, so
+# a read on an empty workspace finds none and returns nothing.
+
+def projects_of(holder: Root) -> list[Project] {
+    out: list[Project] = [];
+    for box in [holder-->[?:Projects]] {
+        out = [box-->[?:Project]];
+    }
+    return out;
+}
+
+
+def members_of(holder: Root) -> list[Member] {
+    out: list[Member] = [];
+    for box in [holder-->[?:Members]] {
+        out = [box-->[?:Member]];
+    }
+    return out;
+}
+
+
+def roles_of(holder: Root) -> list[Role] {
+    out: list[Role] = [];
+    for box in [holder-->[?:Roles]] {
+        out = [box-->[?:Role]];
+    }
+    return out;
+}
+
+
+# Every task: one traversal per project.
+def all_tasks(holder: Root) -> list[Task] {
+    out: list[Task] = [];
+    for p in projects_of(holder) {
+        out.extend([p-->[?:Task]]);
+    }
+    return out;
+}
+
+
+# One project's tasks. Empty for a foreign or unknown id.
+def project_tasks(holder: Root, project_id: str) -> list[Task] {
+    p = resolve(project_id);
+    if not isinstance(p, Project) or not owned(holder, p) {
+        return [];
+    }
+    return [p-->[?:Task]];
+}
+
+
+# Move a task under another project: the container edge IS the project link.
+def rehome_task(task: Task, target: Project) {
+    for e in [edge task<--] {
+        del e;
+    }
+    target ++> task;
+}
+
+
+# The three boxes, made on first use. Call it once per request and keep the
+# handles; a later re-query of the root works (the runtime flushes first)
+# but costs a round trip.
+def ensure_layout(holder: Root) -> tuple[Projects, Members, Roles] {
+    pboxes = [holder-->[?:Projects]];
+    if pboxes {
+        pbox = pboxes[0];
+    } else {
+        pbox = holder ++> Projects();
+        on_attached(holder, pbox);
+    }
+    mboxes = [holder-->[?:Members]];
+    if mboxes {
+        mbox = mboxes[0];
+    } else {
+        mbox = holder ++> Members();
+        on_attached(holder, mbox);
+    }
+    rboxes = [holder-->[?:Roles]];
+    if rboxes {
+        rbox = rboxes[0];
+    } else {
+        rbox = holder ++> Roles();
+        on_attached(holder, rbox);
+    }
+    return (pbox, mbox, rbox);
+}
+
+
+# Task links gathered by walking IN from each Member and Project once. A per-task hop is a separate traversal and dominates at list sizes;
 # this costs one walk per holder no matter how many tasks are involved.
 obj TaskLinks {
     has assignee_ids: dict[str, list[str]] = {},
         assignee_names: dict[str, list[str]] = {},
         project_id: dict[str, str] = {},
-        project_name: dict[str, str] = {},
-        milestone_id: dict[str, str] = {},
-        milestone_name: dict[str, str] = {};
+        project_name: dict[str, str] = {};
 
     # Comma-joined assignee names for one task, "" when unassigned.
     def named(task_id: str) -> str {
@@ -593,11 +674,11 @@ obj TaskLinks {
     }
 }
 
-# One walk IN from every Member, Project and Milestone. Callers that need both
-# views and tallies gather this once and pass it around.
+# One walk IN from every Member and Project. Callers that need both views
+# and tallies gather this once and pass it around.
 def task_links(holder: Root) -> TaskLinks {
     links = TaskLinks();
-    for m in [holder-->[?:Member]] {
+    for m in members_of(holder) {
         who = jid(m);
         for t in [m<-:AssignedTo:<-] {
             key = jid(t);
@@ -606,23 +687,15 @@ def task_links(holder: Root) -> TaskLinks {
                 links.assignee_names[key] = [];
             }
             links.assignee_ids[key].append(who);
-            links.assignee_names[key].append(m.name);
+            links.assignee_names[key].append(m.full_name());
         }
     }
-    for p in [holder-->[?:Project]] {
+    for p in projects_of(holder) {
         pid = jid(p);
-        for t in [p<-:ForProject:<-] {
+        for t in [p-->[?:Task]] {
             key = jid(t);
             links.project_id[key] = pid;
             links.project_name[key] = p.name;
-        }
-    }
-    for ms in [holder-->[?:Milestone]] {
-        sid = jid(ms);
-        for t in [ms<-:InMilestone:<-] {
-            key = jid(t);
-            links.milestone_id[key] = sid;
-            links.milestone_name[key] = ms.title;
         }
     }
     return links;
@@ -639,9 +712,7 @@ def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
                 links.assignee_ids[key] if key in links.assignee_ids else [],
                 links.assignee_names[key] if key in links.assignee_names else [],
                 links.project_id[key] if key in links.project_id else "",
-                links.project_name[key] if key in links.project_name else "",
-                links.milestone_id[key] if key in links.milestone_id else "",
-                links.milestone_name[key] if key in links.milestone_name else ""
+                links.project_name[key] if key in links.project_name else ""
             )
         );
     }
@@ -699,7 +770,9 @@ def member_view(m: Member) -> MemberView {
     }
     return MemberView(
         id=jid(m),
-        name=m.name,
+        name=m.full_name(),
+        first_name=m.first_name,
+        last_name=m.last_name,
         roles=m.roles,
         email=m.email,
         github_username=m.github_username,

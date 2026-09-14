@@ -18,7 +18,10 @@ import from models {
     resolve,
     on_attached,
     owned,
-    valid_full_name
+    valid_full_name,
+    members_of,
+    roles_of,
+    ensure_layout
 }
 
 # ------------------------------------------------------------------- roster
@@ -29,7 +32,7 @@ walker ListMembers {
     # Rows in a local, not a `has` field, or the response carries them twice.
     can gather with Root entry {
         rows: list[MemberView] = [];
-        for m in [here-->[?:Member]] {
+        for m in members_of(here) {
             rows.append(member_view(m));
         }
         rows.sort(key=lambda (m: MemberView) { m.name; });
@@ -38,9 +41,11 @@ walker ListMembers {
 }
 
 walker SaveMember {
-    """Empty member_id creates; otherwise updates the addressed Member."""
+    """Empty member_id creates; otherwise updates the addressed Member. The
+    first name is required, the last optional."""
     has member_id: str = "",
-        name: str = "",
+        first_name: str = "",
+        last_name: str = "",
         roles: list[str] = [],
         email: str = "",
         github_username: str = "",
@@ -49,13 +54,16 @@ walker SaveMember {
         reports: list[MemberView] = [];
 
     can save with Root entry {
-        if not self.name.strip() {
+        first = self.first_name.strip();
+        last = self.last_name.strip();
+        if not first {
             disengage;
         }
         if self.member_id {
             target = resolve(self.member_id);
             if isinstance(target, Member) and owned(here, target) {
-                target.name = self.name.strip();
+                target.first_name = first;
+                target.last_name = last;
                 target.roles = [
                     r.strip()
                     for r in self.roles
@@ -72,8 +80,10 @@ walker SaveMember {
                 report member_view(target);
             }
         } else {
-            fresh = here ++> Member(
-                name=self.name.strip(),
+            (pbox, mbox, rbox) = ensure_layout(here);
+            fresh = mbox ++> Member(
+                first_name=first,
+                last_name=last,
                 roles=[
                     r.strip()
                     for r in self.roles
@@ -141,15 +151,15 @@ walker ArchiveMember {
 
 # -------------------------------------------------------------------- roles
 # Name-centric, not jid-centric: member.roles and step owners hold role NAMES,
-# so the name is the identity to keep consistent. Everything runs on
-# [here-->] under the caller's root, so isolation needs no owned() checks.
+# so the name is the identity to keep consistent. Everything reads the
+# caller's own root through roles_of, so isolation needs no owned() checks.
 
 walker ListRoles {
     has reports: list[list[RoleView]] = [];
 
     can gather with Root entry {
         rows: list[RoleView] = [];
-        for r in [here-->[?:Role]] {
+        for r in roles_of(here) {
             rows.append(role_view(r));
         }
         rows.sort(key=lambda (r: RoleView) { r.sort_order; });
@@ -175,22 +185,30 @@ walker SaveRole {
             disengage;
         }
         wanted = self.new_name.strip();
+        roles = roles_of(here);
         if wanted and wanted != said {
-            if [here-->[?:Role, name==wanted]] {
-                report {"ok": False, "error": "name_taken"};
-                disengage;
+            for r in roles {
+                if r.name == wanted {
+                    report {"ok": False, "error": "name_taken"};
+                    disengage;
+                }
             }
         }
-        existing = [here-->[?:Role, name==said]];
+        existing = [
+            r
+            for r in roles
+            if r.name == said
+        ];
         target = existing[0] if existing else None;
         if not target {
             peak = 0.0;
-            for r in [here-->[?:Role]] {
+            for r in roles {
                 if r.sort_order > peak {
                     peak = r.sort_order;
                 }
             }
-            target = here ++> Role(name=said, sort_order=peak + 1024.0);
+            (pbox, mbox, rbox) = ensure_layout(here);
+            target = rbox ++> Role(name=said, sort_order=peak + 1024.0);
             on_attached(here, target);
         }
         if self.touch_blurb {
@@ -201,7 +219,7 @@ walker SaveRole {
         }
         if wanted and wanted != said {
             target.name = wanted;
-            for m in [here-->[?:Member]] {
+            for m in members_of(here) {
                 if said in m.roles {
                     m.roles = [(wanted if r == said else r) for r in m.roles];
                 }
@@ -228,10 +246,12 @@ walker DeleteRole {
         if not said {
             disengage;
         }
-        for r in [here-->[?:Role, name==said]] {
-            del r;
+        for r in roles_of(here) {
+            if r.name == said {
+                del r;
+            }
         }
-        for m in [here-->[?:Member]] {
+        for m in members_of(here) {
             if said in m.roles {
                 m.roles = [
                     x
@@ -263,8 +283,10 @@ walker ListRepos {
 }
 
 walker AddRepo {
-    """Creates (or reuses) the repo node under root and, when project_id
-    resolves to an owned project, points that project at it."""
+    """Creates (or reuses) the repo node under root and points the given
+    project at it. A project is required: the sync files every issue it
+    finds under the repo's project, and a task always has one. Re-adding
+    with another project moves the repo there."""
     has full_name: str,
         project_id: str = "",
         reports: list[RepoView] = [];
@@ -277,19 +299,21 @@ walker AddRepo {
         if not fn or not valid_full_name(fn) {
             disengage;
         }
+        proj = resolve(self.project_id);
+        if not isinstance(proj, Project) or not owned(here, proj) or not proj.active {
+            disengage;
+        }
         existing = [here-->[?:Repo, full_name==fn]];
         target = existing[0] if existing else None;
         if not target {
             target = here ++> Repo(full_name=fn);
             on_attached(here, target);
         }
-        if self.project_id {
-            proj = resolve(self.project_id);
-            if isinstance(proj, Project) and owned(here, proj) {
-                if not [edge proj->:HasRepo:->target] {
-                    proj +>:HasRepo():+> target;
-                }
+        if not [edge proj->:HasRepo:->target] {
+            for e in [edge target<-:HasRepo:<-] {
+                del e;
             }
+            proj +>:HasRepo():+> target;
         }
         report repo_view(target);
     }

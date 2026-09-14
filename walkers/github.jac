@@ -17,11 +17,12 @@ import from models {
     GhPrRow,
     HasRepo,
     AssignedTo,
-    ForProject,
     resolve,
     on_attached,
     owned,
-    repo_view
+    repo_view,
+    all_tasks,
+    members_of
 }
 import from walkers.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from walkers.log { record_task_event }
@@ -552,7 +553,7 @@ walker ListRepoIssues {
         if isinstance(data, list) {
             raw = data;
         }
-        owned_tasks = [here-->[?:Task]];
+        owned_tasks = all_tasks(here);
         rows: list[GhIssueRow] = [];
         for item in raw {
             if not isinstance(item, dict) {
@@ -611,7 +612,7 @@ walker ListRepoPulls {
         if isinstance(data, list) {
             raw = data;
         }
-        owned_tasks = [here-->[?:Task]];
+        owned_tasks = all_tasks(here);
         rows: list[GhPrRow] = [];
         for item in raw {
             if not isinstance(item, dict) {
@@ -711,7 +712,7 @@ walker SearchRepoItems {
             }
             total = int(data.get("total_count") or 0);
         }
-        owned_tasks = [here-->[?:Task]];
+        owned_tasks = all_tasks(here);
         issue_rows: list[GhIssueRow] = [];
         pr_rows: list[GhPrRow] = [];
         for item in items {
@@ -849,7 +850,7 @@ def file_issue_item(
     item: dict[str, any],
     full_name: str,
     number: int,
-    target_project: any,
+    target_project: Project,
     members: list[Member],
     col: str,
     step: str,
@@ -861,8 +862,8 @@ def file_issue_item(
     landing_step = done_step if issue_state == "closed" else step;
     if landing not in peaks {
         top = 0.0;
-        for t in [holder-->[?:Task, status==landing]] {
-            if t.sort_order > top {
+        for t in all_tasks(holder) {
+            if t.status == landing and t.sort_order > top {
                 top = t.sort_order;
             }
         }
@@ -874,7 +875,7 @@ def file_issue_item(
     sub_done = int(subs.get("completed") or 0) if isinstance(subs, dict) else 0;
     body = str(item.get("body") or "");
     stamp = now_iso();
-    fresh = holder ++> Task(
+    fresh = target_project ++> Task(
         title=str(item.get("title") or ("Issue #" + str(number))),
         category="",
         tags=clean_tags(label_names(item)),
@@ -895,9 +896,6 @@ def file_issue_item(
         gh_sub_done=sub_done
     );
     on_attached(holder, fresh);
-    if isinstance(target_project, Project) {
-        fresh +>:ForProject():+> target_project;
-    }
     # Map GitHub assignees onto roster members by username. Anyone without
     # a match is simply left off; we never invent people.
     logins: list[str] = [];
@@ -960,18 +958,30 @@ walker ImportIssues {
         done_step = first_done_step(here);
         # An explicit project wins; otherwise inherit the repo's own project,
         # which is structurally owned already (root -> Project -> HasRepo).
+        # A list, not an Optional: the checker does not narrow through `if`.
         repo_node = resolve(self.repo_id);
-        target_project = None;
+        homes: list[Project] = [];
         proj = resolve(self.project_id);
         if isinstance(proj, Project) and owned(here, proj) {
-            target_project = proj;
+            homes = [proj];
         } elif isinstance(repo_node, Repo) {
-            attached = [repo_node<-:HasRepo:<-[?:Project]];
-            if attached {
-                target_project = attached[0];
+            homes = [repo_node<-:HasRepo:<-[?:Project]];
+        }
+        if not homes {
+            report {
+                "ok": False,
+                "error": "project_required",
+                "message": "Attach this repo to a project first."
+            };
+            disengage;
+        }
+        members = members_of(here);
+        held: dict[str, bool] = {};
+        for t in all_tasks(here) {
+            if t.gh_issue_number > 0 {
+                held[t.gh_repo + "#" + str(t.gh_issue_number)] = True;
             }
         }
-        members = [here-->[?:Member]];
         imported: list[TaskView] = [];
         skipped: list[int] = [];
         failed: list[int] = [];
@@ -981,8 +991,7 @@ walker ImportIssues {
             if number <= 0 {
                 continue;
             }
-            existing = [here-->[?:Task, gh_repo==full_name, gh_issue_number==number]];
-            if existing {
+            if full_name + "#" + str(number) in held {
                 skipped.append(number);
                 continue;
             }
@@ -1008,7 +1017,7 @@ walker ImportIssues {
                 item,
                 full_name,
                 number,
-                target_project,
+                homes[0],
                 members,
                 col,
                 step,
@@ -1029,10 +1038,9 @@ walker CreateIssueFromTask(find_task) {
         reports: list[dict[str, any]] = [];
 
     can push with Task entry {
-        # In a Task entry ability `here` is the task, so the caller's root
-        # (what ownership is measured against) is one hop back.
-        owners = [here<--];
-        holder = owners[0];
+        # In a Task entry ability `here` is the task; `root` is the caller's
+        # own root, what ownership is measured against.
+        holder = root;
         if here.gh_issue_number != 0 {
             report {
                 "ok": False,
@@ -1168,7 +1176,10 @@ obj SyncContext {
         family_calls: int = 0,
         refreshed: int = 0,
         auto_added: int = 0,
-        auto_done_moves: int = 0;
+        auto_done_moves: int = 0,
+        # New issues on an auto-sync repo that has no project: nowhere to
+        # file them, so they are counted and left for the next pass.
+        unfiled: int = 0;
 }
 
 
@@ -1189,7 +1200,7 @@ def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
             ctx.merge_done.append(r.full_name);
         }
     }
-    for t in [holder-->[?:Task]] {
+    for t in all_tasks(holder) {
         if t.pr_link and t.pr_number == 0 {
             guess_repo = repo_from_link(t.pr_link);
             guess_number = pr_number_from(t.pr_link);
@@ -1229,7 +1240,7 @@ def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
             ctx.done_name = st.name;
         }
     }
-    ctx.members = [holder-->[?:Member]];
+    ctx.members = members_of(holder);
     return ctx;
 }
 
@@ -1301,7 +1312,9 @@ def apply_issue_item(
 ) -> bool {
     full_name = r.full_name;
     if key not in ctx.task_by_key {
-        if r.auto_sync {
+        if r.auto_sync and not isinstance(repo_project, Project) {
+            ctx.unfiled = ctx.unfiled + 1;
+        } elif r.auto_sync {
             fresh = file_issue_item(
                 ctx.holder,
                 item,
@@ -1844,7 +1857,8 @@ walker SyncGithub {
             failure,
             ctx.stamp,
             drained,
-            cooldown
+            cooldown,
+            ctx.unfiled
         );
     }
 }
@@ -1859,7 +1873,8 @@ def sync_summary(
     failure: str,
     last_sync_at: str,
     drained: int = 0,
-    cooldown: float = 0.0
+    cooldown: float = 0.0,
+    unfiled: int = 0
 ) -> dict[str, any] {
     return {
         "ok": True,
@@ -1870,6 +1885,7 @@ def sync_summary(
         "scanned": counts[4],
         "pages": counts[5],
         "drained": drained,
+        "unfiled": unfiled,
         "cooldown_minutes": cooldown,
         "has_more": has_more,
         "failure": failure,

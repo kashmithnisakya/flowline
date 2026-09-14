@@ -67,10 +67,9 @@ def:pub RepoPicker(
                         <Label>Attach to project</Label>
                         <Select value={projectId} onValueChange={onProject}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Project"/>
+                                <SelectValue placeholder="Pick a project"/>
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">No project</SelectItem>
                                 {for p in projects {
                                     <SelectItem key={jid(p)} value={jid(p)}>
                                         {p.name}
@@ -189,7 +188,8 @@ def:pub RepoPicker(
                                             size="sm"
                                             className="shrink-0"
                                             onClick={lambda { onAttach(r.full_name); }}
-                                            disabled={bool(attaching)}
+                                            disabled={bool(attaching)
+                                                or projectId == "none"}
                                         >
                                             {if attaching == r.full_name {
                                                 <Spinner key="sp"/>

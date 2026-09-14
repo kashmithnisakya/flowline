@@ -1,6 +1,6 @@
 """The Board's API: one walker for everything the page renders. NEVER nest
 `root spawn` here -- a nested walker's reports come back EMPTY (see
-walkers/insights.jac). Everything traverses `[root-->]` directly."""
+walkers/insights.jac). Everything traverses the caller's root directly."""
 
 import from models {
     Project,
@@ -19,7 +19,11 @@ import from models {
     role_view,
     step_view,
     task_links,
-    views_from
+    views_from,
+    all_tasks,
+    projects_of,
+    members_of,
+    roles_of
 }
 import from walkers.util { page_bounds, done_cutoff, is_older, order_working }
 import from walkers.github { connection_of, connection_view }
@@ -60,7 +64,7 @@ walker BoardSnapshot {
         # Categories come out of the same walk that picks the page. The board
         # only ever read `categories` off TaskCounts, whose project and member
         # tallies it discarded.
-        for t in [here-->[?:Task]] {
+        for t in all_tasks(here) {
             if t.category and t.category not in cats {
                 cats.append(t.category);
             }
@@ -83,11 +87,11 @@ walker BoardSnapshot {
         roles: list[RoleView] = [];
         connected = False;
         if self.with_workspace {
-            for m in [here-->[?:Member]] {
+            for m in members_of(here) {
                 members.append(member_view(m));
             }
             members.sort(key=lambda (m: MemberView) { m.name; });
-            projects = [here-->[?:Project]];
+            projects = projects_of(here);
             projects.sort(key=lambda (pr: Project) { pr.name; });
             for st in [here-->[?:WorkflowStep]] {
                 steps.append(step_view(st));
@@ -97,7 +101,7 @@ walker BoardSnapshot {
                 repos.append(repo_view(r));
             }
             repos.sort(key=lambda (rv: RepoView) { rv.full_name; });
-            for ro in [here-->[?:Role]] {
+            for ro in roles_of(here) {
                 roles.append(role_view(ro));
             }
             roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });

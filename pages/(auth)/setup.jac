@@ -31,7 +31,8 @@ def:pub SetupPage -> JsxPage {
         orgName: str = "",
         fullName: str = "",
         projectName: str = "",
-        mName: str = "",
+        mFirst: str = "",
+        mLast: str = "",
         added: list[MemberView] = [],
         saveError: str = "",
         busy: bool = False,
@@ -228,15 +229,20 @@ def:pub SetupPage -> JsxPage {
                         <CardContent className="grid gap-4">
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <Input
-                                    placeholder="Name"
-                                    value={mName}
-                                    onChange={lambda (e: ChangeEvent) { mName = e.target.value; }}
+                                    placeholder="First name"
+                                    value={mFirst}
+                                    onChange={lambda (e: ChangeEvent) { mFirst = e.target.value; }}
                                     autoFocus={True}
+                                />
+                                <Input
+                                    placeholder="Last name"
+                                    value={mLast}
+                                    onChange={lambda (e: ChangeEvent) { mLast = e.target.value; }}
                                 />
                                 <Button
                                     variant="outline"
                                     onClick={addPerson}
-                                    disabled={busy or not mName.strip()}
+                                    disabled={busy or not mFirst.strip()}
                                 >
                                     {if busy {
                                         <Spinner key="sp"/>
