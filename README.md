@@ -15,10 +15,11 @@ really uses, connect them however work moves (loops and branches included), and
 the board becomes those steps, in the order you drew them, each in its own
 colour.
 
-Start from a template (Classic Kanban, Software flow, Jaseci flow, Support
-flow) or from a blank canvas. Drag a step to move it, drag from its border onto
-another step to draw a transition, click a transition to remove it. The canvas
-zooms rather than scrolls, so the whole graph stays on screen.
+Start from the Jaseci flow template (specify, triage, architect, build, review,
+de-slop: four roles, with the loops between them) or from a blank canvas. Drag
+a step to move it, drag from its border onto another step to draw a transition,
+click a transition to remove it. The canvas zooms rather than scrolls, so the
+whole graph stays on screen.
 
 Every step carries a *kind* behind the name you chose: start, active, handoff,
 blocked or done. The name is yours, the kind is what the app understands, which
