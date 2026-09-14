@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """Playwright smoke against a running server: sign up, finish the setup
 wizard, apply the flow line template, create a task from the board's
-New task button and see its card survive a reload. Every step is a real
-click or keystroke, so a dead button fails here. Usage: browser_gate.py [base_url]"""
+New task button and see its card survive a reload, then land on GitHub's
+install redirect and check the page finishes it with exactly one callback.
+Every step is a real click or keystroke, so a dead button fails here.
+Usage: browser_gate.py [base_url] [stub_url]"""
+import json
 import re
 import sys
 import time
+import urllib.parse
+import urllib.request
 import uuid
 
 from playwright.sync_api import expect, sync_playwright
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
+STUB = (sys.argv[2] if len(sys.argv) > 2 else "http://127.0.0.1:8099").rstrip("/")
+INSTALLATION = 4242
 STEP_TIMEOUT_MS = 45_000
 
 
@@ -122,7 +129,65 @@ def run(page, tag: str) -> list[str]:
     expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
     page.get_by_role("link", name="Log", exact=True).click()
     expect(page.get_by_role("heading", name="Log", exact=True)).to_be_visible()
+
+    github_install_once(page)
     return []
+
+
+def github_install_once(page) -> None:
+    # GitHub redirects back once, with a single-use code. The page mounts
+    # twice on that load (see CLAUDE.md), and issue #187 was the second mount
+    # firing the callback again: the two calls raced and left the connection
+    # blank. So the assertion is the request count, not only the end state.
+    step("github: the stub owns one installation")
+    body = json.dumps({"installations": [INSTALLATION], "repos": {}}).encode()
+    req = urllib.request.Request(f"{STUB}/_stub/reset", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        assert resp.status == 200, f"stub reset {resp.status}"
+
+    step("github: start the install to get this workspace's nonce")
+    url = page.evaluate(
+        """async (base) => {
+            const r = await fetch(base + "/walker/StartGithubInstall", {
+                method: "POST",
+                headers: {"Content-Type": "application/json",
+                          "Authorization": "Bearer " + localStorage.getItem("jac_token")},
+                body: "{}",
+            });
+            const d = await r.json();
+            const reports = d.reports || (d.data && d.data.result && d.data.result.reports) || [];
+            return (reports[0] && reports[0].url) || JSON.stringify(reports[0] || d);
+        }""",
+        BASE,
+    )
+    state = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("state", [""])[0]
+    assert state, f"StartGithubInstall gave no install URL: {url[:200]}"
+
+    step("github: land on the redirect and finish the install once")
+    callbacks: list[str] = []
+    answers: list[str] = []
+    page.on("request", lambda r: callbacks.append(r.url) if r.url.endswith("/walker/CompleteGithubInstall") else None)
+
+    def record(resp) -> None:
+        if resp.url.endswith("/walker/CompleteGithubInstall"):
+            try:
+                answers.append(f"{resp.status} {resp.text()[:1500]}")
+            except Exception as exc:  # the document may be gone
+                answers.append(f"{resp.status} <body unreadable: {exc}>")
+
+    page.on("response", record)
+    page.goto(f"{BASE}/github?code=stub-code&installation_id={INSTALLATION}"
+              f"&setup_action=install&state={state}&tab=github")
+    settle(page, "/github", "GitHub")
+    try:
+        expect(page.get_by_text("@stub-org", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Disconnect", exact=True)).to_be_visible()
+    except AssertionError as exc:
+        # The server's answer says which check the callback tripped.
+        raise AssertionError(f"install did not finish; callback answers: {answers}") from exc
+    page.wait_for_timeout(1500)
+    assert len(callbacks) == 1, f"CompleteGithubInstall was called {len(callbacks)} times, expected exactly 1"
 
 
 def main() -> int:
