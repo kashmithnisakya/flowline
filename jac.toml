@@ -1,9 +1,7 @@
 [project]
 name = "flowline"
-# No entry-point line on purpose: the web-app default is "main", and the
-# jachammer deploy manager still checks the key as a file path, so the dotted
-# spelling jac 0.37.12+ requires fails its pre-flight (jaseci-labs/jacBuilder#1806).
-# Put entry-point = "main" back once that fix is on the platform.
+# A dotted module name, the only spelling jac 0.37.12+ loads.
+entry-point = "main"
 kind = "web-app"
 jac-version = "==0.37.14"
 

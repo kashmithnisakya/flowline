@@ -270,8 +270,7 @@ File-based routing with route groups:
 
 ### Deploy sizing
 
-The app stays declared under `[project]` (`kind = "web-app"`; the entry-point
-line is omitted on purpose, see below), and the app pod is
+The app stays declared as `[project] kind/entry-point`, and the app pod is
 sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`, `memory_request`,
 `memory_limit` are all honoured there; the gateway pod is sized in
 `[scale.gateway]`). **Do not move it to `[apps.flowline]`.** On jac 0.37.7 an
@@ -298,13 +297,11 @@ once `bundle_storage_class` is set to any name (a placeholder for the RWX
 check that a real deploy satisfies on the platform); `tests/smoke/
 deploy_gate.py` asserts its transcript in CI.
 
-**`[project] entry-point` is omitted on purpose (Sep 14 2026).** jac 0.37.12+
-requires the dotted module spelling (`main`), but the jachammer deploy manager
-still checks the key as a file path and refuses the deploy before the handoff
-(jaseci-labs/jacBuilder#1806). With the line absent, jac resolves the web-app
-kind's default entry `main` and the platform falls back to `main.jac`, which
-exists; the app boots identically. Restore `entry-point = "main"` once the
-platform fix (jacBuilder #1801 carries it) is on jachammer prod.
+**`[project] entry-point` is the dotted module name, `main`.** jac 0.37.12+
+refuses `"main.jac"` on load. The jachammer deploy manager used to check the
+key as a file path, so between the pin bump and the platform's 2026-09-14
+release the line had to be omitted entirely (jaseci-labs/jacBuilder#1806,
+fixed by its #1808); the platform now resolves either spelling to the file.
 
 ## Jac gotchas that have already cost real debugging time
 
