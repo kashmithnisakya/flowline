@@ -42,9 +42,10 @@ import from constants {
 def restatus_tasks(holder: Root, step: WorkflowStep) {
     landing = KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
     target = jid(step);
+    stamp = now_iso();
     for t in all_tasks(holder) {
         if t.step_id == target and t.status != landing {
-            t.status = landing;
+            t.set_status(landing, stamp);
         }
     }
 }

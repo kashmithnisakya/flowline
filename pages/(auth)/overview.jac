@@ -15,9 +15,19 @@ import from ...models {
     TaskTotals,
     ProjectTally,
     LogTotals,
-    MemberDays
+    MemberDays,
+    WeeklyHistory
 }
 import from ...services.insights.insights { OverviewSnapshot }
+import from ...services.tasks.tasks { TaskHistory }
+import from ...components.dashboard.HistoryCharts { BurnUpChart, ThroughputChart }
+import from ...components.ui.select {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
+}
 import from ...components.dashboard.StatTile { StatTile }
 import from ...components.dashboard.QueueCards { ReviewQueueCard, GoneQuietCard }
 import from ...components.ui.card {
@@ -51,7 +61,12 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
          "Nov",
          "Dec"
      ],
-     SK_BARS: list[str] = ["h-16", "h-24", "h-12", "h-32", "h-20", "h-10", "h-28"];
+     SK_BARS: list[str] = ["h-16", "h-24", "h-12", "h-32", "h-20", "h-10", "h-28"],
+     HISTORY_RANGES: list[list[str]] = [
+         ["8", "Last 8 weeks"],
+         ["12", "Last 12 weeks"],
+         ["26", "Last 26 weeks"]
+     ];
 
 # Fixed bar-stub heights for the loading chart skeleton (literal classes).
 def localIso(d: any) -> str {
@@ -112,13 +127,25 @@ def:pub OverviewPage -> JsxPage {
         quiet: list[dict] = [],
         blockedInfo: dict[str, dict] = {},
         loading: bool = True,
-        failed: bool = False;
+        failed: bool = False,
+        # The charts over time, scoped by their own filter row. A refetch
+        # keeps the last render on screen, dimmed, instead of a skeleton.
+        history: WeeklyHistory | None = None,
+        historyProject: str = "all",
+        historyWeeks: str = "12",
+        historyLoading: bool = True,
+        historyFailed: bool = False;
 
     async can with entry {
         loadAll();
     }
 
+    async can with (historyProject, historyWeeks) entry {
+        loadHistory();
+    }
+
     async def loadAll -> None;
+    async def loadHistory -> None;
 
     monday = mondayOf(localIso(new(Date)));
     weekDays = [shiftDay(monday, i) for i in range(7)];
@@ -175,6 +202,14 @@ def:pub OverviewPage -> JsxPage {
     for md in (logs.members if logs else []) {
         personDays[md.name] = md.by_day;
         personTotal[md.name] = md.total;
+    }
+    histWeeks = history.weeks if history else [];
+    histLabels = [fmtDay(w) for w in histWeeks];
+    histAny = False;
+    for v in (history.scope if history else []) {
+        if v > 0 {
+            histAny = True;
+        }
     }
     today = todayIso();
     # NOTE: max(list) compiles to JS Math.max(array) which is NaN; loop instead.
@@ -701,6 +736,172 @@ def:pub OverviewPage -> JsxPage {
                             </CardContent>
                         </Card>
                     </div>
+                    <section className="space-y-4" aria-labelledby="over-time">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2
+                                id="over-time"
+                                className="mr-auto font-display text-lg font-semibold tracking-tight"
+                            >
+                                Over time
+                            </h2>
+                            <Select
+                                value={historyProject}
+                                onValueChange={lambda (v: str) { historyProject = v; }}
+                            >
+                                <SelectTrigger
+                                    className="h-8 w-44"
+                                    size="sm"
+                                    aria-label="Chart project"
+                                >
+                                    <SelectValue/>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All projects</SelectItem>
+                                    {for p in activeProjects {
+                                        <SelectItem key={jid(p)} value={jid(p)}>
+                                            {p.name}
+                                        </SelectItem>
+                                    }}
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={historyWeeks}
+                                onValueChange={lambda (v: str) { historyWeeks = v; }}
+                            >
+                                <SelectTrigger
+                                    className="h-8 w-40"
+                                    size="sm"
+                                    aria-label="Chart range"
+                                >
+                                    <SelectValue/>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {for r in HISTORY_RANGES {
+                                        <SelectItem key={r[0]} value={r[0]}>
+                                            {r[1]}
+                                        </SelectItem>
+                                    }}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {if historyFailed and not history {
+                            <LoadFailed
+                                key="hfail"
+                                title="Could not load the charts"
+                                onRetry={loadHistory}
+                            />
+                        } elif not history {
+                            <div key="hsk" className="grid gap-6 lg:grid-cols-2">
+                                <Skeleton className="h-72 w-full rounded-xl"/>
+                                <Skeleton className="h-72 w-full rounded-xl"/>
+                            </div>
+                        } elif not histAny {
+                            <Card key="hempty">
+                                <CardContent
+                                    className="py-10 text-center text-sm text-muted-foreground"
+                                >
+                                    No tasks in this range yet.
+                                </CardContent>
+                            </Card>
+                        } else {
+                            <div
+                                key="hcharts"
+                                className={"space-y-3 transition-opacity "
+                                    + ("opacity-60" if historyLoading else "")}
+                            >
+                                <div
+                                    className="grid gap-6 lg:grid-cols-2 lg:items-start"
+                                >
+                                    <BurnUpChart
+                                        labels={histLabels}
+                                        scope={history.scope}
+                                        done={history.done}
+                                    />
+                                    <ThroughputChart
+                                        labels={histLabels}
+                                        finished={history.finished}
+                                        added={history.added}
+                                    />
+                                </div>
+                                <details className="group rounded-lg text-sm">
+                                    <summary
+                                        className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
+                                    >
+                                        View as table
+                                    </summary>
+                                    <div
+                                        className="mt-2 overflow-x-auto rounded-lg border bg-card"
+                                    >
+                                        <table className="w-full text-sm tabular-nums">
+                                            <thead>
+                                                <tr
+                                                    className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"
+                                                >
+                                                    <th
+                                                        className="px-3 py-2 font-medium"
+                                                    >
+                                                        Week of
+                                                    </th>
+                                                    <th
+                                                        className="px-3 py-2 text-right font-medium"
+                                                    >
+                                                        Added
+                                                    </th>
+                                                    <th
+                                                        className="px-3 py-2 text-right font-medium"
+                                                    >
+                                                        Done
+                                                    </th>
+                                                    <th
+                                                        className="px-3 py-2 text-right font-medium"
+                                                    >
+                                                        Scope
+                                                    </th>
+                                                    <th
+                                                        className="px-3 py-2 text-right font-medium"
+                                                    >
+                                                        Done total
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {for (i, w) in enumerate(histWeeks) {
+                                                    <tr
+                                                        key={w}
+                                                        className="border-b last:border-0"
+                                                    >
+                                                        <td className="px-3 py-1.5">
+                                                            {histLabels[i]}
+                                                        </td>
+                                                        <td
+                                                            className="px-3 py-1.5 text-right"
+                                                        >
+                                                            {str(history.added[i])}
+                                                        </td>
+                                                        <td
+                                                            className="px-3 py-1.5 text-right"
+                                                        >
+                                                            {str(history.finished[i])}
+                                                        </td>
+                                                        <td
+                                                            className="px-3 py-1.5 text-right"
+                                                        >
+                                                            {str(history.scope[i])}
+                                                        </td>
+                                                        <td
+                                                            className="px-3 py-1.5 text-right"
+                                                        >
+                                                            {str(history.done[i])}
+                                                        </td>
+                                                    </tr>
+                                                }}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </details>
+                            </div>
+                        }   }
+                    </section>
                     <Card className="anim-fade-up anim-d3">
                         <CardHeader>
                             <CardTitle className="text-base">People</CardTitle>

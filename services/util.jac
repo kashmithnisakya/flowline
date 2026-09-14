@@ -83,6 +83,22 @@ def done_cutoff(done_days: int) -> str {
 }
 
 
+# The day a task reached Done: `done_at`, or `updated_at` on rows written
+# before the stamp existed, and never earlier than the day it was created.
+def done_day(t: Task) -> str {
+    day = (t.done_at or t.updated_at)[:10];
+    made = t.created_at[:10];
+    return made if made and day < made else day;
+}
+
+
+# Done that moved here, as opposed to a task created already Done (a closed
+# issue filed by a GitHub backfill): that one is history, not throughput.
+def moved_to_done(t: Task) -> bool {
+    return t.status == "Done" and not (t.done_at and t.done_at == t.created_at);
+}
+
+
 # A Done task last touched before the cutoff: history, not the working set.
 # Shared by the list walkers and the board so the split has one definition.
 def is_older(t: Task, cutoff: str) -> bool {

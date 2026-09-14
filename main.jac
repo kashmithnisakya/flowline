@@ -40,6 +40,7 @@ import from services.roster.roster {
 import from services.tasks.tasks {
     ListTasks,
     TaskCounts,
+    TaskHistory,
     GetTask,
     CreateTask,
     UpdateTask,

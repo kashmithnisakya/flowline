@@ -24,7 +24,7 @@ import from models {
     members_of,
     days_between
 }
-import from services.util { now_iso }
+import from services.util { now_iso, done_day, moved_to_done }
 import from services.tasks.tasks { task_totals, needs_attention, order_attention }
 import from services.log.log { log_totals }
 
@@ -299,7 +299,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     done_period = [
         t
         for t in tasks
-        if t.status == "Done" and t.updated_at[:10] >= from_date
+        if moved_to_done(t) and done_day(t) >= from_date
     ];
 
     blocked = _blocked_items(tasks, links, entries);
@@ -331,7 +331,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
                     [
                         t
                         for t in mine
-                        if t.status == "Done" and t.updated_at[:10] >= from_date
+                        if moved_to_done(t) and done_day(t) >= from_date
                     ]
                 ),
                 log_entries=len(

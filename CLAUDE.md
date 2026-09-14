@@ -172,6 +172,15 @@ the mapped legacy `status` via `KIND_STATUS`. Insights, GitHub sync, the
 assistant and the log therefore never learn what a step is — keep it that way
 rather than teaching them.
 
+**Write `status` through `Task.set_status(status, stamp)`, never by
+assignment** (a constructor passes `done_at` itself). It stamps `done_at`
+when a task enters Done and clears it when it leaves; `done_day(t)` and
+`moved_to_done(t)` in `services/util.jac` are the done date (falling back to
+`updated_at` on older rows) and the rule that a task created already Done (a
+GitHub backfill) is history, not throughput. The Overview's weekly Done
+count, `TaskHistory` (burn-up, throughput) and the snapshot's done-in-period
+all read those two, so they agree.
+
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
 of that kind; an org with no flow line at all falls back to `STATUSES`. Both
