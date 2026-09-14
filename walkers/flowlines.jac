@@ -1,6 +1,7 @@
 """Flow line walkers: the org's step-graph API. One flow line per organization:
 the WorkflowSteps box under the caller's root holds the steps and the flow
-line's own name and template key.
+line's own name and template key. A walker visits the box or the addressed
+step and works there; the traversal from the caller's root is the isolation.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
 
@@ -20,9 +21,9 @@ import from models {
     owned,
     all_tasks,
     project_tasks,
-    roles_of,
     steps_of,
-    ensure_layout
+    roles_box,
+    steps_box
 }
 import from walkers.util { now_iso, page_bounds }
 import from constants {
@@ -85,12 +86,14 @@ walker GetFlowLineMeta {
     reports the defaults without creating one."""
     has reports: list[dict[str, str]] = [];
 
-    can read with Root entry {
-        boxes = [here-->[?:WorkflowSteps]];
-        report {
-            "name": boxes[0].name if boxes else "Flow line",
-            "template_key": boxes[0].template_key if boxes else ""
-        };
+    can start with Root entry {
+        visit [here-->[?:WorkflowSteps]] else {
+            report {"name": "Flow line", "template_key": ""};
+        }
+    }
+
+    can read with WorkflowSteps entry {
+        report {"name": here.name, "template_key": here.template_key};
     }
 }
 
@@ -99,12 +102,15 @@ walker RenameFlowLine {
     has name: str = "",
         reports: list[dict[str, str]] = [];
 
-    can rename with Root entry {
-        (pbox, mbox, rbox, sbox) = ensure_layout(here);
+    can start with Root entry {
+        visit steps_box(here);
+    }
+
+    can rename with WorkflowSteps entry {
         if self.name.strip() {
-            sbox.name = self.name.strip();
+            here.name = self.name.strip();
         }
-        report {"name": sbox.name};
+        report {"name": here.name};
     }
 }
 
@@ -119,9 +125,15 @@ walker GetFlowLine {
         with_counts: bool = True,
         reports: list[list[StepView]] = [];
 
-    can gather with Root entry {
+    can start with Root entry {
+        visit [here-->[?:WorkflowSteps]] else {
+            report [];
+        }
+    }
+
+    can gather with WorkflowSteps entry {
         views: list[StepView] = [];
-        for st in steps_of(here) {
+        for st in [here-->[?:WorkflowStep]] {
             views.append(step_view(st));
         }
         views.sort(key=lambda (s: StepView) { s.sort_order; });
@@ -142,7 +154,7 @@ walker GetFlowLine {
             }
         }
         pool = (
-            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
+            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
         );
         for t in pool {
             landing = landing_step(t, known, first_of_kind);
@@ -169,18 +181,22 @@ walker ListStepTasks {
         page_size: int = 0,
         reports: list[TaskPage] = [];
 
-    can gather with Root entry {
-        (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
-        empty = TaskPage(rows=[], page=p, page_size=size, has_more=False, total=0);
+    can start with Root entry {
         target = resolve(self.step_id);
-        if not isinstance(target, WorkflowStep) or not owned(here, target) {
-            report empty;
-            disengage;
+        if isinstance(target, WorkflowStep) and owned(here, target) {
+            visit [target];
+        } else {
+            (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
+            report TaskPage(rows=[], page=p, page_size=size, has_more=False, total=0);
         }
-        wanted = jid(target);
+    }
+
+    can gather with WorkflowStep entry {
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
+        wanted = jid(here);
         known: list[str] = [];
         first_of_kind: dict[str, str] = {};
-        for st in steps_of(here) {
+        for st in steps_of(root) {
             known.append(jid(st));
             if st.kind not in first_of_kind {
                 first_of_kind[st.kind] = jid(st);
@@ -188,7 +204,7 @@ walker ListStepTasks {
         }
         picked: list[Task] = [];
         pool = (
-            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
+            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
         );
         for t in pool {
             if landing_step(t, known, first_of_kind) != wanted {
@@ -201,12 +217,13 @@ walker ListStepTasks {
         picked.sort(key=lambda (t: Task) { jid(t); });
         picked.sort(key=lambda (t: Task) { t.sort_order; });
         report TaskPage(
-            rows=hydrate_views(here, picked[start:end]),
+            rows=hydrate_views(root, picked[start:end]),
             page=p,
             page_size=size,
             has_more=len(picked) > end,
             total=len(picked)
         );
+        disengage;
     }
 }
 
@@ -218,8 +235,12 @@ walker ApplyTemplate {
     has template_key: str = "",
         reports: list[list[StepView]] = [];
 
-    can apply with Root entry {
-        existing = steps_of(here);
+    can start with Root entry {
+        visit steps_box(here);
+    }
+
+    can apply with WorkflowSteps entry {
+        existing = [here-->[?:WorkflowStep]];
         if existing {
             views: list[StepView] = [];
             for s in existing {
@@ -239,7 +260,6 @@ walker ApplyTemplate {
             report [];
             disengage;
         }
-        (pbox, mbox, rbox, sbox) = ensure_layout(here);
         stamp = now_iso();
         made: list[WorkflowStep] = [];
         order = 1024.0;
@@ -247,7 +267,7 @@ walker ApplyTemplate {
         raw_steps: list[dict[str, any]] = chosen["steps"];
         for s in raw_steps {
             kind = s["kind"] if s["kind"] in STEP_KINDS else "active";
-            fresh = sbox ++> WorkflowStep(
+            fresh = here ++> WorkflowStep(
                 name=s["name"],
                 kind=kind,
                 color=s["color"],
@@ -259,7 +279,7 @@ walker ApplyTemplate {
                 created_at=stamp,
                 updated_at=stamp
             );
-            on_attached(here, fresh);
+            on_attached(root, fresh);
             made.append(fresh);
             order = order + 1024.0;
         }
@@ -285,13 +305,14 @@ walker ApplyTemplate {
         }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
-        sbox.template_key = self.template_key;
+        here.template_key = self.template_key;
         # Seed the template's roles as Role nodes, editable org data from
         # here on. Get-or-create by name, so a role the org already made
         # keeps whatever it says.
         if "roles" in chosen {
             raw_roles: list[dict[str, str]] = chosen["roles"];
-            held = [r.name for r in roles_of(here)];
+            rbox = roles_box(root);
+            held = [r.name for r in [rbox-->[?:Role]]];
             r_order = 1024.0;
             for rr in raw_roles {
                 if rr["name"] not in held {
@@ -301,7 +322,7 @@ walker ApplyTemplate {
                         color=rr["color"] if "color" in rr else "",
                         sort_order=r_order
                     );
-                    on_attached(here, fresh_role);
+                    on_attached(root, fresh_role);
                     held.append(rr["name"]);
                 }
                 r_order = r_order + 1024.0;
@@ -346,54 +367,58 @@ walker SaveStep {
         y: float = 0.0,
         reports: list[StepView] = [];
 
-    can save with Root entry {
+    can start with Root entry {
         # Clamp before anything else: the response envelope echoes these
         # fields, so a non-finite float would 500 the request even when the
         # stored value is clean.
         self.x = safe_coord(self.x);
         self.y = safe_coord(self.y);
-        stamp = now_iso();
         if self.step_id {
             target = resolve(self.step_id);
-            if not isinstance(target, WorkflowStep) or not owned(here, target) {
-                disengage;
+            if isinstance(target, WorkflowStep) and owned(here, target) {
+                visit [target];
             }
-            if self.name.strip() {
-                target.name = self.name.strip();
-            }
-            kind_changed = self.kind in STEP_KINDS and self.kind != target.kind;
-            if self.kind in STEP_KINDS {
-                target.kind = self.kind;
-            }
-            if kind_changed {
-                restatus_tasks(here, target);
-            }
-            if self.color {
-                target.color = self.color;
-            }
-            if self.owner {
-                target.owner = self.owner.strip();
-            }
-            if self.blurb {
-                target.blurb = self.blurb.strip();
-            }
-            target.updated_at = stamp;
-            report step_view(target);
-            disengage;
+        } elif self.name.strip() {
+            visit steps_box(here);
         }
-        if not self.name.strip() {
-            disengage;
+    }
+
+    can update with WorkflowStep entry {
+        if self.name.strip() {
+            here.name = self.name.strip();
         }
+        kind_changed = self.kind in STEP_KINDS and self.kind != here.kind;
+        if self.kind in STEP_KINDS {
+            here.kind = self.kind;
+        }
+        if kind_changed {
+            restatus_tasks(root, here);
+        }
+        if self.color {
+            here.color = self.color;
+        }
+        if self.owner {
+            here.owner = self.owner.strip();
+        }
+        if self.blurb {
+            here.blurb = self.blurb.strip();
+        }
+        here.updated_at = now_iso();
+        report step_view(here);
+        disengage;
+    }
+
+    can create with WorkflowSteps entry {
+        stamp = now_iso();
         kind = self.kind if self.kind in STEP_KINDS else "active";
         color = self.color or KIND_COLORS[kind];
         peak = 0.0;
-        for s in steps_of(here) {
+        for s in [here-->[?:WorkflowStep]] {
             if s.sort_order > peak {
                 peak = s.sort_order;
             }
         }
-        (pbox, mbox, rbox, sbox) = ensure_layout(here);
-        fresh = sbox ++> WorkflowStep(
+        fresh = here ++> WorkflowStep(
             name=self.name.strip(),
             kind=kind,
             color=color,
@@ -405,7 +430,7 @@ walker SaveStep {
             created_at=stamp,
             updated_at=stamp
         );
-        on_attached(here, fresh);
+        on_attached(root, fresh);
         report step_view(fresh);
     }
 }
@@ -485,13 +510,19 @@ walker DeleteFlowLine {
     the template marker is cleared so a scratch redo does not report it."""
     has reports: list[dict[str, any]] = [];
 
-    can wipe with Root entry {
-        steps = steps_of(here);
+    can start with Root entry {
+        visit [here-->[?:WorkflowSteps]] else {
+            report {"ok": True, "deleted": 0};
+        }
+    }
+
+    can wipe with WorkflowSteps entry {
+        steps = [here-->[?:WorkflowStep]];
         gone: list[str] = [];
         for s in steps {
             gone.append(jid(s));
         }
-        for t in all_tasks(here) {
+        for t in all_tasks(root) {
             if t.step_id and t.step_id in gone {
                 t.step_id = "";
             }
@@ -499,9 +530,7 @@ walker DeleteFlowLine {
         for s in steps {
             del s;
         }
-        for box in [here-->[?:WorkflowSteps]] {
-            box.template_key = "";
-        }
+        here.template_key = "";
         report {"ok": True, "deleted": len(gone)};
     }
 }
@@ -518,7 +547,7 @@ walker LinkTransition {
         carries: str = "",
         reports: list[dict[str, any]] = [];
 
-    can link with Root entry {
+    can start with Root entry {
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -527,6 +556,16 @@ walker LinkTransition {
         }
         if not isinstance(target, WorkflowStep) or not owned(here, target) {
             report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        visit [source];
+    }
+
+    # `here` is the source step; the target was owned-checked above.
+    can link with WorkflowStep entry {
+        source = here;
+        target = resolve(self.to_id);
+        if not isinstance(target, WorkflowStep) {
             disengage;
         }
         if jid(source) == jid(target) {
@@ -569,7 +608,7 @@ walker LabelTransition {
         carries: str = "",
         reports: list[dict[str, any]] = [];
 
-    can relabel with Root entry {
+    can start with Root entry {
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -578,6 +617,16 @@ walker LabelTransition {
         }
         if not isinstance(target, WorkflowStep) or not owned(here, target) {
             report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        visit [source];
+    }
+
+    # `here` is the source step; the target was owned-checked above.
+    can relabel with WorkflowStep entry {
+        source = here;
+        target = resolve(self.to_id);
+        if not isinstance(target, WorkflowStep) {
             disengage;
         }
         said = self.label.strip();
@@ -602,7 +651,7 @@ walker UnlinkTransition {
         to_id: str = "",
         reports: list[dict[str, any]] = [];
 
-    can unlink with Root entry {
+    can start with Root entry {
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -611,6 +660,16 @@ walker UnlinkTransition {
         }
         if not isinstance(target, WorkflowStep) or not owned(here, target) {
             report {"ok": False, "error": "not_found"};
+            disengage;
+        }
+        visit [source];
+    }
+
+    # `here` is the source step; the target was owned-checked above.
+    can unlink with WorkflowStep entry {
+        source = here;
+        target = resolve(self.to_id);
+        if not isinstance(target, WorkflowStep) {
             disengage;
         }
         for e in [edge source->:FlowsTo:->target] {

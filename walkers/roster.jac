@@ -1,11 +1,16 @@
-"""Roster walkers: members and GitHub repos."""
+"""Roster walkers: members, roles and GitHub repos. Member and role walkers
+visit the Members or Roles box (or the addressed row) and work there: the
+traversal from the caller's root is the isolation, so only a jid-addressed
+row needs the owned() check. Repos hang off the root and stay there."""
 
 import from models {
     Project,
     Member,
+    Members,
     Repo,
     Task,
     Role,
+    Roles,
     WorkflowStep,
     MemberView,
     RepoView,
@@ -13,7 +18,6 @@ import from models {
     AssignedTo,
     HasRepo,
     HasRole,
-    Roles,
     member_view,
     repo_view,
     role_view,
@@ -21,10 +25,9 @@ import from models {
     on_attached,
     owned,
     valid_full_name,
-    members_of,
-    roles_of,
     steps_of,
-    ensure_layout
+    roles_box,
+    members_box
 }
 
 # ------------------------------------------------------------------- roster
@@ -71,10 +74,17 @@ def link_roles(m: Member, names: list[str], rbox: Roles) {
 walker ListMembers {
     has reports: list[list[MemberView]] = [];
 
+    # A read never makes the box: no box, no members.
+    can start with Root entry {
+        visit [here-->[?:Members]] else {
+            report [];
+        }
+    }
+
     # Rows in a local, not a `has` field, or the response carries them twice.
-    can gather with Root entry {
+    can gather with Members entry {
         rows: list[MemberView] = [];
-        for m in members_of(here) {
+        for m in [here-->[?:Member]] {
             rows.append(member_view(m));
         }
         rows.sort(key=lambda (m: MemberView) { m.name; });
@@ -82,10 +92,23 @@ walker ListMembers {
     }
 }
 
+walker find_member {
+    """Lookup base: resolve the jid once, verify org parentage, then visit.
+    Resolution is NOT authorization."""
+    has member_id: str = "";
+
+    can locate with Root entry {
+        target = resolve(self.member_id);
+        if isinstance(target, Member) and owned(here, target) {
+            visit [target];
+        }
+    }
+}
+
 walker SaveMember {
-    """Empty member_id creates; otherwise updates the addressed Member. The
-    first name is required, the last optional. `roles` are names; each
-    becomes a HasRole edge (and a Role node if new)."""
+    """Empty member_id creates in the box; otherwise updates the addressed
+    Member. The first name is required, the last optional. `roles` are
+    names; each becomes a HasRole edge (and a Role node if new)."""
     has member_id: str = "",
         first_name: str = "",
         last_name: str = "",
@@ -96,103 +119,105 @@ walker SaveMember {
         color: str = "",
         reports: list[MemberView] = [];
 
-    can save with Root entry {
-        first = self.first_name.strip();
-        last = self.last_name.strip();
-        if not first {
+    can start with Root entry {
+        if not self.first_name.strip() {
             disengage;
         }
-        (pbox, mbox, rbox, sbox) = ensure_layout(here);
         if self.member_id {
             target = resolve(self.member_id);
             if isinstance(target, Member) and owned(here, target) {
-                target.first_name = first;
-                target.last_name = last;
-                link_roles(target, self.roles, rbox);
-                target.email = self.email;
-                target.github_username = self.github_username;
-                target.tags = [
-                    t.strip()
-                    for t in self.tags
-                    if t.strip()
-                ];
-                target.color = self.color;
-                report member_view(target);
+                visit [target];
             }
         } else {
-            fresh = mbox ++> Member(
-                first_name=first,
-                last_name=last,
-                email=self.email,
-                github_username=self.github_username,
-                tags=[
-                    t.strip()
-                    for t in self.tags
-                    if t.strip()
-                ],
-                color=self.color
-            );
-            on_attached(here, fresh);
-            link_roles(fresh, self.roles, rbox);
-            report member_view(fresh);
+            visit members_box(here);
         }
+    }
+
+    can create with Members entry {
+        fresh = here ++> Member(
+            first_name=self.first_name.strip(),
+            last_name=self.last_name.strip(),
+            email=self.email,
+            github_username=self.github_username,
+            tags=[
+                t.strip()
+                for t in self.tags
+                if t.strip()
+            ],
+            color=self.color
+        );
+        on_attached(root, fresh);
+        link_roles(fresh, self.roles, roles_box(root));
+        report member_view(fresh);
+    }
+
+    can update with Member entry {
+        here.first_name = self.first_name.strip();
+        here.last_name = self.last_name.strip();
+        link_roles(here, self.roles, roles_box(root));
+        here.email = self.email;
+        here.github_username = self.github_username;
+        here.tags = [
+            t.strip()
+            for t in self.tags
+            if t.strip()
+        ];
+        here.color = self.color;
+        report member_view(here);
+        disengage;
     }
 }
 
-walker SetMemberRoles {
+walker SetMemberRoles(find_member) {
     """Overwrite ONLY the member's roles. The Roles tab toggles one role at
     a time; routing that through SaveMember would overwrite email,
     github_username and tags with whatever the caller happened to send."""
-    has member_id: str = "",
-        roles: list[str] = [],
+    has roles: list[str] = [],
         reports: list[MemberView] = [];
 
-    can set_roles with Root entry {
-        target = resolve(self.member_id);
-        if isinstance(target, Member) and owned(here, target) {
-            (pbox, mbox, rbox, sbox) = ensure_layout(here);
-            link_roles(target, self.roles, rbox);
-            report member_view(target);
-        }
+    can set_roles with Member entry {
+        link_roles(here, self.roles, roles_box(root));
+        report member_view(here);
+        disengage;
     }
 }
 
-walker ArchiveMember {
+walker ArchiveMember(find_member) {
     """active=False, never delete, history edges must survive. Open
     (non-Done) tasks lose their AssignedTo edge so live work returns to
     Unassigned; Done-task edges stay for history."""
-    has member_id: str;
-
-    can archive with Root entry {
-        target = resolve(self.member_id);
-        if isinstance(target, Member) and owned(here, target) {
-            target.active = False;
-            # Filter to Task explicitly: the reverse read also surfaces the
-            # Organization's generic parent edge, which has no `status`.
-            for t in [target<-:AssignedTo:<-[?:Task]] {
-                if t.status != "Done" {
-                    for e in [edge t->:AssignedTo:->] {
-                        del e;
-                    }
+    can archive with Member entry {
+        here.active = False;
+        # Filter to Task explicitly: the reverse read also surfaces the
+        # box's generic parent edge, which has no `status`.
+        for t in [here<-:AssignedTo:<-[?:Task]] {
+            if t.status != "Done" {
+                for e in [edge t->:AssignedTo:->] {
+                    del e;
                 }
             }
-            report {"archived": self.member_id};
         }
+        report {"archived": jid(here)};
+        disengage;
     }
 }
 
 # -------------------------------------------------------------------- roles
 # Members reach a role through HasRole, so a rename or delete reaches them
 # by itself; a step's `owner` still holds the NAME and is kept in step here.
-# Everything reads the caller's own root through roles_of, so isolation
-# needs no owned() checks.
 
 walker ListRoles {
     has reports: list[list[RoleView]] = [];
 
-    can gather with Root entry {
+    can start with Root entry {
+        visit [here-->[?:Roles]] else {
+            report [];
+        }
+    }
+
+    can gather with Roles entry {
         rows: list[RoleView] = [];
-        for r in roles_of(here) {
+        for r in [here-->[?:Role]] {
             rows.append(role_view(r));
         }
         rows.sort(key=lambda (r: RoleView) { r.sort_order; });
@@ -212,13 +237,17 @@ walker SaveRole {
         touch_blurb: bool = False,
         reports: list[dict[str, any]] = [];
 
-    can save with Root entry {
-        said = self.name.strip();
-        if not said {
+    can start with Root entry {
+        if not self.name.strip() {
             disengage;
         }
+        visit roles_box(here);
+    }
+
+    can save with Roles entry {
+        said = self.name.strip();
         wanted = self.new_name.strip();
-        roles = roles_of(here);
+        roles = [here-->[?:Role]];
         if wanted and wanted != said {
             for r in roles {
                 if r.name == wanted {
@@ -240,9 +269,8 @@ walker SaveRole {
                     peak = r.sort_order;
                 }
             }
-            (pbox, mbox, rbox, sbox) = ensure_layout(here);
-            target = rbox ++> Role(name=said, sort_order=peak + 1024.0);
-            on_attached(here, target);
+            target = here ++> Role(name=said, sort_order=peak + 1024.0);
+            on_attached(root, target);
         }
         if self.touch_blurb {
             target.blurb = self.blurb.strip();
@@ -252,7 +280,7 @@ walker SaveRole {
         }
         if wanted and wanted != said {
             target.name = wanted;
-            for s in steps_of(here) {
+            for s in steps_of(root) {
                 if s.owner == said {
                     s.owner = wanted;
                 }
@@ -268,22 +296,35 @@ walker DeleteRole {
     has name: str = "",
         reports: list[dict[str, any]] = [];
 
-    can remove with Root entry {
+    can start with Root entry {
         said = self.name.strip();
         if not said {
             disengage;
         }
-        for r in roles_of(here) {
+        # No box means no Role node; a free-text step owner can still name it.
+        visit [here-->[?:Roles]] else {
+            self.clear_owners(here, said);
+            report {"ok": True, "deleted": said};
+        }
+    }
+
+    can remove with Roles entry {
+        said = self.name.strip();
+        for r in [here-->[?:Role]] {
             if r.name == said {
                 del r;
             }
         }
-        for s in steps_of(here) {
+        self.clear_owners(root, said);
+        report {"ok": True, "deleted": said};
+    }
+
+    def clear_owners(holder: Root, said: str) {
+        for s in steps_of(holder) {
             if s.owner == said {
                 s.owner = "";
             }
         }
-        report {"ok": True, "deleted": said};
     }
 }
 

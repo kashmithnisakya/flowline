@@ -307,8 +307,8 @@ node WorkflowStep {
         updated_at: str = "";
 }
 
-# Boxes, one of each per root, made on first use by ensure_layout. Every
-# project, member, role and step hangs off its box, never off the root.
+# Boxes, one of each per root, made on first write by the *_box helpers.
+# Every project, member, role and step hangs off its box, never off the root.
 node Projects {}
 
 node Members {}
@@ -565,9 +565,10 @@ def repo_view(r: Repo) -> RepoView {
 
 # ------------------------------------------------------------------ layout
 # One box per kind under the root; the box is the one traversal that yields
-# every row of that kind. A box is made on first write by ensure_layout, so
-# a read on an empty workspace finds none. Two overlapping first writes can
-# leave two boxes, so readers merge every box and writers take the first.
+# every row of that kind. These readers serve the walkers that aggregate
+# across kinds from the root; a box-scoped walker visits its box instead.
+# Two overlapping first writes can leave two boxes, so readers merge every
+# box and writers take the first.
 
 def projects_of(holder: Root) -> list[Project] {
     out: list[Project] = [];
@@ -634,39 +635,49 @@ def rehome_task(task: Task, target: Project) {
 }
 
 
-# The four boxes, made on first use. Call it once per request and keep the
-# handles; a later re-query of the root works (the runtime flushes first)
-# but costs a round trip.
-def ensure_layout(holder: Root) -> tuple[Projects, Members, Roles, WorkflowSteps] {
-    pboxes = [holder-->[?:Projects]];
-    if pboxes {
-        pbox = pboxes[0];
-    } else {
-        pbox = holder ++> Projects();
-        on_attached(holder, pbox);
+# Get-or-create, one per kind. A writer visits the box it returns and works
+# there; a read looks the box up itself so a GET never writes.
+def projects_box(holder: Root) -> Projects {
+    found = [holder-->[?:Projects]];
+    if found {
+        return found[0];
     }
-    mboxes = [holder-->[?:Members]];
-    if mboxes {
-        mbox = mboxes[0];
-    } else {
-        mbox = holder ++> Members();
-        on_attached(holder, mbox);
+    box = holder ++> Projects();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def members_box(holder: Root) -> Members {
+    found = [holder-->[?:Members]];
+    if found {
+        return found[0];
     }
-    rboxes = [holder-->[?:Roles]];
-    if rboxes {
-        rbox = rboxes[0];
-    } else {
-        rbox = holder ++> Roles();
-        on_attached(holder, rbox);
+    box = holder ++> Members();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def roles_box(holder: Root) -> Roles {
+    found = [holder-->[?:Roles]];
+    if found {
+        return found[0];
     }
-    sboxes = [holder-->[?:WorkflowSteps]];
-    if sboxes {
-        sbox = sboxes[0];
-    } else {
-        sbox = holder ++> WorkflowSteps();
-        on_attached(holder, sbox);
+    box = holder ++> Roles();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def steps_box(holder: Root) -> WorkflowSteps {
+    found = [holder-->[?:WorkflowSteps]];
+    if found {
+        return found[0];
     }
-    return (pbox, mbox, rbox, sbox);
+    box = holder ++> WorkflowSteps();
+    on_attached(holder, box);
+    return box;
 }
 
 
