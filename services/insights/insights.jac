@@ -15,14 +15,14 @@ import from models {
     MemberView,
     TaskLinks,
     AssignedTo,
-    Logged,
     member_view,
     member_roles,
     task_links,
     views_from,
     all_tasks,
     projects_of,
-    members_of
+    members_of,
+    days_between
 }
 import from services.util { now_iso }
 import from services.tasks.tasks { task_totals, needs_attention, order_attention }
@@ -149,8 +149,8 @@ def _tasks_of(holder: Root) -> list[Task] {
 
 def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
     rows: list[LogEntry] = [];
-    for day in [holder-->[?:LogDay, date>=from_date, date<=to_date]] {
-        for row in [day->:Logged:->] {
+    for day in days_between(holder, from_date, to_date) {
+        for row in [day-->[?:LogEntry]] {
             rows.append(row);
         }
     }
