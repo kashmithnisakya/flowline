@@ -48,6 +48,12 @@ import from ...components.ui.checkbox { Checkbox }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
+# GitHub's redirect is finished once per page load. The page mounts twice on
+# a full load and both mounts run `boot`, so the in-flight callback lives in
+# module state: the first mount starts it, every mount awaits it before it
+# reads status (issue #187). A dict cell, so a function never rebinds a glob.
+glob INSTALL_ONCE: dict[str, any] = {"pending": None};
+
 # "2026-08-03T14:20:05" -> "2026-08-03 14:20". Empty in, empty out.
 def shortStamp(iso: str) -> str {
     if not iso {
@@ -168,6 +174,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     }
 
     async def boot -> None;
+    async def finishInstall(code: str, installId: int, state: str) -> None;
     async def loadStatus -> None;
     async def loadWorkspace -> None;
     async def startInstall -> None;

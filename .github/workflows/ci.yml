@@ -173,8 +173,8 @@ jobs:
           python3 -m pip install --quiet playwright
           python3 -m playwright install --with-deps chromium
 
-      - name: Browser gate (sign up, setup, flow line, New task, card)
-        run: python3 tests/smoke/browser_gate.py http://localhost:8000
+      - name: Browser gate (sign up, setup, flow line, New task, card, GitHub install once)
+        run: python3 tests/smoke/browser_gate.py http://localhost:8000 http://127.0.0.1:8099
 
       - name: Failure screenshot
         if: ${{ failure() }}

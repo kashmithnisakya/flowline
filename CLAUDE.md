@@ -293,7 +293,16 @@ platform fix (jacBuilder #1801 carries it) is on jachammer prod.
   layout's `loggedIn` resolves, then again inside the chrome. Anything a
   page consumes in `can with entry` (a URL param, a one-shot flag) is gone
   for the second mount. Read it in entry, but consume it in the effect that
-  acts on it (see `pendingTaskId` on the board).
+  acts on it (see `pendingTaskId` on the board). The inverse trap is a
+  one-shot param that must reach the server exactly once: both mounts read
+  the URL, so strip it and start the call BEFORE the first await, keep the
+  in-flight promise in module state, and have every mount await that same
+  promise before it reads the result. A flag alone is not enough: the bare
+  mount that made the call is discarded, and the surviving mount would read
+  status while the call is still in flight. The GitHub install callback
+  fired twice that way, and the two concurrent `CompleteGithubInstall`
+  calls raced the single-use OAuth code and left the connection blank
+  (#187); a `Ref` is no guard, since each mount is its own instance.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since
@@ -381,7 +390,9 @@ installation, the poll back-fills, signed deliveries are queued by the
 receiver and applied by the drain, three workspaces stay isolated; the App
 env and `GITHUB_API_BASE` / `GITHUB_WEB_BASE` come from the workflow, no
 secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, create a
-task from the board, see the card). The `jac` job runs
+task from the board, see the card, then land on GitHub's install redirect
+against the stub and check the page finishes it with exactly one
+`CompleteGithubInstall` request). The `jac` job runs
 `jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release
