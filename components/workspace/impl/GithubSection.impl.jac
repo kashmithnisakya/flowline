@@ -4,8 +4,9 @@ answers one envelope dict, so handlers read `payload["ok"]` and surface
 """
 
 impl GithubSection.boot -> None {
-    # Finish GitHub's install round trip before anything reads status, then
-    # scrub the params: the nonce burns on first use, so a replay only errors.
+    # Finish GitHub's install round trip before anything reads status. The
+    # params are consumed once, before the first await: both mounts of the
+    # page read the URL, and the nonce and the OAuth code are single-use.
     # URLSearchParams is missing from the checker's DOM typings: `any` handle.
     w: any = window;
     params: any = new(w.URLSearchParams, w.location.search);
@@ -27,33 +28,42 @@ impl GithubSection.boot -> None {
         searchQuery = wantQuery;
         searchDraft = wantQuery;
     }
-    if installation and state {
+    if installation and state and not INSTALL_ONCE["pending"] {
+        blank: dict[str, any] = {};
+        window.history.replaceState(blank, "", window.location.pathname);
         installId = 0;
         try {
             installId = int(installation);
         } except Exception as e {
             installId = 0;
         }
-        blank: dict[str, any] = {};
-        try {
-            result = root spawn CompleteGithubInstall(
-                code=code, installation_id=installId, state=state
-            );
-            payload = result.reports[0] if result.reports else blank;
-            window.history.replaceState(blank, "", window.location.pathname);
-            if payload["ok"] {
-                toast("GitHub connected");
-            } else {
-                toast(payload["message"] or "That install could not be finished.");
-            }
-        } except Exception as e {
-            window.history.replaceState(blank, "", window.location.pathname);
-            toast("Could not finish the GitHub install");
-        }
+        INSTALL_ONCE["pending"] = finishInstall(code, installId, state);
+    }
+    if INSTALL_ONCE["pending"] {
+        await INSTALL_ONCE["pending"];
     }
     await loadStatus();
     await loadWorkspace();
     loading = False;
+}
+
+impl GithubSection.finishInstall(code: str, installId: int, state: str) -> None {
+    # One server call per redirect; the page's other mount awaits this same
+    # promise, so both read the connection only after it exists.
+    blank: dict[str, any] = {};
+    try {
+        result = root spawn CompleteGithubInstall(
+            code=code, installation_id=installId, state=state
+        );
+        payload = result.reports[0] if result.reports else blank;
+        if payload["ok"] {
+            toast("GitHub connected");
+        } else {
+            toast(payload["message"] or "That install could not be finished.");
+        }
+    } except Exception as e {
+        toast("Could not finish the GitHub install");
+    }
 }
 
 impl GithubSection.loadStatus -> None {
