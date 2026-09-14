@@ -179,6 +179,29 @@ def repo_flags(full_name):
     return None
 
 
+def repo_id(full_name):
+    status, raw = req(BASE, "POST", "/walker/ListRepos", {})
+    reps = (json.loads(raw).get("data") or {}).get("reports") or []
+    rows = reps[0] if reps and isinstance(reps[0], list) else reps
+    return next((r.get("id", "") for r in rows if r.get("full_name") == full_name), "")
+
+
+def repo_flag(full_name, key):
+    status, raw = req(BASE, "POST", "/walker/ListRepos", {})
+    reps = (json.loads(raw).get("data") or {}).get("reports") or []
+    rows = reps[0] if reps and isinstance(reps[0], list) else reps
+    return next((bool(r.get(key)) for r in rows if r.get("full_name") == full_name), None)
+
+
+def stub_state():
+    status, raw = req(STUB, "GET", "/_stub/state", auth=False)
+    return json.loads(raw)
+
+
+def stub_patches():
+    return [path for method, path in stub_state().get("calls", []) if method == "PATCH"]
+
+
 def log_rows():
     rows, page = [], 1
     while True:
@@ -377,6 +400,49 @@ def main() -> int:
     rep, dr = push("issues", envelope("opened", inst=INST_A2, issue=issue(777006, "open", iso(0), title="New install probe")))
     check("  and the new one flows", dr.get("added") == 1 and task_by_title("New install probe") is not None, (rep, dr))
 
+    # ---------------------------------------------------------- write-back: close the issue on Done
+    print("== write-back (A)")
+    saved = stub_state()
+    rid_a = repo_id(REPO)
+    r = walker("SetRepoAutoClose", {"repo_id": rid_a, "enabled": True})
+    check("repo opts into close on done", r.get("ok") and bool((r.get("repo") or {}).get("auto_close")), r)
+    W1, W2 = 777101, 777102
+    rep, dr = push("issues", envelope("opened", inst=INST_A2, issue=issue(W1, "open", iso(0), title="Close-back probe")))
+    t = task_by_issue(W1) or {}
+    check("a linked open card exists", dr.get("added") == 1 and t.get("gh_issue_state") == "open", (dr, t.get("gh_issue_state")))
+    req(STUB, "POST", "/_stub/reset", {"installations": [INST_A, INST_B, INST_A2, INST_D],
+                                        "repos": {REPO: [issue(W1, "open", iso(0), title="Close-back probe"),
+                                                         issue(W2, "open", iso(0), title="Opt-out probe")]}}, auth=False)
+    mv = walker("MoveTask", {"task_id": t.get("id", ""), "status": "Done"})
+    patches = stub_patches()
+    check("moving it to Done PATCHes the issue closed, once", mv.get("status") == "Done" and patches == [f"/repos/{REPO}/issues/{W1}"], (mv.get("status"), patches))
+    st = (stub_state().get("repos", {}).get(REPO, {}) or {}).get(str(W1), {})
+    t = task_by_issue(W1) or {}
+    check("  the stub's issue is closed and the card knows", st.get("state") == "closed" and t.get("gh_issue_state") == "closed", (st.get("state"), t.get("gh_issue_state")))
+    lines = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    moves = [x for x in lines if "Moved to Done" in x.get("activity", "")]
+    check("  one log line, the move naming the close", len(moves) == 1 and f"closed {REPO} #{W1}" in moves[0].get("activity", ""), [x.get("activity") for x in lines])
+    status, rep = deliver("issues", envelope("closed", inst=INST_A2, sender=BOT, issue=issue(W1, "closed", iso(1), closed=iso(1), title="Close-back probe")))
+    dr = drain()
+    after = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    t = task_by_issue(W1) or {}
+    check("the App's echo of that close is dropped: no second line, still Done", rep.get("outcome") == "echo" and dr.get("drained") == 0 and len(after) == len(lines) and t.get("status") == "Done", (rep, dr, len(after), len(lines)))
+    s = walker("SyncGithub")
+    after = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    check("the poll sees the same close and adds no line", s.get("ok") and len(after) == len(lines), (s, len(after), len(lines)))
+    r = walker("SetRepoAutoClose", {"repo_id": rid_a, "enabled": False})
+    rep, dr = push("issues", envelope("opened", inst=INST_A2, issue=issue(W2, "open", iso(0), title="Opt-out probe")))
+    t2 = task_by_issue(W2) or {}
+    mv = walker("MoveTask", {"task_id": t2.get("id", ""), "status": "Done"})
+    t2 = task_by_issue(W2) or {}
+    check("opted-out repo: Done writes nothing to GitHub", mv.get("status") == "Done" and stub_patches() == [f"/repos/{REPO}/issues/{W1}"] and t2.get("gh_issue_state") == "open", (mv.get("status"), stub_patches(), t2.get("gh_issue_state")))
+    # Hand the stub back exactly as this section found it: the sections
+    # below reason about which fixtures a fresh workspace's first poll sees.
+    req(STUB, "POST", "/_stub/reset", {
+        "installations": saved.get("installations", []),
+        "repos": {r: list(items.values()) for r, items in (saved.get("repos") or {}).items()},
+    }, auth=False)
+
     # ---------------------------------------------------------- workspace D never saw a delivery
     print("== workspace D")
     login("d")
@@ -392,9 +458,11 @@ def main() -> int:
     # ---------------------------------------------------------- the App's lifecycle, on D
     print("== installation lifecycle (D)")
     walker("SetRepoAutoDone", {"repo_id": rid_d, "enabled": True})
-    check("repo starts with auto-sync and auto-done on", repo_flags(REPO) == (True, True), repo_flags(REPO))
+    walker("SetRepoAutoClose", {"repo_id": rid_d, "enabled": True})
+    check("repo starts with auto-sync and auto-done on", repo_flags(REPO) == (True, True) and repo_flag(REPO, "auto_close") is True, repo_flags(REPO))
     rep, dr = push("installation_repositories", envelope("removed", inst=INST_D, repositories_removed=[{"full_name": REPO}, {"full_name": "someone/else"}]))
     check("installation_repositories.removed turns auto-sync and auto-done off", dr.get("applied") == 1 and repo_flags(REPO) == (False, False), (dr, repo_flags(REPO)))
+    check("  and close-on-done off with them", repo_flag(REPO, "auto_close") is False, repo_flag(REPO, "auto_close"))
     req(STUB, "POST", "/_stub/reset", {
         "installations": [INST_A, INST_B, INST_A2, INST_D],
         "repos": {REPO: [

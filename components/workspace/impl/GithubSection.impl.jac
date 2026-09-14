@@ -270,6 +270,26 @@ impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
     }
 }
 
+impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
+    try {
+        result = root spawn SetRepoAutoClose(repo_id=rid, enabled=enabled);
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            rResult = root spawn ListRepos();
+            repos = rResult.reports[0] if rResult.reports else [];
+            toast(
+                "Cards moved to done will close their GitHub issues"
+                    if enabled
+                    else "Close issue on done turned off"
+            );
+        } else {
+            toast("Could not update that repo");
+        }
+    } except Exception as e {
+        toast("Could not update that repo");
+    }
+}
+
 impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;

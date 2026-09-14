@@ -14,13 +14,13 @@ import logging;
 
 # Re-exported so callers get the guard and the request helpers from one
 # place; the definition itself is Python-free and lives in models.jac.
-import from models { valid_full_name }
+import from models { valid_full_name, Task, Repo, GithubConnection }
 import from jaclang.server.shared_store { open_docs_store }
 
 # The two bases are overridable so the smoke suite can point the app at
 # tests/smoke/github_stub.py; a deployment never sets them.
-glob GITHUB_API: str = os.environ.get("GITHUB_API_BASE")
-         or "https://api.github.com",
+glob log: logging.Logger = logging.getLogger("flowline.github"),
+     GITHUB_API: str = os.environ.get("GITHUB_API_BASE") or "https://api.github.com",
      GITHUB_WEB: str = os.environ.get("GITHUB_WEB_BASE") or "https://github.com",
      TOKEN_CACHE: dict[str, dict[str, any]] = {},
      INSTALL_INDEX: str = "gh_installations",
@@ -507,6 +507,10 @@ def gh_request(
             resp = requests.post(
                 GITHUB_API + path, headers=headers, json=body_out, timeout=10
             );
+        } elif method == "PATCH" {
+            resp = requests.patch(
+                GITHUB_API + path, headers=headers, json=body_out, timeout=10
+            );
         } else {
             resp = requests.get(
                 GITHUB_API + path, headers=headers, params=query, timeout=10
@@ -601,4 +605,67 @@ def user_owns_installation(user_token: str, installation_id: int) -> dict[str, a
         }
     }
     return nothing;
+}
+
+
+# ------------------------------------------------------------- write-back
+
+# Close the linked issue when a card lands on Done, for repos that opted in.
+# Returns the suffix for the move's own log line, or "" when nothing was
+# written. A failure is logged, never raised: the move already happened and
+# the card's issue state shows the mismatch until the next sync.
+def close_issue_on_done(holder: Root, t: Task, stamp: str) -> str {
+    if t.gh_issue_number <= 0
+        or not valid_full_name(t.gh_repo)
+        or t.gh_issue_state == "closed" {
+        return "";
+    }
+    opted = False;
+    for r in [holder-->[?:Repo]] {
+        if r.full_name == t.gh_repo and r.auto_close {
+            opted = True;
+        }
+    }
+    if not opted {
+        return "";
+    }
+    conns = [holder-->[?:GithubConnection]];
+    c = conns[0] if conns else None;
+    if not isinstance(c, GithubConnection)
+        or c.installation_id == 0
+        or c.status == "invalid" {
+        return "";
+    }
+    token = installation_token(c.installation_id);
+    if not token {
+        return "";
+    }
+    where = t.gh_repo + " #" + str(t.gh_issue_number);
+    result = gh_request(
+        token,
+        "PATCH",
+        "/repos/" + t.gh_repo + "/issues/" + str(t.gh_issue_number),
+        {},
+        {"state": "closed"}
+    );
+    if not result["ok"] {
+        if result.get("error") == "unauthorized" {
+            c.status = "invalid";
+        }
+        log.warning(
+            "close on done skipped for "
+                + where
+                + ": "
+                + str(result.get("message") or result.get("error"))
+        );
+        return "";
+    }
+    item = result["data"];
+    updated = str(item.get("updated_at") or "") if isinstance(item, dict) else "";
+    t.gh_issue_state = "closed";
+    if updated > t.gh_updated_at {
+        t.gh_updated_at = updated;
+    }
+    t.gh_synced_at = stamp;
+    return "closed " + where;
 }

@@ -118,7 +118,9 @@ node Repo {
         auto_sync: bool = False,
         issue_cursor: str = "",
         # Merged PR moves the linked card to the done step on sync.
-        auto_done: bool = False;
+        auto_done: bool = False,
+        # The reverse direction: a card landing on Done closes its issue.
+        auto_close: bool = False;
 }
 
 node Task {
@@ -458,7 +460,8 @@ obj RepoView {
         project_id: str,
         project_name: str,
         auto_sync: bool = False,
-        auto_done: bool = False;
+        auto_done: bool = False,
+        auto_close: bool = False;
 }
 
 obj RoleView {
@@ -554,7 +557,8 @@ def repo_view(r: Repo) -> RepoView {
         project_id=project_id,
         project_name=project_name,
         auto_sync=r.auto_sync,
-        auto_done=r.auto_done
+        auto_done=r.auto_done,
+        auto_close=r.auto_close
     );
 }
 
