@@ -1,4 +1,4 @@
-"""Daily-log walkers: day buckets and their entries."""
+"""Daily-log walkers: day buckets under the Logs box and their entries."""
 
 import from models {
     Project,
@@ -9,12 +9,14 @@ import from models {
     LogPage,
     LogTotals,
     MemberDays,
-    Logged,
+    Logs,
     By,
     AssignedTo,
     resolve,
     on_attached,
-    owned
+    owned,
+    logs_box,
+    days_between
 }
 import from services.util { today_iso, shift_day, page_bounds, now_iso }
 
@@ -30,11 +32,23 @@ walker ListLogEntries {
         page_size: int = 0,
         reports: list[LogPage] = [];
 
-    can gather with Root entry {
+    # A read never makes the box: no box, an empty page. The FIRST box only,
+    # so a second box a racing first write left cannot report twice.
+    can start with Root entry {
+        boxes = [here-->[?:Logs]];
+        if boxes {
+            visit [boxes[0]];
+        } else {
+            (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
+            report LogPage(rows=[], page=p, page_size=size, has_more=False, total=0);
+        }
+    }
+
+    can gather with Logs entry {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
         found: list[LogEntry] = [];
-        for day in [here-->[?:LogDay, date>=self.from_date, date<=self.to_date]] {
-            for row in [day->:Logged:->] {
+        for day in days_between(root, self.from_date, self.to_date) {
+            for row in [day-->[?:LogEntry]] {
                 found.append(row);
             }
         }
@@ -68,8 +82,8 @@ def log_totals(holder: Root, monday: str) -> LogTotals {
     by_week = [0, 0, 0, 0];
     by_day = [0, 0, 0, 0, 0, 0, 0];
     per_person: dict[str, list[int]] = {};
-    for day in [holder-->[?:LogDay, date>=since, date<=until]] {
-        for row in [day->:Logged:->] {
+    for day in days_between(holder, since, until) {
+        for row in [day-->[?:LogEntry]] {
             for i in range(4) {
                 if row.date >= starts[i] and row.date < ends[i] {
                     by_week[i] = by_week[i] + 1;
@@ -122,9 +136,9 @@ walker LogCounts {
 
 
 walker LogActivity {
-    """Get-or-create the day bucket under the caller's root, then append one
-    denormalized row. Refuses writes no view could fetch (empty date) or
-    that would produce a blank authorless row (bad member jid)."""
+    """Visit the Logs box, get-or-create the day in it, then append one
+    denormalized row under the day. Refuses writes no view could fetch
+    (empty date) or that would produce a blank authorless row (bad member)."""
     has date: str,
         member_id: str,
         activity: str,
@@ -145,17 +159,25 @@ walker LogActivity {
         if not isinstance(probe, Member) or not owned(here, probe) {
             disengage;
         }
-        visit [here-->[?:LogDay, date==self.date]] else {
+        visit logs_box(here);
+    }
+
+    # One day per date: an existing one anywhere in the log, else a new one
+    # in this box.
+    can open_day with Logs entry {
+        days = days_between(root, self.date, self.date);
+        if days {
+            visit [days[0]];
+        } else {
             fresh = here ++> LogDay(date=self.date);
-            on_attached(here, fresh);
+            on_attached(root, fresh);
             visit fresh;
         }
     }
 
     can add with LogDay entry {
-        # `here` is the LogDay; its container is the caller's root.
-        owners = [here<--];
-        holder = owners[0];
+        # `here` is the LogDay; `root` is the caller's own root.
+        holder = root;
         member_name = "";
         tags_snap = "";
         m = resolve(self.member_id);
@@ -170,7 +192,7 @@ walker LogActivity {
         }
         # Stamped like the automatic rows, so the time column and the
         # digest's ordering treat manual entries the same way.
-        row = here +>:Logged():+> LogEntry(
+        row = here ++> LogEntry(
             date=here.date,
             at=now_iso(),
             activity=self.activity,
@@ -188,6 +210,7 @@ walker LogActivity {
             row +>:By():+> m;
         }
         report row;
+        disengage;
     }
 }
 
@@ -198,14 +221,11 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     if not today {
         return;
     }
-    # Server-side, a filtered re-query is answered from committed storage,
-    # so a bucket created in this request is invisible to it. Use the
-    # freshly connected node directly instead of querying it back.
-    days = [holder-->[?:LogDay, date==today]];
+    days = days_between(holder, today, today);
     if days {
         day = days[0];
     } else {
-        day = holder ++> LogDay(date=today);
+        day = logs_box(holder) ++> LogDay(date=today);
         on_attached(holder, day);
     }
     names: list[str] = [];
@@ -219,7 +239,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         }
     }
     projects = [task<--[?:Project]];
-    day +>:Logged():+> LogEntry(
+    day ++> LogEntry(
         date=today,
         at=stamp,
         task_id=jid(task),
@@ -241,13 +261,13 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
 # latest row for this task today so its links and note show in the feed.
 def sync_task_links(holder: Root, task: Task, note: str) -> None {
     today = task.updated_at[:10];
-    days = [holder-->[?:LogDay, date==today]];
+    days = days_between(holder, today, today);
     if not days {
         return;
     }
     matches = [
         r
-        for r in [days[0]->:Logged:->]
+        for r in [days[0]-->[?:LogEntry]]
         if r.task_id == jid(task)
     ];
     if not matches {
@@ -263,17 +283,13 @@ def sync_task_links(holder: Root, task: Task, note: str) -> None {
 }
 
 walker find_log_entry {
-    """Lookup base for log-entry mutations: two-hop parentage check
-    (LogEntry <- LogDay <- root) before visiting."""
+    """Lookup base for log-entry mutations: resolve the jid, check it is ours
+    (LogEntry <- LogDay <- Logs <- root, the owned() climb), then visit."""
     has entry_id: str = "";
 
     can locate with Root entry {
         target = resolve(self.entry_id);
-        if not isinstance(target, LogEntry) {
-            disengage;
-        }
-        days = [target<-:Logged:<-];
-        if days and owned(here, days[0]) {
+        if isinstance(target, LogEntry) and owned(here, target) {
             visit [target];
         }
     }
@@ -303,19 +319,15 @@ walker UpdateLogEntry(find_log_entry) {
 }
 
 walker DeleteLogEntries {
-    """Bulk delete: every id is parentage-checked (LogEntry <- LogDay <-
-    root) before removal, same rule as the single-entry lookup base."""
+    """Bulk delete: every id is ownership-checked before removal, the same
+    rule as the single-entry lookup base."""
     has entry_ids: list[str] = [];
 
     can remove with Root entry {
         gone: list[str] = [];
         for eid in self.entry_ids {
             target = resolve(eid);
-            if not isinstance(target, LogEntry) {
-                continue;
-            }
-            days = [target<-:Logged:<-];
-            if days and owned(here, days[0]) {
+            if isinstance(target, LogEntry) and owned(here, target) {
                 gone.append(jid(target));
                 del target;
             }

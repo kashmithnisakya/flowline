@@ -66,11 +66,14 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   gotchas). The graph is boxed: `root ++> Projects ++> Project ++> Task`,
   `root ++> Members ++> Member`, `root ++> Roles ++> Role` and
   `root ++> WorkflowSteps ++> WorkflowStep` (that box also carries the flow
-  line's name and template key); `Repo`, `LogDay` and `GithubConnection`
-  hang off the root directly.
+  line's name and template key) and `root ++> Logs ++> LogDay ++> LogEntry`
+  (an entry hangs under its day; `days_between(root, since, until)` reads
+  the days in a date range, filtered in the store's query); `Repo` and
+  `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
-  `SetMemberRoles` inputs are still names), `HasRepo`, `Logged`, `By`.
+  `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
+  its member).
   There is no edge between steps: a step keeps its outgoing transitions in
   its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
   strips the removed step's id from every other step's list, and
@@ -181,7 +184,8 @@ Isolation is structural: authenticated walkers run on the caller's own root, so
 identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task` /
 `find_log_entry` lookup bases) before touching anything. `owned` climbs
-container edges (at most three hops: task, project, box) and compares each
+container edges (at most three hops: task, project, box; or log entry, day,
+box) and compares each
 parent's jid with the caller's root. `Root` is not a runtime name in
 `models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
 the webhook receiver cannot apply a delivery itself: it queues, the tenant

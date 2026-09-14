@@ -3,9 +3,9 @@ archetype lives HERE and must not move: archetype identity includes the module
 path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
-root ++> Roles ++> Role and root ++> WorkflowSteps ++> WorkflowStep; repos,
-days and the GitHub connection hang off the root directly. `owned()` climbs
-those container edges.
+root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
+root ++> Logs ++> LogDay ++> LogEntry; repos and the GitHub connection hang
+off the root directly. `owned()` climbs those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -56,6 +56,8 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, Members)
         or isinstance(owner, Roles)
         or isinstance(owner, WorkflowSteps)
+        or isinstance(owner, Logs)
+        or isinstance(owner, LogDay)
     );
 }
 
@@ -251,6 +253,7 @@ node Task {
     }
 }
 
+# One day of the log under the Logs box; its entries hang off it.
 node LogDay {
     has date: str;
 }
@@ -338,9 +341,10 @@ node WorkflowSteps {
         template_key: str = "";
 }
 
+node Logs {}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
-edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
 edge OnProject: Member --> Project {}
 edge HasRole: Member --> Role {}
@@ -614,6 +618,17 @@ def steps_of(holder: Root) -> list[WorkflowStep] {
 }
 
 
+# Log days with `date` in [since, until], ISO strings. The date filter runs
+# in the store's query, so a week costs the same however long the history.
+def days_between(holder: Root, since: str, until: str) -> list[LogDay] {
+    out: list[LogDay] = [];
+    for box in [holder-->[?:Logs]] {
+        out.extend([box-->[?:LogDay, date>=since, date<=until]]);
+    }
+    return out;
+}
+
+
 # Every task: one traversal per project.
 def all_tasks(holder: Root) -> list[Task] {
     out: list[Task] = [];
@@ -684,6 +699,17 @@ def steps_box(holder: Root) -> WorkflowSteps {
         return found[0];
     }
     box = holder ++> WorkflowSteps();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def logs_box(holder: Root) -> Logs {
+    found = [holder-->[?:Logs]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Logs();
     on_attached(holder, box);
     return box;
 }
