@@ -261,6 +261,8 @@ def main() -> int:
     check("  drain applies it and moves the card", dr.get("drained") == 1 and dr.get("applied") == 1 and dr.get("moved") == 1, dr)
     t = task_by_issue(N) or {}
     check("  task Done, state closed", t.get("status") == "Done" and t.get("gh_issue_state") == "closed", t)
+    check("  appended after the Done column's last card", t.get("sort_order", 0) > (task_by_issue(3) or {}).get("sort_order", 0),
+          (t.get("sort_order"), (task_by_issue(3) or {}).get("sort_order")))
     moved = [r for r in log_rows() if r.get("task_title") == t.get("title") and "issue closed" in r.get("activity", "")]
     check("  one log line dated closed_at", len(moved) == 1 and moved[0].get("at", "")[:16] == closed_at[:16], moved)
 

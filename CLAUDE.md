@@ -64,8 +64,10 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   Archetype identity includes the module path, so **moving a declaration
   orphans persisted data**. It must also stay free of Python imports (see
   gotchas). The graph is boxed: `root ++> Projects ++> Project ++> Task`,
-  `root ++> Members ++> Member`, `root ++> Roles ++> Role`; `Repo`,
-  `LogDay`, `WorkflowStep` and the singletons hang off the root directly.
+  `root ++> Members ++> Member`, `root ++> Roles ++> Role` and
+  `root ++> WorkflowSteps ++> WorkflowStep` (that box also carries the flow
+  line's name and template key); `Repo`, `LogDay` and `GithubConnection`
+  hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRepo`, `Logged`, `By`,
   `FlowsTo`. **A task's project is its container** (no project edge), so
   every task has exactly one project and `CreateTask` refuses to create
@@ -73,7 +75,7 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   reason (the sync files issues under the repo's project). The boxes are
   made on first write by `ensure_layout(root)` (call it once per request
   and keep the handles); reads go through `projects_of`, `members_of`,
-  `roles_of`, `all_tasks` and `project_tasks`. A `Member` stores
+  `roles_of`, `steps_of`, `all_tasks` and `project_tasks`. A `Member` stores
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
@@ -120,13 +122,11 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
 
 ### The flow line drives the board
 
-An org designs its own steps on `/flowlines` (`WorkflowStep` nodes, `FlowsTo`
-edges, cycles allowed on purpose). **The board's columns ARE those steps**, in
-`sort_order`, so the two views cannot disagree. The feature was called
-"workflow" until Aug 2026; `WorkflowStep` / `WorkflowMeta` keep that name
-because renaming an archetype orphans persisted data, and `GetFlowLineMeta`
-reads the old default name `"Workflow"` as `"Flow line"` for the same reason.
-`/workflow` redirects to `/flowlines` for old links.
+An org designs its own steps on `/flowlines` (`WorkflowStep` nodes under the
+`WorkflowSteps` box, `FlowsTo` edges, cycles allowed on purpose). **The
+board's columns ARE those steps**, in `sort_order`, so the two views cannot
+disagree. The feature was called "workflow" until Aug 2026; the archetypes
+keep that name. `/workflow` redirects to `/flowlines` for old links.
 
 Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 `blocked` / `done`) behind the user's chosen name. **Roughly thirty places key
@@ -366,6 +366,11 @@ platform fix (jacBuilder #1801 carries it) is on jachammer prod.
   an argument or keep it on a `Ref`, which is still correct and stays.
   Keep the habit of building a new list in a local and assigning once
   rather than appending twice around a walker call.
+- **A Radix `Select` shows its placeholder only for the value `""`.** A
+  sentinel such as `"none"` with no matching item renders an empty
+  trigger and no muted styling. Seed `""` for "nothing picked" (project on
+  the task dialog and the repo picker); keep a sentinel only where an item
+  carries it (the reviewer's "No reviewer").
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating.
 

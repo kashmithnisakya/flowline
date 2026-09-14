@@ -22,7 +22,8 @@ import from models {
     owned,
     repo_view,
     all_tasks,
-    members_of
+    members_of,
+    steps_of
 }
 import from walkers.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from walkers.log { record_task_event }
@@ -780,7 +781,10 @@ walker SearchRepoItems {
 def first_done_step(holder: Root) -> str {
     done_step = "";
     done_sort = 0.0;
-    for s in [holder-->[?:WorkflowStep, kind=="done"]] {
+    for s in steps_of(holder) {
+        if s.kind != "done" {
+            continue;
+        }
         if not done_step or s.sort_order < done_sort {
             done_step = jid(s);
             done_sort = s.sort_order;
@@ -804,8 +808,8 @@ def auto_done_land(
 ) -> float {
     if peak < 0.0 {
         peak = 0.0;
-        for d in [holder-->[?:Task, status=="Done"]] {
-            if d.sort_order > peak {
+        for d in all_tasks(holder) {
+            if d.status == "Done" and d.sort_order > peak {
                 peak = d.sort_order;
             }
         }
@@ -825,7 +829,10 @@ def auto_done_land(
 def entry_landing(holder: Root) -> list[str] {
     entry_step = "";
     entry_sort = 0.0;
-    for s in [holder-->[?:WorkflowStep, kind=="start"]] {
+    for s in steps_of(holder) {
+        if s.kind != "start" {
+            continue;
+        }
         if not entry_step or s.sort_order < entry_sort {
             entry_step = jid(s);
             entry_sort = s.sort_order;

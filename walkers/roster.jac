@@ -21,6 +21,7 @@ import from models {
     valid_full_name,
     members_of,
     roles_of,
+    steps_of,
     ensure_layout
 }
 
@@ -80,7 +81,7 @@ walker SaveMember {
                 report member_view(target);
             }
         } else {
-            (pbox, mbox, rbox) = ensure_layout(here);
+            (pbox, mbox, rbox, sbox) = ensure_layout(here);
             fresh = mbox ++> Member(
                 first_name=first,
                 last_name=last,
@@ -207,7 +208,7 @@ walker SaveRole {
                     peak = r.sort_order;
                 }
             }
-            (pbox, mbox, rbox) = ensure_layout(here);
+            (pbox, mbox, rbox, sbox) = ensure_layout(here);
             target = rbox ++> Role(name=said, sort_order=peak + 1024.0);
             on_attached(here, target);
         }
@@ -224,7 +225,7 @@ walker SaveRole {
                     m.roles = [(wanted if r == said else r) for r in m.roles];
                 }
             }
-            for s in [here-->[?:WorkflowStep]] {
+            for s in steps_of(here) {
                 if s.owner == said {
                     s.owner = wanted;
                 }
@@ -260,7 +261,7 @@ walker DeleteRole {
                 ];
             }
         }
-        for s in [here-->[?:WorkflowStep]] {
+        for s in steps_of(here) {
             if s.owner == said {
                 s.owner = "";
             }

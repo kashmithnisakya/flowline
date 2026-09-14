@@ -42,7 +42,7 @@ glob BLANK_TASK: dict[str, str] = {
          "category": "",
          "estimate": "",
          "tags": "",
-         "project": "none",
+         "project": "",
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",

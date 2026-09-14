@@ -23,7 +23,8 @@ import from models {
     all_tasks,
     projects_of,
     members_of,
-    roles_of
+    roles_of,
+    steps_of
 }
 import from walkers.util { page_bounds, done_cutoff, is_older, order_working }
 import from walkers.github { connection_of, connection_view }
@@ -93,7 +94,7 @@ walker BoardSnapshot {
             members.sort(key=lambda (m: MemberView) { m.name; });
             projects = projects_of(here);
             projects.sort(key=lambda (pr: Project) { pr.name; });
-            for st in [here-->[?:WorkflowStep]] {
+            for st in steps_of(here) {
                 steps.append(step_view(st));
             }
             steps.sort(key=lambda (s: StepView) { s.sort_order; });

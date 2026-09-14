@@ -95,7 +95,7 @@ impl GithubSection.loadWorkspace -> None {
             for p in fetchedProjects
             if p.active
         ];
-        if pickerProject == "none" and len(actives) == 1 {
+        if not pickerProject and len(actives) == 1 {
             pickerProject = jid(actives[0]);
         }
         # The "as" picker offers the org's own flow line steps; imports land on
@@ -274,7 +274,7 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;
     }
-    project = pickerProject if pickerProject != "none" else "";
+    project = pickerProject;
     if not project {
         toast("Pick a project for this repo");
         return;

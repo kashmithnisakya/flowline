@@ -1,11 +1,12 @@
-"""Flow line walkers: the org's step-graph API. One flow line per organization,
-steps hanging off the caller's root so the one-hop ownership check works.
+"""Flow line walkers: the org's step-graph API. One flow line per organization:
+the WorkflowSteps box under the caller's root holds the steps and the flow
+line's own name and template key.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
 
 import from models {
     WorkflowStep,
-    WorkflowMeta,
+    WorkflowSteps,
     Task,
     Role,
     StepView,
@@ -20,6 +21,7 @@ import from models {
     all_tasks,
     project_tasks,
     roles_of,
+    steps_of,
     ensure_layout
 }
 import from walkers.util { now_iso, page_bounds }
@@ -78,34 +80,16 @@ def safe_coord(v: float) -> float {
 }
 
 
-# Singleton per root, like GithubConnection: first touch creates it.
-def get_meta(holder: Root) -> WorkflowMeta {
-    existing = [holder-->[?:WorkflowMeta]];
-    if existing {
-        return existing[0];
-    }
-    fresh = holder ++> WorkflowMeta();
-    on_attached(holder, fresh);
-    return fresh;
-}
-
-
 walker GetFlowLineMeta {
-    """Read-only: a GET must not write, so an org that has never renamed
-    its flow line reports the default without creating the node."""
+    """Read-only: a GET must not write, so a workspace with no box yet
+    reports the defaults without creating one."""
     has reports: list[dict[str, str]] = [];
 
     can read with Root entry {
-        existing = [here-->[?:WorkflowMeta]];
-        name = existing[0].name if existing else "";
-        # "Workflow" was the default before the rename, and ApplyTemplate
-        # persisted it for every templated org, so it reads as the new one.
-        if not name or name == "Workflow" {
-            name = "Flow line";
-        }
+        boxes = [here-->[?:WorkflowSteps]];
         report {
-            "name": name,
-            "template_key": existing[0].template_key if existing else ""
+            "name": boxes[0].name if boxes else "Flow line",
+            "template_key": boxes[0].template_key if boxes else ""
         };
     }
 }
@@ -116,11 +100,11 @@ walker RenameFlowLine {
         reports: list[dict[str, str]] = [];
 
     can rename with Root entry {
-        meta = get_meta(here);
+        (pbox, mbox, rbox, sbox) = ensure_layout(here);
         if self.name.strip() {
-            meta.name = self.name.strip();
+            sbox.name = self.name.strip();
         }
-        report {"name": meta.name};
+        report {"name": sbox.name};
     }
 }
 
@@ -137,7 +121,7 @@ walker GetFlowLine {
 
     can gather with Root entry {
         views: list[StepView] = [];
-        for st in [here-->[?:WorkflowStep]] {
+        for st in steps_of(here) {
             views.append(step_view(st));
         }
         views.sort(key=lambda (s: StepView) { s.sort_order; });
@@ -196,7 +180,7 @@ walker ListStepTasks {
         wanted = jid(target);
         known: list[str] = [];
         first_of_kind: dict[str, str] = {};
-        for st in [here-->[?:WorkflowStep]] {
+        for st in steps_of(here) {
             known.append(jid(st));
             if st.kind not in first_of_kind {
                 first_of_kind[st.kind] = jid(st);
@@ -235,7 +219,7 @@ walker ApplyTemplate {
         reports: list[list[StepView]] = [];
 
     can apply with Root entry {
-        existing = [here-->[?:WorkflowStep]];
+        existing = steps_of(here);
         if existing {
             views: list[StepView] = [];
             for s in existing {
@@ -255,6 +239,7 @@ walker ApplyTemplate {
             report [];
             disengage;
         }
+        (pbox, mbox, rbox, sbox) = ensure_layout(here);
         stamp = now_iso();
         made: list[WorkflowStep] = [];
         order = 1024.0;
@@ -262,7 +247,7 @@ walker ApplyTemplate {
         raw_steps: list[dict[str, any]] = chosen["steps"];
         for s in raw_steps {
             kind = s["kind"] if s["kind"] in STEP_KINDS else "active";
-            fresh = here ++> WorkflowStep(
+            fresh = sbox ++> WorkflowStep(
                 name=s["name"],
                 kind=kind,
                 color=s["color"],
@@ -300,14 +285,12 @@ walker ApplyTemplate {
         }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
-        meta = get_meta(here);
-        meta.template_key = self.template_key;
+        sbox.template_key = self.template_key;
         # Seed the template's roles as Role nodes, editable org data from
         # here on. Get-or-create by name, so a role the org already made
         # keeps whatever it says.
         if "roles" in chosen {
             raw_roles: list[dict[str, str]] = chosen["roles"];
-            (pbox, mbox, rbox) = ensure_layout(here);
             held = [r.name for r in roles_of(here)];
             r_order = 1024.0;
             for rr in raw_roles {
@@ -404,12 +387,13 @@ walker SaveStep {
         kind = self.kind if self.kind in STEP_KINDS else "active";
         color = self.color or KIND_COLORS[kind];
         peak = 0.0;
-        for s in [here-->[?:WorkflowStep]] {
+        for s in steps_of(here) {
             if s.sort_order > peak {
                 peak = s.sort_order;
             }
         }
-        fresh = here ++> WorkflowStep(
+        (pbox, mbox, rbox, sbox) = ensure_layout(here);
+        fresh = sbox ++> WorkflowStep(
             name=self.name.strip(),
             kind=kind,
             color=color,
@@ -455,12 +439,12 @@ walker DeleteStep(find_step) {
     has reports: list[dict[str, any]] = [];
 
     can remove with WorkflowStep entry {
-        owners = [here<--];
-        holder = owners[0];
+        # `here` is the step; `root` is the caller's own root.
+        holder = root;
         kind = here.kind;
         if kind == "start" or kind == "done" {
             siblings = 0;
-            for s in [holder-->[?:WorkflowStep]] {
+            for s in steps_of(holder) {
                 if s.kind == kind and jid(s) != jid(here) {
                     siblings = siblings + 1;
                 }
@@ -502,7 +486,7 @@ walker DeleteFlowLine {
     has reports: list[dict[str, any]] = [];
 
     can wipe with Root entry {
-        steps = [here-->[?:WorkflowStep]];
+        steps = steps_of(here);
         gone: list[str] = [];
         for s in steps {
             gone.append(jid(s));
@@ -515,8 +499,8 @@ walker DeleteFlowLine {
         for s in steps {
             del s;
         }
-        for meta in [here-->[?:WorkflowMeta]] {
-            meta.template_key = "";
+        for box in [here-->[?:WorkflowSteps]] {
+            box.template_key = "";
         }
         report {"ok": True, "deleted": len(gone)};
     }

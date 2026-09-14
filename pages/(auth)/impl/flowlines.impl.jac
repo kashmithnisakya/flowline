@@ -191,7 +191,7 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "category": picked.category,
         "tags": ", ".join(picked.tags),
         "estimate": fmtEstimate(picked.estimate) if picked.estimate > 0.0 else "",
-        "project": picked.project_id or "none",
+        "project": picked.project_id,
         "priority": picked.priority,
         "status": key,
         "due_date": picked.due_date,
@@ -230,7 +230,7 @@ impl FlowLinePage.saveTask -> None {
     if not title or not editTaskId {
         return;
     }
-    project = taskForm["project"] if taskForm["project"] != "none" else "";
+    project = taskForm["project"];
     if not project {
         toast("Pick a project for this task");
         return;

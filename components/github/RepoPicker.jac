@@ -188,8 +188,7 @@ def:pub RepoPicker(
                                             size="sm"
                                             className="shrink-0"
                                             onClick={lambda { onAttach(r.full_name); }}
-                                            disabled={bool(attaching)
-                                                or projectId == "none"}
+                                            disabled={bool(attaching) or not projectId}
                                         >
                                             {if attaching == r.full_name {
                                                 <Spinner key="sp"/>

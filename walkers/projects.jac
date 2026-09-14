@@ -45,7 +45,7 @@ walker SaveProject {
                 report target;
             }
         } else {
-            (pbox, mbox, rbox) = ensure_layout(here);
+            (pbox, mbox, rbox, sbox) = ensure_layout(here);
             fresh = pbox ++> Project(
                 name=self.name.strip(), description=self.description
             );

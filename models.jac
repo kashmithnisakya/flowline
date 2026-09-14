@@ -2,9 +2,10 @@
 archetype lives HERE and must not move: archetype identity includes the module
 path, so relocating a declaration orphans persisted data.
 
-Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member
-and root ++> Roles ++> Role; repos, days, steps and the singletons hang off
-the root directly. `owned()` climbs those container edges.
+Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
+root ++> Roles ++> Role and root ++> WorkflowSteps ++> WorkflowStep; repos,
+days and the GitHub connection hang off the root directly. `owned()` climbs
+those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -54,6 +55,7 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, Project)
         or isinstance(owner, Members)
         or isinstance(owner, Roles)
+        or isinstance(owner, WorkflowSteps)
     );
 }
 
@@ -90,7 +92,7 @@ node Project {
 }
 
 node Member {
-    has first_name: str,
+    has first_name: str = "",
         last_name: str = "",
         roles: list[str] = [],
         email: str = "",
@@ -283,9 +285,6 @@ node Role {
         sort_order: float = 0.0;
 }
 
-# `WorkflowStep` and `WorkflowMeta` keep their pre-rename names: an
-# archetype's name is its identity, so renaming them orphans persisted data.
-
 # One step of the org's flow line: a named column with a semantic `kind`
 # behind the user's label. The kind, not the name, is what the app keys
 # behaviour on, so renaming never breaks anything. Position is the
@@ -306,25 +305,21 @@ node WorkflowStep {
         updated_at: str = "";
 }
 
-# The flow line's own record: singleton per root, get-or-created. Steps stay
-# flat off the root; this carries only what the graph itself cannot — the
-# display name.
-node WorkflowMeta {
-    has name: str = "Flow line",
-        # Which template seeded this flow line; "" means drawn from scratch
-        # (or seeded before this field existed). The Roles tab keys on it: a
-        # template with a `roles` list brings fixed roles, "" means
-        # free-text roles.
-        template_key: str = "";
-}
-
 # Boxes, one of each per root, made on first use by ensure_layout. Every
-# project, member and role hangs off its box, never off the root.
+# project, member, role and step hangs off its box, never off the root.
 node Projects {}
 
 node Members {}
 
 node Roles {}
+
+# The steps' box is also the flow line's own record: its display name and
+# which template seeded it ("" means drawn from scratch). The Roles tab keys
+# on the template: one with a `roles` list brings fixed roles.
+node WorkflowSteps {
+    has name: str = "Flow line",
+        template_key: str = "";
+}
 
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
@@ -566,12 +561,13 @@ def repo_view(r: Repo) -> RepoView {
 # ------------------------------------------------------------------ layout
 # One box per kind under the root; the box is the one traversal that yields
 # every row of that kind. A box is made on first write by ensure_layout, so
-# a read on an empty workspace finds none and returns nothing.
+# a read on an empty workspace finds none. Two overlapping first writes can
+# leave two boxes, so readers merge every box and writers take the first.
 
 def projects_of(holder: Root) -> list[Project] {
     out: list[Project] = [];
     for box in [holder-->[?:Projects]] {
-        out = [box-->[?:Project]];
+        out.extend([box-->[?:Project]]);
     }
     return out;
 }
@@ -580,7 +576,7 @@ def projects_of(holder: Root) -> list[Project] {
 def members_of(holder: Root) -> list[Member] {
     out: list[Member] = [];
     for box in [holder-->[?:Members]] {
-        out = [box-->[?:Member]];
+        out.extend([box-->[?:Member]]);
     }
     return out;
 }
@@ -589,7 +585,16 @@ def members_of(holder: Root) -> list[Member] {
 def roles_of(holder: Root) -> list[Role] {
     out: list[Role] = [];
     for box in [holder-->[?:Roles]] {
-        out = [box-->[?:Role]];
+        out.extend([box-->[?:Role]]);
+    }
+    return out;
+}
+
+
+def steps_of(holder: Root) -> list[WorkflowStep] {
+    out: list[WorkflowStep] = [];
+    for box in [holder-->[?:WorkflowSteps]] {
+        out.extend([box-->[?:WorkflowStep]]);
     }
     return out;
 }
@@ -624,10 +629,10 @@ def rehome_task(task: Task, target: Project) {
 }
 
 
-# The three boxes, made on first use. Call it once per request and keep the
+# The four boxes, made on first use. Call it once per request and keep the
 # handles; a later re-query of the root works (the runtime flushes first)
 # but costs a round trip.
-def ensure_layout(holder: Root) -> tuple[Projects, Members, Roles] {
+def ensure_layout(holder: Root) -> tuple[Projects, Members, Roles, WorkflowSteps] {
     pboxes = [holder-->[?:Projects]];
     if pboxes {
         pbox = pboxes[0];
@@ -649,7 +654,14 @@ def ensure_layout(holder: Root) -> tuple[Projects, Members, Roles] {
         rbox = holder ++> Roles();
         on_attached(holder, rbox);
     }
-    return (pbox, mbox, rbox);
+    sboxes = [holder-->[?:WorkflowSteps]];
+    if sboxes {
+        sbox = sboxes[0];
+    } else {
+        sbox = holder ++> WorkflowSteps();
+        on_attached(holder, sbox);
+    }
+    return (pbox, mbox, rbox, sbox);
 }
 
 
