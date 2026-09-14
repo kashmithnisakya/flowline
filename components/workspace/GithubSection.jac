@@ -26,6 +26,7 @@ import from ...services.github.github {
     SetRepoAutoDone,
     SetRepoAutoClose
 }
+import from ...lib.jobs { ensureReconcileJob, dropReconcileJobs }
 import from ...components.ui.input { Input }
 import from ...services.flowlines.flowlines { GetFlowLine }
 import from ...services.projects.projects { ListProjects }

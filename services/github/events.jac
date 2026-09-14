@@ -10,6 +10,8 @@ import from models { GithubConnection }
 import from services.util { now_iso }
 import from services.github.github {
     DRAIN_LIMIT,
+    RECONCILE_PAGES,
+    SyncGithub,
     connection_of,
     not_connected,
     drain_deliveries
@@ -130,6 +132,39 @@ walker GithubEvent {
             disengage;
         }
         report outcome(state, self.delivery);
+    }
+}
+
+
+@schedule(trigger=ScheduleTrigger.DYNAMIC)
+walker ReconcileGithub {
+    """The reconcile pass on a timer instead of a board open (#174), so a
+    workspace nobody opens still catches up. A workspace creates one job for
+    itself when it connects (`lib/jobs.jac`), and the scheduler runs a
+    dynamic job as the user who created it, on that user's own root. A
+    static schedule could not: it would run as the system identity, which
+    reaches a workspace's graph no better here than the receiver does.
+
+    Carries no route of its own: the runtime leaves a scheduled walker out
+    of `/walker/`, which is why this is its own walker and not a decorator
+    on SyncGithub."""
+    has reports: list[dict[str, any]] = [];
+
+    can reconcile with Root entry {
+        c = connection_of(here);
+        if not isinstance(c, GithubConnection) or c.installation_id == 0 {
+            report not_connected();
+            disengage;
+        }
+        result = here spawn SyncGithub(page_budget=RECONCILE_PAGES);
+        payload = result.reports[0] if result.reports else {};
+        log.info(
+            "reconcile tick for installation "
+                + str(c.installation_id)
+                + ": "
+                + str(payload)
+        );
+        report payload;
     }
 }
 

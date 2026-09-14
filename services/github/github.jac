@@ -75,6 +75,9 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # walk order. Counts are free (they ride the issue list); only the
      # child links cost a call, and only when a family changed.
      SUB_ISSUE_CAP: int = 20,
+     # Pages one scheduled reconcile tick may read. Smaller than a board
+     # open's budget: nobody is waiting on it, and the next tick continues.
+     RECONCILE_PAGES: int = 2,
      # Queued webhook deliveries applied per drain; a longer backlog drains
      # over successive calls.
      DRAIN_LIMIT: int = 200;
