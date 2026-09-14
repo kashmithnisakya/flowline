@@ -24,7 +24,7 @@ STUB = (sys.argv[2] if len(sys.argv) > 2 else "http://127.0.0.1:8099").rstrip("/
 SECRET = os.environ.get("GITHUB_APP_WEBHOOK_SECRET", "ci-webhook-secret")
 BOT = os.environ.get("GITHUB_APP_SLUG", "ci-app") + "[bot]"
 REPO = "ci-org/ci-repo"
-INST_A, INST_B, INST_A2 = 111, 222, 333
+INST_A, INST_B, INST_A2, INST_D = 111, 222, 333, 444
 READY_TIMEOUT = 420
 TOKEN = ""
 FAILS: list[str] = []
@@ -196,7 +196,7 @@ def main() -> int:
     if not check("server ready within timeout", wait_ready()):
         return 2
     status, _ = req(STUB, "POST", "/_stub/reset", {
-        "installations": [INST_A, INST_B, INST_A2],
+        "installations": [INST_A, INST_B, INST_A2, INST_D],
         "repos": {REPO: [
             issue(1, "open", "2026-09-02T10:00:00Z", title="Stub issue one"),
             issue(2, "open", "2026-09-02T11:00:00Z", title="Stub issue two"),
@@ -303,6 +303,13 @@ def main() -> int:
     check("SyncGithub drains the queue before polling", s.get("ok") and s.get("drained") == 1 and task_by_title("Sync-drained probe") is not None, s)
     one = [r for r in log_rows() if r.get("task_title") == "Stub issue one" and "issue closed" in r.get("activity", "")]
     check("  the poll adds no duplicate auto-done line", len(one) == 1, len(one))
+    status, rep = deliver("issues", envelope("opened", issue=issue(999996, "open", iso(0), title="Auto-pass probe")))
+    s = walker("SyncGithub", {"auto": True})
+    check("auto pass while live: 15-minute cooldown skips the poll but still drains",
+          s.get("ok") and s.get("cooldown_minutes") == 15.0 and s.get("pages") == 0 and s.get("drained") == 1
+          and task_by_title("Auto-pass probe") is not None, s)
+    s = walker("SyncGithub")
+    check("  manual sync ignores the cooldown", s.get("ok") and s.get("pages", 0) >= 1, s)
     token_a = TOKEN
 
     # ---------------------------------------------------------- workspace B
@@ -348,6 +355,18 @@ def main() -> int:
     check("  deliveries for the old installation are dropped", rep.get("outcome") == "unknown_installation", rep)
     rep, dr = push("issues", envelope("opened", inst=INST_A2, issue=issue(777006, "open", iso(0), title="New install probe")))
     check("  and the new one flows", dr.get("added") == 1 and task_by_title("New install probe") is not None, (rep, dr))
+
+    # ---------------------------------------------------------- workspace D never saw a delivery
+    print("== workspace D")
+    login("d")
+    connect(INST_D)
+    rid_d = walker("AddRepo", {"full_name": REPO}).get("id", "")
+    walker("SetRepoAutoSync", {"repo_id": rid_d, "enabled": True})
+    s = walker("SyncGithub", {"auto": True})
+    check("auto pass with no deliveries: 1-minute cooldown, first pass polls",
+          s.get("ok") and s.get("cooldown_minutes") == 1.0 and s.get("pages", 0) >= 1, s)
+    s = walker("SyncGithub", {"auto": True})
+    check("  second auto pass inside the minute is skipped", s.get("ok") and s.get("pages") == 0 and s.get("cooldown_minutes") == 1.0, s)
 
     print("webhook gate: " + ("PASS" if not FAILS else f"FAIL ({len(FAILS)})"))
     return 1 if FAILS else 0
