@@ -70,9 +70,13 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
-  `SetMemberRoles` inputs are still names), `HasRepo`, `Logged`, `By`,
-  `FlowsTo`. **A task's project is its container** (no project edge), so
-  every task has exactly one project and `CreateTask` refuses to create
+  `SetMemberRoles` inputs are still names), `HasRepo`, `Logged`, `By`.
+  There is no edge between steps: a step keeps its outgoing transitions in
+  its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
+  strips the removed step's id from every other step's list, and
+  `step_view(s, steps)` reads incoming ids off the whole flow line and
+  drops a transition to a step that is gone. **A task's project is its
+  container** (no project edge), so every task has exactly one project and `CreateTask` refuses to create
   without an owned, active one; `AddRepo` needs a project for the same
   reason (the sync files issues under the repo's project). A box is made
   on first write by its get-or-create helper (`projects_box(root)` and
@@ -150,7 +154,8 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
 ### The flow line drives the board
 
 An org designs its own steps on `/flowlines` (`WorkflowStep` nodes under the
-`WorkflowSteps` box, `FlowsTo` edges, cycles allowed on purpose). **The
+`WorkflowSteps` box, transitions stored on each step, cycles allowed on
+purpose). **The
 board's columns ARE those steps**, in `sort_order`, so the two views cannot
 disagree. The feature was called "workflow" until Aug 2026; the archetypes
 keep that name. `/workflow` redirects to `/flowlines` for old links.
