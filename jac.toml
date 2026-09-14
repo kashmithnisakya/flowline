@@ -1,8 +1,8 @@
 [project]
 name = "flowline"
-entry-point = "main.jac"
+entry-point = "main"
 kind = "web-app"
-jac-version = "==0.37.7"
+jac-version = "==0.37.14"
 
 [jac-shadcn]
 style = "nova"

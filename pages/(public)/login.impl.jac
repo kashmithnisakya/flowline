@@ -21,7 +21,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             # The profile starts empty on purpose: the setup wizard collects
             # the organization and PM name, where there is room to say what
             # they are for. jacSignup still needs the argument.
-            res: dict = {};
+            res: any = {};
             res = await jacSignup(addr, pw, {});
             if not res["success"] {
                 error = "Signup failed. Is that email already registered?";
