@@ -137,6 +137,23 @@ jobs:
           jac scale deploy --dry-run --show-yaml main.jac > manifests.yaml
           python3 tests/smoke/deploy_gate.py manifests.yaml
 
+      # A local GitHub stand-in so the connect round trip, the poll and the
+      # webhook receiver run with no credentials. The App JWT needs a real
+      # RSA key to sign with; the stub never checks it.
+      - name: GitHub stub (background) and the App env the server reads
+        run: |
+          nohup python3 tests/smoke/github_stub.py 8099 > stub.log 2>&1 &
+          {
+            echo "GITHUB_API_BASE=http://127.0.0.1:8099"
+            echo "GITHUB_WEB_BASE=http://127.0.0.1:8099"
+            echo "GITHUB_APP_ID=1"
+            echo "GITHUB_APP_SLUG=ci-app"
+            echo "GITHUB_APP_CLIENT_ID=ci-client"
+            echo "GITHUB_APP_CLIENT_SECRET=ci-secret"
+            echo "GITHUB_APP_PRIVATE_KEY=$(openssl genrsa 2048 2>/dev/null | base64 | tr -d '\n')"
+            echo "GITHUB_APP_WEBHOOK_SECRET=ci-webhook-secret"
+          } >> "$GITHUB_ENV"
+
       - name: Serve the app (jac run --no-dev, background)
         run: |
           nohup jac run --no-dev --port 8000 main.jac > serve.log 2>&1 &
@@ -144,6 +161,9 @@ jobs:
 
       - name: API gate (shell, bundle, register, login, walkers, concurrency)
         run: python3 tests/smoke/api_gate.py http://localhost:8000
+
+      - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation)
+        run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
 
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log
@@ -166,4 +186,6 @@ jobs:
 
       - name: Server log
         if: ${{ always() }}
-        run: tail -n 150 serve.log || true
+        run: |
+          tail -n 150 serve.log || true
+          tail -n 20 stub.log || true

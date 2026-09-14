@@ -65,9 +65,6 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # walk order. Counts are free (they ride the issue list); only the
      # child links cost a call, and only when a family changed.
      SUB_ISSUE_CAP: int = 20,
-     # Installations this process has already seen in the index, so the
-     # status call costs a store read once rather than every page open.
-     BOUND_SEEN: dict[str, bool] = {},
      # Queued webhook deliveries applied per drain; a longer backlog drains
      # over successive calls.
      DRAIN_LIMIT: int = 200;
@@ -105,20 +102,17 @@ def connection_view(c: any) -> GithubConnectionView {
 }
 
 
-# Workspaces connected before the installation index existed get their
-# row on the next status call, once per process; no migration step. A store
-# hiccup leaves the memo unset so the next call tries again.
+# A connected workspace whose installation has no index row claims it on
+# its next status call: workspaces connected before the index existed, and
+# the one left behind after another workspace took the installation over
+# and disconnected. One keyed read per call; a memo would go stale across
+# worker processes.
 def ensure_bound(holder: Root, c: any) -> None {
     if not isinstance(c, GithubConnection) or c.installation_id == 0 {
         return;
     }
-    key = str(c.installation_id);
-    if key in BOUND_SEEN {
-        return;
-    }
-    if root_for_installation(c.installation_id)
-        or bind_installation(c.installation_id, jid(holder)) {
-        BOUND_SEEN[key] = True;
+    if not root_for_installation(c.installation_id) {
+        bind_installation(c.installation_id, jid(holder));
     }
 }
 
@@ -270,6 +264,9 @@ walker CompleteGithubInstall {
         if isinstance(account, dict) {
             login = str(account.get("login") or "");
             avatar = str(account.get("avatar_url") or "");
+        }
+        if target.installation_id and target.installation_id != self.installation_id {
+            unbind_installation(target.installation_id);
         }
         target.installation_id = self.installation_id;
         target.account_login = login;
