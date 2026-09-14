@@ -77,7 +77,7 @@ def run(page, tag: str) -> list[str]:
     step("setup wizard: organization")
     settle(page, "/setup", "Name your workspace")
     act(page, lambda: page.get_by_placeholder("Acme Robotics").fill("CI Org"))
-    page.get_by_placeholder("Priya Raman").fill("CI Runner")
+    expect(page.get_by_text("Your name", exact=True)).to_have_count(0)
     page.get_by_role("button", name="Continue", exact=True).click()
 
     step("setup wizard: first project")

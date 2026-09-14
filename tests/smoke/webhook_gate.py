@@ -91,7 +91,7 @@ def login(label):
     status, raw = req(BASE, "POST", "/user/register", {
         "identities": [{"type": "email", "value": email}],
         "credential": {"type": "password", "password": password},
-        "profile": {"org_name": f"Webhook {label}", "full_name": "CI Runner"},
+        "profile": {"org_name": f"Webhook {label}"},
     }, auth=False)
     assert status in (200, 201), ("register", status, raw[:200])
     status, raw = req(BASE, "POST", "/user/login", {

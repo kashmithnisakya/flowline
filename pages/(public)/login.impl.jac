@@ -19,8 +19,8 @@ impl LoginPage.submit(e: FormEvent) -> None {
     try {
         if signingUp {
             # The profile starts empty on purpose: the setup wizard collects
-            # the organization and PM name, where there is room to say what
-            # they are for. jacSignup still needs the argument.
+            # the organization name, where there is room to say what it is
+            # for. jacSignup still needs the argument.
             res: any = {};
             res = await jacSignup(addr, pw, {});
             if not res["success"] {

@@ -6,10 +6,6 @@ impl Shell.loadOrg -> None {
     if name {
         orgName = name;
     }
-    who = profile["full_name"] if profile["full_name"] else "";
-    if who {
-        fullName = who;
-    }
 }
 
 impl Shell.logout -> None {

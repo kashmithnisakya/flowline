@@ -48,7 +48,6 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
         orgName: str = "",
-        fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
         # applyTheme so "system" resolves to what is actually showing.
         themeDark: bool = False,
@@ -255,14 +254,6 @@ def:pub Shell -> JsxLayout {
                                         >
                                             {orgName or "Your workspace"}
                                         </span>
-                                        {if fullName {
-                                            <span
-                                                key="who"
-                                                className="truncate text-xs font-normal text-muted-foreground"
-                                            >
-                                                {fullName}
-                                            </span>
-                                        }}
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator/>
                                     <DropdownMenuItem asChild={True}>

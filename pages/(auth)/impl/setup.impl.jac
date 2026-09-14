@@ -7,9 +7,7 @@ impl SetupPage.boot -> None {
     try {
         profile = await fetchProfile();
         existingOrg = str(profile["org_name"]) if profile["org_name"] else "";
-        existingWho = str(profile["full_name"]) if profile["full_name"] else "";
         orgName = existingOrg;
-        fullName = existingWho;
         if not existingOrg.strip() {
             step = 1;
             return;
@@ -28,21 +26,20 @@ impl SetupPage.boot -> None {
 
 impl SetupPage.saveProfile -> None {
     org = orgName.strip();
-    who = fullName.strip();
-    if not org or not who {
+    if not org {
         return;
     }
     saveError = "";
     busy = True;
     try {
-        ok = await patchProfile({"org_name": org, "full_name": who});
+        ok = await patchProfile({"org_name": org});
         if ok {
             step = 2;
         } else {
-            saveError = "Could not save those names. Try again.";
+            saveError = "Could not save that name. Try again.";
         }
     } except Exception as e {
-        saveError = "Could not save those names. Try again.";
+        saveError = "Could not save that name. Try again.";
     }
     busy = False;
 }
