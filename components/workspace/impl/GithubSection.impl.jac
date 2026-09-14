@@ -57,6 +57,10 @@ impl GithubSection.finishInstall(code: str, installId: int, state: str) -> None 
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
+            # From here the workspace catches up on its own, without anyone
+            # opening the board. A failure is silent on purpose: the connect
+            # succeeded, and the board's own pass still reconciles.
+            await ensureReconcileJob();
             toast("GitHub connected");
         } else {
             toast(payload["message"] or "That install could not be finished.");
@@ -159,6 +163,7 @@ impl GithubSection.disconnect -> None {
     confirmDisconnect = False;
     try {
         root spawn DisconnectGithub();
+        await dropReconcileJobs();
         repoId = "";
         issues = [];
         pulls = [];

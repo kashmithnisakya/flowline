@@ -137,6 +137,13 @@ description = 'Jac IDE snapshot for flowline'
 # GitHub App deliveries land on /webhook/GithubEvent. The runtime verifies
 # X-Hub-Signature-256 against this secret before the walker runs, so an
 # empty or wrong value means every delivery is refused, never applied.
+# Scheduled jobs. Only the reconcile pass uses them: a workspace creates one
+# job for itself when it connects GitHub, so a board nobody opens still
+# catches up. Enabling the capability is what makes `jac install` pull
+# APScheduler; without it the /jobs endpoints answer but nothing ever fires.
+[scale.scheduler]
+enabled = true
+
 [scale.webhook]
 github_secret = "${GITHUB_APP_WEBHOOK_SECRET}"
 max_body_bytes = 2097152
@@ -145,6 +152,10 @@ max_body_bytes = 2097152
 default = "server"
 
 [placement.pins]
+"lib.jobs.dropReconcileJobs" = "client"
+"lib.jobs.reconcileJobs" = "client"
+"lib.jobs.reconcileWalker" = "client"
+"lib.jobs.ensureReconcileJob" = "client"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
