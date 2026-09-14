@@ -1,8 +1,8 @@
 """flowline - Projects page: create, rename, archive."""
 
 import from ...models { Project, RepoView }
-import from ...walkers.projects { ListProjects, SaveProject, ArchiveProject }
-import from ...walkers.roster { ListRepos, AddRepo, RemoveRepo }
+import from ...services.projects.projects { ListProjects, SaveProject, ArchiveProject }
+import from ...services.roster.roster { ListRepos, AddRepo, RemoveRepo }
 import from ...components.projects.ProjectTable { ProjectTable }
 
 def normalizeRepoInput(raw: str) -> str {

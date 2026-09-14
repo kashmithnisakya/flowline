@@ -6,14 +6,14 @@ fetched once (Mon-Sun) and the day view filters locally.
 import from "@jac/runtime" { useState }
 import from "react" { useEffect, useRef }
 import from ...models { LogEntry, MemberView, Project }
-import from ...walkers.log {
+import from ...services.log.log {
     ListLogEntries,
     DeleteLogEntries,
     LogActivity,
     UpdateLogEntry
 }
-import from ...walkers.roster { ListMembers }
-import from ...walkers.projects { ListProjects }
+import from ...services.roster.roster { ListMembers }
+import from ...services.projects.projects { ListProjects }
 import from ...components.log.WeekStrip { WeekStrip }
 import from ...components.log.EntryDialog { EntryDialog }
 import from ...components.log.LogTable { LogTable }

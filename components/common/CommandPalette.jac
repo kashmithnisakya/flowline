@@ -9,7 +9,7 @@ Navigation goes through the runtime's navigate(); the board reacts to
 import from "@jac/runtime" { navigate, useLocation, jacLogout }
 import from "react" { useEffect }
 import from ...models { TaskView }
-import from ...walkers.tasks { ListTasks }
+import from ...services.tasks.tasks { ListTasks }
 import from ...lib.theme { getThemePref, setThemePref }
 import from ..ui.dialog { Dialog, DialogContent, DialogTitle }
 import from .Avatar { AvatarStack, dotFor }

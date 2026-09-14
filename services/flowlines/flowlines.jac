@@ -25,7 +25,7 @@ import from models {
     roles_box,
     steps_box
 }
-import from walkers.util { now_iso, page_bounds }
+import from services.util { now_iso, page_bounds }
 import from constants {
     STEP_KINDS,
     KIND_COLORS,

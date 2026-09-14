@@ -12,7 +12,7 @@ import from ...models {
     GhIssueRow,
     GhPrRow
 }
-import from ...walkers.github {
+import from ...services.github.github {
     GithubStatus,
     StartGithubInstall,
     CompleteGithubInstall,
@@ -27,9 +27,9 @@ import from ...walkers.github {
     SetRepoAutoClose
 }
 import from ...components.ui.input { Input }
-import from ...walkers.flowlines { GetFlowLine }
-import from ...walkers.projects { ListProjects }
-import from ...walkers.roster { ListRepos, AddRepo }
+import from ...services.flowlines.flowlines { GetFlowLine }
+import from ...services.projects.projects { ListProjects }
+import from ...services.roster.roster { ListRepos, AddRepo }
 import from ...components.github.ConnectCard { ConnectCard }
 import from ...components.github.ReconnectBanner { ReconnectBanner }
 import from ...components.github.RepoPicker { RepoPicker }

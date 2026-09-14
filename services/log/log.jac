@@ -16,7 +16,7 @@ import from models {
     on_attached,
     owned
 }
-import from walkers.util { today_iso, shift_day, page_bounds, now_iso }
+import from services.util { today_iso, shift_day, page_bounds, now_iso }
 
 # ---------------------------------------------------------------- daily log
 

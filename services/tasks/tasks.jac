@@ -26,7 +26,7 @@ import from models {
     roles_of,
     rehome_task
 }
-import from walkers.util {
+import from services.util {
     now_iso,
     today_iso,
     shift_day,
@@ -36,8 +36,8 @@ import from walkers.util {
     is_older,
     order_working
 }
-import from walkers.log { record_task_event, sync_task_links }
-import from walkers.ghutil { close_issue_on_done }
+import from services.log.log { record_task_event, sync_task_links }
+import from services.github.util { close_issue_on_done }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
 

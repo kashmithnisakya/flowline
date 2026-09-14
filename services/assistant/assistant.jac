@@ -4,8 +4,8 @@ back empty), NO `:pub` (bare walkers require a JWT), and the model NEVER
 writes: propose_action returns a suggestion the UI applies via normal walkers."""
 
 import from constants { STATUSES, PRIORITIES }
-import from walkers.insights { Snapshot, build_snapshot }
-import from walkers.util { now_iso }
+import from services.insights.insights { Snapshot, build_snapshot }
+import from services.util { now_iso }
 import logging;
 
 # ------------------------------------------------------------------ LLM shapes

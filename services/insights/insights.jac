@@ -24,9 +24,9 @@ import from models {
     projects_of,
     members_of
 }
-import from walkers.util { now_iso }
-import from walkers.tasks { task_totals, needs_attention, order_attention }
-import from walkers.log { log_totals }
+import from services.util { now_iso }
+import from services.tasks.tasks { task_totals, needs_attention, order_attention }
+import from services.log.log { log_totals }
 
 glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
      STALE_AFTER_DAYS: int = 7;

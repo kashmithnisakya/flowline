@@ -17,7 +17,7 @@ import from ...models {
     LogTotals,
     MemberDays
 }
-import from ...walkers.insights { OverviewSnapshot }
+import from ...services.insights.insights { OverviewSnapshot }
 import from ...components.dashboard.StatTile { StatTile }
 import from ...components.dashboard.QueueCards { ReviewQueueCard, GoneQuietCard }
 import from ...components.ui.card {
@@ -107,7 +107,7 @@ def:pub OverviewPage -> JsxPage {
         counts: TaskTotals | None = None,
         logs: LogTotals | None = None,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
-        # objs would pull walkers.insights types into the client bundle.
+        # objs would pull services.insights.insights types into the client bundle.
         reviewQueue: list[dict] = [],
         quiet: list[dict] = [],
         blockedInfo: dict[str, dict] = {},
