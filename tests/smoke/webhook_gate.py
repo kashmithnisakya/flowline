@@ -25,6 +25,9 @@ SECRET = os.environ.get("GITHUB_APP_WEBHOOK_SECRET", "ci-webhook-secret")
 BOT = os.environ.get("GITHUB_APP_SLUG", "ci-app") + "[bot]"
 REPO = "ci-org/ci-repo"
 INST_A, INST_B, INST_A2, INST_D = 111, 222, 333, 444
+# Never connected by any workspace, in this run or an earlier one against the
+# same store: the index is a docs-store row and outlives a single gate run.
+INST_NONE = 555
 READY_TIMEOUT = 420
 TOKEN = ""
 FAILS: list[str] = []
@@ -329,6 +332,47 @@ def main() -> int:
     rep, dr = push("pull_request", envelope("closed", pull_request=dict(pr, number=424242)))
     check("unlinked PR drained without effect", dr.get("drained") == 1 and dr.get("applied") == 0, dr)
 
+    # ---------------------------------------------------------- the signals #47 maps: assignee and review
+    rt = walker("CreateTask", {"title": "Review probe", "status": "In Progress", "project_id": pid_a})
+    rtid = rt.get("id", "")
+    walker("UpdateTask", {"task_id": rtid, "title": "Review probe", "status": "In Progress", "priority": "Medium",
+                          "pr_link": f"https://github.com/{REPO}/pull/60"})
+    rpr = {"number": 60, "state": "open", "merged_at": None, "draft": False,
+           "html_url": f"https://github.com/{REPO}/pull/60", "title": "review probe"}
+
+    def review_state():
+        return (task_by_title("Review probe") or {}).get("pr_review_state")
+
+    rep, dr = push("pull_request", envelope("review_requested", pull_request=dict(rpr, updated_at=iso(1))))
+    check("pull_request.review_requested marks the card as awaiting review", dr.get("applied") == 1 and review_state() == "requested", (dr, review_state()))
+    rep, dr = push("pull_request_review", envelope("submitted", pull_request=dict(rpr, updated_at=iso(2)),
+                                                  review={"state": "changes_requested", "submitted_at": iso(2), "user": {"login": "octocat"}}))
+    check("pull_request_review.submitted records changes_requested", dr.get("applied") == 1 and review_state() == "changes_requested", (dr, review_state()))
+    rep, dr = push("pull_request_review", envelope("submitted", pull_request=dict(rpr, updated_at=iso(3)),
+                                                  review={"state": "commented", "submitted_at": iso(3), "user": {"login": "octocat"}}))
+    check("  a commented review answers nothing and leaves it pending", dr.get("applied") == 0 and review_state() == "changes_requested", (dr, review_state()))
+    rep, dr = push("pull_request_review", envelope("submitted", pull_request=dict(rpr, updated_at=iso(4)),
+                                                  review={"state": "approved", "submitted_at": iso(4), "user": {"login": "octocat"}}))
+    check("  a later approval replaces it", dr.get("applied") == 1 and review_state() == "approved", (dr, review_state()))
+    rep, dr = push("pull_request_review", envelope("submitted", pull_request=dict(rpr, updated_at=iso(5)),
+                                                  review={"state": "changes_requested", "submitted_at": iso(-10), "user": {"login": "octocat"}}))
+    check("  a review that arrives late cannot roll the verdict back", dr.get("applied") == 0 and review_state() == "approved", (dr, review_state()))
+    rep, dr = push("pull_request", envelope("review_request_removed", pull_request=dict(rpr, updated_at=iso(6))))
+    check("review_request_removed clears it", dr.get("applied") == 1 and review_state() == "", (dr, review_state()))
+    rep, dr = push("pull_request_review", envelope("submitted", pull_request=dict(rpr, number=424243, updated_at=iso(7)),
+                                                  review={"state": "approved", "submitted_at": iso(7)}))
+    check("a review on an unlinked PR drains without effect", dr.get("drained") == 1 and dr.get("applied") == 0, dr)
+
+    A1 = 777201
+    rep, dr = push("issues", envelope("opened", issue=issue(A1, "open", iso(1), title="Assignee probe",
+                                                            extra={"assignees": [{"login": "Octocat"}]})))
+    check("issues carries GitHub's assignees onto the card", dr.get("added") == 1 and (task_by_issue(A1) or {}).get("gh_assignees") == ["octocat"], (dr, (task_by_issue(A1) or {}).get("gh_assignees")))
+    rep, dr = push("issues", envelope("assigned", issue=issue(A1, "open", iso(2), title="Assignee probe",
+                                                              extra={"assignees": [{"login": "octocat"}, {"login": "hubot"}]})))
+    check("issues.assigned adds the second one", dr.get("applied") == 1 and (task_by_issue(A1) or {}).get("gh_assignees") == ["octocat", "hubot"], (dr, (task_by_issue(A1) or {}).get("gh_assignees")))
+    rep, dr = push("issues", envelope("unassigned", issue=issue(A1, "open", iso(3), title="Assignee probe", extra={"assignees": []})))
+    check("issues.unassigned empties it", dr.get("applied") == 1 and (task_by_issue(A1) or {}).get("gh_assignees") == [], (dr, (task_by_issue(A1) or {}).get("gh_assignees")))
+
     parent = issue(N, "open", iso(4), extra={"sub_issues_summary": {"total": 1, "completed": 0}})
     child = issue(NEW, "open", iso(4))
     fam = dict(parent_issue=parent, parent_issue_repo={"full_name": REPO}, sub_issue=child, sub_issue_repo={"full_name": REPO})
@@ -341,6 +385,10 @@ def main() -> int:
     check("sub_issue_removed clears it", tc.get("gh_parent_number") == 0 and tp.get("gh_sub_total") == 0, (tc.get("gh_parent_number"), tp.get("gh_sub_total")))
     rep, dr = push("issues", envelope("deleted", issue=issue(NEW, "open", iso(5))))
     check("issues.deleted unlinks the task, keeps the card", dr.get("drained") == 1 and task_by_issue(NEW) is None and task_by_title("Webhook-filed probe") is not None, dr)
+
+    status, rep = deliver("pull_request_review", envelope("submitted", inst=INST_NONE, pull_request=dict(rpr, updated_at=iso(8)),
+                                                         review={"state": "approved", "submitted_at": iso(8)}))
+    check("a review for an installation no workspace holds is dropped at the receiver", rep.get("outcome") == "unknown_installation", rep)
 
     status, rep = deliver("issues", envelope("opened", issue=issue(999997, "open", iso(0), title="Sync-drained probe")))
     s = walker("SyncGithub")
