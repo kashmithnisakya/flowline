@@ -8,6 +8,7 @@ import json
 import re
 import sys
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -117,6 +118,25 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["repos"][repo][number] = item
                 return self._send(201, item)
         return self._send(404, {"message": f"stub: no route for POST {url.path}"})
+
+    def do_PATCH(self):
+        # The app's one write-back: PATCH /repos/{r}/issues/{n} with a state.
+        url = urlparse(self.path)
+        body = self._body()
+        with LOCK:
+            STATE["calls"].append(("PATCH", url.path))
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)", url.path)
+            if m:
+                item = STATE["repos"].get(m.group(1), {}).get(int(m.group(2)))
+                if not item:
+                    return self._send(404, {"message": "Not Found"})
+                state = str(body.get("state") or item["state"])
+                stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                item["state"] = state
+                item["updated_at"] = stamp
+                item["closed_at"] = stamp if state == "closed" else None
+                return self._send(200, item)
+        return self._send(404, {"message": f"stub: no route for PATCH {url.path}"})
 
 
 def main():

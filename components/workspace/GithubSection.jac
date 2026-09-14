@@ -23,7 +23,8 @@ import from ...walkers.github {
     SearchRepoItems,
     ImportIssues,
     SetRepoAutoSync,
-    SetRepoAutoDone
+    SetRepoAutoDone,
+    SetRepoAutoClose
 }
 import from ...components.ui.input { Input }
 import from ...walkers.flowlines { GetFlowLine }
@@ -185,6 +186,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def attachRepo(fullName: str) -> None;
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def toggleAutoDone(rid: str, enabled: bool) -> None;
+    async def toggleAutoClose(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
     async def importSelected -> None;
@@ -419,6 +421,25 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             ); }}
                                         />
                                         Done on merge &amp; close
+                                    </label>
+                                }}
+                                {for r in [
+                                    x
+                                    for x in repos
+                                    if x.id == repoId
+                                ] {
+                                    <label
+                                        key={"close-" + r.id}
+                                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+                                        title="Moving a card to your done step closes its GitHub issue"
+                                    >
+                                        <Checkbox
+                                            checked={r.auto_close}
+                                            onCheckedChange={lambda { toggleAutoClose(
+                                                r.id, not r.auto_close
+                                            ); }}
+                                        />
+                                        Close issue on done
                                     </label>
                                 }}
                                 {for r in [

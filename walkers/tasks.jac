@@ -38,6 +38,7 @@ import from walkers.util {
     order_working
 }
 import from walkers.log { record_task_event, sync_task_links }
+import from walkers.ghutil { close_issue_on_done }
 import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
 
 
@@ -557,7 +558,14 @@ walker UpdateTask(find_task) {
             }
         }
         if moved {
-            record_task_event(holder, here, "Moved to " + here.status, here.updated_at);
+            line = "Moved to " + here.status;
+            if here.status == "Done" {
+                closed = close_issue_on_done(holder, here, here.updated_at);
+                if closed {
+                    line = line + " · " + closed;
+                }
+            }
+            record_task_event(holder, here, line, here.updated_at);
         }
         report here.to_view();
         disengage;
@@ -707,6 +715,14 @@ walker MoveTask(find_task) {
                 here +>:AssignedTo():+> target;
                 note = note + " · " + target.full_name();
                 took = True;
+            }
+        }
+        # Landing on Done is the one move that writes back to GitHub, for
+        # repos that opted in; the close rides on the move's own log line.
+        if landing == "Done" and was != "Done" {
+            closed = close_issue_on_done(holder, here, here.updated_at);
+            if closed {
+                note = note + " · " + closed;
             }
         }
         if landing != was or took {

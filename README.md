@@ -128,8 +128,11 @@ before the webhook existed and anything delivered while the app was being
 deployed. GitHub does not retry a failed delivery on its own; the App's
 Advanced tab lists every delivery with its response and a Redeliver button.
 
-The only write to GitHub is still an issue you explicitly create from a task.
-Nothing runs on a schedule: a workspace nobody opens stays as it was.
+Flowline writes to GitHub in two cases: an issue you explicitly create from a
+task, and, per repo and off by default ("Close issue on done"), closing the
+issue when its card reaches your done step. The receiver drops the App's own
+echo of that close, so the card is not moved or logged twice. Nothing runs on
+a schedule: a workspace nobody opens stays as it was.
 
 ## License
 

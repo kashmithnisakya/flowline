@@ -102,7 +102,7 @@ def:pub ConnectCard(
                     </li>
                 </ul>
                 <p>
-                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, nothing is polled in the background, and the one write is an issue somebody explicitly asks for.
+                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, and it writes to GitHub only when asked: an issue opened from a task, or, per repo and off by default, the issue closed when its card reaches done.
                 </p>
                 {if len(missing) > 0 {
                     <p

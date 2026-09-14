@@ -1155,6 +1155,26 @@ walker SetRepoAutoDone {
 }
 
 
+walker SetRepoAutoClose {
+    """Per-repo policy, the reverse of auto_done and off by default: a card
+    landing on Done closes its GitHub issue. The receiver drops the App's
+    own echo of that close, so the card is never moved twice."""
+    has repo_id: str = "",
+        enabled: bool = False,
+        reports: list[dict[str, any]] = [];
+
+    can set with Root entry {
+        target = resolve(self.repo_id);
+        if not isinstance(target, Repo) or not owned(here, target) {
+            report {"ok": False, "error": "not_found", "message": "Unknown repo."};
+            disengage;
+        }
+        target.auto_close = self.enabled;
+        report {"ok": True, "repo": repo_view(target)};
+    }
+}
+
+
 # ------------------------------------------------------------------- sync
 
 # Everything one sync increment needs, built once per call so the per-item
@@ -1605,6 +1625,7 @@ def apply_repo_access(
             r = ctx.by_name[full_name];
             r.auto_sync = False;
             r.auto_done = False;
+            r.auto_close = False;
             touched.append(full_name);
         }
     }

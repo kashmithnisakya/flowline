@@ -81,7 +81,8 @@ import from walkers.github {
     CreateIssueFromTask,
     SyncGithub,
     SetRepoAutoSync,
-    SetRepoAutoDone
+    SetRepoAutoDone,
+    SetRepoAutoClose
 }
 import from walkers.ghevents { GithubEvent, DrainGithubEvents }
 import from walkers.board { BoardSnapshot }
