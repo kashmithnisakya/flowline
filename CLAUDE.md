@@ -251,7 +251,14 @@ keep it equal to the cores in `cpu_limit` (#140). Never write `"auto"`
 there: the manifest builder resolves it on the deploying machine, not in
 the pod (this Mac renders 10). The HPA scales on memory too (80% of the
 request), so a request below the idle footprint pins the deployment at
-`max_replicas`. The dry-run command above renders the manifests locally
+`max_replicas`. **The gateway gets an HPA of its own** with the same
+`[scale.kubernetes]` bounds unless `[scale.gateway.hpa]` sets them (it does:
+1 to 2); four gateway pods on dev (2026-09-14) were that inheritance plus a
+512Mi request sized for one worker while `[serve.workers]` gives the gateway
+two. `[scale.monitoring] k8s_metrics_enabled` and `[scale.gateway.logs]`
+each add a per-node DaemonSet (node-exporter, Alloy) to the namespace on the
+shared cluster, so both stay off; the deploy gate checks the gateway range.
+The dry-run command above renders the manifests locally
 once `bundle_storage_class` is set to any name (a placeholder for the RWX
 check that a real deploy satisfies on the platform); `tests/smoke/
 deploy_gate.py` asserts its transcript in CI.
