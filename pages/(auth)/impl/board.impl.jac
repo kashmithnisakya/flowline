@@ -358,9 +358,16 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
     # hardcoded "Backlog" that may not exist.
     keys = columnKeys();
     landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
+    # A task always has a project: the filtered one, else the first active.
+    firstProject = "";
+    for pr in projects {
+        if pr.active and not firstProject {
+            firstProject = jid(pr);
+        }
+    }
     form = {
         ** BLANK_TASK,
-        "project": fProject if fProject != "all" else "none",
+        "project": fProject if fProject != "all" else firstProject,
         "status": landing,
         "due_date": shifted.toISOString()[:10]
     };
@@ -375,7 +382,7 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "category": t.category,
         "tags": ", ".join(t.tags),
         "estimate": fmtEstimate(t.estimate) if t.estimate > 0.0 else "",
-        "project": t.project_id or "none",
+        "project": t.project_id,
         "priority": t.priority,
         "status": columnKeyOf(t),
         "due_date": t.due_date,
@@ -404,8 +411,12 @@ impl BoardPage.saveTask -> None {
     if not title {
         return;
     }
+    project = form["project"];
+    if not project {
+        toast("Pick a project for this task");
+        return;
+    }
     saving = True;
-    project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
     tagList = [
         s.strip()

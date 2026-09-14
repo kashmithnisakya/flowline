@@ -255,7 +255,9 @@ def:pub IssueImportTable(
                                         <SelectValue placeholder="Project"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">No project</SelectItem>
+                                        <SelectItem value="none">
+                                            Repo's project
+                                        </SelectItem>
                                         {for p in projects {
                                             <SelectItem key={jid(p)} value={jid(p)}>
                                                 {p.name}

@@ -15,11 +15,14 @@ import from models {
     MemberView,
     TaskLinks,
     AssignedTo,
-    ForProject,
     Logged,
     member_view,
+    member_roles,
     task_links,
-    views_from
+    views_from,
+    all_tasks,
+    projects_of,
+    members_of
 }
 import from walkers.util { now_iso }
 import from walkers.tasks { task_totals, needs_attention, order_attention }
@@ -140,7 +143,7 @@ def _today -> str {
 # Each takes the caller's root and traverses it directly. No walker spawns.
 
 def _tasks_of(holder: Root) -> list[Task] {
-    return [holder-->[?:Task]];
+    return all_tasks(holder);
 }
 
 
@@ -277,12 +280,12 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     tasks = _tasks_of(holder);
     members = [
         m
-        for m in [holder-->[?:Member]]
+        for m in members_of(holder)
         if m.active
     ];
     projects = [
         p
-        for p in [holder-->[?:Project]]
+        for p in projects_of(holder)
         if p.active
     ];
     entries = _entries_between(holder, from_date, to_date);
@@ -306,15 +309,16 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
 
     people: list[PersonStat] = [];
     for m in members {
+        shown = m.full_name();
         mine = [
             t
             for t in tasks
-            if m.name in links.named(jid(t))
+            if shown in links.named(jid(t))
         ];
         people.append(
             PersonStat(
-                name=m.name,
-                roles=", ".join(m.roles),
+                name=shown,
+                roles=", ".join(member_roles(m)),
                 tags=", ".join(m.tags),
                 open_tasks=len(
                     [
@@ -334,7 +338,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
                     [
                         e
                         for e in entries
-                        if m.name in e.member_name
+                        if shown in e.member_name
                     ]
                 ),
                 blocked=len(
@@ -457,11 +461,11 @@ walker OverviewSnapshot {
         flagged.sort(key=lambda (t: Task) { jid(t); });
         order_attention(flagged);
         members: list[MemberView] = [];
-        for m in [here-->[?:Member]] {
+        for m in members_of(here) {
             members.append(member_view(m));
         }
         members.sort(key=lambda (m: MemberView) { m.name; });
-        projects = [here-->[?:Project]];
+        projects = projects_of(here);
         projects.sort(key=lambda (p: Project) { p.name; });
         report OverviewData(
             counts=task_totals(here, tasks, links, self.monday),

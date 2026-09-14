@@ -101,6 +101,13 @@ def login(label):
     return TOKEN
 
 
+def project():
+    """Every repo and task needs a project; one per workspace is enough.
+    SaveProject reports the raw node, whose id rides as _jac_id."""
+    rep = walker("SaveProject", {"name": "Webhook project"})
+    return rep.get("id") or rep.get("_jac_id") or ""
+
+
 def connect(installation_id):
     """The real install round trip: nonce from StartGithubInstall, then the
     callback the App would redirect to, answered by the stub."""
@@ -225,7 +232,9 @@ def main() -> int:
     check("GithubStatus: connected to the stub account, no deliveries yet",
           status_view.get("connected") and status_view.get("account_login") == "stub-org"
           and not status_view.get("webhook_seen_at"), status_view)
-    rid = walker("AddRepo", {"full_name": REPO}).get("id", "")
+    pid_a = project()
+    check("AddRepo without a project attaches nothing", not walker("AddRepo", {"full_name": REPO}).get("id"))
+    rid = walker("AddRepo", {"full_name": REPO, "project_id": pid_a}).get("id", "")
     check("AddRepo", bool(rid))
     walker("SetRepoAutoSync", {"repo_id": rid, "enabled": True})
     walker("SetRepoAutoDone", {"repo_id": rid, "enabled": True})
@@ -252,6 +261,8 @@ def main() -> int:
     check("  drain applies it and moves the card", dr.get("drained") == 1 and dr.get("applied") == 1 and dr.get("moved") == 1, dr)
     t = task_by_issue(N) or {}
     check("  task Done, state closed", t.get("status") == "Done" and t.get("gh_issue_state") == "closed", t)
+    check("  appended after the Done column's last card", t.get("sort_order", 0) > (task_by_issue(3) or {}).get("sort_order", 0),
+          (t.get("sort_order"), (task_by_issue(3) or {}).get("sort_order")))
     moved = [r for r in log_rows() if r.get("task_title") == t.get("title") and "issue closed" in r.get("activity", "")]
     check("  one log line dated closed_at", len(moved) == 1 and moved[0].get("at", "")[:16] == closed_at[:16], moved)
 
@@ -277,7 +288,7 @@ def main() -> int:
     rep, dr = push("issue_comment", envelope("created", issue=issue(NEW, "open", iso(3))))
     check("unsupported event not queued", rep.get("outcome") == "unsupported" and dr.get("drained") == 0, (rep, dr))
 
-    pt = walker("CreateTask", {"title": "PR-linked probe", "status": "In Progress"})
+    pt = walker("CreateTask", {"title": "PR-linked probe", "status": "In Progress", "project_id": pid_a})
     pid = pt.get("id", "")
     check("CreateTask for the PR case", bool(pid), pt)
     walker("UpdateTask", {"task_id": pid, "title": "PR-linked probe", "status": "In Progress", "priority": "Medium",
@@ -326,7 +337,7 @@ def main() -> int:
     print("== workspace B")
     login("b")
     connect(INST_B)
-    rid_b = walker("AddRepo", {"full_name": REPO}).get("id", "")
+    rid_b = walker("AddRepo", {"full_name": REPO, "project_id": project()}).get("id", "")
     walker("SetRepoAutoSync", {"repo_id": rid_b, "enabled": True})
     rep, dr = push("issues", envelope("opened", inst=INST_B, issue=issue(777001, "open", iso(0), title="B-only probe")))
     check("B drains its own installation's delivery", rep.get("outcome") == "queued" and dr.get("added") == 1 and task_by_title("B-only probe") is not None, (rep, dr))
@@ -341,7 +352,7 @@ def main() -> int:
     print("== workspace C")
     login("c")
     connect(INST_A)
-    rid_c = walker("AddRepo", {"full_name": REPO}).get("id", "")
+    rid_c = walker("AddRepo", {"full_name": REPO, "project_id": project()}).get("id", "")
     walker("SetRepoAutoSync", {"repo_id": rid_c, "enabled": True})
     token_c = TOKEN
     status, rep = deliver("issues", envelope("opened", issue=issue(777003, "open", iso(0), title="Handover probe")))
@@ -370,7 +381,7 @@ def main() -> int:
     print("== workspace D")
     login("d")
     connect(INST_D)
-    rid_d = walker("AddRepo", {"full_name": REPO}).get("id", "")
+    rid_d = walker("AddRepo", {"full_name": REPO, "project_id": project()}).get("id", "")
     walker("SetRepoAutoSync", {"repo_id": rid_d, "enabled": True})
     s = walker("SyncGithub", {"auto": True})
     check("auto pass with no deliveries: 1-minute cooldown, first pass polls",

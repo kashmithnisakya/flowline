@@ -19,7 +19,8 @@ import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
-         "name": "",
+         "first_name": "",
+         "last_name": "",
          "email": "",
          "github": "",
          "color": "",

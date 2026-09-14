@@ -85,8 +85,14 @@ def run(page, tag: str) -> list[str]:
     page.get_by_placeholder("Website redesign").fill("CI Project")
     page.get_by_role("button", name="Continue", exact=True).click()
 
-    step("setup wizard: finish")
+    step("setup wizard: add a person by first and last name")
     expect(page.get_by_text("Add your people").first).to_be_visible()
+    page.get_by_placeholder("First name").fill("Priya")
+    page.get_by_placeholder("Last name").fill("Raman")
+    page.get_by_role("button", name="Add", exact=True).click()
+    expect(page.get_by_text("Priya Raman", exact=True)).to_be_visible()
+
+    step("setup wizard: finish")
     page.get_by_role("button", name="Design your flow line", exact=True).click()
     settle(page, "/flowlines", "How does your team move work?")
 

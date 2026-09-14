@@ -68,19 +68,20 @@ impl SetupPage.createProject -> None {
 impl SetupPage.addPerson -> None {
     # Names only: roles are assigned on the Workspace tab once a flow line
     # exists to define them, so the wizard never invents role vocabulary.
-    captured = mName.strip();
-    if not captured {
+    first = mFirst.strip();
+    if not first {
         return;
     }
     saveError = "";
     busy = True;
     try {
-        result = root spawn SaveMember(name=captured);
+        result = root spawn SaveMember(first_name=first, last_name=mLast.strip());
         fresh = result.reports[0] if result.reports else None;
         if fresh {
             added = added + [fresh];
         }
-        mName = "";
+        mFirst = "";
+        mLast = "";
     } except Exception as e {
         saveError = "Could not add that person. Try again.";
     }
@@ -92,7 +93,7 @@ impl SetupPage.finish -> None {
     # silently discard a typed member. `finishing` stays True through the
     # hard navigation so the button keeps its spinner until the page swaps.
     finishing = True;
-    if mName.strip() {
+    if mFirst.strip() {
         await addPerson();
     }
     # New orgs land on the flow line picker: choosing how work moves is the

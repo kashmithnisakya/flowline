@@ -15,7 +15,7 @@ import from models {
     MemberView,
     GithubConnectionView,
     WorkflowStep,
-    WorkflowMeta,
+    WorkflowSteps,
     StepView
 }
 import from walkers.projects {

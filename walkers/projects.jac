@@ -1,6 +1,15 @@
 """Project walkers: CRUD plus member assignment edges."""
 
-import from models { Project, Member, OnProject, resolve, on_attached, owned }
+import from models {
+    Project,
+    Member,
+    OnProject,
+    resolve,
+    on_attached,
+    owned,
+    projects_of,
+    ensure_layout
+}
 
 # ----------------------------------------------------------------- projects
 
@@ -11,7 +20,7 @@ walker ListProjects {
     # are serialised into the response beside the report, so an accumulator
     # field would ship the whole list twice.
     can gather with Root entry {
-        rows = [here-->[?:Project]];
+        rows = projects_of(here);
         rows.sort(key=lambda (p: Project) { p.name; });
         report rows;
     }
@@ -36,7 +45,8 @@ walker SaveProject {
                 report target;
             }
         } else {
-            fresh = here ++> Project(
+            (pbox, mbox, rbox, sbox) = ensure_layout(here);
+            fresh = pbox ++> Project(
                 name=self.name.strip(), description=self.description
             );
             on_attached(here, fresh);

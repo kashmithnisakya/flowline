@@ -108,6 +108,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
     # validated status and priority against the real vocabularies.
     p: any = turns[index]["proposal"];
     busy = True;
+    where = "";
     try {
         if p.kind == "move_task" {
             # The model returns a title, never a jid. The server ranks an
@@ -129,11 +130,27 @@ impl AssistantDock.applyProposal(index: int) -> None {
             pResult = root spawn ListProjects();
             people = mResult.reports[0] if mResult.reports else [];
             projects = pResult.reports[0] if pResult.reports else [];
+            # A task always has a project: the one the model named, else
+            # the first active one, and the toast says where it went.
             projectId = "";
             for pr in projects {
-                if pr.name == p.project {
+                if pr.active and pr.name == p.project {
                     projectId = jid(pr);
+                    where = " · " + pr.name;
                 }
+            }
+            if not projectId {
+                for pr in projects {
+                    if pr.active and not projectId {
+                        projectId = jid(pr);
+                        where = " · " + pr.name;
+                    }
+                }
+            }
+            if not projectId {
+                toast("Create a project before adding tasks");
+                busy = False;
+                return;
             }
             assignees: list[str] = [];
             for m in people {
@@ -141,7 +158,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
                     assignees = [m.id];
                 }
             }
-            root spawn CreateTask(
+            made = root spawn CreateTask(
                 title=p.title,
                 category=p.category,
                 priority=p.priority or "Medium",
@@ -151,12 +168,19 @@ impl AssistantDock.applyProposal(index: int) -> None {
                 assignee_ids=assignees,
                 project_id=projectId
             );
+            # The walker creates nothing (and reports nothing) for a project
+            # it refuses, so an empty report is a failure, not an apply.
+            if not made.reports {
+                toast("Could not add that task");
+                busy = False;
+                return;
+            }
         }
         setTurnState(index, "applied");
         # The board is not in this component tree, so tell it to refetch
         # instead of leaving the change invisible until its next poll.
         announceRefresh();
-        toast("Applied", {"description": p.title});
+        toast("Applied", {"description": p.title + where});
     } except Exception as e {
         toast("Could not apply that");
     }

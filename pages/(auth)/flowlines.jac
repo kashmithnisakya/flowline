@@ -73,7 +73,7 @@ glob BLANK_STEP: dict[str, str] = {
          "category": "",
          "tags": "",
          "estimate": "",
-         "project": "none",
+         "project": "",
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",
