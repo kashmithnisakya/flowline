@@ -74,14 +74,28 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   `FlowsTo`. **A task's project is its container** (no project edge), so
   every task has exactly one project and `CreateTask` refuses to create
   without an owned, active one; `AddRepo` needs a project for the same
-  reason (the sync files issues under the repo's project). The boxes are
-  made on first write by `ensure_layout(root)` (call it once per request
-  and keep the handles); reads go through `projects_of`, `members_of`,
-  `roles_of`, `steps_of`, `all_tasks` and `project_tasks`. A `Member` stores
-  `first_name` and `last_name`; `full_name()` is the display name.
+  reason (the sync files issues under the repo's project). A box is made
+  on first write by its get-or-create helper (`projects_box(root)` and
+  friends); the cross-kind readers `projects_of`, `members_of`, `roles_of`,
+  `steps_of`, `all_tasks` and `project_tasks` serve the walkers that
+  aggregate from the root. A `Member` stores `first_name` and `last_name`;
+  `full_name()` is the display name.
 - **`walkers/`** — the API, one module per domain (`projects`, `roster`,
   `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
-  Walkers are **bare (JWT-required)**; there are no `:pub` walkers. The one
+  Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+  **A box-scoped walker visits, it does not read from the root.** Its
+  `Root entry` ability only decides where to go: `visit [here-->[?:Members]]
+  else { report []; }` for a read (a GET never makes a box), `visit
+  members_box(here)` for a write, `visit [target]` after `resolve` +
+  `owned` for a jid-addressed row (the `find_task` / `find_step` /
+  `find_project` / `find_member` lookup bases). The work happens in a
+  `with <Box> entry` or `with <Row> entry` ability, where the traversal from
+  the caller's root is the isolation and `root` is the caller's root when a
+  sibling box is needed. Only the aggregators that page or sort across
+  kinds (`BoardSnapshot`, `OverviewSnapshot`, `TaskCounts`, `ListTasks`
+  without a project, `SyncGithub`) stay on the root with the `*_of`
+  readers: carrying rows between abilities means walker `has` fields, and
+  those ship in the response. The one
   exception is `walkers/ghevents.jac`: `GithubEvent` is a webhook-protocol
   walker (`/webhook/GithubEvent`, never `/walker/`) whose caller is GitHub,
   authenticated by the runtime's signature check before the walker exists.

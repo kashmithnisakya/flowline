@@ -21,7 +21,6 @@ import from models {
     on_attached,
     owned,
     all_tasks,
-    project_tasks,
     projects_of,
     members_of,
     roles_of,
@@ -179,18 +178,34 @@ walker ListTasks {
         page_size: int = 0,
         reports: list[TaskPage] = [];
 
-    can gather with Root entry {
+    # A project filter visits that project and pages its own children;
+    # otherwise the page is built over every project from the root.
+    can start with Root entry {
+        if self.project_id {
+            p = resolve(self.project_id);
+            if isinstance(p, Project) and owned(here, p) {
+                visit [p];
+            } else {
+                report self.page_of(here, []);
+            }
+        } else {
+            report self.page_of(here, all_tasks(here));
+        }
+    }
+
+    can gather with Project entry {
+        report self.page_of(root, [here-->[?:Task]]);
+        disengage;
+    }
+
+    # Filter and sort on node fields over the whole pool, hydrate the page.
+    def page_of(holder: Root, pool: list[Task]) -> TaskPage {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         needle = self.q.lower().strip();
         today = today_iso();
         cutoff = done_cutoff(self.done_days);
         picked: list[Task] = [];
         left_out: list[Task] = [];
-        # A project filter reads that project's own children; anything else
-        # walks every project once.
-        pool = (
-            project_tasks(here, self.project_id) if self.project_id else all_tasks(here)
-        );
         for t in pool {
             if needle and needle not in t.title.lower() {
                 continue;
@@ -231,7 +246,7 @@ walker ListTasks {
         }
         if self.project_id or self.assignee_id {
             if self.assignee_id {
-                picked = self.assigned_to(here, picked);
+                picked = self.assigned_to(holder, picked);
             }
             # `older` is only read on an unfiltered working page (the board
             # asks the "older" scope itself once a filter is on).
@@ -255,8 +270,8 @@ walker ListTasks {
         } else {
             order_working(picked);
         }
-        report TaskPage(
-            rows=hydrate_views(here, picked[start:end]),
+        return TaskPage(
+            rows=hydrate_views(holder, picked[start:end]),
             page=p,
             page_size=size,
             has_more=len(picked) > end,
@@ -419,27 +434,31 @@ walker CreateTask {
         project_id: str = "",
         reports: list[TaskView] = [];
 
-    can create with Root entry {
+    # Every task lives under a project. An empty, unknown, foreign or
+    # archived project id creates nothing: the walker never leaves the root.
+    can start with Root entry {
         if not self.title.strip() {
             disengage;
         }
-        # Every task lives under a project. An empty, unknown, foreign or
-        # archived project id creates nothing.
         p = resolve(self.project_id);
-        if not isinstance(p, Project) or not owned(here, p) or not p.active {
-            disengage;
+        if isinstance(p, Project) and owned(here, p) and p.active {
+            visit [p];
         }
+    }
+
+    can create with Project entry {
+        holder = root;
         col = self.status if self.status in STATUSES else "Backlog";
         step = "";
         if self.step_id {
-            mapped = status_for_step(here, self.step_id);
+            mapped = status_for_step(holder, self.step_id);
             if mapped {
                 col = mapped;
                 step = self.step_id;
             }
         }
         peak = 0.0;
-        for t in all_tasks(here) {
+        for t in all_tasks(holder) {
             in_column = (
                 t.step_id == step if step else (t.status == col and not t.step_id)
             );
@@ -448,7 +467,7 @@ walker CreateTask {
             }
         }
         stamp = now_iso();
-        fresh = p ++> Task(
+        fresh = here ++> Task(
             title=self.title.strip(),
             category=self.category,
             tags=clean_tags(self.tags),
@@ -463,15 +482,16 @@ walker CreateTask {
             updated_at=stamp,
             sort_order=peak + 1024.0
         );
-        on_attached(here, fresh);
+        on_attached(holder, fresh);
         for aid in self.assignee_ids {
             m = resolve(aid);
-            if isinstance(m, Member) and owned(here, m) {
+            if isinstance(m, Member) and owned(holder, m) {
                 fresh +>:AssignedTo():+> m;
             }
         }
-        record_task_event(here, fresh, "Added to " + col, stamp);
+        record_task_event(holder, fresh, "Added to " + col, stamp);
         report fresh.to_view();
+        disengage;
     }
 }
 
