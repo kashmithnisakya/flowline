@@ -132,10 +132,12 @@ deployed. GitHub does not retry a failed delivery on its own; the App's
 Advanced tab lists every delivery with its response and a Redeliver button.
 
 Flowline writes to GitHub in two cases: an issue you explicitly create from a
-task, and, per repo and off by default ("Close issue on done"), closing the
-issue when its card reaches your done step. The receiver drops the App's own
-echo of that close, so the card is not moved or logged twice. Nothing runs on
-a schedule: a workspace nobody opens stays as it was.
+task, and, per repo and off by default ("Close & reopen issue"), the issue's
+state: closing it when its card reaches your done step, and reopening it when
+the card moves back out. The receiver drops the App's own echo of either, so
+the card is not moved or logged twice. Titles, assignees and labels are never
+written back. Nothing runs on a schedule: a workspace nobody opens stays as it
+was.
 
 ## License
 

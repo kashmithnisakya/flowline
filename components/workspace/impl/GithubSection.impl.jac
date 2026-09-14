@@ -278,9 +278,9 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
             toast(
-                "Cards moved to done will close their GitHub issues"
+                "Cards will close their GitHub issues on done and reopen them when moved back"
                     if enabled
-                    else "Close issue on done turned off"
+                    else "Close & reopen issue turned off"
             );
         } else {
             toast("Could not update that repo");

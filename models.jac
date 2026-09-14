@@ -121,7 +121,8 @@ node Repo {
         issue_cursor: str = "",
         # Merged PR moves the linked card to the done step on sync.
         auto_done: bool = False,
-        # The reverse direction: a card landing on Done closes its issue.
+        # The reverse direction: a card landing on Done closes its issue,
+        # and one leaving Done reopens it.
         auto_close: bool = False;
 }
 

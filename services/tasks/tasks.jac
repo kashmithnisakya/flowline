@@ -41,7 +41,7 @@ import from services.util {
     moved_to_done
 }
 import from services.log.log { record_task_event, sync_task_links }
-import from services.github.util { close_issue_on_done }
+import from services.github.util { sync_issue_state }
 import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 
@@ -669,7 +669,8 @@ walker UpdateTask(find_task) {
                 here.step_id = self.step_id;
             }
         }
-        moved = landing and landing != here.status;
+        was = here.status;
+        moved = landing and landing != was;
         here.title = self.title;
         here.category = self.category;
         here.tags = clean_tags(self.tags);
@@ -710,10 +711,13 @@ walker UpdateTask(find_task) {
         }
         if moved {
             line = "Moved to " + here.status;
-            if here.status == "Done" {
-                closed = close_issue_on_done(holder, here, here.updated_at);
-                if closed {
-                    line = line + " · " + closed;
+            # A move always crosses Done or not; only crossing it writes back.
+            if here.status == "Done" or was == "Done" {
+                wrote = sync_issue_state(
+                    holder, here, here.status == "Done", here.updated_at
+                );
+                if wrote {
+                    line = line + " · " + wrote;
                 }
             }
             record_task_event(holder, here, line, here.updated_at);
@@ -868,12 +872,13 @@ walker MoveTask(find_task) {
                 took = True;
             }
         }
-        # Landing on Done is the one move that writes back to GitHub, for
-        # repos that opted in; the close rides on the move's own log line.
-        if landing == "Done" and was != "Done" {
-            closed = close_issue_on_done(holder, here, here.updated_at);
-            if closed {
-                note = note + " · " + closed;
+        # Crossing Done is the one move that writes back to GitHub, for repos
+        # that opted in: landing closes the issue, leaving reopens it. The
+        # write rides on the move's own log line.
+        if (landing == "Done") != (was == "Done") {
+            wrote = sync_issue_state(holder, here, landing == "Done", here.updated_at);
+            if wrote {
+                note = note + " · " + wrote;
             }
         }
         if landing != was or took {

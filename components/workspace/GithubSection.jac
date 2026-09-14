@@ -431,7 +431,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                     <label
                                         key={"close-" + r.id}
                                         className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
-                                        title="Moving a card to your done step closes its GitHub issue"
+                                        title="Moving a card to your done step closes its GitHub issue, and moving it back out reopens it"
                                     >
                                         <Checkbox
                                             checked={r.auto_close}
@@ -439,7 +439,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 r.id, not r.auto_close
                                             ); }}
                                         />
-                                        Close issue on done
+                                        Close &amp; reopen issue
                                     </label>
                                 }}
                                 {for r in [
