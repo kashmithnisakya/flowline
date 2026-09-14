@@ -33,8 +33,10 @@ is why renaming a step never changes how anything behaves.
 - **Handoffs ask for detail**: moving work to a handoff or blocked step asks
   (optionally) for a reviewer, a review-by date, a PR link or what is blocking it
 - **Multi-assignee tasks**, free-text categories and tags, repos attached to projects
-- **GitHub, on demand**: install the app on the repos you choose, import issues
-  as tasks, watch pull-request state on the cards, and open an issue from a task
+- **GitHub, live**: install the app on the repos you choose; issues opened,
+  closed or reopened and pull requests merged on GitHub land on an open board
+  within seconds, import issues as tasks, watch pull-request state on the
+  cards, and open an issue from a task
 - **An Overview tab** with headline numbers, per-project progress and per-person activity
 - **An assistant** that reads the whole workspace and writes the standup note for
   you, answers questions about your own board, and turns "add a task for Nadia on
@@ -79,7 +81,8 @@ Create one at <https://github.com/settings/apps/new>:
 | Callback URL | `<HOST>/workspace?tab=github` |
 | Setup URL | `<HOST>/workspace?tab=github`, with "Redirect on update" ticked |
 | Request user authorization (OAuth) during installation | **on** |
-| Webhooks | off |
+| Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, a secret you generate (`openssl rand -hex 32`) |
+| Subscribe to events | Issues · Pull request · Sub-issues (installation events are sent to every App on their own) |
 | Repository permissions | Issues: read and write · Pull requests: read · Metadata: read |
 
 The OAuth-during-installation box is not optional. Installation ids are small
@@ -88,14 +91,45 @@ authorized can actually see that installation; with the box off, that check
 cannot run and connecting is refused.
 
 Generate a private key, then set `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
-`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` and
-`GITHUB_APP_PRIVATE_KEY` (see `.env.example` for the base64 one-liner). Leave
-them empty and the GitHub tab explains what is missing instead of failing.
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`
+(see `.env.example` for the base64 one-liner) and `GITHUB_APP_WEBHOOK_SECRET`,
+the same secret you gave the webhook. Leave the first five empty and the
+GitHub tab explains what is missing instead of failing; leave the webhook
+secret empty and the server refuses to start, since the receiver would have
+nothing to verify deliveries against.
 
 What the app stores is an installation id, not a token: each request mints a
-one-hour installation token in memory and drops it. Nothing is polled or
-scheduled, and the only write to GitHub is an issue you explicitly create from
-a task.
+one-hour installation token in memory and drops it.
+
+### What syncs live
+
+GitHub posts each change to `/webhook/GithubEvent`. The runtime checks the
+signature before any app code runs, and the receiver only queues the delivery:
+it never calls GitHub and never touches a workspace. An open board applies its
+own queue every 20 seconds, so a card appears or moves without a reload, and
+the GitHub tab shows "Live · last event N ago". What lands this way, for the
+repos you track:
+
+- an issue opened, edited, closed, reopened, deleted or transferred (a closed
+  issue moves its card to your done step when the repo's auto-done is on)
+- a pull request's state on the card, and a merge moving the card to done
+  under the same auto-done setting
+- sub-issue links added or removed
+- the App suspended, unsuspended or uninstalled, and repos removed from it
+
+The log entry carries the event's own time, not the time someone next opened
+the board.
+
+### What the reconcile pass still does
+
+Opening the board still runs the GitHub poll, on a cooldown: every 15 minutes
+while deliveries are flowing, every minute otherwise. It catches history from
+before the webhook existed and anything delivered while the app was being
+deployed. GitHub does not retry a failed delivery on its own; the App's
+Advanced tab lists every delivery with its response and a Redeliver button.
+
+The only write to GitHub is still an issue you explicitly create from a task.
+Nothing runs on a schedule: a workspace nobody opens stays as it was.
 
 ## License
 
