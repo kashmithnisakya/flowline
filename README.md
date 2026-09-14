@@ -82,7 +82,7 @@ Create one at <https://github.com/settings/apps/new>:
 | Setup URL | `<HOST>/workspace?tab=github`, with "Redirect on update" ticked |
 | Request user authorization (OAuth) during installation | **on** |
 | Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, a secret you generate (`openssl rand -hex 32`) |
-| Subscribe to events | Issues · Pull request · Sub-issues (installation events are sent to every App on their own) |
+| Subscribe to events | Issues · Pull request · Pull request review · Sub-issues (installation events are sent to every App on their own) |
 | Repository permissions | Issues: read and write · Pull requests: read · Metadata: read |
 
 The OAuth-during-installation box is not optional. Installation ids are small
@@ -114,6 +114,8 @@ repos you track:
   issue moves its card to your done step when the repo's auto-done is on)
 - a pull request's state on the card, and a merge moving the card to done
   under the same auto-done setting
+- who GitHub has assigned an issue to, and a review requested on a linked
+  pull request or answered with an approval or a change request
 - sub-issue links added or removed
 - the App suspended, unsuspended or uninstalled, and repos removed from it
 

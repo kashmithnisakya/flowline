@@ -25,6 +25,7 @@ glob log: logging.Logger = logging.getLogger("flowline.github"),
      QUEUED_EVENTS: list[str] = [
          "issues",
          "pull_request",
+         "pull_request_review",
          "sub_issues",
          "installation",
          "installation_repositories"
@@ -49,6 +50,7 @@ walker GithubEvent {
         issue: dict[str, any] = {},
         pull_request: dict[str, any] = {},
         sender: dict[str, any] = {},
+        review: dict[str, any] = {},
         sub_issue: dict[str, any] = {},
         parent_issue: dict[str, any] = {},
         sub_issue_repo: dict[str, any] = {},
@@ -62,6 +64,10 @@ walker GithubEvent {
         }
         if self.sub_issue {
             return "sub_issues";
+        }
+        # Before pull_request: a review delivery carries both.
+        if self.review {
+            return "pull_request_review";
         }
         if self.pull_request {
             return "pull_request";
@@ -107,6 +113,7 @@ walker GithubEvent {
             "sender": {"login": str(self.sender.get("login") or "")},
             "issue": self.issue,
             "pull_request": self.pull_request,
+            "review": self.review,
             "sub_issue": self.sub_issue,
             "parent_issue": self.parent_issue,
             "sub_issue_repo": self.sub_issue_repo,

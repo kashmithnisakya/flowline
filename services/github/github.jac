@@ -68,6 +68,9 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # cooldown once the newest delivery is older than the window.
      LIVE_SYNC_COOLDOWN_MINUTES: float = 15.0,
      LIVE_WINDOW_MINUTES: float = 60.0,
+     # The review states that answer a review request. A commented review is
+     # not a verdict and leaves a pending request pending.
+     REVIEW_VERDICTS: list[str] = ["approved", "changes_requested"],
      # Sub-issue child lists fetched per sync, stalest families first by
      # walk order. Counts are free (they ride the issue list); only the
      # child links cost a call, and only when a family changed.
@@ -396,6 +399,23 @@ def owned_full_name(holder: Root, repo_id: str) -> str {
 
 # An issue's label names, from the API's list of label objects. Shared by
 # the browse rows and the import so both read labels the same way.
+def assignee_logins(item: dict[str, any]) -> list[str] {
+    logins: list[str] = [];
+    raw = item.get("assignees") or [];
+    if isinstance(raw, list) {
+        for a in raw {
+            if isinstance(a, dict) {
+                login = str(a.get("login") or "").lower();
+                if login {
+                    logins.append(login);
+                }
+            }
+        }
+    }
+    return logins;
+}
+
+
 def label_names(item: dict[str, any]) -> list[str] {
     labels: list[str] = [];
     raw_labels = item.get("labels") or [];
@@ -905,15 +925,8 @@ def file_issue_item(
     on_attached(holder, fresh);
     # Map GitHub assignees onto roster members by username. Anyone without
     # a match is simply left off; we never invent people.
-    logins: list[str] = [];
-    raw_assignees = item.get("assignees") or [];
-    if isinstance(raw_assignees, list) {
-        for a in raw_assignees {
-            if isinstance(a, dict) {
-                logins.append(str(a.get("login") or "").lower());
-            }
-        }
-    }
+    logins = assignee_logins(item);
+    fresh.gh_assignees = logins;
     for m in members {
         if m.github_username and m.github_username.lower() in logins {
             fresh +>:AssignedTo():+> m;
@@ -1381,6 +1394,14 @@ def apply_issue_item(
             ctx.auto_done_moves = ctx.auto_done_moves + 1;
         }
     }
+    # GitHub's assignees ride every issue item, so assigned and unassigned
+    # need no action of their own. The card's own assignees are the
+    # roster's: the workspace sets those, and a sync never rewrites them.
+    logins = assignee_logins(item);
+    if logins != t.gh_assignees {
+        t.gh_assignees = logins;
+        ctx.refreshed = ctx.refreshed + 1;
+    }
     # Sub-issue family: counts ride the stream. A family that shrank to
     # nothing releases its children here; one that moved asks for the child
     # list, and the caller decides whether the budget allows the fetch.
@@ -1451,7 +1472,11 @@ def delivery_outcome(kind: str, detail: str = "") -> dict[str, any] {
 # rather than under the delivery's arrival.
 def event_time(item: dict[str, any]) -> str {
     stamp = str(
-        item.get("merged_at") or item.get("closed_at") or item.get("updated_at") or ""
+        item.get("merged_at")
+            or item.get("closed_at")
+            or item.get("submitted_at")
+            or item.get("updated_at")
+            or ""
     );
     return stamp or now_iso();
 }
@@ -1486,7 +1511,7 @@ def apply_issue(
     }
     key = full_name + "#" + str(number);
     if item.get("pull_request") {
-        return apply_pull(ctx, full_name, item);
+        return apply_pull(ctx, full_name, action, item);
     }
     if action == "deleted" or action == "transferred" {
         if key in ctx.task_by_key {
@@ -1509,7 +1534,7 @@ def apply_issue(
 
 
 def apply_pull(
-    ctx: SyncContext, full_name: str, item: dict[str, any]
+    ctx: SyncContext, full_name: str, action: str, item: dict[str, any]
 ) -> dict[str, any] {
     number = int(item.get("number") or 0);
     key = full_name + "#" + str(number);
@@ -1520,6 +1545,43 @@ def apply_pull(
         return delivery_outcome("stale", key);
     }
     apply_pr_item(ctx, full_name, key, item);
+    # Who is waiting on whom rides the PR event: the request is a fact about
+    # the PR, and its answer arrives later as a review of its own.
+    if action == "review_requested" {
+        ctx.task_by_pr[key].pr_review_state = "requested";
+    } elif action == "review_request_removed" {
+        ctx.task_by_pr[key].pr_review_state = "";
+    }
+    return delivery_outcome("applied", key);
+}
+
+
+# A review submitted on the linked PR. Only a verdict is recorded: a
+# commented review answers nothing, and letting it overwrite a pending
+# "changes_requested" would say the branch is clear when it is not.
+def apply_review(
+    ctx: SyncContext, full_name: str, review: dict[str, any], item: dict[str, any]
+) -> dict[str, any] {
+    number = int(item.get("number") or 0);
+    key = full_name + "#" + str(number);
+    if number <= 0 or key not in ctx.task_by_pr {
+        return delivery_outcome("unlinked", key);
+    }
+    verdict = str(review.get("state") or "").lower();
+    if verdict not in REVIEW_VERDICTS {
+        return delivery_outcome("ignored", key + " " + (verdict or "no state"));
+    }
+    t = ctx.task_by_pr[key];
+    at = str(review.get("submitted_at") or "");
+    if at and t.pr_review_at and at <= t.pr_review_at {
+        return delivery_outcome("stale", key);
+    }
+    t.pr_review_state = verdict;
+    if at > t.pr_review_at {
+        t.pr_review_at = at;
+    }
+    t.gh_synced_at = ctx.stamp;
+    ctx.refreshed = ctx.refreshed + 1;
     return delivery_outcome("applied", key);
 }
 
@@ -1652,6 +1714,8 @@ def apply_delivery(ctx: SyncContext, payload: dict[str, any]) -> dict[str, any] 
         item = payload.get("pull_request") or {};
     } elif kind == "sub_issues" {
         item = payload.get("parent_issue") or {};
+    } elif kind == "pull_request_review" {
+        item = payload.get("review") or {};
     }
     ctx.stamp = event_time(item if isinstance(item, dict) else {});
     if kind == "sub_issues" {
@@ -1673,7 +1737,15 @@ def apply_delivery(ctx: SyncContext, payload: dict[str, any]) -> dict[str, any] 
         return apply_issue(ctx, full_name, action, payload.get("issue") or {});
     }
     if kind == "pull_request" {
-        return apply_pull(ctx, full_name, payload.get("pull_request") or {});
+        return apply_pull(ctx, full_name, action, payload.get("pull_request") or {});
+    }
+    if kind == "pull_request_review" {
+        return apply_review(
+            ctx,
+            full_name,
+            payload.get("review") or {},
+            payload.get("pull_request") or {}
+        );
     }
     return delivery_outcome("unsupported", kind + "." + action);
 }
