@@ -12,6 +12,7 @@ import from models {
     WorkflowStep,
     AssignedTo,
     OnProject,
+    HasRole,
     TaskLinks,
     task_links,
     hydrate_views,
@@ -23,6 +24,7 @@ import from models {
     project_tasks,
     projects_of,
     members_of,
+    roles_of,
     rehome_task
 }
 import from walkers.util {
@@ -64,9 +66,14 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
     }
     project = owning[0];
     holders: list[Member] = [];
-    for m in members_of(holder) {
-        if m.active and role in m.roles and [edge m->:OnProject:->project] {
-            holders.append(m);
+    for r in roles_of(holder) {
+        if r.name != role {
+            continue;
+        }
+        for m in [r<-:HasRole:<-] {
+            if m.active and [edge m->:OnProject:->project] {
+                holders.append(m);
+            }
         }
     }
     if len(holders) != 1 {

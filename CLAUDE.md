@@ -68,7 +68,9 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   `root ++> WorkflowSteps ++> WorkflowStep` (that box also carries the flow
   line's name and template key); `Repo`, `LogDay` and `GithubConnection`
   hang off the root directly.
-  Typed edges: `AssignedTo`, `OnProject`, `HasRepo`, `Logged`, `By`,
+  Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
+  edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
+  `SetMemberRoles` inputs are still names), `HasRepo`, `Logged`, `By`,
   `FlowsTo`. **A task's project is its container** (no project edge), so
   every task has exactly one project and `CreateTask` refuses to create
   without an owned, active one; `AddRepo` needs a project for the same

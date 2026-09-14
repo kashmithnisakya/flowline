@@ -12,6 +12,8 @@ import from models {
     RoleView,
     AssignedTo,
     HasRepo,
+    HasRole,
+    Roles,
     member_view,
     repo_view,
     role_view,
@@ -26,6 +28,45 @@ import from models {
 }
 
 # ------------------------------------------------------------------- roster
+
+# Point the member at exactly these roles, by name. A name with no Role node
+# yet gets one in the box: a free-text role becomes managed the moment
+# someone holds it.
+def link_roles(m: Member, names: list[str], rbox: Roles) {
+    wanted: list[str] = [];
+    for n in names {
+        said = n.strip();
+        if said and said not in wanted {
+            wanted.append(said);
+        }
+    }
+    for e in [edge m->:HasRole:->] {
+        del e;
+    }
+    known: list[Role] = [rbox-->[?:Role]];
+    peak = 0.0;
+    for r in known {
+        if r.sort_order > peak {
+            peak = r.sort_order;
+        }
+    }
+    for said in wanted {
+        hit: list[Role] = [
+            r
+            for r in known
+            if r.name == said
+        ];
+        if hit {
+            target = hit[0];
+        } else {
+            peak = peak + 1024.0;
+            target = rbox ++> Role(name=said, sort_order=peak);
+            known.append(target);
+        }
+        m +>:HasRole():+> target;
+    }
+}
+
 
 walker ListMembers {
     has reports: list[list[MemberView]] = [];
@@ -43,7 +84,8 @@ walker ListMembers {
 
 walker SaveMember {
     """Empty member_id creates; otherwise updates the addressed Member. The
-    first name is required, the last optional."""
+    first name is required, the last optional. `roles` are names; each
+    becomes a HasRole edge (and a Role node if new)."""
     has member_id: str = "",
         first_name: str = "",
         last_name: str = "",
@@ -60,16 +102,13 @@ walker SaveMember {
         if not first {
             disengage;
         }
+        (pbox, mbox, rbox, sbox) = ensure_layout(here);
         if self.member_id {
             target = resolve(self.member_id);
             if isinstance(target, Member) and owned(here, target) {
                 target.first_name = first;
                 target.last_name = last;
-                target.roles = [
-                    r.strip()
-                    for r in self.roles
-                    if r.strip()
-                ];
+                link_roles(target, self.roles, rbox);
                 target.email = self.email;
                 target.github_username = self.github_username;
                 target.tags = [
@@ -81,15 +120,9 @@ walker SaveMember {
                 report member_view(target);
             }
         } else {
-            (pbox, mbox, rbox, sbox) = ensure_layout(here);
             fresh = mbox ++> Member(
                 first_name=first,
                 last_name=last,
-                roles=[
-                    r.strip()
-                    for r in self.roles
-                    if r.strip()
-                ],
                 email=self.email,
                 github_username=self.github_username,
                 tags=[
@@ -100,14 +133,15 @@ walker SaveMember {
                 color=self.color
             );
             on_attached(here, fresh);
+            link_roles(fresh, self.roles, rbox);
             report member_view(fresh);
         }
     }
 }
 
 walker SetMemberRoles {
-    """Overwrite ONLY the member's role list. The Roles tab toggles one
-    role at a time; routing that through SaveMember would overwrite email,
+    """Overwrite ONLY the member's roles. The Roles tab toggles one role at
+    a time; routing that through SaveMember would overwrite email,
     github_username and tags with whatever the caller happened to send."""
     has member_id: str = "",
         roles: list[str] = [],
@@ -116,11 +150,8 @@ walker SetMemberRoles {
     can set_roles with Root entry {
         target = resolve(self.member_id);
         if isinstance(target, Member) and owned(here, target) {
-            target.roles = [
-                r.strip()
-                for r in self.roles
-                if r.strip()
-            ];
+            (pbox, mbox, rbox, sbox) = ensure_layout(here);
+            link_roles(target, self.roles, rbox);
             report member_view(target);
         }
     }
@@ -151,9 +182,10 @@ walker ArchiveMember {
 }
 
 # -------------------------------------------------------------------- roles
-# Name-centric, not jid-centric: member.roles and step owners hold role NAMES,
-# so the name is the identity to keep consistent. Everything reads the
-# caller's own root through roles_of, so isolation needs no owned() checks.
+# Members reach a role through HasRole, so a rename or delete reaches them
+# by itself; a step's `owner` still holds the NAME and is kept in step here.
+# Everything reads the caller's own root through roles_of, so isolation
+# needs no owned() checks.
 
 walker ListRoles {
     has reports: list[list[RoleView]] = [];
@@ -169,10 +201,10 @@ walker ListRoles {
 }
 
 walker SaveRole {
-    """Create or update the role named `name` (get-or-create, so a free-text
-    role becomes managed on first edit). `new_name` renames and propagates
-    through members and step owners; renaming onto an existing role is refused.
-    Blurb overwrite is opt-in via touch_blurb so assignment can't blank it."""
+    """Create or update the role named `name` (get-or-create). `new_name`
+    renames; members follow through their edge, step owners are rewritten;
+    renaming onto an existing role is refused. Blurb overwrite is opt-in via
+    touch_blurb so assignment can't blank it."""
     has name: str = "",
         new_name: str = "",
         blurb: str = "",
@@ -220,11 +252,6 @@ walker SaveRole {
         }
         if wanted and wanted != said {
             target.name = wanted;
-            for m in members_of(here) {
-                if said in m.roles {
-                    m.roles = [(wanted if r == said else r) for r in m.roles];
-                }
-            }
             for s in steps_of(here) {
                 if s.owner == said {
                     s.owner = wanted;
@@ -236,9 +263,8 @@ walker SaveRole {
 }
 
 walker DeleteRole {
-    """Deletes by name: the Role node if one exists, the name out of every
-    member's role list, and any flow line step owner naming it. Works on
-    unmanaged free-text roles too, where it is just the strip."""
+    """Deletes by name: the Role node (its HasRole edges go with it) and any
+    flow line step owner naming it."""
     has name: str = "",
         reports: list[dict[str, any]] = [];
 
@@ -250,15 +276,6 @@ walker DeleteRole {
         for r in roles_of(here) {
             if r.name == said {
                 del r;
-            }
-        }
-        for m in members_of(here) {
-            if said in m.roles {
-                m.roles = [
-                    x
-                    for x in m.roles
-                    if x != said
-                ];
             }
         }
         for s in steps_of(here) {

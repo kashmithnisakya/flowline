@@ -17,6 +17,7 @@ import from models {
     AssignedTo,
     Logged,
     member_view,
+    member_roles,
     task_links,
     views_from,
     all_tasks,
@@ -317,7 +318,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         people.append(
             PersonStat(
                 name=shown,
-                roles=", ".join(m.roles),
+                roles=", ".join(member_roles(m)),
                 tags=", ".join(m.tags),
                 open_tasks=len(
                     [

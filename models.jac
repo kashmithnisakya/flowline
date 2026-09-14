@@ -91,10 +91,10 @@ node Project {
         active: bool = True;
 }
 
+# Roles are HasRole edges to Role nodes, never names on the member.
 node Member {
     has first_name: str = "",
         last_name: str = "",
-        roles: list[str] = [],
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
@@ -276,8 +276,8 @@ node GithubConnection {
 }
 
 # An org-level role definition, seeded by ApplyTemplate and editable on the
-# Roles tab. Members and step owners hold role NAMES, so rename/delete
-# walkers propagate by name rather than anything holding a jid to this node.
+# Roles tab. A member holds it through a HasRole edge, so a rename or delete
+# reaches members on its own; a step's `owner` still holds the NAME.
 node Role {
     has name: str,
         blurb: str = "",
@@ -326,6 +326,7 @@ edge AssignedTo: Task --> Member {}
 edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
 edge OnProject: Member --> Project {}
+edge HasRole: Member --> Role {}
 # A flow line transition. Cycles are ALLOWED by design (review looping back
 # to development is the point); only self-loops are refused, at link time.
 # `label` is what has to be true to cross; empty on older transitions.
@@ -773,6 +774,14 @@ def step_view(s: WorkflowStep) -> StepView {
 }
 
 
+# A member's role names, in the roles' own order.
+def member_roles(m: Member) -> list[str] {
+    held = [m->:HasRole:->];
+    held.sort(key=lambda (r: Role) { r.sort_order; });
+    return [r.name for r in held];
+}
+
+
 def member_view(m: Member) -> MemberView {
     ids: list[str] = [];
     names: list[str] = [];
@@ -785,7 +794,7 @@ def member_view(m: Member) -> MemberView {
         name=m.full_name(),
         first_name=m.first_name,
         last_name=m.last_name,
-        roles=m.roles,
+        roles=member_roles(m),
         email=m.email,
         github_username=m.github_username,
         tags=m.tags,
