@@ -205,6 +205,11 @@ impl FlowLinePage.openTask(tid: str) -> None {
     taskOpen = True;
 }
 
+# A checklist write reports the task's fresh view; the panel row takes it.
+impl FlowLinePage.replacePeekRow(view: TaskView) -> None {
+    peekTasks = [view if t.id == view.id else t for t in peekTasks];
+}
+
 impl FlowLinePage.setTaskField(key: str, value: str) -> None {
     # A computed key does not survive a dict-literal spread: `{**taskForm,
     # key: value}` writes a literal "key" property and the input freezes.

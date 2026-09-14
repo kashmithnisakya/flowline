@@ -184,6 +184,7 @@ def:pub TasksPage -> JsxPage {
     def columnKeyOf(t: TaskView, keys: list[str]) -> str;
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
+    def replaceRow(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
     async def saveTask -> None;
@@ -225,6 +226,12 @@ def:pub TasksPage -> JsxPage {
         colTints.append(tint);
         if columnKind(key) in HANDOFF_KINDS {
             handoffKeys.append(key);
+        }
+    }
+    taskChecklist: list[dict[str, any]] = [];
+    for t in rows {
+        if t.id == editTaskId {
+            taskChecklist = t.checklist;
         }
     }
     stepNames: dict[str, str] = {};
@@ -443,6 +450,9 @@ def:pub TasksPage -> JsxPage {
                 onToggleAssignee={toggleTaskAssignee}
                 steps={steps}
                 roles={roleRows}
+                taskId={editTaskId}
+                checklist={taskChecklist}
+                onChecklist={replaceRow}
             />
         </div>;
 }

@@ -396,6 +396,13 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     dialogOpen = True;
 }
 
+# A write from inside the dialog (the checklist) reports the task's fresh
+# view; swap it into whichever list holds the card so the card updates.
+impl BoardPage.replaceRow(view: TaskView) -> None {
+    tasks = [view if t.id == view.id else t for t in tasks];
+    olderDone = [view if t.id == view.id else t for t in olderDone];
+}
+
 impl BoardPage.openTaskById(tid: str) -> None {
     # Jump the open dialog to another card of the same family. A row not in
     # the loaded working set (deep history) is simply a no-op.

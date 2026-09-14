@@ -3,6 +3,7 @@ Python imports, client components import types from models, and a Python
 anchor there would drag the wasm host into the browser bundle."""
 
 import datetime;
+import uuid;
 import from models { Task }
 
 
@@ -40,6 +41,12 @@ def shift_day(iso: str, days: int) -> str {
         return iso;
     }
     return (d + datetime.timedelta(days=days)).isoformat();
+}
+
+
+# A short id for an item stored inside a node field (a checklist row).
+def short_id -> str {
+    return uuid.uuid4().hex[:12];
 }
 
 

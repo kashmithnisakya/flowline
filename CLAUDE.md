@@ -279,6 +279,12 @@ File-based routing with route groups:
   does the same for its rows, and keeps scope, filters, sort and page in the
   URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
   `sort="step"` follow the board's column order and placement rule.
+- **A task's checklist is not part of the form.** `Task.checklist` is written
+  only by `AddChecklistItem` / `SetChecklistItem` / `RemoveChecklistItem`,
+  each applied at once from `components/board/Checklist.jac`, so a dialog
+  save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
+  page that opens `TaskDialog` passes `taskId`, `checklist` and an
+  `onChecklist` that swaps the reported view into its rows.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   create dialog; an already mounted board listens for `flowline:open-task` /
   `flowline:new-task` instead (the palette uses both paths).

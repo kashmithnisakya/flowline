@@ -293,6 +293,11 @@ impl TasksPage.openTask(tid: str) -> None {
     }
 }
 
+# A checklist write reports the task's fresh view; the table row takes it.
+impl TasksPage.replaceRow(view: TaskView) -> None {
+    rows = [view if t.id == view.id else t for t in rows];
+}
+
 impl TasksPage.setTaskField(key: str, value: str) -> None {
     # A computed key does not survive a dict-literal spread.
     updated = {** taskForm};
