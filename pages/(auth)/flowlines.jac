@@ -4,11 +4,19 @@ org, so no project selector. Validation is advisory and never blocks saving.
 The editor and the task panel dock BESIDE the canvas as flex siblings; keep
 notes out of JSX (a `#` there renders)."""
 
-import from ...models { Project, StepView, TaskView, MemberView, RoleView }
+import from ...models {
+    Project,
+    StepView,
+    TaskView,
+    MemberView,
+    RoleView,
+    IterationView
+}
 import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
 import from ...services.projects.projects { ListProjects, AssignToProject }
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
 import from ...services.roster.roster { ListMembers, ListRoles }
+import from ...services.iterations.iterations { ListIterations }
 import from ...services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
@@ -77,6 +85,8 @@ glob BLANK_STEP: dict[str, str] = {
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",
+         "start_date": "",
+         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -152,6 +162,8 @@ def:pub FlowLinePage -> JsxPage {
         taskForm: dict[str, str] = BLANK_TASK,
         taskAssignees: list[str] = [],
         taskSaving: bool = False,
+        # For the task dialog's Iteration field.
+        iterations: list[IterationView] = [],
         # Zoom instead of scrollbars: the canvas never scrolls, it scales.
         zoom: float = 1.0,
         # Screen-px offset that centers the diagram in the viewport. Applied
@@ -977,6 +989,7 @@ def:pub FlowLinePage -> JsxPage {
                 taskId={editTaskId}
                 checklist={taskChecklist}
                 onChecklist={replacePeekRow}
+                iterations={iterations}
             />
         </div>;
 }

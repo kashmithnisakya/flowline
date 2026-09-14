@@ -35,6 +35,8 @@ impl TasksPage.loadWorkspace -> None {
         steps = sResult.reports[0] if sResult.reports else [];
         rResult = root spawn ListRoles();
         roleRows = rResult.reports[0] if rResult.reports else [];
+        iResult = root spawn ListIterations();
+        iterations = iResult.reports[0] if iResult.reports else [];
     } except Exception as e {
         # Non-fatal: the filters just show fewer options; loadTasks owns the
         # failure panel for the table itself.
@@ -281,6 +283,8 @@ impl TasksPage.openTask(tid: str) -> None {
                 "priority": t.priority,
                 "status": columnKeyOf(t, keys),
                 "due_date": t.due_date,
+                "start_date": t.start_date,
+                "iteration": t.iteration_id or "none",
                 "notes": t.notes,
                 "issue": t.issue_link,
                 "pr": t.pr_link,
@@ -363,6 +367,10 @@ impl TasksPage.saveTask -> None {
             status=mappedStatus(taskForm["status"]),
             step_id=taskForm["status"] if len(steps) > 0 else "",
             due_date=taskForm["due_date"],
+            start_date=taskForm["start_date"],
+            iteration_id=taskForm["iteration"]
+                if taskForm["iteration"] != "none"
+                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),

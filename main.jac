@@ -90,6 +90,12 @@ import from services.github.github {
 }
 import from services.github.events { GithubEvent, DrainGithubEvents }
 import from services.board.board { BoardSnapshot }
+import from services.iterations.iterations {
+    ListIterations,
+    SaveIteration,
+    DeleteIteration,
+    RoadmapSnapshot
+}
 import from services.insights.insights { Digest, OverviewSnapshot }
 import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
 

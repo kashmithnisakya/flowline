@@ -35,6 +35,12 @@ glob PAGES: list[dict[str, str]] = [
          },
          {
              "kind": "page",
+             "label": "Roadmap",
+             "to": "/roadmap",
+             "hint": "Work on a timeline, by iteration"
+         },
+         {
+             "kind": "page",
              "label": "Overview",
              "to": "/overview",
              "hint": "Where the work stands"

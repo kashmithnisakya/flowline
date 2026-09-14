@@ -5,10 +5,18 @@ reload, the back button or a shared link keeps the view."""
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect, useRef }
-import from ...models { Project, MemberView, TaskView, StepView, RoleView }
+import from ...models {
+    Project,
+    MemberView,
+    TaskView,
+    StepView,
+    RoleView,
+    IterationView
+}
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 import from ...services.tasks.tasks { ListTasks, UpdateTask, DeleteTask }
 import from ...services.roster.roster { ListMembers, ListRoles }
+import from ...services.iterations.iterations { ListIterations }
 import from ...services.projects.projects { ListProjects, AssignToProject }
 import from ...services.flowlines.flowlines { GetFlowLine }
 import from ...components.tasks.TaskTable { TaskTable }
@@ -57,6 +65,8 @@ glob SCOPES: list[list[str]] = [
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",
+         "start_date": "",
+         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -136,6 +146,7 @@ def:pub TasksPage -> JsxPage {
         taskOpen: bool = False,
         editTaskId: str = "",
         taskForm: dict[str, str] = BLANK_TASK,
+        iterations: list[IterationView] = [],
         taskAssignees: list[str] = [],
         taskSaving: bool = False,
         total: int = 0,
@@ -453,6 +464,7 @@ def:pub TasksPage -> JsxPage {
                 taskId={editTaskId}
                 checklist={taskChecklist}
                 onChecklist={replaceRow}
+                iterations={iterations}
             />
         </div>;
 }
