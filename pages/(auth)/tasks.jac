@@ -6,9 +6,9 @@ and paging are presentational."""
 import from "@jac/runtime" { useState }
 import from "react" { useEffect, useRef }
 import from ...models { Project, MemberView, TaskView }
-import from ...walkers.tasks { ListTasks }
-import from ...walkers.roster { ListMembers }
-import from ...walkers.projects { ListProjects }
+import from ...services.tasks.tasks { ListTasks }
+import from ...services.roster.roster { ListMembers }
+import from ...services.projects.projects { ListProjects }
 import from ...components.tasks.TaskTable { TaskTable }
 import from ...components.ui.card { Card, CardContent }
 import from ...components.ui.button { Button }

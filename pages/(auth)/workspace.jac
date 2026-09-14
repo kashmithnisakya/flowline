@@ -6,8 +6,17 @@ self-contained section, so the page stays a thin shell."""
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
 import from ...models { Project, MemberView }
-import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
-import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
+import from ...services.roster.roster {
+    ListMembers,
+    SaveMember,
+    ListRoles,
+    ArchiveMember
+}
+import from ...services.projects.projects {
+    ListProjects,
+    AssignToProject,
+    UnassignFromProject
+}
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }

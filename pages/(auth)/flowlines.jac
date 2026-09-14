@@ -6,10 +6,10 @@ notes out of JSX (a `#` there renders)."""
 
 import from ...models { Project, StepView, TaskView, MemberView, RoleView }
 import from ...constants { STEP_KINDS, KIND_COLORS, KIND_STATUS }
-import from ...walkers.projects { ListProjects, AssignToProject }
-import from ...walkers.tasks { UpdateTask, DeleteTask }
-import from ...walkers.roster { ListMembers, ListRoles }
-import from ...walkers.flowlines {
+import from ...services.projects.projects { ListProjects, AssignToProject }
+import from ...services.tasks.tasks { UpdateTask, DeleteTask }
+import from ...services.roster.roster { ListMembers, ListRoles }
+import from ...services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
     SaveStep,

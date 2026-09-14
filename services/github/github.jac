@@ -25,10 +25,10 @@ import from models {
     members_of,
     steps_of
 }
-import from walkers.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
-import from walkers.log { record_task_event }
-import from walkers.tasks { find_task, status_for_step }
-import from walkers.ghutil {
+import from services.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
+import from services.log.log { record_task_event }
+import from services.tasks.tasks { find_task, status_for_step }
+import from services.github.util {
     missing_config,
     install_url,
     new_state,

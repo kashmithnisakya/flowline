@@ -80,9 +80,19 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   `steps_of`, `all_tasks` and `project_tasks` serve the walkers that
   aggregate from the root. A `Member` stores `first_name` and `last_name`;
   `full_name()` is the display name.
-- **`walkers/`** — the API, one module per domain (`projects`, `roster`,
-  `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
-  Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+- **`services/`** — the API, one folder per section (`projects`, `roster`,
+  `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`, and
+  `github` with `github.jac`, `events.jac` and `util.jac`) plus
+  `services/util.jac` for shared server-only helpers. Walkers are **bare
+  (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
+  bodies inline, not in an `.impl.jac` annex**, on jac 0.37.14: the endpoint
+  effect pass does not follow an ability body into an annex, so an annexed
+  walker is classified as a pure read, the client caches it, and a save no
+  longer invalidates anything (every write-then-refetch shows stale data;
+  `jac run` gives no error, only the browser gate catches it). Compare the
+  `endpointEffects` in the `/board` shell's `__jac_init__` to verify.
+  Filed as jaseci-labs/jac#9189; annex the bodies once a release carries
+  the fix and the pin moves.
   **A box-scoped walker visits, it does not read from the root.** Its
   `Root entry` ability only decides where to go: `visit [here-->[?:Members]]
   else { report []; }` for a read (a GET never makes a box), `visit
@@ -96,7 +106,7 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   without a project, `SyncGithub`) stay on the root with the `*_of`
   readers: carrying rows between abilities means walker `has` fields, and
   those ship in the response. The one
-  exception is `walkers/ghevents.jac`: `GithubEvent` is a webhook-protocol
+  exception is `services/github/events.jac`: `GithubEvent` is a webhook-protocol
   walker (`/webhook/GithubEvent`, never `/walker/`) whose caller is GitHub,
   authenticated by the runtime's signature check before the walker exists.
   It runs as the system identity and only queues the delivery in the shared
@@ -109,7 +119,7 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   once costs a handful of traversals no matter how long the page is, and the
   same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
   is that path and is what every list walker uses; `to_view()` is for a
-  single task. `walkers/insights.jac` does the same thing for the snapshot
+  single task. `services/insights/insights.jac` does the same thing for the snapshot
   (`_hydrate`). Never build a list by calling `to_view()` in a loop.
 - **List walkers page, and build their rows in a local.** A walker's public
   `has` fields are serialised into the response beside `reports`, so an
@@ -117,7 +127,7 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   runtime already ships `walker.reports` a third. Rows go in a local and
   are reported once. Anything that grows with history (`ListTasks`,
   `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
-  `page_size` (1-based, clamped by `page_bounds` in `walkers/util.jac`) and
+  `page_size` (1-based, clamped by `page_bounds` in `services/util.jac`) and
   reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
   `rows`, `has_more` and `total`. Filter and sort on node fields first, run
   `to_view()` (three edge hops) for the page alone. Roster-sized lists
@@ -134,7 +144,8 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   client dropdowns and server validation.
 - **`main.jac`** — entry point. **A walker missing from its import list 404s**,
   and the entry module cannot use relative imports (`import from models {…}`,
-  not `.models`); modules under `walkers/` likewise import bare.
+  not `.models`); modules under `services/` likewise import bare, by the
+  full dotted path (`import from services.tasks.tasks {…}`).
 
 ### The flow line drives the board
 
@@ -169,15 +180,15 @@ container edges (at most three hops: task, project, box) and compares each
 parent's jid with the caller's root. `Root` is not a runtime name in
 `models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
 the webhook receiver cannot apply a delivery itself: it queues, the tenant
-drains (see `walkers/ghevents.jac`).
+drains (see `services/github/events.jac`).
 
 **An uncaught walker exception is returned to the browser with its Python
 traceback** (the runtime sets `include_traceback` unconditionally, no config
 switch). Anything that can fail outside our control (the LLM, GitHub) is
 caught inside the walker, logged server-side with the operator hint, and
 reported as an empty or `{"ok": False, ...}` result; the client shows a plain
-"not available right now". See `_llm_failed` in `walkers/assistant.jac` and
-`gh_request` in `walkers/ghutil.jac`.
+"not available right now". See `_llm_failed` in `services/assistant/assistant.jac`
+and `gh_request` in `services/github/util.jac`.
 
 Watch the container variable inside abilities: in a `Task`/`LogDay` entry
 ability `here` is the *task or day*, not the root; the caller's root is
@@ -196,8 +207,8 @@ drops items older than the task's last applied `updated_at`, stamps the log
 with the event's own time, and applies through the helpers the poll uses.
 Neither side calls GitHub. The one write-back, closing the issue when a card
 lands on Done for a repo with `auto_close`, runs inside `MoveTask` /
-`UpdateTask` through `close_issue_on_done` in `walkers/ghutil.jac` (not in
-`walkers/github.jac`: that module imports `tasks`, so `tasks` cannot import
+`UpdateTask` through `close_issue_on_done` in `services/github/util.jac` (not in
+`services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
 it back); it rides on the move's own log line, and the receiver drops the
 App's echo by sender login so the close is never applied a second time.
 
@@ -300,7 +311,7 @@ platform fix (jacBuilder #1801 carries it) is on jachammer prod.
   React mount loop that pinned the main thread. It lives in `toaster.jac`.
 - **No Python imports in modules the client imports types from.** A stray
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
-  bundle and broke the build; that helper lives in `walkers/util.jac`.
+  bundle and broke the build; that helper lives in `services/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
 - **`xs and xs[0].field` is not a safe guard.** A bare `and` compiles to a
   JS `&&`, and an empty array is truthy in JS, so the guard passes and the
@@ -344,11 +355,12 @@ platform fix (jacBuilder #1801 carries it) is on jachammer prod.
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since
   jac 0.35 the `cl`/`sv` markers are syntax errors; `[placement.pins]` is the
-  override. `models` and every `walkers/*` module carry a module-level
-  `"server"` pin: without it a page's plain import of a walker pulls the
-  whole walker module (abilities included) into the browser bundle and the
-  build dies with "Client pathway failed to lower this edge reference shape".
-  **A new walker module needs its own pin line.** The three `lib/utils`
+  override. `models` and every `services` module carry a module-level
+  `"server"` pin, keyed by the dotted path (`"services.github.events"`):
+  without it a page's plain import of a walker pulls the whole module
+  (abilities included) into the browser bundle and the build dies with
+  "Client pathway failed to lower this edge reference shape". **A new
+  service module needs its own pin line.** The three `lib/utils`
   helpers are pinned `"client"` because an evidence-free `def:pub` in a
   web-app is otherwise a server endpoint. `jac check <page> --placements`
   prints every verdict with its evidence.

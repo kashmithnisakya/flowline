@@ -6,8 +6,8 @@ per step for the entrance animation; `finishing` gives Finish its own spinner.""
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
 import from ...models { MemberView }
-import from ...walkers.projects { ListProjects, SaveProject }
-import from ...walkers.roster { SaveMember }
+import from ...services.projects.projects { ListProjects, SaveProject }
+import from ...services.roster.roster { SaveMember }
 import from ...lib.session { fetchProfile, patchProfile }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.ui.card {

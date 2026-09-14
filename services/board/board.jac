@@ -1,6 +1,6 @@
 """The Board's API: one walker for everything the page renders. NEVER nest
 `root spawn` here -- a nested walker's reports come back EMPTY (see
-walkers/insights.jac). Everything traverses the caller's root directly."""
+services/insights/insights.jac). Everything traverses the caller's root directly."""
 
 import from models {
     Project,
@@ -26,8 +26,8 @@ import from models {
     roles_of,
     steps_of
 }
-import from walkers.util { page_bounds, done_cutoff, is_older, order_working }
-import from walkers.github { connection_of, connection_view }
+import from services.util { page_bounds, done_cutoff, is_older, order_working }
+import from services.github.github { connection_of, connection_view }
 
 obj BoardData {
     """One page of the board's working set, plus the workspace lists it

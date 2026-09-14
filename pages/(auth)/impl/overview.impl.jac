@@ -10,7 +10,7 @@ impl OverviewPage.loadAll -> None {
         result = root spawn OverviewSnapshot(
             monday=monday, from_date=shiftDay(monday, -14), attention_size=8
         );
-        # Untyped on purpose: typing the report would pull walkers.insights
+        # Untyped on purpose: typing the report would pull services.insights.insights
         # objs into the client bundle for the queue lists.
         data: any = result.reports[0] if result.reports else None;
         counts = data["counts"] if data else None;

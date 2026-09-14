@@ -9,9 +9,9 @@ import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleV
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
-import from ...walkers.board { BoardSnapshot }
-import from ...walkers.projects { AssignToProject }
-import from ...walkers.tasks {
+import from ...services.board.board { BoardSnapshot }
+import from ...services.projects.projects { AssignToProject }
+import from ...services.tasks.tasks {
     ListTasks,
     GetTask,
     CreateTask,
@@ -20,8 +20,8 @@ import from ...walkers.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.github { SyncGithub, CreateIssueFromTask }
-import from ...walkers.ghevents { DrainGithubEvents }
+import from ...services.github.github { SyncGithub, CreateIssueFromTask }
+import from ...services.github.events { DrainGithubEvents }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }

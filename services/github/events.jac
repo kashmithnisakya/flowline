@@ -7,14 +7,14 @@ does every SyncGithub call, before it touches GitHub."""
 
 import logging;
 import from models { GithubConnection }
-import from walkers.util { now_iso }
-import from walkers.github {
+import from services.util { now_iso }
+import from services.github.github {
     DRAIN_LIMIT,
     connection_of,
     not_connected,
     drain_deliveries
 }
-import from walkers.ghutil {
+import from services.github.util {
     root_for_installation,
     bot_login,
     enqueue_delivery,
