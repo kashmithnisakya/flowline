@@ -173,7 +173,16 @@ node Task {
         gh_sub_total: int = 0,
         gh_sub_done: int = 0,
         pr_number: int = 0,
-        pr_state: str = "";
+        pr_state: str = "",
+        # GitHub's own assignees on the issue, refreshed by every issue
+        # event. The card's assignees are the roster's and stay the
+        # workspace's to set; these say what GitHub thinks.
+        gh_assignees: list[str] = [],
+        # The linked PR's review conversation: "requested" from a review
+        # request, then the verdict a review submits. Its own clock, because
+        # the PR's updated_at does not move when someone reviews it.
+        pr_review_state: str = "",
+        pr_review_at: str = "";
 
     # One task's view, hopping its own edges. Fine for a single task; for a
     # list use hydrate_views, which gets the same links in a few traversals
@@ -235,7 +244,9 @@ node Task {
             gh_sub_total=self.gh_sub_total,
             gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
-            pr_state=self.pr_state
+            pr_state=self.pr_state,
+            gh_assignees=self.gh_assignees,
+            pr_review_state=self.pr_review_state
         );
     }
 }
@@ -371,7 +382,9 @@ obj TaskView {
         gh_sub_total: int = 0,
         gh_sub_done: int = 0,
         pr_number: int = 0,
-        pr_state: str = "";
+        pr_state: str = "",
+        gh_assignees: list[str] = [],
+        pr_review_state: str = "";
 }
 
 # One page of tasks. `total` counts every row that matched the filters, not
