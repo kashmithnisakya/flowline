@@ -29,7 +29,6 @@ import from ...components.common.ErrorNote { ErrorNote }
 def:pub SetupPage -> JsxPage {
     has step: int = 0,
         orgName: str = "",
-        fullName: str = "",
         projectName: str = "",
         mFirst: str = "",
         mLast: str = "",
@@ -127,7 +126,7 @@ def:pub SetupPage -> JsxPage {
                                 Name your workspace
                             </CardTitle>
                             <CardDescription>
-                                The organization name heads every page, and your name is who the daily log is written by. Both stay editable on the Workspace tab.
+                                The organization name heads every page. It stays editable on the Workspace tab.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
@@ -140,14 +139,6 @@ def:pub SetupPage -> JsxPage {
                                     autoFocus={True}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label>Your name</Label>
-                                <Input
-                                    value={fullName}
-                                    onChange={lambda (e: ChangeEvent) { fullName = e.target.value; }}
-                                    placeholder="Priya Raman"
-                                />
-                            </div>
                             {if saveError {
                                 <ErrorNote key="err" message={saveError}/>
                             }}
@@ -155,9 +146,7 @@ def:pub SetupPage -> JsxPage {
                         <CardFooter className="justify-end">
                             <Button
                                 onClick={saveProfile}
-                                disabled={busy
-                                    or not orgName.strip()
-                                    or not fullName.strip()}
+                                disabled={busy or not orgName.strip()}
                             >
                                 {if busy {
                                     <Spinner key="sp"/>

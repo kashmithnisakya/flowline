@@ -54,9 +54,10 @@ Then read the actual port out of the startup log rather than assuming 8000.
 ## Architecture
 
 Multi-tenant kanban + daily-log tracker. **The account is the organization** —
-there is no `Organization` node. Org details (`org_name`, `full_name`) live in
-the account profile at `GET`/`PATCH /user/me`, written at signup through
-`jacSignup`'s third `profile` argument.
+there is no `Organization` node. The organization's name (`org_name`) lives in
+the account profile at `GET`/`PATCH /user/me`: signup sends an empty profile
+and the setup wizard writes the name. The app asks for no personal name; the
+people it tracks are roster members.
 
 ### Server
 

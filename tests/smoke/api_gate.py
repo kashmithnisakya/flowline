@@ -114,7 +114,7 @@ def main() -> int:
     status, _, raw = req("POST", "/user/register", {
         "identities": [{"type": "email", "value": email}],
         "credential": {"type": "password", "password": password},
-        "profile": {"org_name": "CI Org", "full_name": "CI Runner"},
+        "profile": {"org_name": "CI Org"},
     })
     check("register", status in (200, 201), f"{status} {raw[:200]!r}")
     status, _, raw = req("POST", "/user/login", {
