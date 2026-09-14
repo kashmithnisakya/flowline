@@ -113,7 +113,12 @@ def connection_view(c: any) -> GithubConnectionView {
 # and disconnected. One keyed read per call; a memo would go stale across
 # worker processes.
 def ensure_bound(holder: Root, c: any) -> None {
-    if not isinstance(c, GithubConnection) or c.installation_id == 0 {
+    # An invalid connection stays out of the index: a deleted installation
+    # must not be re-bound by the next status call, and a reconnect binds
+    # the new id itself.
+    if not isinstance(c, GithubConnection)
+        or c.installation_id == 0
+        or c.status == "invalid" {
         return;
     }
     if not root_for_installation(c.installation_id) {
@@ -1536,9 +1541,71 @@ def apply_family(
 }
 
 
+# The App's own lifecycle: none of it touches tasks. A deleted installation
+# leaves the connection in place, invalid, so the GitHub tab shows the
+# reconnect banner; the index row goes so the receiver drops what follows.
+def apply_installation(ctx: SyncContext, action: str) -> dict[str, any] {
+    c = ctx.connection;
+    if not isinstance(c, GithubConnection) {
+        return delivery_outcome("ignored", "installation." + action);
+    }
+    if action == "deleted" {
+        c.status = "invalid";
+        forget_installation(c.installation_id);
+        unbind_installation(c.installation_id);
+        return delivery_outcome("applied", "installation deleted");
+    }
+    if action == "suspend" {
+        c.status = "invalid";
+        return delivery_outcome("applied", "installation suspended");
+    }
+    if action == "unsuspend" {
+        c.status = "ok";
+        return delivery_outcome("applied", "installation unsuspended");
+    }
+    return delivery_outcome("ignored", "installation." + action);
+}
+
+
+# A repo taken out of the installation keeps its tasks and links (the same
+# promise DisconnectGithub makes) but stops auto-filing and auto-moving.
+def apply_repo_access(
+    ctx: SyncContext, action: str, removed: list[dict[str, any]]
+) -> dict[str, any] {
+    if action != "removed" {
+        return delivery_outcome("ignored", "installation_repositories." + action);
+    }
+    touched: list[str] = [];
+    for row in removed {
+        if not isinstance(row, dict) {
+            continue;
+        }
+        full_name = str(row.get("full_name") or "");
+        if full_name in ctx.by_name {
+            r = ctx.by_name[full_name];
+            r.auto_sync = False;
+            r.auto_done = False;
+            touched.append(full_name);
+        }
+    }
+    if not touched {
+        return delivery_outcome("untracked", "installation_repositories.removed");
+    }
+    return delivery_outcome("applied", ", ".join(touched));
+}
+
+
 def apply_delivery(ctx: SyncContext, payload: dict[str, any]) -> dict[str, any] {
     kind = str(payload.get("event") or "");
     action = str(payload.get("action") or "");
+    if kind == "installation" {
+        return apply_installation(ctx, action);
+    }
+    if kind == "installation_repositories" {
+        return apply_repo_access(
+            ctx, action, payload.get("repositories_removed") or []
+        );
+    }
     item = payload.get("issue") or {};
     if kind == "pull_request" {
         item = payload.get("pull_request") or {};
