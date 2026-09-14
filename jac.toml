@@ -78,12 +78,17 @@ client_secret = "${GOOGLE_CLIENT_SECRET}"
 client_id = "${GITHUB_CLIENT_ID}"
 client_secret = "${GITHUB_CLIENT_SECRET}"
 
+# /metrics, walker metrics and one Prometheus + Grafana pair in the namespace.
+# k8s_metrics_enabled defaults to true and adds kube-state-metrics plus a
+# node-exporter DaemonSet (one pod on EVERY node of the shared cluster);
+# `jachammer top` already reports pod CPU and memory from metrics-server.
 [scale.monitoring]
 enabled = true
 endpoint = "/metrics"
 namespace = "flowline"
 walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
+k8s_metrics_enabled = false
 
 [scale.kubernetes]
 app_name = "flowline"
@@ -93,8 +98,14 @@ app_name = "flowline"
 # count is fixed in [serve.workers] instead.
 cpu_request = "1000m"
 cpu_limit = "2000m"
-memory_request = "3Gi"
+# Every HPA jac-scale renders also scales on memory (80% of the request), and
+# memory does not spread across replicas, so a request below the idle working
+# set pins max_replicas with no load. 2.37Gi was measured idle at ONE worker;
+# two workers sit above the 2.4Gi threshold the old 3Gi request gave.
+memory_request = "4Gi"
 memory_limit = "6Gi"
+# jac-scale hands these bounds to EVERY service, the gateway included, unless
+# [scale.gateway.hpa] overrides them (it does, below).
 min_replicas = 2
 max_replicas = 6
 cpu_utilization_target = 70
@@ -103,11 +114,23 @@ autoscaler_scale_up_max_pods = 4
 [scale.gateway]
 http_forward_timeout = 120.0
 cpu_request = "100m"
-memory_request = "512Mi"
+# [serve.workers] reaches the gateway pod too, so two gateway processes sit
+# above the 512Mi that was sized for one, and the HPA memory metric scaled the
+# gateway out. jac-scale's own gateway default is 2Gi.
+memory_request = "1Gi"
 memory_limit = "2Gi"
 
+# The gateway only proxies (~1m CPU at 25 req/s on dev). Without this table it
+# inherits the app's 2 -> 6 bounds above, which ran four gateway pods on dev.
+[scale.gateway.hpa]
+min = 1
+max = 2
+
+# Loki plus an Alloy DaemonSet (one pod per node). Alloy reads pods cluster-wide
+# and Grafana's logs view queries every namespace, so on the shared jachammer
+# cluster it exposes other tenants' logs as well as costing a pod per node.
 [scale.gateway.logs]
-enabled = true
+enabled = false
 
 [jacpack]
 name = 'flowline'
