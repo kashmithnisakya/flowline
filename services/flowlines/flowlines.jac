@@ -13,7 +13,6 @@ import from models {
     StepView,
     TaskView,
     TaskPage,
-    FlowsTo,
     hydrate_views,
     step_view,
     resolve,
@@ -133,8 +132,9 @@ walker GetFlowLine {
 
     can gather with WorkflowSteps entry {
         views: list[StepView] = [];
-        for st in [here-->[?:WorkflowStep]] {
-            views.append(step_view(st));
+        line_steps = [here-->[?:WorkflowStep]];
+        for st in line_steps {
+            views.append(step_view(st, line_steps));
         }
         views.sort(key=lambda (s: StepView) { s.sort_order; });
         if not self.with_counts {
@@ -244,7 +244,7 @@ walker ApplyTemplate {
         if existing {
             views: list[StepView] = [];
             for s in existing {
-                views.append(step_view(s));
+                views.append(step_view(s, existing));
             }
             views.sort(key=lambda (v: StepView) { v.sort_order; });
             report views;
@@ -301,7 +301,8 @@ walker ApplyTemplate {
             if carried not in CARRY_KINDS {
                 carried = "";
             }
-            source +>:FlowsTo(label=said, carries=carried):+> target;
+            source.transitions = source.transitions
+                + [{"to": jid(target), "label": said, "carries": carried}];
         }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
@@ -330,7 +331,7 @@ walker ApplyTemplate {
         }
         views: list[StepView] = [];
         for m in made {
-            views.append(step_view(m));
+            views.append(step_view(m, made));
         }
         report views;
     }
@@ -404,7 +405,7 @@ walker SaveStep {
             here.blurb = self.blurb.strip();
         }
         here.updated_at = now_iso();
-        report step_view(here);
+        report step_view(here, steps_of(root));
         disengage;
     }
 
@@ -431,7 +432,7 @@ walker SaveStep {
             updated_at=stamp
         );
         on_attached(root, fresh);
-        report step_view(fresh);
+        report step_view(fresh, [here-->[?:WorkflowStep]]);
     }
 }
 
@@ -451,16 +452,16 @@ walker MoveStep(find_step) {
         here.x = self.x;
         here.y = self.y;
         here.updated_at = now_iso();
-        report step_view(here);
+        report step_view(here, steps_of(root));
         disengage;
     }
 }
 
 
 walker DeleteStep(find_step) {
-    """Removes the step; its transitions die with it and any task on it falls
-    back to its status. Refuses to remove the LAST start or done step: an org
-    with no way in or out has a board work cannot leave."""
+    """Removes the step and every transition into it (its own go with it);
+    any task on it falls back to its status. Refuses to remove the LAST start
+    or done step: an org with no way in or out has a board work cannot leave."""
     has reports: list[dict[str, any]] = [];
 
     can remove with WorkflowStep entry {
@@ -494,6 +495,17 @@ walker DeleteStep(find_step) {
         for t in all_tasks(holder) {
             if t.step_id == gone {
                 t.step_id = "";
+            }
+        }
+        # An id in a field does not die with its node the way an edge did.
+        for s in steps_of(holder) {
+            kept = [
+                t
+                for t in s.transitions
+                if t["to"] != gone
+            ];
+            if len(kept) != len(s.transitions) {
+                s.transitions = kept;
             }
         }
         del here;
@@ -577,22 +589,31 @@ walker LinkTransition {
             disengage;
         }
         carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
-        # Re-drawing an arrow is how its label gets edited.
-        existing = [edge source->:FlowsTo:->target];
-        if existing {
-            for e in existing {
-                if self.label.strip() {
-                    e.label = self.label.strip();
-                }
-                if carried {
-                    e.carries = carried;
-                }
+        said = self.label.strip();
+        to = jid(target);
+        # Re-drawing an arrow is how its label gets edited: a non-empty
+        # label or tag replaces the stored one, an empty one keeps it.
+        kept: list[dict[str, str]] = [];
+        duplicate = False;
+        for t in source.transitions {
+            if t["to"] == to {
+                duplicate = True;
+                kept.append(
+                    {
+                        "to": to,
+                        "label": said or t["label"],
+                        "carries": carried or t["carries"]
+                    }
+                );
+            } else {
+                kept.append(t);
             }
-            report {"ok": True, "linked": True, "duplicate": True};
-            disengage;
         }
-        source +>:FlowsTo(label=self.label.strip(), carries=carried):+> target;
-        report {"ok": True, "linked": True, "duplicate": False};
+        if not duplicate {
+            kept.append({"to": to, "label": said, "carries": carried});
+        }
+        source.transitions = kept;
+        report {"ok": True, "linked": True, "duplicate": duplicate};
     }
 }
 
@@ -631,16 +652,22 @@ walker LabelTransition {
         }
         said = self.label.strip();
         carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
+        to = jid(target);
         found = False;
-        for e in [edge source->:FlowsTo:->target] {
-            e.label = said;
-            e.carries = carried;
-            found = True;
+        kept: list[dict[str, str]] = [];
+        for t in source.transitions {
+            if t["to"] == to {
+                found = True;
+                kept.append({"to": to, "label": said, "carries": carried});
+            } else {
+                kept.append(t);
+            }
         }
         if not found {
             report {"ok": False, "error": "not_found"};
             disengage;
         }
+        source.transitions = kept;
         report {"ok": True, "label": said, "carries": carried};
     }
 }
@@ -672,9 +699,12 @@ walker UnlinkTransition {
         if not isinstance(target, WorkflowStep) {
             disengage;
         }
-        for e in [edge source->:FlowsTo:->target] {
-            del e;
-        }
+        to = jid(target);
+        source.transitions = [
+            t
+            for t in source.transitions
+            if t["to"] != to
+        ];
         report {"ok": True, "unlinked": True};
     }
 }

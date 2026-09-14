@@ -94,8 +94,9 @@ walker BoardSnapshot {
             members.sort(key=lambda (m: MemberView) { m.name; });
             projects = projects_of(here);
             projects.sort(key=lambda (pr: Project) { pr.name; });
-            for st in steps_of(here) {
-                steps.append(step_view(st));
+            line_steps = steps_of(here);
+            for st in line_steps {
+                steps.append(step_view(st, line_steps));
             }
             steps.sort(key=lambda (s: StepView) { s.sort_order; });
             for r in [here-->[?:Repo]] {

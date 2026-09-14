@@ -314,6 +314,10 @@ node WorkflowStep {
         x: float = 0.0,
         y: float = 0.0,
         sort_order: float = 0.0,
+        # Outgoing transitions in draw order, one per target step:
+        # {"to": step jid, "label": what has to be true to cross, "carries":
+        # "issue" | "pr" | ""}. Cycles are allowed; self-loops are refused.
+        transitions: list[dict[str, str]] = [],
         created_at: str = "",
         updated_at: str = "";
 }
@@ -340,15 +344,6 @@ edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
 edge OnProject: Member --> Project {}
 edge HasRole: Member --> Role {}
-# A flow line transition. Cycles are ALLOWED by design (review looping back
-# to development is the point); only self-loops are refused, at link time.
-# `label` is what has to be true to cross; empty on older transitions.
-# `carries` is what moves across it, "issue" or "pr" (see CARRY_KINDS);
-# empty means untagged and is what every pre-existing transition reads as.
-edge FlowsTo: WorkflowStep --> WorkflowStep {
-    has label: str = "",
-        carries: str = "";
-}
 
 obj TaskView {
     has id: str,
@@ -504,7 +499,7 @@ obj StepView {
         blurb: str = "",
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids: one FlowsTo traversal builds all three.
+        # Index-aligned with next_ids, all three read off the step's field.
         next_labels: list[str] = [],
         next_carries: list[str] = [],
         # How much work is sitting here, counted per request in GetFlowLine
@@ -768,21 +763,30 @@ def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
 }
 
 
-def step_view(s: WorkflowStep) -> StepView {
+# One step's view. `steps` is the whole flow line: incoming ids are read off
+# the other steps' transitions, and a transition to a step that no longer
+# exists is left out.
+def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
+    me = jid(s);
+    known: list[str] = [];
     prev_ids: list[str] = [];
-    for p in [s<-:FlowsTo:<-] {
-        prev_ids.append(jid(p));
+    for o in steps {
+        known.append(jid(o));
+        for t in o.transitions {
+            if t["to"] == me and jid(o) not in prev_ids {
+                prev_ids.append(jid(o));
+            }
+        }
     }
     next_ids: list[str] = [];
-    for n in [s->:FlowsTo:->] {
-        next_ids.append(jid(n));
-    }
-    # `[edge ...]` is how an edge's own fields are read.
     next_labels: list[str] = [];
     next_carries: list[str] = [];
-    for e in [edge s->:FlowsTo:->] {
-        next_labels.append(e.label);
-        next_carries.append(e.carries);
+    for t in s.transitions {
+        if t["to"] in known {
+            next_ids.append(t["to"]);
+            next_labels.append(t["label"]);
+            next_carries.append(t["carries"]);
+        }
     }
     return StepView(
         id=jid(s),
