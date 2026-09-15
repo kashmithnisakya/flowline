@@ -257,6 +257,104 @@
     .page-subtitle {
         @apply text-sm text-muted-foreground;
     }
+    /* Section and panel title: 16px, weight 650, 108% width. */
+    .section-title {
+        @apply font-display text-base leading-snug;
+        font-weight: 650;
+        font-stretch: 108%;
+    }
+    /* Metadata text: 12px muted, the size floor. */
+    .meta {
+        @apply text-xs text-muted-foreground;
+    }
+    /* Keyboard hint: mono 12px on a surface with a heavier bottom edge. */
+    .kbd {
+        @apply inline-flex items-center rounded-sm border border-b-2 bg-card px-1 font-mono text-xs leading-4 font-medium text-subtle;
+    }
+    /* Numbers, dates, times, ids and counts: mono with tabular figures. */
+    .num {
+        @apply font-mono tabular-nums;
+    }
+    /* A resting surface: card fill, hairline border, 4px radius, no shadow. */
+    .surface {
+        @apply rounded-md border bg-card text-card-foreground;
+    }
+    /* A single filter row between hairlines; wraps on narrow screens. */
+    .toolbar {
+        @apply flex flex-wrap items-center gap-2 border-y bg-card px-4 py-2;
+    }
+    /* Step colour swatch: a 10px square; pair with bg-step-<key>. */
+    .step-swatch {
+        @apply inline-block size-2.5 shrink-0 rounded-xs;
+    }
+}
+
+/* ---- Classes that must beat the registry primitives' own utilities sit
+   outside any layer (unlayered rules outrank @layer utilities). A call site
+   still overrides one with an important utility such as `px-4!`. */
+
+/* Ghost filter trigger (a SelectTrigger or button); data-active="true"
+   turns it into an outlined control in foreground weight 600. */
+.toolbar-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 30px;
+    padding-inline: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 500;
+    width: auto;
+}
+.toolbar-filter:hover {
+    background-color: var(--accent);
+    color: var(--foreground);
+}
+.toolbar-filter[data-active="true"] {
+    border-color: var(--input);
+    background-color: var(--card);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+/* Data table (the Table primitive or a raw table): sentence-case 12.5px
+   muted headers, 13.5px cells, 1px row rules, accent hover row. */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+.data-table th {
+    height: auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+}
+.data-table td {
+    padding: 9px 12px;
+    font-size: 13.5px;
+    vertical-align: middle;
+}
+.data-table tbody tr {
+    border-bottom: 1px solid var(--border);
+}
+.data-table tbody tr:last-child {
+    border-bottom: 0;
+}
+.data-table tbody tr:hover {
+    background-color: var(--accent);
+}
+.data-table thead tr:hover {
+    background-color: transparent;
 }
 
 /* The wide cut: display text renders at 118% width. */
