@@ -102,8 +102,28 @@ def run(page, tag: str) -> list[str]:
     expect(dialog.get_by_text("New task", exact=True)).to_be_visible()
     dialog.get_by_role("button", name="Cancel", exact=True).click()
     expect(dialog).to_be_hidden()
-    for column in ("To do", "Doing", "Review", "Done"):
+    columns = ["To do", "Doing", "Review", "Done"]
+    for column in columns:
         expect(page.get_by_text(column, exact=True).filter(visible=True).first).to_be_visible()
+    # Visible text alone could match a word elsewhere on the page, so the
+    # flow line the wizard applied is checked exactly as well.
+    steps = page.evaluate(
+        """async (base) => {
+            const r = await fetch(base + "/walker/GetFlowLine", {
+                method: "POST",
+                headers: {"Content-Type": "application/json",
+                          "Authorization": "Bearer " + localStorage.getItem("jac_token")},
+                body: JSON.stringify({with_counts: false}),
+            });
+            const d = await r.json();
+            const reports = d.reports || (d.data && (d.data.reports
+                || (d.data.result && d.data.result.reports))) || [];
+            return (reports[0] || []).map((s) => [s.name, s.kind]);
+        }""",
+        BASE,
+    )
+    expected = [[n, k] for n, k in zip(columns, ["start", "active", "handoff", "done"])]
+    assert steps == expected, f"setup applied {steps}, expected {expected}"
 
     step("board: open via the nav")
     page.get_by_role("link", name="Board", exact=True).click()
