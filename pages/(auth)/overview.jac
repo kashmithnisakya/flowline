@@ -222,7 +222,7 @@ def:pub OverviewPage -> JsxPage {
 
     return
         <div className="space-y-8">
-            <div className="anim-fade-up">
+            <div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <h1 className="page-title">Overview</h1>
                     <span
@@ -354,7 +354,7 @@ def:pub OverviewPage -> JsxPage {
             } else {
                 <div key="body" className="space-y-8">
                     <div
-                        className="anim-fade-up anim-d1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
+                        className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
                     >
                         <StatTile label="Open" value={str(openCount)}/>
                         <StatTile
@@ -389,7 +389,7 @@ def:pub OverviewPage -> JsxPage {
                             spark={entrySpark}
                         />
                     </div>
-                    <Card className="anim-fade-up anim-d2">
+                    <Card>
                         <CardHeader>
                             <CardTitle className="text-base">Needs attention</CardTitle>
                             <CardDescription>
@@ -404,7 +404,7 @@ def:pub OverviewPage -> JsxPage {
                                     className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                                 >
                                     <span
-                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide "
+                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold "
                                             + ("bg-destructive/10 text-destructive")}
                                     >
                                         {"Blocked"
@@ -485,15 +485,11 @@ def:pub OverviewPage -> JsxPage {
                             }}
                         </CardContent>
                     </Card>
-                    <div
-                        className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
-                    >
+                    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
                         <ReviewQueueCard rows={reviewQueue}/>
                         <GoneQuietCard rows={quiet}/>
                     </div>
-                    <div
-                        className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
-                    >
+                    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-base">
@@ -835,7 +831,7 @@ def:pub OverviewPage -> JsxPage {
                                         <table className="w-full text-sm tabular-nums">
                                             <thead>
                                                 <tr
-                                                    className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"
+                                                    className="border-b text-left text-xs text-muted-foreground"
                                                 >
                                                     <th
                                                         className="px-3 py-2 font-medium"
@@ -902,7 +898,7 @@ def:pub OverviewPage -> JsxPage {
                             </div>
                         }   }
                     </section>
-                    <Card className="anim-fade-up anim-d3">
+                    <Card>
                         <CardHeader>
                             <CardTitle className="text-base">People</CardTitle>
                             <CardDescription>

@@ -96,7 +96,7 @@ def:pub SettingsPage -> JsxPage {
                         <button
                             key={opt[0]}
                             type="button"
-                            className={"relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md "
+                            className={"relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors hover:bg-accent "
                                 + (
                                     "border-primary ring-2 ring-primary/30"
                                         if pref == opt[0]

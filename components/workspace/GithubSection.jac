@@ -336,7 +336,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             >
                                                 {"No events yet. In the GitHub App's settings, point the webhook at "}
                                                 <code
-                                                    className="rounded bg-muted px-1 py-0.5 text-[11px]"
+                                                    className="rounded bg-muted px-1 py-0.5 text-xs"
                                                 >
                                                     {webhookUrl}
                                                 </code>
@@ -523,7 +523,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                 >
                                     <button
                                         type="button"
-                                        className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground"
                                             if tab == "issues"
                                             else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
                                         onClick={lambda { tab = "issues"; }}
@@ -532,7 +532,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                     </button>
                                     <button
                                         type="button"
-                                        className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                                        className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground"
                                             if tab == "pulls"
                                             else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
                                         onClick={lambda { tab = "pulls"; }}

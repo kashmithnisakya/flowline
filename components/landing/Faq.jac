@@ -1,6 +1,5 @@
-"""FAQ. Every answer is true of the app today, including the honest "not yet"
-ones; update an answer when a capability lands, never soften it in advance.
-"""
+"""FAQ. Every answer is true of the app today, including the "not yet" ones;
+update an answer when a capability lands, never soften it in advance."""
 
 obj QA {
     has q: str,
@@ -9,89 +8,68 @@ obj QA {
 
 glob FAQS: list[QA] = [
          QA(
-             q="Do my teammates need their own accounts?",
-             a="No. Only the person managing the projects signs in. Teammates are "
-             "roster records you create, and you log the day on their behalf, "
-             "so nobody else has a password to forget."
-         ),
-         QA(
-             q="Can two managers share one organization?",
-             a="Not yet. Today one account is one organization, which is what keeps "
-             "workspaces completely isolated from each other. Multi-manager "
-             "organizations are the next thing on the list."
+             q="Does it connect to GitHub?",
+             a="Yes. Install the GitHub App on the repositories you pick to import issues as cards and see pull request state on them. GitHub tells Flowline about changes as they happen. For each repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue. Both stay off until you turn them on. There is no Slack, Teams or mobile app today."
          ),
          QA(
              q="Where does my data live?",
-             a="On your own private graph inside the workspace you created. Every "
-             "request runs against your account's own data, so another account "
-             "cannot read or modify it. You run the server, so it stays wherever "
-             "you deploy it."
+             a="Open source under the MIT license. Each workspace is its own isolated graph, and you can run your own server."
          ),
          QA(
-             q="Does it connect to GitHub?",
-             a="Yes, read-mostly. Install the GitHub App on the repos you pick and "
-             "Flowline can list them, import issues as tasks, and show the state "
-             "of open pull requests. The only thing it ever writes to GitHub is "
-             "an issue you explicitly create from a task. Syncing happens when "
-             "you press Sync, nothing runs on a schedule, and Flowline never "
-             "moves a card for you. There is no Slack, Teams or mobile app "
-             "today; Flowline is a web app."
+             q="Do my teammates need their own accounts?",
+             a="No. One account runs the workspace. Teammates are people you add and assign cards to, so nobody else has a password to forget."
+         ),
+         QA(
+             q="Can two people manage the same workspace?",
+             a="Not yet. Today one account is one workspace, which is what keeps workspaces isolated from each other."
          ),
          QA(
              q="Do we have to use the same columns as everyone else?",
-             a="No. You design the flow line: name the steps your team actually "
-             "uses and connect them however work moves, loops included. The "
-             "board is those steps, so the two can never disagree. Start from "
-             "a template if you would rather not draw one."
+             a="No. You draw the flow line: name the steps your team uses and connect them however work moves, loops included. The board's columns are those steps. Start from the Simple template if you would rather not draw."
          ),
          QA(
-             q="What happened to the spreadsheet we used before?",
-             a="This replaced it. The board covers the to-do sheet, the daily log "
-             "covers the activity sheet, and projects replaced the hardcoded team "
-             "column, but the app does not import the old file, so you start "
-             "clean."
+             q="Can we import from another tool?",
+             a="Only from GitHub: issues from the repositories you connect become cards. Everything else starts clean."
          )
      ];
 
 def:pub Faq -> JsxElement {
     return
-        <section id="faq" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
-            <span
-                className="text-xs font-semibold uppercase tracking-widest text-primary"
-            >
-                FAQ
-            </span>
+        <section
+            id="faq"
+            className="mx-auto grid max-w-[1180px] scroll-mt-16 gap-6 px-4 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10"
+        >
             <h2
-                className="font-display mt-3 max-w-2xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
+                className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%] lg:sticky lg:top-24 lg:self-start"
             >
-                Questions worth asking first
+                Questions
             </h2>
-            <div
-                className="mt-8 max-w-[840px] divide-y divide-foreground/10 border-y border-foreground/10"
-            >
+            <div className="border-b">
                 {for (i, f) in enumerate(FAQS) {
-                    <details
-                        key={f.q}
-                        open={i == 0}
-                        className="group py-5 [interpolate-size:allow-keywords] [&::details-content]:h-0 [&::details-content]:overflow-clip [&::details-content]:opacity-0 [&::details-content]:transition-[height,opacity,content-visibility] [&::details-content]:duration-300 [&::details-content]:ease-out [&::details-content]:[transition-behavior:allow-discrete] [&[open]::details-content]:h-auto [&[open]::details-content]:opacity-100"
-                    >
+                    <details key={f.q} open={i < 2} className="group border-t py-4">
                         <summary
-                            className="flex cursor-pointer list-none items-center justify-between gap-6 text-left transition-colors hover:text-primary"
+                            className="flex cursor-pointer list-none items-start justify-between gap-6 text-left [&::-webkit-details-marker]:hidden"
                         >
-                            <span
-                                className="font-display text-base font-bold tracking-tight"
-                            >
-                                {f.q}
-                            </span>
-                            <span
+                            <span className="text-base font-semibold">{f.q}</span>
+                            <svg
+                                width={16}
+                                height={16}
+                                viewBox="0 0 16 16"
                                 aria-hidden="true"
-                                className="shrink-0 text-lg text-primary transition-transform duration-200 group-open:rotate-45"
+                                className="mt-1 shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180"
                             >
-                                +
-                            </span>
+                                <path
+                                    d="m4.5 6.5 3.5 3.5 3.5-3.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={1.6}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
                         </summary>
                         <p
-                            className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground"
+                            className="mt-2 max-w-[68ch] text-[15px] leading-relaxed text-muted-foreground"
                         >
                             {f.a}
                         </p>

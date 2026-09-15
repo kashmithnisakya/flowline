@@ -105,7 +105,7 @@ def:pub WeekMatrix(
                             key={"h" + d}
                             type="button"
                             onClick={lambda { onSelectDate(d); }}
-                            className={"rounded-md py-1 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-accent "
+                            className={"rounded-md py-1 text-center text-xs font-semibold transition-colors hover:bg-accent "
                                 + (
                                     "text-primary"
                                         if d == selectedDate
@@ -139,7 +139,7 @@ def:pub WeekMatrix(
                                         + ": "
                                         + str(len(cells[who + "|" + d]))
                                         + " entries"}
-                                    className={"flex min-h-14 flex-col items-start gap-0.5 rounded-lg border p-1.5 text-left text-[11px] leading-tight transition-colors hover:bg-accent "
+                                    className={"flex min-h-14 flex-col items-start gap-0.5 rounded-lg border p-1.5 text-left text-xs leading-tight transition-colors hover:bg-accent "
                                         + (
                                             (
                                                 "border-destructive/50 bg-destructive/5"

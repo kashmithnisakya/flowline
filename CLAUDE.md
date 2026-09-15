@@ -269,12 +269,22 @@ File-based routing with route groups:
   `dueTone`, `dueLabel`): the card, the lane header and the overview all
   derive "overdue" from it, so change it there or nowhere.
 - **`components/common/`** holds the shared bits: `Avatar.jac` (initials
-  avatars, hue hashed from the name, `AvatarStack` for assignees),
-  `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`, `KineticGrid`.
+  avatars on eight fixed fills hashed from the name, `AvatarStack` for
+  assignees), `KindGlyph.jac` (a step kind as a glyph), `StepName.jac` (a
+  step's swatch plus name), `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`.
+- **The visual system lives in `styles/global.css`.** Archivo (the
+  `wdth.css` import, so `font-stretch` works) for UI and display, IBM Plex
+  Mono for data, shadcn token names on a neutral ground with one rust
+  primary. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
+  `.toolbar-filter`, `.data-table`, `.step-swatch` ...) are defined there;
+  the two that dress registry primitives sit outside `@layer` so they beat
+  the primitives' utilities. Nothing renders below 12px, labels are
+  sentence case, and only floating layers cast a shadow.
 - **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
   (opaque canvas fill) in `styles/global.css` for both palettes; the tables
   in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
-  colour key needs tokens in both palettes, and its key is what persists.
+  colour key needs tokens in both palettes, and its key is what persists
+  (`rose` renders orchid, clear of the andon red).
 - **The flow line page's step panel opens the board's dialog.** Clicking a step
   in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
   and a row opens `components/board/TaskDialog` on the same form dict and the

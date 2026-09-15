@@ -49,7 +49,7 @@ def:pub ProjectCard(
     has armed: bool = False;
 
     return
-        <Card className="card-hover gap-3 py-5 hover:ring-foreground/20">
+        <Card className="gap-3 py-5 hover:ring-foreground/20">
             <CardHeader className="gap-1">
                 <CardTitle className="flex items-center gap-2 text-base">
                     <span
@@ -63,9 +63,7 @@ def:pub ProjectCard(
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-                <div
-                    className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                >
+                <div className="text-xs font-medium text-muted-foreground">
                     Repositories
                 </div>
                 {if len(repos) > 0 {

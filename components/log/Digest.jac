@@ -209,10 +209,10 @@ def DigestColumn(title: str, sub: str, rows: list[dict[str, any]]) -> JsxElement
     return
         <div className="min-w-0">
             <div
-                className="mb-1.5 flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mb-1.5 flex items-baseline gap-2 text-xs font-semibold text-muted-foreground"
             >
                 {title}
-                <span className="font-normal normal-case tracking-normal">{sub}</span>
+                <span className="font-normal">{sub}</span>
             </div>
             {if len(rows) == 0 {
                 <div key="none" className="text-sm text-muted-foreground/70">
@@ -279,7 +279,7 @@ def:pub Digest(entries: list[LogEntry], day: str) -> JsxElement {
         toast.success("Standup copied as Markdown");
     }
     return
-        <Card className="anim-fade-in gap-0 py-0">
+        <Card className="gap-0 py-0">
             <CardContent className="p-4 sm:p-5">
                 <div className="mb-3 flex items-center justify-between gap-3">
                     <div>

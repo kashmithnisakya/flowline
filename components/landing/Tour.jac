@@ -1,391 +1,437 @@
-"""Product tour: the three surfaces behind one tab row, flow line first,
-because designing your own steps is the thing no other board offers. Every
-panel is a hand-drawn mock in the product's own visual language, not a
-screenshot.
+"""Product tour: the flow line, the board and the log as three always-visible
+rows, each a short statement beside a rendering in the product's own system.
+The diagram keeps its natural size and scrolls sideways on phones rather than
+shrinking its 12px labels.
 """
 
-import from ..common.Avatar { Avatar, AvatarStack }
+import from ..common.Avatar { Avatar }
+import from ..common.KindGlyph { KindGlyph }
+import from ..common.StepName { StepName }
 
-glob TABS: list[dict[str, str]] = [
-         {"key": "flow", "label": "The flow line"},
-         {"key": "board", "label": "The board"},
-         {"key": "log", "label": "The daily log"}
-     ],
-     # The example flow the SVG draws; x is the node's left edge.
+glob NODE_W: int = 116,
+     NODE_H: int = 54,
+     SWATCH_FILL: dict[str, str] = {
+         "sky": "var(--step-sky)",
+         "amber": "var(--step-amber)",
+         "indigo": "var(--step-indigo)",
+         "rose": "var(--step-rose)",
+         "emerald": "var(--step-emerald)"
+     },
      FLOW_NODES: list[dict[str, any]] = [
-         {"x": 12, "name": "Idea", "kind": "start", "cls": "text-step-sky"},
-         {"x": 182, "name": "Build", "kind": "active", "cls": "text-step-amber"},
-         {"x": 352, "name": "Review", "kind": "handoff", "cls": "text-step-indigo"},
-         {"x": 522, "name": "Done", "kind": "done", "cls": "text-step-emerald"}
-     ],
-     BOARD_LANES: list[dict[str, any]] = [
          {
-             "name": "Up next",
-             "color": "bg-step-sky",
-             "bar": "border-l-step-sky",
+             "name": "Specify",
+             "kind": "start",
+             "color": "sky",
+             "owner": "Anyone",
+             "x": 6,
+             "y": 110
+         },
+         {
+             "name": "Design",
+             "kind": "active",
+             "color": "amber",
+             "owner": "Architect",
+             "x": 160,
+             "y": 18
+         },
+         {
+             "name": "Build",
+             "kind": "active",
+             "color": "indigo",
+             "owner": "Builder",
+             "x": 314,
+             "y": 110
+         },
+         {
+             "name": "Review",
+             "kind": "handoff",
+             "color": "rose",
+             "owner": "Reviewer",
+             "x": 468,
+             "y": 110
+         },
+         {
+             "name": "Done",
+             "kind": "done",
+             "color": "emerald",
+             "owner": "",
+             "x": 622,
+             "y": 110
+         }
+     ],
+     BOARD: list[dict[str, any]] = [
+         {
+             "name": "Specify",
+             "color": "sky",
              "cards": [
                  {
-                     "title": "Write the migration runbook",
-                     "project": "Platform",
-                     "dot": "bg-chart-3",
-                     "who": ["Dev Fernando"],
-                     "chip": "Docs"
+                     "title": "Push notification opt-in screen",
+                     "meta": "Mobile app",
+                     "who": ["Nina Park"]
+                 },
+                 {
+                     "title": "Tax ID field for EU customers",
+                     "meta": "Billing",
+                     "who": ["Ravi Kumar"]
                  }
              ]
          },
          {
-             "name": "In progress",
-             "color": "bg-step-amber",
-             "bar": "border-l-step-amber",
+             "name": "Design",
+             "color": "amber",
              "cards": [
                  {
-                     "title": "Ship the new landing page",
-                     "project": "Launch Site",
-                     "dot": "bg-chart-1",
-                     "who": ["Amara Perera", "Kasun Silva"],
-                     "chip": "Design"
+                     "title": "Proration for mid-cycle plan changes",
+                     "meta": "Billing",
+                     "who": ["Dev Fernando"]
+                 }
+             ]
+         },
+         {
+             "name": "Build",
+             "color": "indigo",
+             "cards": [
+                 {
+                     "title": "Invoice PDF redesign",
+                     "meta": "Billing · due Thu",
+                     "who": ["Priya Raman"]
                  },
                  {
-                     "title": "Roll out the auth change",
-                     "project": "Platform",
-                     "dot": "bg-chart-3",
-                     "who": ["Priya Raman"],
-                     "chip": "Backend"
+                     "title": "Dark mode polish on settings",
+                     "meta": "Mobile app",
+                     "who": ["Kasun Silva"]
+                 }
+             ]
+         },
+         {
+             "name": "Review",
+             "color": "rose",
+             "cards": [
+                 {
+                     "title": "Webhook for cancelled subscriptions",
+                     "meta": "Billing · #412",
+                     "who": ["Priya Raman", "Dev Fernando"]
                  }
              ]
          },
          {
              "name": "Done",
-             "color": "bg-step-emerald",
-             "bar": "border-l-step-emerald",
+             "color": "emerald",
              "cards": [
                  {
-                     "title": "Pick the CDN region",
-                     "project": "Launch Site",
-                     "dot": "bg-chart-1",
-                     "who": ["Amara Perera"],
-                     "chip": "Infra"
+                     "title": "Stripe SDK upgrade",
+                     "meta": "Billing",
+                     "who": ["Priya Raman"]
                  }
              ]
          }
      ],
      LOG_ROWS: list[dict[str, str]] = [
          {
-             "who": "Amara Perera",
-             "project": "Launch Site",
-             "what": "Shipped the hero rework and fixed the CDN redirect",
-             "status": "Done",
-             "link": "PR #142"
+             "at": "09:15",
+             "kind": "done",
+             "who": "Priya Raman",
+             "what": "Moved to Done · issue closed",
+             "task": "Receipt emails missing VAT number",
+             "link": "#398"
          },
          {
+             "at": "09:42",
+             "kind": "active",
              "who": "Priya Raman",
-             "project": "Platform",
-             "what": "Auth change rolled out behind the flag, watching error rates",
-             "status": "In progress",
+             "what": "Moved to Build",
+             "task": "Invoice PDF redesign",
              "link": ""
          },
          {
+             "at": "10:30",
+             "kind": "handoff",
              "who": "Dev Fernando",
-             "project": "Platform",
-             "what": "Migration runbook drafted, ready for review",
-             "status": "Review",
-             "link": "#87"
+             "what": "Moved to Review · Priya Raman",
+             "task": "Webhook for cancelled subscriptions",
+             "link": "PR #412"
+         },
+         {
+             "at": "11:05",
+             "kind": "active",
+             "who": "Kasun Silva",
+             "what": "Checked off: Reproduce on a Pixel 8 (2/5)",
+             "task": "Crash when rotating on Android 14",
+             "link": ""
+         },
+         {
+             "at": "14:20",
+             "kind": "active",
+             "who": "Leo Martins",
+             "what": "Wrote up the Lighthouse fixes for the pricing page",
+             "task": "",
+             "link": ""
          }
-     ],
-     STATUS_TINT: dict[str, str] = {
-         "Done": "bg-step-emerald-wash text-step-emerald-ink",
-         "In progress": "bg-step-amber-wash text-step-amber-ink",
-         "Review": "bg-step-indigo-wash text-step-indigo-ink"
-     };
+     ];
 
-def nodeMid(n: dict[str, any]) -> int {
-    x: int = n["x"];
-    return x + 59;
+def TourRow(title: str, body: str, children: any = None) -> JsxElement {
+    return
+        <div
+            className="grid gap-5 border-t py-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] xl:gap-10"
+        >
+            <div className="grid content-start gap-2">
+                <h3 className="text-lg leading-snug font-semibold [font-stretch:108%]">
+                    {title}
+                </h3>
+                <p
+                    className="max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground"
+                >
+                    {body}
+                </p>
+            </div>
+            <div className="min-w-0">{children}</div>
+        </div>;
+}
+
+def FlowDiagram -> JsxElement {
+    return
+        <div className="overflow-x-auto rounded-xl border bg-background">
+            <svg
+                viewBox="0 0 744 236"
+                className="block h-auto w-full min-w-[744px]"
+                role="img"
+                aria-label="A flow line: Specify goes to Build, or through Design for big changes; Build goes to Review, Review to Done, and Review can send work back to Build."
+            >
+                <g
+                    className="text-wire"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                >
+                    <path d="M122 137H307"/>
+                    <path d="M64 110C64 72 96 45 153 45"/>
+                    <path d="M276 45C336 45 372 58 372 103"/>
+                    <path d="M430 137H461"/>
+                    <path d="M584 137H615"/>
+                    <path d="M526 164C526 208 372 208 372 171" strokeDasharray="5 4"/>
+                </g>
+                <g className="text-wire" fill="currentColor">
+                    <path d="M307 133l7 4-7 4z"/>
+                    <path d="M153 41l7 4-7 4z"/>
+                    <path d="M368 103l4 7 4-7z"/>
+                    <path d="M461 133l7 4-7 4z"/>
+                    <path d="M615 133l7 4-7 4z"/>
+                    <path d="M368 171l4-7 4 7z"/>
+                </g>
+                <g
+                    className="font-mono text-xs"
+                    style={{"fill": "var(--subtle)"}}
+                    textAnchor="middle"
+                >
+                    <text x={218} y={129}>Issue</text>
+                    <text x={449} y={129}>PR</text>
+                    <text x={603} y={129}>PR</text>
+                    <text x={94} y={90} textAnchor="start">Big changes</text>
+                    <text x={449} y={226}>Changes requested</text>
+                </g>
+                {for n in FLOW_NODES {
+                    <g key={n["name"]}>
+                        <rect
+                            x={n["x"]}
+                            y={n["y"]}
+                            width={NODE_W}
+                            height={NODE_H}
+                            rx={4}
+                            style={{"fill": "var(--card)", "stroke": "var(--border)"}}
+                        />
+                        <rect
+                            x={int(n["x"]) + 10}
+                            y={int(n["y"]) + 13}
+                            width={10}
+                            height={10}
+                            rx={2}
+                            style={{"fill": SWATCH_FILL[n["color"]]}}
+                        />
+                        <text
+                            x={int(n["x"]) + 26}
+                            y={int(n["y"]) + 22}
+                            className="text-[13px] font-semibold"
+                            style={{"fill": "var(--foreground)"}}
+                        >
+                            {n["name"]}
+                        </text>
+                        <g
+                            transform={"translate("
+                                + str(int(n["x"]) + NODE_W - 24)
+                                + " "
+                                + str(int(n["y"]) + 11)
+                                + ")"}
+                            className="text-muted-foreground"
+                        >
+                            <KindGlyph kind={n["kind"]}/>
+                        </g>
+                        {if n["owner"] {
+                            <text
+                                key="owner"
+                                x={int(n["x"]) + 10}
+                                y={int(n["y"]) + 42}
+                                className="text-xs"
+                                style={{"fill": "var(--subtle)"}}
+                            >
+                                {n["owner"]}
+                            </text>
+                        }}
+                    </g>
+                }}
+            </svg>
+        </div>;
+}
+
+def BoardFragment -> JsxElement {
+    return
+        <div className="overflow-x-auto rounded-xl border bg-card">
+            <div className="grid min-w-[700px] grid-cols-5">
+                {for col in BOARD {
+                    <div
+                        key={col["name"]}
+                        className="flex min-h-[210px] flex-col gap-2 border-r p-2.5 last:border-r-0"
+                    >
+                        <div
+                            className="flex items-center gap-1.5 text-[13px] font-semibold"
+                        >
+                            <StepName name={col["name"]} color={col["color"]}/>
+                            <span
+                                className="ml-auto font-mono text-xs font-medium text-subtle tabular-nums"
+                            >
+                                {len(col["cards"])}
+                            </span>
+                        </div>
+                        {for c in col["cards"] {
+                            <div
+                                key={c["title"]}
+                                className="grid gap-1.5 rounded-md border bg-card px-2.5 py-2"
+                            >
+                                <span
+                                    className="text-[13px] leading-[1.35] font-medium"
+                                >
+                                    {c["title"]}
+                                </span>
+                                <span
+                                    className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                                >
+                                    <span className="truncate">{c["meta"]}</span>
+                                    <span className="ml-auto flex shrink-0">
+                                        {for (i, who) in enumerate(c["who"]) {
+                                            <span
+                                                key={who}
+                                                className={"inline-flex rounded-full ring-2 ring-card"
+                                                    + (" -ml-1.5" if i > 0 else "")}
+                                            >
+                                                <Avatar name={who} size="xs"/>
+                                            </span>
+                                        }}
+                                    </span>
+                                </span>
+                            </div>
+                        }}
+                    </div>
+                }}
+            </div>
+        </div>;
+}
+
+def LogLedger -> JsxElement {
+    return
+        <div className="overflow-hidden rounded-xl border bg-card">
+            <div
+                className="flex items-baseline justify-between gap-3 border-b px-4 py-2.5"
+            >
+                <span className="text-sm font-semibold">Tuesday</span>
+                <span className="font-mono text-xs text-subtle tabular-nums">
+                    5 entries · 4 people
+                </span>
+            </div>
+            <ol className="divide-y">
+                {for r in LOG_ROWS {
+                    <li
+                        key={r["at"]}
+                        className="grid grid-cols-[44px_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 text-[13.5px] sm:grid-cols-[48px_150px_minmax(0,1fr)]"
+                    >
+                        <time
+                            className="pt-px font-mono text-[12.5px] text-subtle tabular-nums"
+                        >
+                            {r["at"]}
+                        </time>
+                        <span className="flex min-w-0 items-center gap-2 font-medium">
+                            <Avatar name={r["who"]} size="xs"/>
+                            <span className="truncate">{r["who"]}</span>
+                        </span>
+                        <span
+                            className="col-start-2 flex min-w-0 items-start gap-2 sm:col-start-3"
+                        >
+                            <KindGlyph
+                                kind={r["kind"]}
+                                className="mt-[3px] text-muted-foreground"
+                            />
+                            <span className="min-w-0">
+                                {r["what"]}
+                                {if r["task"] {
+                                    <span key="task" className="text-muted-foreground">
+                                        {" · " + r["task"]}
+                                    </span>
+                                }}
+                                {if r["link"] {
+                                    <span key="link" className="text-muted-foreground">
+                                        {" · "}
+                                        <span className="font-mono text-[12.5px]">
+                                            {r["link"]}
+                                        </span>
+                                    </span>
+                                }}
+                            </span>
+                        </span>
+                    </li>
+                }}
+            </ol>
+        </div>;
 }
 
 def:pub Tour -> JsxElement {
-    has tab: str = "flow";
-
     return
-        <section id="tour" className="mt-24 scroll-mt-24 border-y bg-muted/30">
-            <div className="mx-auto max-w-[1180px] px-7 py-16">
-                <span
-                    className="text-xs font-semibold uppercase tracking-widest text-primary"
+        <section
+            id="tour"
+            className="mx-auto max-w-[1180px] scroll-mt-16 px-4 pt-14 sm:px-6 sm:pt-20"
+        >
+            <h2
+                className="max-w-[28ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
+            >
+                One flow line, three views of the same work
+            </h2>
+            <p
+                className="mt-3 max-w-[62ch] text-base leading-relaxed text-muted-foreground"
+            >
+                You draw the steps once. The board and the log read from them, so the three can never disagree.
+            </p>
+            <div className="mt-8">
+                <TourRow
+                    title="Flow line"
+                    body="Name the steps your team really uses and connect them the way work moves, branches and loops included. Each step says what it means (start, active, handoff, blocked or done) and can name who owns it; a connection can say whether it carries an issue or a pull request."
                 >
-                    A quick look
-                </span>
-                <h2
-                    className="font-display mt-3 max-w-2xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
+                    <FlowDiagram/>
+                    <p className="mt-2 text-xs text-subtle min-[792px]:hidden">
+                        Scroll sideways to see the whole flow line.
+                    </p>
+                </TourRow>
+                <TourRow
+                    title="Board"
+                    body="The board's columns are those steps, in order. Drag a card to move it, filter by project or person, and open a card for its details, checklist and GitHub links. Moving a card to Review can ask for a reviewer and a pull request; a blocked card asks for a note."
                 >
-                    The flow line, the board, the log.
-                </h2>
-                <p className="mt-4 max-w-2xl text-base text-muted-foreground">
-                    You design the flow line once. The board's columns are its steps, and the log is what each day looked like.
-                </p>
-                <div
-                    role="tablist"
-                    aria-label="Product tour"
-                    className="mt-8 flex flex-wrap gap-2"
+                    <BoardFragment/>
+                    <p className="mt-2 text-xs text-subtle min-[748px]:hidden">
+                        Scroll sideways to see every column.
+                    </p>
+                </TourRow>
+                <TourRow
+                    title="Log"
+                    body="Every move lands in the day's log with the time, the people on the card and its issue or pull request. Add what happened off the board by hand. The week view is the summary a standup used to be for, and it is still there next month."
                 >
-                    {for t in TABS {
-                        <button
-                            key={t["key"]}
-                            role="tab"
-                            aria-selected={tab == t["key"]}
-                            onClick={lambda { tab = t["key"]; }}
-                            className={"rounded-full px-5 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-ring "
-                                + (
-                                    "bg-primary text-primary-foreground"
-                                        if tab == t["key"]
-                                        else "border bg-card text-muted-foreground hover:text-foreground"
-                                )}
-                        >
-                            {t["label"]}
-                        </button>
-                    }}
-                </div>
-                {if tab == "flow" {
-                    <div key="flow" className="animate-in fade-in mt-6 duration-300">
-                        <div
-                            className="rounded-2xl border bg-card p-4 shadow-sm sm:p-8"
-                        >
-                            <svg
-                                viewBox="0 0 652 168"
-                                className="mx-auto block h-auto w-full max-w-3xl"
-                                role="img"
-                                aria-label="A flow line: Idea to Build to Review to Done, with a loop from Review back to Build"
-                            >
-                                {for n in FLOW_NODES {
-                                    <g key={n["name"]} className={n["cls"]}>
-                                        <rect
-                                            x={n["x"]}
-                                            y={42}
-                                            width={118}
-                                            height={44}
-                                            rx={10}
-                                            stroke="currentColor"
-                                            strokeWidth={1.5}
-                                            style={{"fill": "var(--card)"}}
-                                        />
-                                        <text
-                                            x={nodeMid(n)}
-                                            y={62}
-                                            textAnchor="middle"
-                                            className="text-[13px] font-semibold"
-                                            style={{"fill": "var(--foreground)"}}
-                                        >
-                                            {n["name"]}
-                                        </text>
-                                        <text
-                                            x={nodeMid(n)}
-                                            y={77}
-                                            textAnchor="middle"
-                                            className="text-[8.5px] font-medium uppercase tracking-widest"
-                                            style={{"fill": "var(--muted-foreground)"}}
-                                        >
-                                            {n["kind"]}
-                                        </text>
-                                    </g>
-                                }}
-                                <g
-                                    className="text-muted-foreground"
-                                    stroke="currentColor"
-                                    strokeWidth={1.4}
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path
-                                        d="M 130 64 L 176 64 m 0 0 l -7 -4 m 7 4 l -7 4"
-                                    />
-                                    <path
-                                        d="M 300 64 L 346 64 m 0 0 l -7 -4 m 7 4 l -7 4"
-                                    />
-                                    <path
-                                        d="M 470 64 L 516 64 m 0 0 l -7 -4 m 7 4 l -7 4"
-                                    />
-                                </g>
-                                <g
-                                    className="text-primary"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path
-                                        d="M 396 90 C 370 134, 282 134, 254 92"
-                                        strokeWidth={1.4}
-                                        strokeDasharray="5 5"
-                                    />
-                                    <path
-                                        d="M 254 92 l -1 9 m 1 -9 l 9 2"
-                                        strokeWidth={1.4}
-                                    />
-                                </g>
-                                <text
-                                    x={325}
-                                    y={146}
-                                    textAnchor="middle"
-                                    className="text-[10px] font-semibold"
-                                    style={{"fill": "var(--primary)"}}
-                                >
-                                    changes requested · loops on purpose
-                                </text>
-                            </svg>
-                        </div>
-                        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
-                            <span className="font-semibold text-foreground">
-                                You draw this once.
-                            </span>{" "}
-                            Name the steps your team actually uses and connect them the way work actually moves, loops included. The board's columns are these steps, so the two can never disagree.
-                        </p>
-                    </div>
-                }}
-                {if tab == "board" {
-                    <div key="board" className="animate-in fade-in mt-6 duration-300">
-                        <div
-                            className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6"
-                        >
-                            <div className="grid grid-cols-3 gap-2.5">
-                                {for lane in BOARD_LANES {
-                                    <div
-                                        key={lane["name"]}
-                                        className="relative flex min-h-36 flex-col gap-2 rounded-xl border bg-muted/40 p-2 pt-2.5"
-                                    >
-                                        <span
-                                            className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full "
-                                                + lane["color"]}
-                                        />
-                                        <div
-                                            className="flex items-center justify-between px-1 text-[11px] font-semibold"
-                                        >
-                                            <span className="flex items-center gap-1.5">
-                                                <span
-                                                    className={"h-1.5 w-1.5 rounded-full "
-                                                        + lane["color"]}
-                                                />
-                                                {lane["name"]}
-                                            </span>
-                                            <span
-                                                className="rounded-full bg-muted px-1.5 tabular-nums text-muted-foreground"
-                                            >
-                                                {len(lane["cards"])}
-                                            </span>
-                                        </div>
-                                        {for c in lane["cards"] {
-                                            <div
-                                                key={c["title"]}
-                                                className={"rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 "
-                                                    + lane["bar"]}
-                                            >
-                                                <div
-                                                    className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground"
-                                                >
-                                                    <span
-                                                        className={"h-1 w-1 rounded-full "
-                                                            + c["dot"]}
-                                                    />
-                                                    {c["project"]}
-                                                </div>
-                                                <div
-                                                    className={"mt-0.5 text-[11px] font-medium leading-snug "
-                                                        + (
-                                                            "text-muted-foreground line-through decoration-foreground/30"
-                                                                if lane["name"]
-                                                                    == "Done"
-                                                                else ""
-                                                        )}
-                                                >
-                                                    {c["title"]}
-                                                </div>
-                                                <div
-                                                    className="mt-1.5 flex items-center gap-1.5"
-                                                >
-                                                    <AvatarStack
-                                                        names={c["who"]}
-                                                        max={2}
-                                                    />
-                                                    <span
-                                                        className="rounded-full border px-1.5 text-[9px] font-medium"
-                                                    >
-                                                        {c["chip"]}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        }}
-                                    </div>
-                                }}
-                            </div>
-                        </div>
-                        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
-                            <span className="font-semibold text-foreground">
-                                Your steps become the columns.
-                            </span>{" "}
-                            Drag a card between them, and filter the board by project or assignee. Try it yourself in the hero above.
-                        </p>
-                    </div>
-                }}
-                {if tab == "log" {
-                    <div key="log" className="animate-in fade-in mt-6 duration-300">
-                        <div
-                            className="rounded-2xl border bg-card px-4 py-2 shadow-sm sm:px-6"
-                        >
-                            <div
-                                className="border-b py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
-                            >
-                                Mon · Aug 24
-                            </div>
-                            {for (i, r) in enumerate(LOG_ROWS) {
-                                <div
-                                    key={r["who"]}
-                                    className={"flex items-center gap-3 py-3 "
-                                        + ("border-b" if i < len(LOG_ROWS) - 1 else "")}
-                                >
-                                    <Avatar name={r["who"]} size="sm"/>
-                                    <div className="min-w-0 flex-1">
-                                        <div
-                                            className="flex flex-wrap items-center gap-2 text-xs font-semibold"
-                                        >
-                                            {r["who"]}
-                                            <span
-                                                className="text-[10px] font-medium text-muted-foreground"
-                                            >
-                                                {r["project"]}
-                                            </span>
-                                        </div>
-                                        <div
-                                            className="mt-0.5 truncate text-xs text-muted-foreground"
-                                        >
-                                            {r["what"]}
-                                        </div>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-1.5">
-                                        <span
-                                            className={"rounded-full px-2 py-0.5 text-[9.5px] font-bold "
-                                                + STATUS_TINT[r["status"]]}
-                                        >
-                                            {r["status"]}
-                                        </span>
-                                        {if r["link"] {
-                                            <span
-                                                key="link"
-                                                className="rounded-md border px-1.5 py-0.5 text-[9.5px] font-medium text-muted-foreground"
-                                            >
-                                                {r["link"]}
-                                            </span>
-                                        }}
-                                    </div>
-                                </div>
-                            }}
-                        </div>
-                        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
-                            <span className="font-semibold text-foreground">
-                                One line per person per weekday.
-                            </span>{" "}
-                            The work, the project, the status and the links. The week view is the summary you used to hold a meeting for, and unlike the meeting, it is still there next month.
-                        </p>
-                    </div>
-                }}
+                    <LogLedger/>
+                </TourRow>
             </div>
         </section>;
 }

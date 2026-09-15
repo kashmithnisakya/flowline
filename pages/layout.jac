@@ -1,20 +1,25 @@
-"""flowline - root layout. App pages get the nav, an account menu (org name,
-settings, theme, log out) and the ⌘K palette; public pages render bare (the
-landing brings its own header). The header is sticky with a blur; below md
-the six links collapse into a dropdown menu.
-"""
+"""flowline - root layout. App pages get a grouped top bar (the setup group
+folds into More below 1024px), the ⌘K palette, Ask (a docked column at 1280px
+and up, a sheet below) and, on phones, a header over a bottom tab bar. /setup
+gets the mark and Sign out only."""
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from "react" { useEffect }
-import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
-import from ..components.ui.button { Button }
 import from ..components.common.Avatar { Avatar }
-import from ..components.common.CommandPalette { CommandPalette }
+import from ..components.common.KindGlyph { KindGlyph }
+import from ..components.common.glyphs { WarnIcon }
+import from ..components.common.CommandPalette {
+    CommandPalette,
+    PageIcon,
+    NAV_PAGES,
+    modKey
+}
 # Note: the wrapper lives in toaster.jac, not sonner.jac, a module named
 # `sonner` makes the compiler resolve the npm import "sonner" to ITSELF,
 # producing a self-rendering Toaster and an infinite React mount loop.
 import from ..components.ui.toaster { Toaster }
+import from ..components.ui.sheet { Sheet, SheetContent, SheetHeader, SheetTitle }
 import from ..components.ui.dropdown_menu {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -22,6 +27,9 @@ import from ..components.ui.dropdown_menu {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubTrigger,
+    DropdownMenuSubContent,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem
 }
@@ -33,322 +41,715 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
          {"value": "dark", "label": "Dark"},
          {"value": "system", "label": "System"}
      ],
-     NAV_ITEMS: list[dict[str, str]] = [
-         {"to": "/flowlines", "label": "Flow line"},
-         {"to": "/board", "label": "Board"},
-         {"to": "/tasks", "label": "Tasks"},
-         {"to": "/roadmap", "label": "Roadmap"},
-         {"to": "/overview", "label": "Overview"},
-         {"to": "/log", "label": "Log"},
-         {"to": "/github", "label": "GitHub"},
-         {"to": "/workspace", "label": "Workspace"}
-     ];
+     TAB_KEYS: list[str] = ["board", "tasks", "log", "overview"],
+     # Titles for the phone header on pages the nav does not list.
+     EXTRA_TITLES: dict[str, str] = {"/settings": "Preferences", "/setup": "Setup"},
+     # Sonner places toasts this far above a phone's tab bar.
+     TAB_CLEAR: str = "calc(4.5rem + env(safe-area-inset-bottom))";
 
-# Settings lives in the account menu on the right, next to the theme toggle
-# and the palette button; the text row is pages only.
+# The brand mark drawn inline in currentColor: a start node, a bend, an end node.
+def Mark(size: int = 20, className: str = "") -> JsxElement {
+    return
+        <svg
+            className={"shrink-0 text-mark " + className}
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+        >
+            <circle cx={5} cy={17} r={3} stroke="currentColor" strokeWidth={2.2}/>
+            <path
+                d="M8 17h3.5a3 3 0 0 0 3-3v-4a3 3 0 0 1 1.5-2.6"
+                stroke="currentColor"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+            />
+            <circle cx={19} cy={7} r={3} fill="currentColor"/>
+        </svg>;
+}
+
+# The account menu behind the avatar: who is signed in, workspace settings,
+# preferences, a theme submenu and Sign out.
+def AccountMenu(
+    orgName: str,
+    account: str,
+    themeChoice: str,
+    onTheme: Callable[[str], None],
+    onSignOut: Callable[[], None]
+) -> JsxElement {
+    themeLabel = "System";
+    for c in THEME_CHOICES {
+        if c["value"] == themeChoice {
+            themeLabel = c["label"];
+        }
+    }
+    return
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild={True}>
+                <button
+                    type="button"
+                    aria-label="Account menu"
+                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-accent sm:size-8"
+                >
+                    {if orgName {
+                        <Avatar key="av" name={orgName} size="sm"/>
+                    } else {
+                        <span
+                            key="blank"
+                            className="size-6 rounded-full border border-input bg-muted"
+                        />
+                    } }
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className="w-64">
+                <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5">
+                    <span className="truncate text-sm font-semibold text-foreground">
+                        {orgName or "Your workspace"}
+                    </span>
+                    {if account {
+                        <span
+                            key="who"
+                            className="truncate text-xs font-normal text-muted-foreground"
+                        >
+                            {account}
+                        </span>
+                    }}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator/>
+                <DropdownMenuItem asChild={True}>
+                    <Link to="/workspace" className="gap-2 px-2 py-1.5">
+                        <PageIcon name="workspace" className="text-muted-foreground"/>
+                        Workspace settings
+                    </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild={True}>
+                    <Link to="/workspace?tab=preferences" className="gap-2 px-2 py-1.5">
+                        <PageIcon name="preferences" className="text-muted-foreground"/>
+                        Preferences
+                    </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="gap-2 px-2 py-1.5">
+                        <PageIcon name="theme" className="text-muted-foreground"/>
+                        Theme
+                        <span className="ml-auto text-xs text-muted-foreground">
+                            {themeLabel}
+                        </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-36">
+                        <DropdownMenuRadioGroup
+                            value={themeChoice}
+                            onValueChange={onTheme}
+                        >
+                            {for choice in THEME_CHOICES {
+                                <DropdownMenuRadioItem
+                                    key={choice["value"]}
+                                    value={choice["value"]}
+                                    className="px-2 py-1.5"
+                                >
+                                    {choice["label"]}
+                                </DropdownMenuRadioItem>
+                            }}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator/>
+                <DropdownMenuItem
+                    className="gap-2 px-2 py-1.5"
+                    onSelect={lambda { onSignOut(); }}
+                >
+                    <PageIcon name="signout" className="text-muted-foreground"/>
+                    Sign out
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>;
+}
+
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
         orgName: str = "",
-        # Mirrors the html.dark class for the toggle icon. Read after
-        # applyTheme so "system" resolves to what is actually showing.
-        themeDark: bool = False,
+        # The signed-in email (or login) for the account menu.
+        account: str = "",
         # Not `themePref`: its generated setter would shadow the imported
         # setThemePref, silently breaking the toggle (issue #131).
         themeChoice: str = "system",
-        paletteOpen: bool = False;
+        paletteOpen: bool = False,
+        askOpen: bool = False,
+        moreOpen: bool = False,
+        # Viewport bands: Ask docks at 1280px and up; the tab bar is below 640px.
+        wide: bool = False,
+        narrow: bool = False,
+        prevPath: Ref[any] = Ref();
 
     async can with entry {
         applyTheme(getThemePref());
         watchTheme();
-        doc: any = document;
-        themeDark = bool(doc.documentElement.classList.contains("dark"));
         themeChoice = getThemePref();
+        w: any = window;
+        wide = bool(w.matchMedia("(min-width: 1280px)").matches);
+        narrow = not bool(w.matchMedia("(min-width: 640px)").matches);
         isIn = jacIsLoggedIn();
         loggedIn = isIn;
         if isIn {
-            loadOrg();
+            loadMe();
         }
     }
 
-    # ⌘K / Ctrl+K anywhere in the app opens the palette.
+    # ⌘K / Ctrl+K opens the palette and ⌘/ / Ctrl+/ toggles Ask, on app pages
+    # other than the setup wizard (Ctrl+J is Chrome's downloads on Windows).
     useEffect(
         lambda {
-            onKey = lambda (e: any) { if (e.metaKey or e.ctrlKey)
-                and str(e.key).lower() == "k" {
-                e.preventDefault();
-                paletteOpen = True;
-            }};
+            onKey = lambda (e: any) {
+                path = str(window.location.pathname);
+                live = jacIsLoggedIn()
+                    and path not in PUBLIC_PATHS
+                    and path != "/setup";
+                if live and (e.metaKey or e.ctrlKey) {
+                    key = str(e.key).lower();
+                    if key == "k" {
+                        e.preventDefault();
+                        paletteOpen = True;
+                    } elif key == "/" or e.code == "Slash" {
+                        e.preventDefault();
+                        askOpen = not askOpen;
+                    }
+                }
+            };
             window.addEventListener("keydown", onKey);
             return lambda { window.removeEventListener("keydown", onKey); };
         },
         []
     );
 
-    async def loadOrg -> None;
+    # Window events and viewport bands: the workspace rename (C3), a theme
+    # change made elsewhere, the palette's Ask action, and the two breakpoints.
+    useEffect(
+        lambda {
+            w: any = window;
+            onRenamed = lambda (e: any) {
+                name = str(e.detail.name or "") if e.detail else "";
+                if name {
+                    orgName = name;
+                }
+            };
+            onTheme = lambda (e: any) { themeChoice = getThemePref(); };
+            onAsk = lambda (e: any) { askOpen = True; };
+            wideQ: any = w.matchMedia("(min-width: 1280px)");
+            smQ: any = w.matchMedia("(min-width: 640px)");
+            onWide = lambda (e: any) { wide = bool(e.matches); };
+            onSm = lambda (e: any) { narrow = not bool(e.matches); };
+            w.addEventListener("flowline:org-renamed", onRenamed);
+            w.addEventListener("flowline:theme", onTheme);
+            w.addEventListener("flowline:ask", onAsk);
+            wideQ.addEventListener("change", onWide);
+            smQ.addEventListener("change", onSm);
+            return lambda {
+                w.removeEventListener("flowline:org-renamed", onRenamed);
+                w.removeEventListener("flowline:theme", onTheme);
+                w.removeEventListener("flowline:ask", onAsk);
+                wideQ.removeEventListener("change", onWide);
+                smQ.removeEventListener("change", onSm);
+            };
+        },
+        []
+    );
+
+    async def loadMe -> None;
     def logout -> None;
-    def toggleTheme -> None;
     def pickTheme(pref: str) -> None;
 
     location = useLocation();
-    chrome = loggedIn and location.pathname not in PUBLIC_PATHS;
-    # The wizard has nothing to link to yet: every page would be empty.
-    navItems: list[dict[str, str]] = [] if location.pathname == "/setup" else NAV_ITEMS;
+    path = str(location.pathname);
 
-    def navClass(path: str) -> str {
-        base = "rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 ";
-        if location.pathname == path {
-            return base + "bg-primary/10 text-primary";
-        }
-        return base + "text-muted-foreground hover:bg-accent hover:text-foreground";
+    # A route change closes the More sheet; leaving /setup rereads the name
+    # the wizard just saved.
+    useEffect(
+        lambda {
+            moreOpen = False;
+            if prevPath.current == "/setup" and path != "/setup" {
+                loadMe();
+            }
+            prevPath.current = path;
+        },
+        [path]
+    );
+
+    chrome = loggedIn and path not in PUBLIC_PATHS;
+    setup = path == "/setup";
+    mod = modKey();
+
+    def isActive(to: str) -> bool {
+        return path == to or path.startswith(to + "/");
     }
+
+    def linkClass(to: str, quiet: bool) -> str {
+        size = "text-[13px] " if quiet else "text-[13.5px] ";
+        base = "inline-flex h-8 shrink-0 items-center whitespace-nowrap px-2.5 transition-colors ";
+        if isActive(to) {
+            return base
+                + size
+                + "font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]";
+        }
+        return base
+            + size
+            + "rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
+    }
+
+    daily = [
+        p
+        for p in NAV_PAGES
+        if p["group"] == "daily"
+    ];
+    setupPages = [
+        p
+        for p in NAV_PAGES
+        if p["group"] == "setup"
+    ];
+    tabs = [
+        p
+        for p in NAV_PAGES
+        if p["key"] in TAB_KEYS
+    ];
+    morePages = [
+        p
+        for p in NAV_PAGES
+        if p["key"] not in TAB_KEYS
+    ];
+    setupActive = False;
+    for p in setupPages {
+        if isActive(p["to"]) {
+            setupActive = True;
+        }
+    }
+    moreActive = False;
+    title = EXTRA_TITLES[path] if path in EXTRA_TITLES else "";
+    for p in morePages {
+        if isActive(p["to"]) {
+            moreActive = True;
+        }
+    }
+    for p in NAV_PAGES {
+        if isActive(p["to"]) {
+            title = p["label"];
+        }
+    }
+
+    dockOpen = askOpen and wide and chrome and not setup;
+    tabBar = chrome and not setup;
+    # Toasts sit bottom right, left of the docked column. While the Ask sheet is
+    # open they move to the top, off its composer (top left beside a side sheet).
+    sheetOpen = askOpen and not wide and tabBar;
+    toastPosition = ("top-center" if narrow else "top-left")
+        if sheetOpen
+        else "bottom-right";
+    toastOffset: dict[str, str] = {
+        "top": "24px",
+        "left": "24px",
+        "right": "376px" if dockOpen else "24px",
+        "bottom": TAB_CLEAR if narrow and tabBar else "24px"
+    };
+    toastMobile: dict[str, str] = {
+        "top": "calc(12px + env(safe-area-inset-top))",
+        "bottom": TAB_CLEAR if tabBar else "16px"
+    };
+    toastIcons: dict[str, any] = {
+        "success": <KindGlyph kind="done" size={16} className="text-success"/>,
+        "error": <KindGlyph kind="blocked" size={16} className="text-destructive"/>,
+        "warning": <WarnIcon size={16} className="text-warning"/>
+    };
+    toastOptions: dict[str, any] = {
+        "classNames": {
+            "toast": "rounded-xl! border-border! font-sans! text-[13.5px]! shadow-xl!",
+            "title": "font-medium!",
+            "description": "text-muted-foreground!",
+            "error": "border-l-2! border-l-destructive!"
+        }
+    };
 
     return
         <div className="min-h-screen bg-background text-foreground">
-            {if chrome {
+            {if chrome and setup {
                 <header
-                    key="nav"
-                    className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
+                    key="setupbar"
+                    className="sticky top-0 z-40 h-12 border-b bg-card"
                 >
+                    <div className="flex h-full items-center gap-2 px-4 sm:px-6">
+                        <Mark/>
+                        <span
+                            className="min-w-0 truncate text-sm font-bold [font-stretch:108%]"
+                        >
+                            {orgName or "flowline"}
+                        </span>
+                        <button
+                            type="button"
+                            className="ml-auto inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            onClick={logout}
+                        >
+                            <PageIcon name="signout"/>
+                            Sign out
+                        </button>
+                    </div>
+                </header>
+            } elif chrome {
+                <header key="nav" className="sticky top-0 z-40 h-12 border-b bg-card">
                     <nav
-                        className="flex h-14 w-full items-center gap-1 px-4 sm:px-6 lg:px-10"
+                        aria-label="Pages"
+                        className="hidden h-full items-center gap-0.5 px-4 sm:flex lg:px-5"
                     >
                         <Link
                             to="/board"
-                            className="mr-3 flex shrink-0 items-center gap-2"
+                            className="mr-2 flex min-w-6 shrink items-center gap-2 rounded-md py-1 pr-1 lg:mr-3"
+                            aria-label={(orgName or "flowline") + " home"}
                         >
-                            <img
-                                src="/static/brand/logo-mark.svg"
-                                alt=""
-                                width={28}
-                                height={28}
-                            />
+                            <Mark/>
                             <span
-                                className="font-display text-xl font-bold tracking-tight"
+                                className="hidden min-w-0 max-w-[11rem] truncate text-sm font-bold [font-stretch:108%] lg:inline xl:max-w-[16rem]"
                             >
-                                flowline
-                                <span className="text-primary ml-0.5">.</span>
+                                {orgName or "flowline"}
                             </span>
                         </Link>
-                        <div className="hidden items-center gap-1 md:flex">
-                            {for item in navItems {
+                        {for p in daily {
+                            <Link
+                                key={p["key"]}
+                                to={p["to"]}
+                                aria-current={"page" if isActive(p["to"]) else None}
+                                className={linkClass(p["to"], False)}
+                            >
+                                {p["label"]}
+                            </Link>
+                        }}
+                        <span
+                            aria-hidden="true"
+                            className="mx-2 hidden h-5 w-px shrink-0 bg-border lg:block"
+                        />
+                        <div className="hidden items-center gap-0.5 lg:flex">
+                            {for p in setupPages {
                                 <Link
-                                    key={item["to"]}
-                                    to={item["to"]}
-                                    className={navClass(item["to"])}
+                                    key={p["key"]}
+                                    to={p["to"]}
+                                    aria-current={"page" if isActive(p["to"]) else None}
+                                    className={linkClass(p["to"], True)}
                                 >
-                                    {item["label"]}
+                                    {p["label"]}
                                 </Link>
                             }}
                         </div>
-                        <div className="ml-auto flex items-center gap-1 sm:gap-2">
-                            <button
-                                type="button"
-                                aria-label="Open command palette"
-                                title="Command palette (⌘K)"
-                                className="inline-flex items-center gap-2 rounded-full p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground sm:rounded-lg sm:border sm:border-border/70 sm:bg-card sm:py-1 sm:pr-1.5 sm:pl-2.5"
-                                onClick={lambda { paletteOpen = True; }}
-                            >
-                                <svg
-                                    width={16}
-                                    height={16}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden="true"
-                                >
-                                    <circle cx={11} cy={11} r={8}/>
-                                    <path d="m21 21-4.3-4.3"/>
-                                </svg>
-                                <kbd
-                                    className="hidden rounded border border-border bg-muted px-1 font-mono text-[10px] sm:inline"
-                                >
-                                    ⌘K
-                                </kbd>
-                            </button>
-                            <button
-                                type="button"
-                                aria-label={"Switch to light mode"
-                                    if themeDark
-                                    else "Switch to dark mode"}
-                                title={"Switch to light mode"
-                                    if themeDark
-                                    else "Switch to dark mode"}
-                                className="rounded-full p-2 text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
-                                onClick={toggleTheme}
-                            >
-                                {if themeDark {
-                                    <svg
-                                        key="sun"
-                                        width={16}
-                                        height={16}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <circle cx={12} cy={12} r={4}/>
-                                        <path d="M12 2v2"/>
-                                        <path d="M12 20v2"/>
-                                        <path d="m4.93 4.93 1.41 1.41"/>
-                                        <path d="m17.66 17.66 1.41 1.41"/>
-                                        <path d="M2 12h2"/>
-                                        <path d="M20 12h2"/>
-                                        <path d="m6.34 17.66-1.41 1.41"/>
-                                        <path d="m19.07 4.93-1.41 1.41"/>
-                                    </svg>
-                                } else {
-                                    <svg
-                                        key="moon"
-                                        width={16}
-                                        height={16}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-                                    </svg>
-                                } }
-                            </button>
+                        <div className="lg:hidden">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild={True}>
                                     <button
                                         type="button"
-                                        aria-label="Account menu"
-                                        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card py-0.5 pr-2 pl-0.5 text-xs font-medium text-foreground transition-colors duration-200 hover:bg-accent"
+                                        className={"inline-flex h-8 items-center gap-1 whitespace-nowrap px-2.5 text-[13px] transition-colors "
+                                            + (
+                                                "font-semibold text-foreground shadow-[inset_0_-2px_0_var(--primary)]"
+                                                    if setupActive
+                                                    else "rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                                            )}
                                     >
-                                        <Avatar name={orgName or "flowline"} size="sm"/>
-                                        <span
-                                            className="hidden max-w-40 truncate sm:inline"
-                                        >
-                                            {orgName or "Account"}
-                                        </span>
-                                        <svg
-                                            width={12}
-                                            height={12}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            className="text-muted-foreground"
-                                            aria-hidden="true"
-                                        >
-                                            <path d="m6 9 6 6 6-6"/>
-                                        </svg>
+                                        More
+                                        <PageIcon name="chevron" size={14}/>
                                     </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuLabel
-                                        className="flex flex-col gap-0.5"
-                                    >
-                                        <span
-                                            className="truncate text-sm font-semibold"
-                                        >
-                                            {orgName or "Your workspace"}
-                                        </span>
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuSeparator/>
-                                    <DropdownMenuItem asChild={True}>
-                                        <Link to="/settings">Settings</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild={True}>
-                                        <Link to="/workspace">Workspace</Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator/>
-                                    <DropdownMenuLabel
-                                        className="text-xs font-medium text-muted-foreground"
-                                    >
-                                        Theme
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuRadioGroup
-                                        value={themeChoice}
-                                        onValueChange={pickTheme}
-                                    >
-                                        {for choice in THEME_CHOICES {
-                                            <DropdownMenuRadioItem
-                                                key={choice["value"]}
-                                                value={choice["value"]}
+                                <DropdownMenuContent align="start" className="w-48">
+                                    {for p in setupPages {
+                                        <DropdownMenuItem key={p["key"]} asChild={True}>
+                                            <Link
+                                                to={p["to"]}
+                                                aria-current={"page"
+                                                    if isActive(p["to"])
+                                                    else None}
+                                                className={"gap-2 px-2 py-1.5 "
+                                                    + (
+                                                        "font-semibold"
+                                                            if isActive(p["to"])
+                                                            else ""
+                                                    )}
                                             >
-                                                {choice["label"]}
-                                            </DropdownMenuRadioItem>
-                                        }}
-                                    </DropdownMenuRadioGroup>
-                                    <DropdownMenuSeparator/>
-                                    <DropdownMenuItem
-                                        variant="destructive"
-                                        onSelect={lambda { logout(); }}
-                                    >
-                                        Log out
-                                    </DropdownMenuItem>
+                                                <PageIcon
+                                                    name={p["key"]}
+                                                    className="text-muted-foreground"
+                                                />
+                                                {p["label"]}
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    }}
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <div className="md:hidden">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild={True}>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            aria-label="Open navigation"
-                                        >
-                                            <svg
-                                                width={18}
-                                                height={18}
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                strokeLinecap="round"
-                                            >
-                                                <path d="M4 6h16"/>
-                                                <path d="M4 12h16"/>
-                                                <path d="M4 18h16"/>
-                                            </svg>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
-                                        {for item in NAV_ITEMS {
-                                            <DropdownMenuItem
-                                                key={item["to"]}
-                                                asChild={True}
-                                            >
-                                                <Link to={item["to"]}>
-                                                    {item["label"]}
-                                                </Link>
-                                            </DropdownMenuItem>
-                                        }}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
+                        </div>
+                        <div
+                            className="ml-auto flex shrink-0 items-center gap-1.5 pl-3"
+                        >
+                            <button
+                                type="button"
+                                aria-label="Search or jump"
+                                title={"Search or jump (" + mod + "K)"}
+                                className="inline-flex h-[30px] items-center gap-2 rounded-md border bg-background px-2 text-[13px] text-subtle transition-colors hover:bg-accent hover:text-foreground"
+                                onClick={lambda { paletteOpen = True; }}
+                            >
+                                <PageIcon name="search"/>
+                                <span className="kbd hidden md:inline-flex">
+                                    {mod + "K"}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                data-ask-trigger="true"
+                                aria-pressed={askOpen}
+                                title={"Ask about this workspace (" + mod + "/)"}
+                                className={"inline-flex h-[30px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-accent hover:text-foreground "
+                                    + (
+                                        "bg-accent text-foreground"
+                                            if askOpen
+                                            else "text-muted-foreground"
+                                    )}
+                                onClick={lambda { askOpen = not askOpen; }}
+                            >
+                                <PageIcon name="ask"/>
+                                Ask
+                                <span className="kbd hidden xl:inline-flex">
+                                    {mod + "/"}
+                                </span>
+                            </button>
+                            <AccountMenu
+                                orgName={orgName}
+                                account={account}
+                                themeChoice={themeChoice}
+                                onTheme={pickTheme}
+                                onSignOut={logout}
+                            />
                         </div>
                     </nav>
+                    <div className="flex h-full items-center gap-2 pr-2 pl-4 sm:hidden">
+                        <Link
+                            to="/board"
+                            aria-label={(orgName or "flowline") + " home"}
+                            className="-m-1 rounded-md p-1"
+                        >
+                            <Mark/>
+                        </Link>
+                        <span
+                            className="min-w-0 truncate text-[15px] font-bold [font-stretch:108%]"
+                        >
+                            {title}
+                        </span>
+                        <button
+                            type="button"
+                            aria-label="Search or jump"
+                            className="ml-auto inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            onClick={lambda { paletteOpen = True; }}
+                        >
+                            <PageIcon name="search" size={18}/>
+                        </button>
+                        <AccountMenu
+                            orgName={orgName}
+                            account={account}
+                            themeChoice={themeChoice}
+                            onTheme={pickTheme}
+                            onSignOut={logout}
+                        />
+                    </div>
                 </header>
-            }}
+            } }
             {if chrome {
-                <main key="app" className="w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-                    <Outlet/>
-                </main>
+                <div key="app" className="flex w-full items-start">
+                    <main
+                        className={"min-w-0 flex-1 px-4 pt-6 sm:px-6 sm:pb-6 lg:px-10 lg:pt-8 lg:pb-8 "
+                            + (
+                                "pb-6"
+                                    if setup
+                                    else "pb-[calc(5rem+env(safe-area-inset-bottom))]"
+                            )}
+                    >
+                        <Outlet/>
+                    </main>
+                    {if not setup {
+                        <AssistantDock
+                            key="assistant"
+                            open={askOpen}
+                            onOpenChange={lambda (o: bool) { askOpen = o; }}
+                            docked={wide}
+                            narrow={narrow}
+                        />
+                    }}
+                </div>
             } else {
                 <Outlet key="bare"/>
             } }
-            {if chrome {
-                <AssistantDock key="assistant"/>
+            {if tabBar {
+                <nav
+                    key="tabs"
+                    aria-label="Pages"
+                    className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] sm:hidden"
+                >
+                    {for p in tabs {
+                        <Link
+                            key={p["key"]}
+                            to={p["to"]}
+                            aria-current={"page" if isActive(p["to"]) else None}
+                            className={"flex h-14 flex-col items-center justify-center gap-1 text-xs "
+                                + (
+                                    "font-semibold text-primary"
+                                        if isActive(p["to"])
+                                        else "font-medium text-muted-foreground"
+                                )}
+                        >
+                            <PageIcon name={p["key"]} size={20}/>
+                            {p["label"]}
+                        </Link>
+                    }}
+                    <button
+                        type="button"
+                        aria-haspopup="dialog"
+                        aria-expanded={moreOpen}
+                        className={"flex h-14 flex-col items-center justify-center gap-1 text-xs "
+                            + (
+                                "font-semibold text-primary"
+                                    if moreActive
+                                    else "font-medium text-muted-foreground"
+                            )}
+                        onClick={lambda { moreOpen = True; }}
+                    >
+                        <PageIcon name="more" size={20}/>
+                        More
+                    </button>
+                </nav>
             }}
-            {if chrome {
+            {if tabBar {
+                <Sheet
+                    key="more"
+                    open={moreOpen}
+                    onOpenChange={lambda (o: bool) { moreOpen = o; }}
+                >
+                    <SheetContent
+                        side="bottom"
+                        className="max-h-[88dvh] gap-0 overflow-y-auto rounded-t-xl p-0 pb-[env(safe-area-inset-bottom)]"
+                    >
+                        <SheetHeader className="px-4 pt-4 pb-2">
+                            <SheetTitle className="text-[15px] font-semibold">
+                                More
+                            </SheetTitle>
+                        </SheetHeader>
+                        <div className="grid px-2 pb-2">
+                            {for p in morePages {
+                                <Link
+                                    key={p["key"]}
+                                    to={p["to"]}
+                                    aria-current={"page" if isActive(p["to"]) else None}
+                                    onClick={lambda { moreOpen = False; }}
+                                    className={"flex h-12 items-center gap-3 rounded-md px-3 text-[15px] "
+                                        + (
+                                            "bg-accent font-semibold text-foreground"
+                                                if isActive(p["to"])
+                                                else "text-foreground"
+                                        )}
+                                >
+                                    <PageIcon
+                                        name={p["key"]}
+                                        size={18}
+                                        className="text-muted-foreground"
+                                    />
+                                    {p["label"]}
+                                </Link>
+                            }}
+                            <button
+                                type="button"
+                                className="flex h-12 items-center gap-3 rounded-md px-3 text-left text-[15px] text-foreground"
+                                onClick={lambda {
+                                    moreOpen = False;
+                                    askOpen = True;
+                                }}
+                            >
+                                <PageIcon
+                                    name="ask"
+                                    size={18}
+                                    className="text-muted-foreground"
+                                />
+                                Ask about this workspace
+                            </button>
+                        </div>
+                        <div
+                            className="flex items-center justify-between gap-3 border-t px-5 py-3"
+                        >
+                            <span className="text-sm text-muted-foreground">Theme</span>
+                            <div
+                                className="inline-flex rounded-md bg-muted p-0.5"
+                                role="group"
+                                aria-label="Theme"
+                            >
+                                {for choice in THEME_CHOICES {
+                                    <button
+                                        key={choice["value"]}
+                                        type="button"
+                                        aria-pressed={themeChoice == choice["value"]}
+                                        onClick={lambda { pickTheme(choice["value"]); }}
+                                        className={"h-8 rounded-sm border px-3 text-[13px] "
+                                            + (
+                                                "bg-card font-semibold text-foreground"
+                                                    if themeChoice == choice["value"]
+                                                    else "border-transparent font-medium text-muted-foreground"
+                                            )}
+                                    >
+                                        {choice["label"]}
+                                    </button>
+                                }}
+                            </div>
+                        </div>
+                        <div className="grid border-t px-2 py-2">
+                            <div className="px-3 py-2">
+                                <div className="truncate text-sm font-semibold">
+                                    {orgName or "Your workspace"}
+                                </div>
+                                {if account {
+                                    <div
+                                        key="who"
+                                        className="truncate text-xs text-muted-foreground"
+                                    >
+                                        {account}
+                                    </div>
+                                }}
+                            </div>
+                            <Link
+                                to="/workspace?tab=preferences"
+                                onClick={lambda { moreOpen = False; }}
+                                className="flex h-12 items-center gap-3 rounded-md px-3 text-[15px]"
+                            >
+                                <PageIcon
+                                    name="preferences"
+                                    size={18}
+                                    className="text-muted-foreground"
+                                />
+                                Preferences
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={logout}
+                                className="flex h-12 items-center gap-3 rounded-md px-3 text-left text-[15px]"
+                            >
+                                <PageIcon
+                                    name="signout"
+                                    size={18}
+                                    className="text-muted-foreground"
+                                />
+                                Sign out
+                            </button>
+                        </div>
+                    </SheetContent>
+                </Sheet>
+            }}
+            {if chrome and not setup {
                 <CommandPalette
                     key="palette"
                     open={paletteOpen}
                     onOpenChange={lambda (o: bool) { paletteOpen = o; }}
                 />
             }}
-            <Toaster/>
+            <Toaster
+                position={toastPosition}
+                offset={toastOffset}
+                mobileOffset={toastMobile}
+                icons={toastIcons}
+                toastOptions={toastOptions}
+            />
         </div>;
 }
