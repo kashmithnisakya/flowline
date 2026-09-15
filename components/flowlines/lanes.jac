@@ -1,40 +1,54 @@
 """Computed swimlane layout for the flow line viewer. Nothing is persisted: lane
 = owner role, column = longest forward path (send-backs ignored, which makes
 loops terminate), so it recomputes from live data and cannot drift. Wires are
-elbows in the column gaps; cards are shorter because the owner line is gone."""
+elbows in the column gaps, drawn in screen px from the canvas's node rects."""
 
 import from ...models { StepView, RoleView, MemberView }
-import from .geometry { NODE_W }
+import from .geometry { NODE_W, polySamples }
 
-# Label gutter on the left, column pitch, lane breathing room and the
-# compact card height. Canvas px, the same space the designer draws in.
+# Label gutter on the left, column pitch, lane breathing room and the card
+# footprint height, in canvas px. The viewer draws the gutter at a fixed
+# screen width instead (LANE_LABEL_W), so lane labels never shrink.
 glob LANE_GUTTER: float = 176.0,
      LANE_COL_W: float = 208.0,
      LANE_PAD: float = 16.0,
      LANE_ROW_GAP: float = 14.0,
-     LANE_NODE_H: float = 64.0,
+     LANE_NODE_H: float = 72.0,
+     LANE_LABEL_W: float = 184.0,
      # Fan spacing for ports sharing a card side, and the part of the gap
-     # trunks may occupy (the rest keeps them off the card borders).
-     PORT_STEP: float = 12.0,
+     # trunks may occupy (the rest keeps them off the card borders). Screen px.
+     PORT_STEP: float = 10.0,
      TRUNK_INSET: float = 6.0,
-     # How far the viewer may scale the lane view up. The layout is generated
-     # to fill the box, so it goes as far as the canvas clamp allows rather
-     # than sitting small in the middle of a wide screen. Shared with the
-     # page's fit, and with the growth target below, so the two agree.
-     LANE_ZOOM_CAP: float = 2.0;
+     # How far the viewer's fit may scale the lane view up, shared with the
+     # growth target below so the bands and the fit agree.
+     LANE_ZOOM_CAP: float = 1.25;
 
 
-# `boxW`/`boxH` are the fit's inner box in screen px (viewport minus its
-# margin), 0 when nothing has been measured yet. The lane view is width-bound
-# on any normal screen, so the spare height is dead canvas: the bands grow
-# into it and the card rows centre inside them. At this target the fit's two
-# axes tie, so the zoom, and the card size with it, does not change.
+# First names, "Kasun, Nina, Priya +1", for a lane label that has to fit.
+def shortHolders(names: list[str]) -> str {
+    firsts: list[str] = [];
+    for n in names {
+        parts = n.strip().split(" ");
+        if len(firsts) < 3 {
+            firsts.append(parts[0] if len(parts) > 0 else n);
+        }
+    }
+    extra = len(names) - len(firsts);
+    return ", ".join(firsts) + (" +" + str(extra) if extra > 0 else "");
+}
+
+
+# `boxW`/`boxH` are the fit's inner box in screen px, 0 when nothing has been
+# measured yet. The lane view is width-bound on any normal screen, so the bands
+# grow into the spare height. With `gutterPx` >= 0 the viewer draws the label
+# gutter at that fixed screen width, and the growth target accounts for it.
 def:pub laneLayout(
     steps: list[StepView],
     roles: list[RoleView],
     members: list[MemberView],
     boxW: float = 0.0,
-    boxH: float = 0.0
+    boxH: float = 0.0,
+    gutterPx: float = -1.0
 ) -> dict[str, any] {
     # Column = longest forward path. sort_order is a topological order for
     # forward edges by construction, so one relaxation pass in that order
@@ -47,7 +61,9 @@ def:pub laneLayout(
     for s in steps {
         depth[s.id] = 0;
     }
-    for s in steps {
+    ordered = [s for s in steps];
+    ordered.sort(key=lambda (st: StepView) { st.sort_order; });
+    for s in ordered {
         for nid in s.next_ids {
             if nid in sortOf and sortOf[nid] > s.sort_order {
                 deeper = depth[s.id] + 1;
@@ -61,7 +77,7 @@ def:pub laneLayout(
     # Role lookups: color and holders, for the lane labels.
     roleNames: list[str] = [];
     colorOf: dict[str, str] = {};
-    holdersOf: dict[str, str] = {};
+    holdersOf: dict[str, list[str]] = {};
     for r in roles {
         roleNames.append(r.name);
         colorOf[r.name] = r.color or "slate";
@@ -71,13 +87,12 @@ def:pub laneLayout(
                 held.append(m.name);
             }
         }
-        holdersOf[r.name] = ", ".join(held);
+        holdersOf[r.name] = held;
     }
 
-    # Lane order: role lanes follow the org's role order (the Roles tab's), so
-    # the picture agrees with the list. Owners that are not managed roles
-    # ("anyone", legacy free text) come first by first appearance, that being
-    # where work enters before it belongs to any role. Unowned last.
+    # Lane order: owners that are not managed roles ("anyone", legacy free
+    # text) first, where work enters; then the org's roles in the Roles
+    # tab's order; unowned last.
     seenOwners: list[str] = [];
     hasUnowned = False;
     for s in steps {
@@ -108,8 +123,7 @@ def:pub laneLayout(
     positions: dict[str, list[float]] = {};
     laneOf: dict[str, str] = {};
     # The grid behind the px: column and row slot per step, reported so a
-    # smaller rendering (the task dialog's) can lay the same grid out at its
-    # own size rather than inferring it back from the canvas positions.
+    # smaller rendering (the task dialog's) can lay the same grid out.
     slotOf: dict[str, int] = {};
     lanes: list[dict[str, any]] = [];
     maxCol = 0;
@@ -148,26 +162,38 @@ def:pub laneLayout(
         # The sub-line: holders for a role (warning tone when nobody), a
         # hint for the two synthetic lanes.
         sub = "";
+        short = "";
         warn = False;
         if key == "__unowned" {
-            sub = "set an owner in the designer";
+            sub = "Set an owner in the designer";
+            short = sub;
         } elif isRole {
-            if holdersOf[key] {
-                sub = holdersOf[key];
+            if len(holdersOf[key]) > 0 {
+                sub = ", ".join(holdersOf[key]);
+                short = shortHolders(holdersOf[key]);
             } else {
-                sub = "no one yet";
+                sub = "No one yet";
+                short = sub;
                 warn = True;
             }
         } elif key == "anyone" {
-            sub = "any role";
+            sub = "Any role";
+            short = sub;
+        }
+        label = key;
+        if key == "__unowned" {
+            label = "Unowned";
+        } elif key == "anyone" {
+            label = "Anyone";
         }
         stepNoun = " step" if len(mine) == 1 else " steps";
         taskNoun = " task" if taskTotal == 1 else " tasks";
         lanes.append(
             {
                 "key": key,
-                "label": "Unowned" if key == "__unowned" else key,
+                "label": label,
                 "sub": sub,
+                "short": short,
                 "warn": warn,
                 "totals": str(len(mine)) + stepNoun + " · " + str(taskTotal) + taskNoun,
                 "manage": isRole,
@@ -187,11 +213,14 @@ def:pub laneLayout(
         # The zoom the fit will land on, so the bands grow to exactly the
         # height that zoom draws into the box.
         z = boxW / contentW;
+        if gutterPx >= 0.0 {
+            z = (boxW - gutterPx) / (contentW - LANE_GUTTER);
+        }
         if z > LANE_ZOOM_CAP {
             z = LANE_ZOOM_CAP;
         }
         target = boxH / z;
-        if target > naturalH {
+        if z > 0.0 and target > naturalH {
             scale = target / naturalH;
         }
     }
@@ -225,70 +254,54 @@ def:pub laneLayout(
 }
 
 
-# Roughly how wide a label chip renders, in canvas px: the wording plus the
-# tag, the border and the padding. Only used to decide whether a chip fits on
-# its wire, so an estimate is enough.
-def chipWidth(said: str, carried: str) -> float {
-    return float(len(said)) * 5.4 + (36.0 if carried else 16.0);
-}
-
-
-# One elbow per transition, in canvas px. Each entry carries the same keys
-# FlowCanvas reads off wire() (d, arrow, mx/my, lx/ly, back, label, carries)
-# plus `side`: -1 puts the label chip to the left of its anchor, 1 to the
-# right, 0 centers it above.
+# One elbow per transition in SCREEN px, from the node rects the canvas draws
+# ([left, top, w, h]). `colGap` is the screen gap between two columns. Each
+# entry carries d, arrow, and label `anchors` for geometry.placeChips.
 def:pub laneWires(
-    steps: list[StepView], positions: dict[str, list[float]]
+    steps: list[StepView], rects: dict[str, list[float]], colGap: float
 ) -> list[dict[str, any]] {
     byId: dict[str, StepView] = {};
     for s in steps {
         byId[s.id] = s;
     }
-    half = LANE_NODE_H / 2.0;
-    gap = LANE_COL_W - NODE_W;
+    gap = colGap if colGap > 8.0 else 8.0;
 
     # Every edge once, with the geometry it needs decided up front: which
     # side it leaves and enters, and which gap its trunk lives in.
     edges: list[dict[str, any]] = [];
     for s in steps {
-        if s.id not in positions {
+        if s.id not in rects {
             continue;
         }
-        sp = positions[s.id];
+        sr = rects[s.id];
         for (i, nid) in enumerate(s.next_ids) {
-            if nid not in byId or nid not in positions {
+            if nid not in byId or nid not in rects {
                 continue;
             }
-            tp = positions[nid];
+            tr = rects[nid];
             target = byId[nid];
             said = s.next_labels[i] if i < len(s.next_labels) else "";
             carried = s.next_carries[i] if i < len(s.next_carries) else "";
-            twoWay = s.id in target.next_ids;
             isReturn = target.sort_order < s.sort_order;
-            # Travel direction decides the sides, not send-back-ness: a
-            # back edge can point at a deeper column when the flow forks.
-            rightward = tp[0] > sp[0] + 1.0;
-            leftward = tp[0] < sp[0] - 1.0;
-            # The gap index the trunk lives in, keyed by the x of its
-            # left edge, so trunks in one gap can be spread together.
+            # Travel direction decides the sides, not send-back-ness: a back
+            # edge can point at a deeper column when the flow forks.
+            rightward = tr[0] > sr[0] + sr[2] / 2.0;
+            leftward = tr[0] + tr[2] < sr[0] + sr[2] / 2.0;
             gapX = 0.0;
             if rightward {
-                gapX = sp[0] + NODE_W;
+                gapX = sr[0] + sr[2];
             } elif leftward {
-                gapX = sp[0] - gap;
+                gapX = sr[0] - gap;
             }
             edges.append(
                 {
                     "from": s.id,
                     "to": nid,
-                    "sx": sp[0],
-                    "sy": sp[1],
-                    "tx": tp[0],
-                    "ty": tp[1],
+                    "sr": sr,
+                    "tr": tr,
                     "rightward": rightward,
                     "leftward": leftward,
                     "gapX": gapX,
-                    "twoWay": twoWay,
                     "back": isReturn,
                     "label": said,
                     "carries": carried,
@@ -301,11 +314,11 @@ def:pub laneWires(
     }
 
     # Fan the ports: every use of one card side, ordered by where the other
-    # end is (then outgoing before incoming on a tie), spaced PORT_STEP
-    # apart around the side's centre. Keeps two-way pairs parted and
-    # keeps a card's fan-out from leaving as one line.
+    # end is (outgoing before incoming on a tie), spaced PORT_STEP apart.
     sideKeys: dict[str, list[int]] = {};
     for (idx, e) in enumerate(edges) {
+        sr: list[float] = e["sr"];
+        tr: list[float] = e["tr"];
         outSide = "";
         inSide = "";
         if e["rightward"] {
@@ -315,7 +328,7 @@ def:pub laneWires(
             outSide = "L";
             inSide = "R";
         } else {
-            goesDown = float(e["ty"]) > float(e["sy"]);
+            goesDown = tr[1] > sr[1];
             outSide = "B" if goesDown else "T";
             inSide = "T" if goesDown else "B";
         }
@@ -327,20 +340,18 @@ def:pub laneWires(
         if ki not in sideKeys {
             sideKeys[ki] = [];
         }
-        # Encode direction in the sign: positive = outgoing use, negative =
-        # incoming, index+1 so zero never collides.
+        # Direction in the sign: positive outgoing, negative incoming.
         sideKeys[ko].append(idx + 1);
         sideKeys[ki].append(0 - (idx + 1));
     }
     for k in list(sideKeys.keys()) {
         uses = sideKeys[k];
-        # Sort key: the y of the far end, ties broken outgoing-first.
         keyed: list[list[float]] = [];
         for u in uses {
             idx = (u if u > 0 else 0 - u) - 1;
             e = edges[idx];
-            farY = float(e["ty"]) if u > 0 else float(e["sy"]);
-            keyed.append([farY, 0.0 if u > 0 else 1.0, float(u)]);
+            far: list[float] = e["tr"] if u > 0 else e["sr"];
+            keyed.append([far[1], 0.0 if u > 0 else 1.0, float(u)]);
         }
         keyed.sort(key=lambda (row: list[float]) { row[0] * 10.0 + row[1]; });
         n = len(keyed);
@@ -357,14 +368,13 @@ def:pub laneWires(
     }
 
     # Spread the trunks that share a gap across its inner width, rightward
-    # travellers first then leftward, each by source y, so a two-way pair
-    # never stacks on one x.
+    # travellers first then leftward, each by source y.
     gapUsers: dict[str, list[int]] = {};
     for (idx, e) in enumerate(edges) {
         if not (e["rightward"] or e["leftward"]) {
             continue;
         }
-        gk = str(int(e["gapX"]));
+        gk = str(int(float(e["gapX"])));
         if gk not in gapUsers {
             gapUsers[gk] = [];
         }
@@ -375,12 +385,16 @@ def:pub laneWires(
         ranked: list[list[float]] = [];
         for idx in users {
             e = edges[idx];
+            sr: list[float] = e["sr"];
             primary = 0.0 if e["rightward"] else 1.0;
-            ranked.append([primary * 100000.0 + float(e["sy"]), float(idx)]);
+            ranked.append([primary * 100000.0 + sr[1], float(idx)]);
         }
         ranked.sort(key=lambda (row: list[float]) { row[0]; });
         n = len(ranked);
         inner = gap - TRUNK_INSET * 2.0;
+        if inner < 0.0 {
+            inner = 0.0;
+        }
         for (rank, row) in enumerate(ranked) {
             idx = int(row[1]);
             e = edges[idx];
@@ -393,30 +407,29 @@ def:pub laneWires(
 
     out: list[dict[str, any]] = [];
     for e in edges {
-        sx = float(e["sx"]);
-        sy = float(e["sy"]);
-        tx = float(e["tx"]);
-        ty = float(e["ty"]);
+        sr: list[float] = e["sr"];
+        tr: list[float] = e["tr"];
         outOff = float(e["outOff"]);
         inOff = float(e["inOff"]);
-        # Seeded outside the branches: a name first assigned inside an
-        # `if` is block-scoped in the compiled JS.
+        # Seeded outside the branches: a name first assigned inside an `if`
+        # is block-scoped in the compiled JS.
         d = "";
         arrow = "";
-        lx = 0.0;
-        ly = 0.0;
-        side = 0;
+        poly: list[float] = [];
+        anchors: list[list[float]] = [];
         if e["rightward"] or e["leftward"] {
             trunk = float(e["trunkX"]);
-            ey = sy + half + outOff;
-            iy = ty + half + inOff;
-            # A rightward wire leaves the right edge and enters the left;
-            # a leftward one the reverse.
-            ex = sx + NODE_W if e["rightward"] else sx;
-            ix = tx if e["rightward"] else tx + NODE_W;
+            ey = sr[1] + sr[3] / 2.0 + outOff;
+            iy = tr[1] + tr[3] / 2.0 + inOff;
+            ex = sr[0] + sr[2] if e["rightward"] else sr[0];
+            ix = tr[0] if e["rightward"] else tr[0] + tr[2];
+            dirn = 1.0 if e["rightward"] else -1.0;
+            stop = ix - 9.0 * dirn;
             sameRow = (iy - ey) < 1.0 and (ey - iy) < 1.0;
             if sameRow {
-                d = "M " + str(ex) + " " + str(ey) + " L " + str(ix) + " " + str(iy);
+                d = "M " + str(ex) + " " + str(ey) + " L " + str(stop) + " " + str(iy);
+                poly = [ex, ey, stop, iy];
+                anchors.append([(ex + ix) / 2.0, ey, 0.0, 1.0, 1.0]);
             } else {
                 d = (
                     "M "
@@ -432,61 +445,45 @@ def:pub laneWires(
                     + " "
                     + str(iy)
                     + " L "
-                    + str(ix)
+                    + str(stop)
                     + " "
                     + str(iy)
                 );
+                poly = [ex, ey, trunk, ey, trunk, iy, stop, iy];
+                # Beside the trunk first (rightward on the source side,
+                # leftward on the other, so a two-way pair parts), then the
+                # two horizontal runs.
+                anchors.append(
+                    [trunk, (ey + iy) / 2.0, 1.0, 0.0, -1.0 if e["rightward"] else 1.0]
+                );
+                anchors.append([(ex + trunk) / 2.0, ey, 0.0, 1.0, 1.0]);
+                anchors.append([(trunk + ix) / 2.0, iy, 0.0, 1.0, 1.0]);
             }
-            dirn = 1.0 if e["rightward"] else -1.0;
             arrow = (
                 "M "
                 + str(ix)
                 + " "
                 + str(iy)
                 + " L "
-                + str(ix - 8.0 * dirn)
+                + str(ix - 10.0 * dirn)
                 + " "
-                + str(iy - 4.5)
+                + str(iy - 5.0)
                 + " L "
-                + str(ix - 8.0 * dirn)
+                + str(ix - 10.0 * dirn)
                 + " "
-                + str(iy + 4.5)
+                + str(iy + 5.0)
                 + " Z"
             );
-            span = iy - ey;
-            if span < 0.0 {
-                span = 0.0 - span;
-            }
-            if sameRow or span < 40.0 {
-                # Short trunk: the chip goes above the longer horizontal run.
-                lx = (ex + ix) / 2.0;
-                ly = (ey + iy) / 2.0 - 13.0;
-                side = 0;
-                # Two cards in the same row sit one column gap apart, which
-                # is narrower than most chips: a chip wider than its run
-                # would hide behind the cards, so lift it clear of both.
-                runW = ix - ex;
-                if runW < 0.0 {
-                    runW = 0.0 - runW;
-                }
-                if chipWidth(str(e["label"]), str(e["carries"])) > runW {
-                    ly = (sy if sy < ty else ty) - 9.0;
-                }
-            } else {
-                # Beside the trunk at its midpoint: rightward wires keep the
-                # chip on the source side, leftward on the other, so a
-                # two-way pair reads on opposite sides of the gap.
-                lx = trunk;
-                ly = (ey + iy) / 2.0;
-                side = -1 if e["rightward"] else 1;
-            }
         } else {
             # Same column: straight vertical between the facing edges.
-            downward = ty > sy;
-            ex = sx + NODE_W / 2.0 + outOff;
-            ey = sy + LANE_NODE_H if downward else sy;
-            ix = tx + NODE_W / 2.0 + inOff;
-            iy = ty if downward else ty + LANE_NODE_H;
+            downward = tr[1] > sr[1];
+            ex = sr[0] + sr[2] / 2.0 + outOff;
+            ey = sr[1] + sr[3] if downward else sr[1];
+            ix = tr[0] + tr[2] / 2.0 + inOff;
+            iy = tr[1] if downward else tr[1] + tr[3];
+            dirn = 1.0 if downward else -1.0;
+            mid = (ey + iy) / 2.0;
+            poly = [ex, ey, ex, mid, ix, mid, ix, iy];
             d = (
                 "M "
                 + str(ex)
@@ -495,35 +492,32 @@ def:pub laneWires(
                 + " L "
                 + str(ex)
                 + " "
-                + str((ey + iy) / 2.0)
+                + str(mid)
                 + " L "
                 + str(ix)
                 + " "
-                + str((ey + iy) / 2.0)
+                + str(mid)
                 + " L "
                 + str(ix)
                 + " "
-                + str(iy)
+                + str(iy - 9.0 * dirn)
             );
-            dirn = 1.0 if downward else -1.0;
             arrow = (
                 "M "
                 + str(ix)
                 + " "
                 + str(iy)
                 + " L "
-                + str(ix - 4.5)
+                + str(ix - 5.0)
                 + " "
-                + str(iy - 8.0 * dirn)
+                + str(iy - 10.0 * dirn)
                 + " L "
-                + str(ix + 4.5)
+                + str(ix + 5.0)
                 + " "
-                + str(iy - 8.0 * dirn)
+                + str(iy - 10.0 * dirn)
                 + " Z"
             );
-            lx = ix;
-            ly = (ey + iy) / 2.0;
-            side = 1;
+            anchors.append([ix, (mid + iy) / 2.0, 1.0, 0.0, 1.0]);
         }
         out.append(
             {
@@ -532,11 +526,8 @@ def:pub laneWires(
                 "to": e["to"],
                 "d": d,
                 "arrow": arrow,
-                "mx": lx,
-                "my": ly,
-                "lx": lx,
-                "ly": ly,
-                "side": side,
+                "anchors": anchors,
+                "samples": polySamples(poly),
                 "back": e["back"],
                 "label": e["label"],
                 "carries": e["carries"]

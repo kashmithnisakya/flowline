@@ -1,38 +1,35 @@
 """Canvas geometry shared by FlowCanvas and the flow line page impl, in ONE
-module so hit-testing and drawing cannot drift apart. Positions are free-form
-px, so an edge can travel any direction; control handles are axis-aligned along
-the dominant axis, keeping tangents exact and the arrowhead a fixed triangle."""
+module so hit-testing and drawing cannot drift apart. Positions persist in
+canvas px; everything drawn is in SCREEN px (position times zoom), so text and
+strokes keep their size at every zoom and only the layout scales."""
 
 import from ...models { StepView }
 
 glob NODE_W: float = 176.0,
-     # Four lines: name, the blurb, kind, and who holds work here. Uniform
-     # whether or not a step has a blurb - the geometry is one constant.
+     # The footprint a step claims in canvas px. What is drawn inside it is
+     # sized in screen px by the zoom's detail level, see nodeRects.
      NODE_H: float = 96.0,
-     EDGE_ZONE: float = 12.0,
-     # Working room kept beyond the furthest step, so there is always
-     # somewhere to drag to without the canvas jumping.
-     MARGIN: float = 120.0;
+     ZOOM_MIN: float = 0.3,
+     ZOOM_MAX: float = 2.0,
+     ZOOM_STOPS: list[float] = [0.3, 0.4, 0.5, 0.6, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
+     # Below LOW a node shows its name; up to HIGH also count and kind;
+     # above HIGH the first task titles as well.
+     DETAIL_LOW: float = 0.6,
+     DETAIL_HIGH: float = 1.4,
+     # Node anatomy in screen px.
+     NODE_PAD_Y: float = 8.0,
+     NAME_LH: float = 20.0,
+     META_LH: float = 18.0,
+     ROW_LH: float = 17.0,
+     RULE_H: float = 9.0,
+     MIN_NODE_W: float = 88.0,
+     MAX_NODE_W: float = 240.0,
+     # How close to a drawn border counts as grabbing the port, screen px.
+     PORT_ZONE: float = 10.0,
+     CHIP_H: float = 20.0,
+     CHIP_PAD_X: float = 6.0;
 
-# Does this transition travel backwards? One definition, shared by the canvas
-# and the inspector, so the two renderings of the same edge cannot disagree.
-# Node size is constant, so top-left deltas equal centre deltas.
-def isBackEdge(fx: float, fy: float, tx: float, ty: float) -> bool {
-    dx = tx - fx;
-    dy = ty - fy;
-    ax = dx if dx >= 0.0 else 0.0 - dx;
-    ay = dy if dy >= 0.0 else 0.0 - dy;
-    if ax >= ay {
-        return dx < 0.0;
-    }
-    return dy < 0.0;
-}
-
-
-# How close to a node's edge counts as grabbing its border (the wire port)
-# rather than its body (a move).
-# The position a step is actually drawn at: its live drag override, else the
-# persisted one.
+# The position a step is actually drawn at: its live override, else persisted.
 def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
     if s.id in live {
         return live[s.id];
@@ -41,79 +38,180 @@ def stepXY(s: StepView, live: dict[str, list[float]]) -> list[float] {
 }
 
 
-# Canvas big enough for every node plus working room to drag into.
-def canvasSize(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
-    # Content plus a margin to drag into, NOT padded to a minimum: CSS
-    # min-width/height stretches the surface to the viewport, so a fitting
-    # flow line shows no scrollbars and scrolling starts only past the edge.
-    # A blank canvas keeps a surface for the empty state the same way.
-    w = 320.0;
-    h = 240.0;
-    for s in steps {
-        pos = stepXY(s, live);
-        if pos[0] + NODE_W + MARGIN > w {
-            w = pos[0] + NODE_W + MARGIN;
-        }
-        if pos[1] + NODE_H + MARGIN > h {
-            h = pos[1] + NODE_H + MARGIN;
-        }
+def detailOf(z: float) -> str {
+    if z < DETAIL_LOW {
+        return "low";
     }
-    return [w, h];
+    if z > DETAIL_HIGH {
+        return "high";
+    }
+    return "mid";
 }
 
 
-# Which step is under the canvas-relative pointer, and whether the pointer
-# is in its border strip. Later steps render on top, so the LAST hit wins.
-def hitStep(
-    steps: list[StepView], live: dict[str, list[float]], px: float, py: float
-) -> dict[str, any] {
-    miss: dict[str, any] = {};
-    if px < 0.0 or py < 0.0 {
-        return miss;
+def nextStop(z: float, dirn: int) -> float {
+    if dirn > 0 {
+        for v in ZOOM_STOPS {
+            if v > z + 0.01 {
+                return v;
+            }
+        }
+        return ZOOM_MAX;
     }
-    found: list[StepView] = [];
+    below = ZOOM_MIN;
+    for v in ZOOM_STOPS {
+        if v < z - 0.01 {
+            below = v;
+        }
+    }
+    return below;
+}
+
+
+def clampZoom(v: float) -> float {
+    if v < ZOOM_MIN {
+        return ZOOM_MIN;
+    }
+    if v > ZOOM_MAX {
+        return ZOOM_MAX;
+    }
+    return v;
+}
+
+
+# The first task titles a node shows at high detail, and whether "N more"
+# follows. Shared so the page's hit test sizes nodes as the canvas draws them.
+def nodeTitles(s: StepView, stepTitles: dict[str, list[str]]) -> list[str] {
+    shown: list[str] = [];
+    if s.id in stepTitles {
+        for t in stepTitles[s.id] {
+            if len(shown) < 2 {
+                shown.append(t);
+            }
+        }
+    }
+    return shown;
+}
+
+
+def nodeHeight(detail: str, shown: int, more: bool) -> float {
+    h = NODE_PAD_Y * 2.0 + NAME_LH;
+    if detail == "low" {
+        return h;
+    }
+    h = h + 2.0 + META_LH;
+    if detail == "high" and (shown > 0 or more) {
+        h = h + RULE_H + float(shown) * ROW_LH + (ROW_LH if more else 0.0);
+    }
+    return h;
+}
+
+
+# Screen rect [left, top, w, h] of every step, relative to the pan origin.
+# `ox` shifts x (the lane view's fixed label gutter); `footH` is the canvas-px
+# footprint height the box centres on. `need` is the width a node's text wants:
+# a node grows to it while it stays clear of the nodes beside it.
+def nodeRects(
+    steps: list[StepView],
+    positions: dict[str, list[float]],
+    z: float,
+    stepTitles: dict[str, list[str]],
+    ox: float,
+    footH: float,
+    need: dict[str, float] = {}
+) -> dict[str, list[float]] {
+    detail = detailOf(z);
+    out: dict[str, list[float]] = {};
+    base = NODE_W * z;
+    if base < MIN_NODE_W {
+        base = MIN_NODE_W;
+    }
+    centres: list[list[float]] = [];
+    for s in steps {
+        pos = stepXY(s, positions);
+        shown = len(nodeTitles(s, stepTitles)) if detail == "high" else 0;
+        more = detail == "high" and s.task_count > shown and s.id in stepTitles;
+        h = nodeHeight(detail, shown, more);
+        cx = ox + (pos[0] + NODE_W / 2.0) * z;
+        cy = (pos[1] + footH / 2.0) * z;
+        centres.append([cx, cy, h]);
+    }
+    for (i, s) in enumerate(steps) {
+        c = centres[i];
+        w = base;
+        if s.id in need and need[s.id] > base {
+            w = need[s.id] if need[s.id] < MAX_NODE_W else MAX_NODE_W;
+            # Split the gap to any node on the same band evenly, so two
+            # growing neighbours can never meet.
+            for (j, o) in enumerate(centres) {
+                if j == i {
+                    continue;
+                }
+                dy = o[1] - c[1];
+                ady = dy if dy >= 0.0 else 0.0 - dy;
+                if ady >= (o[2] + c[2]) / 2.0 + 6.0 {
+                    continue;
+                }
+                dx = o[0] - c[0];
+                room = (dx if dx >= 0.0 else 0.0 - dx) - 16.0;
+                if room < w {
+                    w = room;
+                }
+            }
+            if w < base {
+                w = base;
+            }
+        }
+        out[s.id] = [c[0] - w / 2.0, c[1] - c[2] / 2.0, w, c[2]];
+    }
+    return out;
+}
+
+
+# Which drawn node is under a pan-origin screen point, and whether the point
+# is on its border strip (the wire port). Last in `steps` order wins.
+def hitRect(
+    steps: list[StepView], rects: dict[str, list[float]], sx: float, sy: float
+) -> dict[str, any] {
+    found = "";
     onEdge = False;
     for s in steps {
-        pos = stepXY(s, live);
-        inside = (
-            px >= pos[0]
-            and px <= pos[0] + NODE_W
-            and py >= pos[1]
-            and py <= pos[1] + NODE_H
-        );
-        if inside {
-            found = [s];
-            dxl = px - pos[0];
-            dyt = py - pos[1];
+        if s.id not in rects {
+            continue;
+        }
+        r = rects[s.id];
+        if sx >= r[0] and sx <= r[0] + r[2] and sy >= r[1] and sy <= r[1] + r[3] {
+            found = s.id;
             onEdge = (
-                dxl < EDGE_ZONE
-                or dyt < EDGE_ZONE
-                or (NODE_W - dxl) < EDGE_ZONE
-                or (NODE_H - dyt) < EDGE_ZONE
+                sx - r[0] < PORT_ZONE
+                or sy - r[1] < PORT_ZONE
+                or r[0] + r[2] - sx < PORT_ZONE
+                or r[1] + r[3] - sy < PORT_ZONE
             );
         }
     }
     if not found {
-        return miss;
+        return {};
     }
-    return {"step": found[0], "onEdge": onEdge};
+    return {"id": found, "onEdge": onEdge};
 }
 
 
-# The curve between two node rects, leaving and entering through the borders
-# that face each other along the dominant axis. `twoWay` shifts it sideways so
-# an A→B / B→A pair reads as two arcs. Returns the path, arrowhead, true
-# midpoint (for the chip) and `back` (right-to-left or bottom-to-top travel).
-def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, any] {
-    c1x = x1 + NODE_W / 2.0;
-    c1y = y1 + NODE_H / 2.0;
-    c2x = x2 + NODE_W / 2.0;
-    c2y = y2 + NODE_H / 2.0;
+# The curve between two screen rects, leaving and entering through the borders
+# that face each other along the dominant axis. `twoWay` parts an A to B / B to
+# A pair by a fixed screen offset; `shift` reports the side it took (-1 or 1).
+def link(a: list[float], b: list[float], twoWay: bool) -> dict[str, any] {
+    c1x = a[0] + a[2] / 2.0;
+    c1y = a[1] + a[3] / 2.0;
+    c2x = b[0] + b[2] / 2.0;
+    c2y = b[1] + b[3] / 2.0;
     dx = c2x - c1x;
     dy = c2y - c1y;
-    horizontal = abs(dx) >= abs(dy);
-    # A name first assigned inside a branch is block-scoped in the compiled
-    # JS, so everything the branches write is initialised here first.
+    adx = dx if dx >= 0.0 else 0.0 - dx;
+    ady = dy if dy >= 0.0 else 0.0 - dy;
+    horizontal = adx >= ady;
+    # Everything the branches write starts here: a first assignment inside
+    # an `if` is block-scoped in the compiled JS.
     sx = 0.0;
     sy = 0.0;
     ex = 0.0;
@@ -127,71 +225,60 @@ def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, 
     b2x = 0.0;
     b2y = 0.0;
     dirn = 1.0;
-    bend = 0.0;
-    back = False;
-    shift = 0.0;
+    side = 0.0;
     if twoWay {
         if horizontal {
-            shift = -10.0 if dx >= 0.0 else 10.0;
+            side = -1.0 if dx >= 0.0 else 1.0;
         } else {
-            shift = -10.0 if dy >= 0.0 else 10.0;
+            side = -1.0 if dy >= 0.0 else 1.0;
         }
     }
+    shift = side * 7.0;
+    span = 0.0;
     if horizontal {
         dirn = 1.0 if dx >= 0.0 else -1.0;
-        sx = x1 + NODE_W if dx >= 0.0 else x1;
+        sx = a[0] + a[2] if dx >= 0.0 else a[0];
         sy = c1y + shift;
-        ex = x2 if dx >= 0.0 else x2 + NODE_W;
+        ex = b[0] if dx >= 0.0 else b[0] + b[2];
         ey = c2y + shift;
-        # Manual abs: the checker types abs() generically and refuses the
-        # multiply below.
-        span = ex - sx;
-        if span < 0.0 {
-            span = 0.0 - span;
-        }
-        bend = span * 0.45;
-        if bend < 36.0 {
-            bend = 36.0;
-        }
-        if bend > 120.0 {
-            bend = 120.0;
-        }
+        span = ex - sx if ex >= sx else sx - ex;
+    } else {
+        dirn = 1.0 if dy >= 0.0 else -1.0;
+        sy = a[1] + a[3] if dy >= 0.0 else a[1];
+        sx = c1x + shift;
+        ey = b[1] if dy >= 0.0 else b[1] + b[3];
+        ex = c2x + shift;
+        span = ey - sy if ey >= sy else sy - ey;
+    }
+    bend = span * 0.45;
+    if bend < 28.0 {
+        bend = 28.0;
+    }
+    if bend > 140.0 {
+        bend = 140.0;
+    }
+    if horizontal {
         h1x = sx + bend * dirn;
         h1y = sy;
         h2x = ex - bend * dirn;
         h2y = ey;
-        b1x = ex - 9.0 * dirn;
+        b1x = ex - 10.0 * dirn;
         b1y = ey - 5.0;
-        b2x = ex - 9.0 * dirn;
+        b2x = ex - 10.0 * dirn;
         b2y = ey + 5.0;
-        back = dx < 0.0;
     } else {
-        dirn = 1.0 if dy >= 0.0 else -1.0;
-        sy = y1 + NODE_H if dy >= 0.0 else y1;
-        sx = c1x + shift;
-        ey = y2 if dy >= 0.0 else y2 + NODE_H;
-        ex = c2x + shift;
-        span = ey - sy;
-        if span < 0.0 {
-            span = 0.0 - span;
-        }
-        bend = span * 0.45;
-        if bend < 36.0 {
-            bend = 36.0;
-        }
-        if bend > 120.0 {
-            bend = 120.0;
-        }
         h1x = sx;
         h1y = sy + bend * dirn;
         h2x = ex;
         h2y = ey - bend * dirn;
         b1x = ex - 5.0;
-        b1y = ey - 9.0 * dirn;
+        b1y = ey - 10.0 * dirn;
         b2x = ex + 5.0;
-        b2y = ey - 9.0 * dirn;
-        back = dy < 0.0;
+        b2y = ey - 10.0 * dirn;
     }
+    # The stroke stops at the arrow's base so the round cap cannot poke out.
+    tx = ex - 9.0 * dirn if horizontal else ex;
+    ty = ey if horizontal else ey - 9.0 * dirn;
     d = (
         "M "
         + str(sx)
@@ -206,9 +293,9 @@ def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, 
         + " "
         + str(h2y)
         + ", "
-        + str(ex)
+        + str(tx)
         + " "
-        + str(ey)
+        + str(ty)
     );
     arrow = (
         "M "
@@ -228,10 +315,217 @@ def wire(x1: float, y1: float, x2: float, y2: float, twoWay: bool) -> dict[str, 
     return {
         "d": d,
         "arrow": arrow,
-        # Cubic midpoint: (p1 + 3c1 + 3c2 + p2) / 8, exact because the
-        # handles are known, no curve sampling.
-        "mx": (sx + 3.0 * h1x + 3.0 * h2x + ex) / 8.0,
-        "my": (sy + 3.0 * h1y + 3.0 * h2y + ey) / 8.0,
-        "back": back
+        "pts": [sx, sy, h1x, h1y, h2x, h2y, ex, ey],
+        "horizontal": horizontal,
+        "side": side
     };
+}
+
+
+# Point and unit normal on a cubic [x0 y0 x1 y1 x2 y2 x3 y3] at t.
+def cubicAt(p: list[float], t: float) -> list[float] {
+    u = 1.0 - t;
+    x = u * u * u * p[0]
+        + 3.0 * u * u * t * p[2]
+        + 3.0 * u * t * t * p[4]
+        + t * t * t * p[6];
+    y = u * u * u * p[1]
+        + 3.0 * u * u * t * p[3]
+        + 3.0 * u * t * t * p[5]
+        + t * t * t * p[7];
+    tx = 3.0 * u * u * (p[2] - p[0])
+        + 6.0 * u * t * (p[4] - p[2])
+        + 3.0 * t * t * (p[6] - p[4]);
+    ty = 3.0 * u * u * (p[3] - p[1])
+        + 6.0 * u * t * (p[5] - p[3])
+        + 3.0 * t * t * (p[7] - p[5]);
+    ln = (tx * tx + ty * ty) ** 0.5;
+    if ln < 0.001 {
+        return [x, y, 0.0, -1.0];
+    }
+    return [x, y, 0.0 - ty / ln, tx / ln];
+}
+
+
+def overlapArea(a: list[float], b: list[float]) -> float {
+    ox = (a[0] + a[2] if a[0] + a[2] < b[0] + b[2] else b[0] + b[2])
+        - (a[0] if a[0] > b[0] else b[0]);
+    oy = (a[1] + a[3] if a[1] + a[3] < b[1] + b[3] else b[1] + b[3])
+        - (a[1] if a[1] > b[1] else b[1]);
+    if ox <= 0.0 or oy <= 0.0 {
+        return 0.0;
+    }
+    return ox * oy;
+}
+
+
+# Points every ~12px along a polyline [x0, y0, x1, y1, ...], so a chip can
+# tell when it would sit on top of another wire.
+def polySamples(pts: list[float]) -> list[list[float]] {
+    out: list[list[float]] = [];
+    i = 0;
+    while i + 3 < len(pts) {
+        x0 = pts[i];
+        y0 = pts[i + 1];
+        x1 = pts[i + 2];
+        y1 = pts[i + 3];
+        ln = ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)) ** 0.5;
+        n = int(ln / 12.0) + 1;
+        k = 0;
+        while k < n {
+            t = float(k) / float(n);
+            out.append([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
+            k = k + 1;
+        }
+        i = i + 2;
+    }
+    return out;
+}
+
+
+def cubicSamples(p: list[float]) -> list[list[float]] {
+    out: list[list[float]] = [];
+    ln = ((p[6] - p[0]) * (p[6] - p[0]) + (p[7] - p[1]) * (p[7] - p[1])) ** 0.5;
+    n = int(ln / 10.0) + 8;
+    k = 0;
+    while k <= n {
+        at = cubicAt(p, float(k) / float(n));
+        out.append([at[0], at[1]]);
+        k = k + 1;
+    }
+    return out;
+}
+
+
+# Put each label chip beside its own wire, clear of nodes, chips and wires.
+# Anchors are [x, y, |nx|, |ny|, pref] (the wire's normal there); a chip steps
+# up (+) or down, right (+) or left, far enough to clear that slope. The
+# cheapest candidate wins; on the wire itself is the last resort. Sets cx/cy.
+def placeChips(links: list[dict[str, any]], nodes: list[list[float]]) {
+    placed: list[list[float]] = [];
+    # A two-way pair has the least room (its partner wire runs alongside),
+    # so pairs choose first and everything else fits around them.
+    pairKeys: dict[str, bool] = {};
+    for l in links {
+        pairKeys[str(l["from"]) + ">" + str(l["to"])] = True;
+    }
+    ordered: list[dict[str, any]] = [];
+    for l in links {
+        if str(l["to"]) + ">" + str(l["from"]) in pairKeys {
+            ordered.append(l);
+        }
+    }
+    for l in links {
+        if str(l["to"]) + ">" + str(l["from"]) not in pairKeys {
+            ordered.append(l);
+        }
+    }
+    for l in ordered {
+        if not l["text"] {
+            continue;
+        }
+        cw = float(l["cw"]);
+        anchors: list[list[float]] = l["anchors"];
+        band: list[float] = l["band"] if "band" in l else [];
+        tries: list[list[float]] = [];
+        for level in [0.0, 1.0, 2.0, 3.0] {
+            for an in anchors {
+                pref = an[4] if an[4] != 0.0 else 1.0;
+                flat = an[3] >= an[2];
+                for axis in ([0.0, 1.0] if flat else [1.0, 0.0]) {
+                    # Rise over run of the wire as seen from this axis, and
+                    # the extra offset that slope forces on a chip this size.
+                    slope = 9.0;
+                    if axis == 0.0 and an[3] > 0.01 {
+                        slope = an[2] / an[3];
+                    } elif axis == 1.0 and an[2] > 0.01 {
+                        slope = an[3] / an[2];
+                    }
+                    lean = slope * (cw if axis == 0.0 else CHIP_H) / 2.0;
+                    # Distance from the wire is what makes a label read as
+                    # someone else's, so every extra px costs, and a steep
+                    # lean is not worth trying at all.
+                    if lean > 60.0 {
+                        continue;
+                    }
+                    cost = level * 18.0 + lean * 0.5;
+                    for sd in [pref, 0.0 - pref] {
+                        if axis == 0.0 {
+                            gap = CHIP_H / 2.0 + lean + 5.0 + level * 12.0;
+                            tries.append([an[0], an[1] - sd * gap, cost]);
+                        } else {
+                            gap = cw / 2.0 + lean + 6.0 + level * 12.0;
+                            tries.append([an[0] + sd * gap, an[1], cost]);
+                        }
+                    }
+                }
+            }
+        }
+        for an in anchors {
+            tries.append([an[0], an[1], 50.0]);
+        }
+        # Cheapest first (a stable sort keeps the preference order on ties),
+        # so the first spot that pays nothing beyond its own cost is the best.
+        tries.sort(key=lambda (tr: list[float]) { tr[2]; });
+        best: list[float] = [];
+        bestScore = -1.0;
+        for tr in tries {
+            cx = tr[0];
+            cy = tr[1];
+            rect = [
+                cx - cw / 2.0 - 3.0,
+                cy - CHIP_H / 2.0 - 3.0,
+                cw + 6.0,
+                CHIP_H + 6.0
+            ];
+            score = tr[2];
+            # Covering a node or a chip clips words, the one thing a label
+            # must never do, so it outweighs leaving the lane band.
+            for n in nodes {
+                score = score + overlapArea(rect, n) * 40.0;
+            }
+            for q in placed {
+                score = score + overlapArea(rect, q) * 40.0;
+            }
+            if len(band) > 0 and (cy < band[0] or cy > band[1]) {
+                score = score + 2000.0;
+            }
+            for o in links {
+                if "samples" not in o {
+                    continue;
+                }
+                # Across the partner wire a label reads as the partner's.
+                weight = 40.0 if o["from"] == l["to"] and o["to"] == l["from"] else 3.0;
+                pts: list[list[float]] = o["samples"];
+                for pt in pts {
+                    if pt[0] > rect[0]
+                        and pt[0] < rect[0] + rect[2]
+                        and pt[1] > rect[1]
+                        and pt[1] < rect[1] + rect[3] {
+                        score = score + weight;
+                    }
+                }
+            }
+            if bestScore < 0.0 or score < bestScore {
+                bestScore = score;
+                best = [cx, cy];
+            }
+            if score == tr[2] {
+                break;
+            }
+        }
+        if len(best) == 0 {
+            continue;
+        }
+        l["cx"] = best[0];
+        l["cy"] = best[1];
+        placed.append(
+            [
+                best[0] - cw / 2.0 - 2.0,
+                best[1] - CHIP_H / 2.0 - 2.0,
+                cw + 4.0,
+                CHIP_H + 4.0
+            ]
+        );
+    }
 }
