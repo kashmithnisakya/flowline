@@ -236,9 +236,10 @@ def:pub BoardPage -> JsxPage {
             timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             onResize = lambda { scheduleMeasure(); };
             window.addEventListener("resize", onResize);
-            # "/" focuses the title filter and N opens a new task, unless the
-            # keys are being typed or a dialog or menu has them. "/" in the
-            # sheet stays there: focus behind it would lose the next Escape.
+            # "/" focuses the title filter, N opens a new task and J/K step the
+            # open sheet through the cards, unless the keys are being typed or
+            # a dialog or menu has them. "/" in the sheet stays there: focus
+            # behind it would lose the next Escape.
             onKey = lambda (e: any) {
                 t: any = e.target;
                 tag = str(t.tagName or "").lower() if t else "";
@@ -266,6 +267,14 @@ def:pub BoardPage -> JsxPage {
                     and not document.querySelector("[role=dialog][data-state=open]") {
                     e.preventDefault();
                     pendingTaskId = "new";
+                } elif (e.key == "j" or e.key == "J" or e.key == "k" or e.key == "K")
+                    and document.querySelector("[data-task-sheet][data-state=open]")
+                    and not document.querySelector(
+                        "[role=dialog][data-state=open]:not([data-task-sheet])"
+                    )
+                    and not (t and t.closest and t.closest("[role=combobox]")) {
+                    e.preventDefault();
+                    stepCard(1 if e.key == "j" or e.key == "J" else -1);
                 }
             };
             window.addEventListener("keydown", onKey);
@@ -391,6 +400,8 @@ def:pub BoardPage -> JsxPage {
     # Where an open task sheet starts on screen (md+), else -1: the lanes
     # under it count as out of view.
     def sheetEdge -> float;
+    # J/K with the sheet open: the next or previous card in board order.
+    def stepCard(delta: int) -> None;
     # A drag near either edge of the lanes scrolls them, so a card can reach
     # a lane that starts off screen.
     def dragEdgeScroll(e: DragEvent) -> None;

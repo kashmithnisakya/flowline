@@ -1146,6 +1146,32 @@ impl BoardPage.sheetEdge -> float {
         - float(sheet.offsetWidth);
 }
 
+impl BoardPage.stepCard(delta: int) -> None {
+    el: any = lanesRef.current;
+    if not el or not editingId {
+        return;
+    }
+    cards: any = el.querySelectorAll("[data-task-card]");
+    at = -1;
+    for i in range(int(cards.length)) {
+        if str(cards[i].getAttribute("data-task-card")) == editingId {
+            at = i;
+        }
+    }
+    to = at + delta;
+    if at < 0 or to < 0 or to >= int(cards.length) {
+        return;
+    }
+    card: any = cards[to];
+    active: any = document.activeElement;
+    # Focus follows only when it was on a card; typing focus stays in the sheet.
+    if active and active.hasAttribute("data-task-card") {
+        card.focus({"preventScroll": True});
+    }
+    card.scrollIntoView({"block": "nearest", "inline": "nearest"});
+    openTaskById(str(card.getAttribute("data-task-card")));
+}
+
 impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
     el: any = lanesRef.current;
     if not el or not wideView {
