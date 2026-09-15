@@ -107,7 +107,11 @@ def FilterMenu(
                     <Chevron/>
                 </DropdownMenuTrigger>
             } }
-            <DropdownMenuContent align="start" className="max-h-80 w-56">
+            <DropdownMenuContent
+                align="start"
+                collisionPadding={16}
+                className="max-h-80 w-56"
+            >
                 <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
                     {for o in options {
                         <DropdownMenuRadioItem key={o[0]} value={o[0]}>
@@ -337,7 +341,10 @@ def:pub FilterBar(
 
     return
         <div className="min-w-0">
-            <div className="toolbar hidden rounded-md border-x md:flex">
+            <div
+                data-board-toolbar="true"
+                className="toolbar hidden rounded-md border-x md:flex"
+            >
                 {SearchBox("w-[210px]")}
                 <FilterMenu
                     label="Project"
@@ -405,7 +412,11 @@ def:pub FilterBar(
                         More
                         <Chevron/>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuContent
+                        align="start"
+                        collisionPadding={16}
+                        className="w-48"
+                    >
                         <DropdownMenuSub>
                             <DropdownMenuSubTrigger>Category</DropdownMenuSubTrigger>
                             <DropdownMenuSubContent

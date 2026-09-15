@@ -192,6 +192,7 @@ def:pub MoveMenu(
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align={align}
+                collisionPadding={16}
                 className="w-60 p-1.5"
                 onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
                 onKeyDown={lambda (e: KeyboardEvent) {

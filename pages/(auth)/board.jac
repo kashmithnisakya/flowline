@@ -70,7 +70,29 @@ glob BLANK_TASK: dict[str, str] = {
      },
      # Step kinds whose moves open the optional handoff dialog: work that
      # has been passed to someone else, or has stopped.
-     HANDOFF_KINDS: list[str] = ["handoff", "blocked"];
+     HANDOFF_KINDS: list[str] = ["handoff", "blocked"],
+     # The task form's fields, compared against the opened copy to tell
+     # whether the sheet holds unsaved edits.
+     FORM_KEYS: list[str] = [
+         "title",
+         "category",
+         "estimate",
+         "tags",
+         "project",
+         "priority",
+         "status",
+         "due_date",
+         "start_date",
+         "iteration",
+         "notes",
+         "issue",
+         "pr",
+         "reviewer",
+         "review_due"
+     ],
+     # What the page was asked to open while the sheet held unsaved edits:
+     # kind "task" (id, title) or "new" (lane key); kind "" is nothing.
+     NO_SWITCH: dict[str, str] = {"kind": "", "id": "", "key": "", "title": ""};
 
 # The auto sync's one-shot lives at module level on purpose: a full page
 # load mounts the board twice and each instance owns its own `has` flags.
@@ -141,6 +163,12 @@ def:pub BoardPage -> JsxPage {
         editingId: str = "",
         form: dict[str, str] = BLANK_TASK,
         fAssignees: list[str] = [],
+        # The form and assignees as the sheet opened (or last moved), so
+        # opening another card over edits asks first instead of losing them.
+        baseForm: dict[str, str] = BLANK_TASK,
+        baseAssignees: list[str] = [],
+        switchTo: dict[str, str] = NO_SWITCH,
+        switchRow: Ref[any] = Ref(),
         moveTaskId: str = "",
         moveTaskTitle: str = "",
         moveStatus: str = "",
@@ -236,10 +264,10 @@ def:pub BoardPage -> JsxPage {
             timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             onResize = lambda { scheduleMeasure(); };
             window.addEventListener("resize", onResize);
-            # "/" focuses the title filter, N opens a new task and J/K step the
-            # open sheet through the cards, unless the keys are being typed or
-            # a dialog or menu has them. "/" in the sheet stays there: focus
-            # behind it would lose the next Escape.
+            # "/" focuses the title filter, N opens a new task (beside a sheet
+            # too) and J/K step the open sheet through the cards, unless the
+            # keys are being typed or a dialog or menu has them. "/" in the
+            # sheet stays there: focus behind it would lose the next Escape.
             onKey = lambda (e: any) {
                 t: any = e.target;
                 tag = str(t.tagName or "").lower() if t else "";
@@ -264,7 +292,9 @@ def:pub BoardPage -> JsxPage {
                         }
                     }
                 } elif (e.key == "n" or e.key == "N")
-                    and not document.querySelector("[role=dialog][data-state=open]") {
+                    and not document.querySelector(
+                        "[role=dialog][data-state=open]:not([data-beside=true])"
+                    ) {
                     e.preventDefault();
                     pendingTaskId = "new";
                 } elif (e.key == "j" or e.key == "J" or e.key == "k" or e.key == "K")
@@ -361,7 +391,9 @@ def:pub BoardPage -> JsxPage {
     async def refreshOlder(pid: str, who: str, cat: str) -> None;
     def toggleOlder -> None;
     async def openById(taskId: str) -> None;
-    async def saveTask -> None;
+    # keepOpen: the save answers "Save and open", so the sheet moves on to
+    # what was asked for instead of closing.
+    async def saveTask(keepOpen: bool = False) -> None;
     async def deleteTask -> None;
     # The columns ARE the flow line, so every column question routes through
     # these rather than a status literal. Page methods, not module defs,
@@ -409,9 +441,16 @@ def:pub BoardPage -> JsxPage {
     def setMoveField(key: str, value: str) -> None;
     def toggleAssignee(memberId: str) -> None;
     async def saveMoveInfo -> None;
-    # Empty inKey lands the task in the first column.
+    # Empty inKey lands the task in the first column. openCreate and openEdit
+    # ask before replacing unsaved edits; showCreate and showTask replace.
     def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
+    def showCreate(inKey: str = "") -> None;
+    def showTask(t: TaskView) -> None;
+    def formDirty -> bool;
+    async def resolveSwitch(save: bool) -> None;
+    def openSwitchTarget -> None;
+    def sheetOpenChange(o: bool) -> None;
     def replaceRow(view: TaskView) -> None;
     async def syncGithub -> None;
     async def autoSyncGithub(connected: bool) -> None;
@@ -624,6 +663,12 @@ def:pub BoardPage -> JsxPage {
             editingUpdated = t.updated_at;
         }
     }
+    switchLabel = "";
+    if switchTo["kind"] == "task" {
+        switchLabel = "“" + switchTo["title"] + "”";
+    } elif switchTo["kind"] == "new" {
+        switchLabel = "a new task";
+    }
     laneStyle: dict[str, str] = {};
     if wideView and laneH > 0 {
         laneStyle["height"] = str(laneH) + "px";
@@ -699,7 +744,7 @@ def:pub BoardPage -> JsxPage {
                             New task
                             <span
                                 aria-hidden="true"
-                                className="ml-0.5 font-mono text-xs opacity-80 max-md:hidden"
+                                className="ml-0.5 font-mono text-xs max-md:hidden"
                             >
                                 N
                             </span>
@@ -874,7 +919,7 @@ def:pub BoardPage -> JsxPage {
                         data-board-lanes="true"
                         onScroll={lambda { scheduleMeasure(); }}
                         onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
-                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[252px] md:items-stretch md:gap-2.5"
+                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[252px] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5"
                         style={laneStyle}
                     >
                         {for (ci, key) in enumerate(colKeys) {
@@ -924,7 +969,7 @@ def:pub BoardPage -> JsxPage {
                 members={activeMembers}
                 saving={saving}
                 onField={setField}
-                onOpenChange={lambda (o: bool) { dialogOpen = o; }}
+                onOpenChange={sheetOpenChange}
                 onSave={saveTask}
                 onDelete={deleteTask}
                 categories={allCategories}
@@ -957,6 +1002,11 @@ def:pub BoardPage -> JsxPage {
                 createdAt={editingCreated}
                 historyKey={editingUpdated}
                 prState={editingPrState}
+                beside={True}
+                topAnchor="[data-board-toolbar]"
+                switchLabel={switchLabel}
+                onSwitch={resolveSwitch}
+                onStay={lambda { switchTo = NO_SWITCH; }}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

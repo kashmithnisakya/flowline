@@ -1,7 +1,7 @@
-"""The task sheet: a non-modal right-side Radix dialog (full screen below sm)
-with the route breadcrumb, title, properties, notes, checklist and travel so
-far. The page owns the form dict and UpdateTask overwrites every field, so
-every property here goes out on Save."""
+"""The task sheet: a right-side Radix dialog (full screen below sm) with the
+route breadcrumb, title, properties, notes, checklist and travel so far. The
+page owns the form dict and UpdateTask overwrites every field, so every
+property here goes out on Save. Modal unless the page opts into `beside`."""
 
 import from "react" { useEffect }
 import from ...models {
@@ -16,7 +16,6 @@ import from ...models {
 import from ..common.Markdown { Markdown }
 import from ..common.StepName { StepName }
 import from ..common.Avatar { AvatarStack }
-import from .MiniLanes { MiniLanes }
 import from .Checklist { ChecklistEditor }
 import from .MoveMenu { MoveMenu, routeFrom }
 import from .TravelLog { TravelLog }
@@ -207,7 +206,17 @@ def:pub TaskDialog(
     createdAt: str = "",
     historyKey: str = "",
     # The linked pull request's GitHub state (open, draft, merged, closed).
-    prState: str = ""
+    prState: str = "",
+    # Beside the page (md+): no scrim, the page stays usable. Only for a page
+    # that guards unsaved edits through switchLabel; topAnchor names the
+    # element whose bottom edge the sheet starts at.
+    beside: bool = False,
+    topAnchor: str = "",
+    # The page wants to open something else over unsaved edits: the footer
+    # asks, onSwitch(True) saves first, onSwitch(False) discards, onStay keeps.
+    switchLabel: str = "",
+    onSwitch: Callable[[bool], None] = None,
+    onStay: Callable[[], None] = None
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several. Notes
     # open rendered once written; pendingAction marks which button started
@@ -218,17 +227,26 @@ def:pub TaskDialog(
         pendingAction: str = "",
         moveOpen: bool = False,
         topPx: int = 0,
-        rightPx: int = 0;
+        rightPx: int = 0,
+        viewW: int = 0;
 
     def placeSheet {
         w: any = window;
         header: any = document.querySelector("header");
         main: any = document.querySelector("main");
+        anchor: any = document.querySelector(topAnchor)
+            if beside and topAnchor
+            else None;
+        wide = int(w.innerWidth);
         bottom = 0;
         inset = 0;
-        if w.innerWidth >= 640 {
+        if wide >= 640 {
             if header {
                 bottom = int(header.getBoundingClientRect().bottom);
+            }
+            if anchor and wide >= 768 and anchor.offsetParent {
+                below = int(anchor.getBoundingClientRect().bottom);
+                bottom = below if below > bottom else bottom;
             }
             if main {
                 inset = int(
@@ -237,8 +255,17 @@ def:pub TaskDialog(
                 );
             }
         }
-        topPx = bottom if bottom > 0 else 0;
-        rightPx = inset if inset > 0 else 0;
+        top = bottom if bottom > 0 else 0;
+        right = inset if inset > 0 else 0;
+        if top != topPx {
+            topPx = top;
+        }
+        if right != rightPx {
+            rightPx = right;
+        }
+        if wide != viewW {
+            viewW = wide;
+        }
     }
 
     useEffect(
@@ -246,10 +273,48 @@ def:pub TaskDialog(
             onResize: any = lambda { placeSheet(); };
             if open {
                 window.addEventListener("resize", onResize);
+                window.addEventListener("scroll", onResize);
             }
-            return lambda { window.removeEventListener("resize", onResize); };
+            return lambda {
+                window.removeEventListener("resize", onResize);
+                window.removeEventListener("scroll", onResize);
+            };
         },
         [open]
+    );
+
+    # The anchor moves when the page above it reflows (a filter chip wraps
+    # the toolbar), so every render re-reads it; writes only on a change.
+    useEffect(lambda { if open { placeSheet(); }});
+
+    # The unsaved-changes question takes focus so a key or a click on a card
+    # is answered where it was asked; once answered, focus returns to the sheet.
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if open {
+                timer = window.setTimeout(
+                    lambda {
+                        active: any = document.activeElement;
+                        box: any = document.querySelector("[data-task-sheet]");
+                        if switchLabel {
+                            btn: any = document.querySelector(
+                                "[data-switch-save]:not(:disabled)"
+                            )
+                                or document.querySelector("[data-switch-stay]");
+                            if btn {
+                                btn.focus({"preventScroll": True});
+                            }
+                        } elif box and (not active or active == document.body) {
+                            box.focus({"preventScroll": True});
+                        }
+                    },
+                    30
+                );
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [switchLabel]
     );
 
     async can with (open, taskId, editing) entry {
@@ -395,6 +460,37 @@ def:pub TaskDialog(
                 );
         }
     }
+    # The route list in column order: each step with who owns it and who on
+    # this project holds that role.
+    routeSteps: list[StepView] = [];
+    routeWho: list[str] = [];
+    routePool = inProject if hasProject else members;
+    for k in columnKeys {
+        for s in steps {
+            if s.id == k {
+                owner = (s.owner or "").strip();
+                holders: list[str] = [];
+                for m in routePool {
+                    if owner and owner in m.roles {
+                        holders.append(m.name);
+                    }
+                }
+                who = "";
+                if owner == "anyone" {
+                    who = "anyone";
+                } elif owner {
+                    who = owner
+                        + (
+                            " · " + ", ".join(holders)
+                                if len(holders) > 0
+                                else " · no one on this project"
+                        );
+                }
+                routeSteps.append(s);
+                routeWho.append(who);
+            }
+        }
+    }
     # CreateTask takes no reviewer or pull request, so those rows wait for
     # an existing task rather than drop what is typed into them.
     showReviewer = editing
@@ -461,9 +557,16 @@ def:pub TaskDialog(
         }
     }
 
-    # Escape in a field outside the sheet (the board's title filter) is that
-    # field's, so it must not close the sheet and drop unsaved edits.
+    # Escape answers an open unsaved-changes question with "keep editing". In
+    # a field outside the sheet (the board's title filter) it is that field's.
     def keepOnOutsideEscape(e: any) {
+        if switchLabel {
+            e.preventDefault();
+            if onStay {
+                onStay();
+            }
+            return;
+        }
         active: any = document.activeElement;
         sheet: any = document.querySelector("[data-task-sheet]");
         tag = str(active.tagName or "").lower() if active else "";
@@ -474,11 +577,19 @@ def:pub TaskDialog(
         }
     }
 
+    # Beside the page only at md+: below that the sheet covers the board (full
+    # screen on phones), so it traps focus like any modal. viewW re-renders
+    # this on a resize.
+    win: any = window;
+    besideNow = beside and int(win.innerWidth) >= 768;
+
     return
-        <Sheet open={open} onOpenChange={onOpenChange} modal={False}>
+        <Sheet open={open} onOpenChange={onOpenChange} modal={not besideNow}>
             <SheetContent
                 side="right"
                 data-task-sheet="true"
+                data-beside={"true" if besideNow else "false"}
+                aria-modal={"false" if besideNow else "true"}
                 showCloseButton={False}
                 className="gap-0 bg-card p-0 text-card-foreground outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[420px]"
                 style={{
@@ -497,9 +608,8 @@ def:pub TaskDialog(
                 onCloseAutoFocus={returnFocus}
                 onEscapeKeyDown={keepOnOutsideEscape}
                 onInteractOutside={lambda (e: any) {
-                # Only Close, Cancel, Save and Escape close it: a click on
-                # the page (another card or row swaps the task) must not
-                # throw away unsaved edits.
+                # Only Close, Cancel, Save and Escape close it. A click on
+                # the page goes to the page, which asks before it swaps.
                 e.preventDefault(); }}
                 onKeyDown={onSheetKey}
             >
@@ -1215,56 +1325,135 @@ def:pub TaskDialog(
                                         {whereLine}
                                     </span>
                                 </summary>
-                                <MiniLanes
-                                    className="mt-2"
-                                    steps={steps}
-                                    roles={roles}
-                                    members={inProject if hasProject else members}
-                                    currentKey={hereKey}
-                                />
+                                <ol className="mt-2 border-t" data-route-list="true">
+                                    {for (ri, rs) in enumerate(routeSteps) {
+                                        <li
+                                            key={rs.id}
+                                            aria-current={"step"
+                                                if rs.id == hereKey
+                                                else "false"}
+                                            className={"flex min-h-8 items-center gap-3 border-b px-1 py-1 text-[13px] "
+                                                + (
+                                                    "font-semibold text-foreground"
+                                                        if rs.id == hereKey
+                                                        else "text-muted-foreground"
+                                                )}
+                                        >
+                                            <StepName
+                                                name={rs.name}
+                                                color={rs.color}
+                                                className="shrink-0"
+                                            />
+                                            {if rs.id == hereKey {
+                                                <span
+                                                    key="here"
+                                                    className="shrink-0 text-xs font-normal text-muted-foreground"
+                                                >
+                                                    current
+                                                </span>
+                                            }}
+                                            <span
+                                                className="ml-auto min-w-0 truncate text-right text-xs font-normal text-muted-foreground"
+                                                title={routeWho[ri]}
+                                            >
+                                                {routeWho[ri]}
+                                            </span>
+                                        </li>
+                                    }}
+                                </ol>
                             </details>
                         }}
                     </div>
                 </div>
-                <div
-                    className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-                >
-                    {if editing {
-                        <Button
-                            key="del"
-                            variant="ghost"
-                            className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            onClick={lambda {
-                                pendingAction = "delete";
-                                onDelete();
-                            }}
-                            disabled={saving}
-                        >
-                            {if saving and pendingAction == "delete" {
-                                <Spinner key="sp"/>
-                            }}
-                            {"Deleting…"
-                                if saving and pendingAction == "delete"
-                                else "Delete"}
-                        </Button>
-                    }}
-                    <div className="ml-auto flex gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={lambda { onOpenChange(False); }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button onClick={lambda { save(); }} disabled={not canSave}>
-                            {if saving and pendingAction == "save" {
-                                <Spinner key="sp"/>
-                            }}
-                            {"Saving…"
-                                if saving and pendingAction == "save"
-                                else "Save"}
-                        </Button>
+                {if switchLabel {
+                    <div
+                        key="switch"
+                        role="group"
+                        aria-label="Unsaved changes"
+                        className="grid shrink-0 gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+                    >
+                        <p id="task-switch-note" className="text-[13px]">
+                            <span className="font-semibold">Unsaved changes.</span>
+                            {" Save or discard them to open " + switchLabel + "."}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                className="-ml-2"
+                                data-switch-stay="true"
+                                onClick={lambda { if onStay { onStay(); }}}
+                            >
+                                Keep editing
+                            </Button>
+                            <div className="ml-auto flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    disabled={saving}
+                                    onClick={lambda { if onSwitch { onSwitch(False); }}}
+                                >
+                                    Discard
+                                </Button>
+                                <Button
+                                    data-switch-save="true"
+                                    aria-describedby="task-switch-note"
+                                    disabled={not canSave}
+                                    onClick={lambda { if onSwitch and canSave {
+                                        pendingAction = "save";
+                                        onSwitch(True);
+                                    }}}
+                                >
+                                    {if saving and pendingAction == "save" {
+                                        <Spinner key="sp"/>
+                                    }}
+                                    {"Saving…"
+                                        if saving and pendingAction == "save"
+                                        else "Save and open"}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                } else {
+                    <div
+                        key="footer"
+                        className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+                    >
+                        {if editing {
+                            <Button
+                                key="del"
+                                variant="ghost"
+                                className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={lambda {
+                                    pendingAction = "delete";
+                                    onDelete();
+                                }}
+                                disabled={saving}
+                            >
+                                {if saving and pendingAction == "delete" {
+                                    <Spinner key="sp"/>
+                                }}
+                                {"Deleting…"
+                                    if saving and pendingAction == "delete"
+                                    else "Delete"}
+                            </Button>
+                        }}
+                        <div className="ml-auto flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={lambda { onOpenChange(False); }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button onClick={lambda { save(); }} disabled={not canSave}>
+                                {if saving and pendingAction == "save" {
+                                    <Spinner key="sp"/>
+                                }}
+                                {"Saving…"
+                                    if saving and pendingAction == "save"
+                                    else "Save"}
+                            </Button>
+                        </div>
+                    </div>
+                } }
             </SheetContent>
         </Sheet>;
 }

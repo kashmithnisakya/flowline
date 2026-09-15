@@ -366,6 +366,27 @@ impl BoardPage.setField(key: str, value: str) -> None {
 }
 
 impl BoardPage.openCreate(inKey: str = "") -> None {
+    # A new-task sheet already open keeps its draft and takes the lane asked
+    # for; over an edited task the sheet asks first.
+    if dialogOpen and not editingId {
+        if inKey and inKey in columnKeys() {
+            setField("status", inKey);
+        }
+        field: any = document.querySelector("[data-task-title]");
+        if field {
+            field.focus();
+        }
+        switchTo = NO_SWITCH;
+        return;
+    }
+    if formDirty() {
+        switchTo = {"kind": "new", "id": "", "key": inKey, "title": ""};
+        return;
+    }
+    showCreate(inKey);
+}
+
+impl BoardPage.showCreate(inKey: str = "") -> None {
     editingId = "";
     d = new(Date);
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
@@ -395,19 +416,37 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
         }
     }
     # No due date: a quick capture must not be born due today.
-    form = {
+    fresh = {
         ** BLANK_TASK,
         "project": fProject if fProject != "all" else firstProject,
         "status": landing,
         "iteration": planned
     };
+    form = fresh;
+    baseForm = fresh;
     fAssignees = [];
+    baseAssignees = [];
+    switchTo = NO_SWITCH;
     dialogOpen = True;
 }
 
 impl BoardPage.openEdit(t: TaskView) -> None {
+    # The open card again keeps its edits; another card waits for them.
+    if dialogOpen and editingId == t.id {
+        switchTo = NO_SWITCH;
+        return;
+    }
+    if formDirty() {
+        switchRow.current = t;
+        switchTo = {"kind": "task", "id": t.id, "key": "", "title": t.title};
+        return;
+    }
+    showTask(t);
+}
+
+impl BoardPage.showTask(t: TaskView) -> None {
     editingId = t.id;
-    form = {
+    fresh = {
         "title": t.title,
         "category": t.category,
         "tags": ", ".join(t.tags),
@@ -424,8 +463,63 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "reviewer": t.reviewer_id or "none",
         "review_due": t.review_due
     };
+    form = fresh;
+    baseForm = fresh;
     fAssignees = t.assignee_ids;
+    baseAssignees = t.assignee_ids;
+    switchTo = NO_SWITCH;
     dialogOpen = True;
+}
+
+impl BoardPage.formDirty -> bool {
+    if not dialogOpen {
+        return False;
+    }
+    for k in FORM_KEYS {
+        if str(form[k] or "") != str(baseForm[k] or "") {
+            return True;
+        }
+    }
+    now: list[str] = [a for a in fAssignees];
+    was: list[str] = [a for a in baseAssignees];
+    now.sort();
+    was.sort();
+    return ",".join(now) != ",".join(was);
+}
+
+impl BoardPage.resolveSwitch(save: bool) -> None {
+    if save {
+        await saveTask(True);
+    } else {
+        openSwitchTarget();
+    }
+}
+
+impl BoardPage.openSwitchTarget -> None {
+    target = switchTo;
+    switchTo = NO_SWITCH;
+    if target["kind"] == "new" {
+        showCreate(target["key"]);
+    } elif target["kind"] == "task" {
+        # The loaded row when there is one (a save may have refreshed it),
+        # else the row the click handed over (older history, a deep link).
+        row: any = switchRow.current;
+        for t in tasks + olderDone {
+            if t.id == target["id"] {
+                row = t;
+            }
+        }
+        if row {
+            showTask(row);
+        }
+    }
+}
+
+impl BoardPage.sheetOpenChange(o: bool) -> None {
+    dialogOpen = o;
+    if not o {
+        switchTo = NO_SWITCH;
+    }
 }
 
 # A write from inside the dialog (the checklist) reports the task's fresh
@@ -445,7 +539,7 @@ impl BoardPage.openTaskById(tid: str) -> None {
     }
 }
 
-impl BoardPage.saveTask -> None {
+impl BoardPage.saveTask(keepOpen: bool = False) -> None {
     title = form["title"].strip();
     if not title {
         return;
@@ -522,7 +616,12 @@ impl BoardPage.saveTask -> None {
                 project_id=project
             );
         }
-        dialogOpen = False;
+        if keepOpen and switchTo["kind"] {
+            openSwitchTarget();
+        } else {
+            dialogOpen = False;
+            switchTo = NO_SWITCH;
+        }
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
@@ -539,6 +638,7 @@ impl BoardPage.deleteTask -> None {
     try {
         root spawn DeleteTask(task_id=editingId);
         dialogOpen = False;
+        switchTo = NO_SWITCH;
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
@@ -700,9 +800,12 @@ impl BoardPage.moveTo(
     reorder = positioned and oldKey == columnKey;
     landing = mappedStatus(columnKey);
     # An open sheet on this task follows the move, or its Save (which sends
-    # every field) would put the card back.
+    # every field) would put the card back. The move is saved, not an edit.
     if dialogOpen and editingId == taskId and not reorder {
         setField("status", columnKey);
+        rebased = {** baseForm};
+        rebased["status"] = columnKey;
+        baseForm = rebased;
     }
     # The rendered order is the array order, so a positioned drop splices
     # the row beside its anchor; an append keeps the sort_order patch.
@@ -794,6 +897,7 @@ impl BoardPage.moveTo(
         }
         if dialogOpen and editingId == taskId {
             fAssignees = landed[0].assignee_ids;
+            baseAssignees = landed[0].assignee_ids;
         }
         # `tasks` read after the await is the pre-call snapshot, which is
         # exactly the list the optimistic patch produced; swap the row in.
@@ -1163,13 +1267,19 @@ impl BoardPage.stepCard(delta: int) -> None {
         return;
     }
     card: any = cards[to];
+    nextId = str(card.getAttribute("data-task-card"));
+    # Over unsaved edits the sheet asks first and nothing moves yet.
+    if formDirty() {
+        openTaskById(nextId);
+        return;
+    }
     active: any = document.activeElement;
     # Focus follows only when it was on a card; typing focus stays in the sheet.
     if active and active.hasAttribute("data-task-card") {
         card.focus({"preventScroll": True});
     }
     card.scrollIntoView({"block": "nearest", "inline": "nearest"});
-    openTaskById(str(card.getAttribute("data-task-card")));
+    openTaskById(nextId);
 }
 
 impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
