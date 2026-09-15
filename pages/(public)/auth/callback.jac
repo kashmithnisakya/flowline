@@ -4,9 +4,20 @@ this page stores the token like a password login would and hands off.
 """
 
 import from "@jac/runtime" { jacSetToken }
+import from ....lib.session { fetchProfile }
 import from ....components.ui.button { Button }
 import from ....components.common.glyphs { WarnIcon }
 import from ....components.landing.Wordmark { Wordmark }
+
+# Both mounts of the page load share one profile read.
+glob LANDING: dict[str, any] = {"promise": None};
+
+# A new account has no workspace name yet, so it goes straight to setup.
+async def landingPath -> str {
+    profile = await fetchProfile();
+    named = str(profile["org_name"]).strip() if profile["org_name"] else "";
+    return "/board" if named else "/setup";
+}
 
 def:pub SsoCallbackPage -> JsxPage {
     has failure: str = "";
@@ -27,7 +38,7 @@ def:pub SsoCallbackPage -> JsxPage {
         return "";
     }
 
-    can with entry {
+    async can with entry {
         token = param("token");
         problem = param("message") or param("error");
         if token {
@@ -35,7 +46,11 @@ def:pub SsoCallbackPage -> JsxPage {
             # Same marker a password login sets, so a later 401 can tell
             # this apart from a cold arrival at /login.
             localStorage.setItem("flowline_session", "1");
-            window.location.href = "/board";
+            if not LANDING["promise"] {
+                LANDING["promise"] = landingPath();
+            }
+            path: str = await LANDING["promise"];
+            window.location.replace(path);
         } else {
             failure = problem or "Sign-in was cancelled or failed.";
         }
