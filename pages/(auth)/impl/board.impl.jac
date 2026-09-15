@@ -122,6 +122,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
         fetchedSteps: list[StepView] = [];
         fetchedRepos: list[RepoView] = [];
         fetchedRoles: list[RoleView] = [];
+        fetchedIterations: list[IterationView] = [];
         pageNo = 1;
         more = True;
         gotPage = False;
@@ -144,6 +145,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                     fetchedSteps = data.steps;
                     fetchedRepos = data.repos;
                     fetchedRoles = data.roles;
+                    fetchedIterations = data.iterations;
                     connected = data.github_connected;
                     projectCount = len(data.projects);
                 }
@@ -165,6 +167,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                 steps = fetchedSteps;
                 repos = fetchedRepos;
                 roleRows = fetchedRoles;
+                iterations = fetchedIterations;
                 ghConnected = connected;
             }
             # A filtered fetch owns the count while filters are on; the poll
@@ -365,11 +368,25 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
             firstProject = jid(pr);
         }
     }
+    # A board filtered to an iteration plans the new task into it.
+    planned = "none";
+    for it in iterations {
+        if fIteration == it.id
+            or (
+                fIteration == "current"
+                and planned == "none"
+                and it.start_date <= shifted.toISOString()[:10]
+                and it.end_date >= shifted.toISOString()[:10]
+            ) {
+            planned = it.id;
+        }
+    }
     form = {
         ** BLANK_TASK,
         "project": fProject if fProject != "all" else firstProject,
         "status": landing,
-        "due_date": shifted.toISOString()[:10]
+        "due_date": shifted.toISOString()[:10],
+        "iteration": planned
     };
     fAssignees = [];
     dialogOpen = True;
@@ -386,6 +403,8 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "priority": t.priority,
         "status": columnKeyOf(t),
         "due_date": t.due_date,
+        "start_date": t.start_date,
+        "iteration": t.iteration_id or "none",
         "notes": t.notes,
         "issue": t.issue_link,
         "pr": t.pr_link,
@@ -462,6 +481,8 @@ impl BoardPage.saveTask -> None {
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
+                start_date=form["start_date"],
+                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 pr_link=form["pr"].strip(),
@@ -480,6 +501,8 @@ impl BoardPage.saveTask -> None {
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
+                start_date=form["start_date"],
+                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 assignee_ids=fAssignees,

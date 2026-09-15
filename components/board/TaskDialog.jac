@@ -14,7 +14,15 @@ glob STATUSES: list[str] = [
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"];
 
-import from ...models { Project, MemberView, RepoView, StepView, RoleView, TaskView }
+import from ...models {
+    Project,
+    MemberView,
+    RepoView,
+    StepView,
+    RoleView,
+    TaskView,
+    IterationView
+}
 import from ..common.Markdown { Markdown }
 import from .MiniLanes { MiniLanes }
 import from .Checklist { ChecklistEditor }
@@ -47,6 +55,7 @@ import from ..ui.dropdown_menu {
     DropdownMenuCheckboxItem
 }
 import from ..common.glyphs { Spinner }
+import from ...lib.dates { prettyDay }
 
 # Every control fills its cell, so the labels above them line up as a
 # grid instead of a ragged row of chips.
@@ -136,7 +145,10 @@ def:pub TaskDialog(
     # reports the task view to `onChecklist`; no `taskId` hides the section.
     taskId: str = "",
     checklist: list[dict[str, any]] = [],
-    onChecklist: Callable[[TaskView], None] = None
+    onChecklist: Callable[[TaskView], None] = None,
+    # The workspace's iterations; the form's "iteration" is a jid or "none".
+    # With none defined the field stays out of the way.
+    iterations: list[IterationView] = []
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -444,6 +456,15 @@ def:pub TaskDialog(
                             />
                         </div>
                         <div className="grid content-start gap-2">
+                            <Label>Start date</Label>
+                            <DatePicker
+                                value={form["start_date"]}
+                                clearable={True}
+                                className="w-full justify-between"
+                                onChange={lambda (d: str) { onField("start_date", d); }}
+                            />
+                        </div>
+                        <div className="grid content-start gap-2">
                             <Label>Due date</Label>
                             <DatePicker
                                 value={form["due_date"]}
@@ -451,7 +472,43 @@ def:pub TaskDialog(
                                 className="w-full justify-between"
                                 onChange={lambda (d: str) { onField("due_date", d); }}
                             />
+                            {if form["start_date"]
+                                and form["due_date"]
+                                and form["start_date"] > form["due_date"] {
+                                <span key="order" className="text-xs text-destructive">
+                                    Due before it starts.
+                                </span>
+                            }}
                         </div>
+                        {if len(iterations) > 0 or form["iteration"] != "none" {
+                            <div key="iteration" className={WIDE}>
+                                <Label>Iteration</Label>
+                                <Select
+                                    value={form["iteration"]}
+                                    onValueChange={lambda (v: str) { onField(
+                                        "iteration", v
+                                    ); }}
+                                >
+                                    <SelectTrigger className={FIELD}>
+                                        <SelectValue placeholder="No iteration"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">
+                                            No iteration
+                                        </SelectItem>
+                                        {for it in iterations {
+                                            <SelectItem key={it.id} value={it.id}>
+                                                {it.name
+                                                    + " · "
+                                                    + prettyDay(it.start_date)
+                                                    + " – "
+                                                    + prettyDay(it.end_date)}
+                                            </SelectItem>
+                                        }}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        }}
                         <div className={WIDE}>
                             <Label>GitHub issue (optional)</Label>
                             <div className="flex items-center gap-2">

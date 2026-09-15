@@ -11,6 +11,7 @@ import from models {
     ProjectTally,
     MemberTally,
     WorkflowStep,
+    Iteration,
     AssignedTo,
     OnProject,
     HasRole,
@@ -35,6 +36,7 @@ import from services.util {
     page_bounds,
     clean_tags,
     short_id,
+    iso_day,
     done_cutoff,
     is_older,
     order_working,
@@ -48,6 +50,13 @@ import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 # The legacy status a step stands for. Every move writes both, so the rest of
 # the app keeps reading `status` and never has to know about steps.
+# An iteration id the caller may plan into: its own iteration, else "".
+def owned_iteration(holder: Root, iteration_id: str) -> str {
+    it = resolve(iteration_id);
+    return iteration_id if isinstance(it, Iteration) and owned(holder, it) else "";
+}
+
+
 def status_for_step(holder: Root, step_id: str) -> str {
     step = resolve(step_id);
     if not isinstance(step, WorkflowStep) or not owned(holder, step) {
@@ -215,6 +224,8 @@ walker ListTasks {
         # estimate) or "no" (unestimated).
         tag: str = "",
         estimated: str = "",
+        # An iteration jid, "none" for tasks in no iteration, or "" for any.
+        iteration_id: str = "",
         # The table view's column sort; empty keeps the scope's own order.
         sort: str = "",
         sort_dir: str = "asc",
@@ -265,6 +276,14 @@ walker ListTasks {
                 continue;
             }
             if self.estimated == "no" and t.estimate > 0.0 {
+                continue;
+            }
+            if self.iteration_id == "none" and t.iteration_id {
+                continue;
+            }
+            if self.iteration_id
+                and self.iteration_id != "none"
+                and t.iteration_id != self.iteration_id {
                 continue;
             }
             done = t.status == "Done";
@@ -559,6 +578,8 @@ walker CreateTask {
         status: str = "Backlog",
         step_id: str = "",
         due_date: str = "",
+        start_date: str = "",
+        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         assignee_ids: list[str] = [],
@@ -607,6 +628,8 @@ walker CreateTask {
             status=col,
             step_id=step,
             due_date=self.due_date,
+            start_date=iso_day(self.start_date),
+            iteration_id=owned_iteration(holder, self.iteration_id),
             notes=self.notes,
             issue_link=self.issue_link,
             created_at=stamp,
@@ -650,6 +673,8 @@ walker UpdateTask(find_task) {
         status: str = "",
         step_id: str = "",
         due_date: str = "",
+        start_date: str = "",
+        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         pr_link: str = "",
@@ -679,6 +704,8 @@ walker UpdateTask(find_task) {
         here.priority = self.priority;
         here.set_status(landing, now_iso());
         here.due_date = self.due_date;
+        here.start_date = iso_day(self.start_date);
+        here.iteration_id = owned_iteration(holder, self.iteration_id);
         here.notes = self.notes;
         here.issue_link = self.issue_link;
         here.pr_link = self.pr_link;

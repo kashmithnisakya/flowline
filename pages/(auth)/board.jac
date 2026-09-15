@@ -3,7 +3,15 @@ ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
-import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleView }
+import from ...models {
+    Project,
+    MemberView,
+    TaskView,
+    StepView,
+    RepoView,
+    RoleView,
+    IterationView
+}
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
@@ -46,6 +54,8 @@ glob BLANK_TASK: dict[str, str] = {
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",
+         "start_date": "",
+         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -119,6 +129,9 @@ def:pub BoardPage -> JsxPage {
         # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
         fTag: str = "All",
         fEstimate: str = "All",
+        # "All", "current" (whichever iterations hold today), "none" or a jid.
+        fIteration: str = "All",
+        iterations: list[IterationView] = [],
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
         boardQuery: str = "",
@@ -326,6 +339,14 @@ def:pub BoardPage -> JsxPage {
     # One filter predicate for both the working set and the older-Done list,
     # so a new condition is added once. hideDone and the older-list's own
     # showAllDone guard stay at the call sites, since they differ per list.
+    todayDay = todayIso();
+    currentIterations: list[str] = [];
+    for it in iterations {
+        if it.start_date <= todayDay and it.end_date >= todayDay {
+            currentIterations.append(it.id);
+        }
+    }
+
     def matches(t: TaskView) -> bool {
         # The issue/PR number lives in the synced numeric field OR the tail of
         # a hand-pasted link, so search the number wherever it actually is.
@@ -342,6 +363,12 @@ def:pub BoardPage -> JsxPage {
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)
+            and (
+                fIteration == "All"
+                or (fIteration == "none" and not t.iteration_id)
+                or (fIteration == "current" and t.iteration_id in currentIterations)
+                or (bool(t.iteration_id) and t.iteration_id == fIteration)
+            )
             and (
                 fEstimate == "All"
                 or (fEstimate == "yes" and t.estimate > 0.0)
@@ -489,6 +516,9 @@ def:pub BoardPage -> JsxPage {
                             estimate={fEstimate}
                             onTag={lambda (v: str) { fTag = v; }}
                             onEstimate={lambda (v: str) { fEstimate = v; }}
+                            iterations={iterations}
+                            iteration={fIteration}
+                            onIteration={lambda (v: str) { fIteration = v; }}
                         />
                         {if ghConnected {
                             <Button
@@ -730,6 +760,7 @@ def:pub BoardPage -> JsxPage {
                 familyDone={famDone}
                 parentTaskId={famParentId}
                 parentLabel={famParentLabel}
+                iterations={iterations}
                 onOpenTask={openTaskById}
                 taskId={editingId}
                 checklist={editingChecklist}

@@ -69,8 +69,10 @@ people it tracks are roster members.
   `root ++> WorkflowSteps ++> WorkflowStep` (that box also carries the flow
   line's name and template key) and `root ++> Logs ++> LogDay ++> LogEntry`
   (an entry hangs under its day; `days_between(root, since, until)` reads
-  the days in a date range, filtered in the store's query); `Repo` and
-  `GithubConnection` hang off the root directly.
+  the days in a date range, filtered in the store's query) and
+  `root ++> Iterations ++> Iteration` (time boxes; a task points at one
+  through its `iteration_id` field, like `step_id`, and `DeleteIteration`
+  clears it); `Repo` and `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
   `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
@@ -89,7 +91,8 @@ people it tracks are roster members.
   aggregate from the root. A `Member` stores `first_name` and `last_name`;
   `full_name()` is the display name.
 - **`services/`** — the API, one folder per section (`projects`, `roster`,
-  `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`, and
+  `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
+  `iterations` (iteration CRUD and `RoadmapSnapshot`), and
   `github` with `github.jac`, `events.jac` and `util.jac`) plus
   `services/util.jac` for shared server-only helpers. Walkers are **bare
   (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
@@ -243,7 +246,7 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
@@ -278,7 +281,10 @@ File-based routing with route groups:
   same `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
   does the same for its rows, and keeps scope, filters, sort and page in the
   URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
-  `sort="step"` follow the board's column order and placement rule.
+  `sort="step"` follow the board's column order and placement rule. `/roadmap`
+  opens it from a bar. **`UpdateTask` overwrites every field**, so each page
+  that opens the dialog must carry `start_date` and `iteration` (a jid or
+  `"none"`) in its form and pass them on save, or a save clears them.
 - **A task's checklist is not part of the form.** `Task.checklist` is written
   only by `AddChecklistItem` / `SetChecklistItem` / `RemoveChecklistItem`,
   each applied at once from `components/board/Checklist.jac`, so a dialog

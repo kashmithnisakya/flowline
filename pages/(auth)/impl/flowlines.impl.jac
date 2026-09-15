@@ -34,6 +34,8 @@ impl FlowLinePage.boot -> None {
         roleRows = roleResult.reports[0] if roleResult.reports else [];
         memResult = root spawn ListMembers();
         roleMembers = memResult.reports[0] if memResult.reports else [];
+        itResult = root spawn ListIterations();
+        iterations = itResult.reports[0] if itResult.reports else [];
     } except Exception as e {
         roleRows = [];
     }
@@ -195,6 +197,8 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "priority": picked.priority,
         "status": key,
         "due_date": picked.due_date,
+        "start_date": picked.start_date,
+        "iteration": picked.iteration_id or "none",
         "notes": picked.notes,
         "issue": picked.issue_link,
         "pr": picked.pr_link,
@@ -280,6 +284,10 @@ impl FlowLinePage.saveTask -> None {
             status=mappedStatus(landing),
             step_id=landing,
             due_date=taskForm["due_date"],
+            start_date=taskForm["start_date"],
+            iteration_id=taskForm["iteration"]
+                if taskForm["iteration"] != "none"
+                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),

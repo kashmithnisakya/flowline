@@ -34,6 +34,9 @@ is why renaming a step never changes how anything behaves.
 - **Handoffs ask for detail**: moving work to a handoff or blocked step asks
   (optionally) for a reviewer, a review-by date, a PR link or what is blocking it
 - **Multi-assignee tasks**, free-text categories and tags, repos attached to projects
+- **Iterations and a roadmap**: plan tasks into time boxes, filter the board to
+  the current one, and see work on a twelve-week timeline by its start and due
+  dates or its iteration
 - **GitHub, live**: install the app on the repos you choose; issues opened,
   closed or reopened and pull requests merged on GitHub land on an open board
   within seconds, import issues as tasks, watch pull-request state on the

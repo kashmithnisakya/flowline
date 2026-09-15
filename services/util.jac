@@ -50,6 +50,19 @@ def short_id -> str {
 }
 
 
+# `value` as a canonical ISO day ("2026-09-14"), or "" when it is not one.
+def iso_day(value: str) -> str {
+    if not value or len(value) < 10 {
+        return "";
+    }
+    try {
+        return datetime.date.fromisoformat(value[:10]).isoformat();
+    } except Exception {
+        return "";
+    }
+}
+
+
 def today_iso -> str {
     return now_iso()[:10];
 }

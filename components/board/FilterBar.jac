@@ -1,7 +1,7 @@
 """Board filters: project (persisted), assignee, category, tag, estimate,
-hide-Done."""
+iteration, hide-Done."""
 
-import from ...models { Project, MemberView }
+import from ...models { Project, MemberView, IterationView }
 import from ..ui.select {
     Select,
     SelectTrigger,
@@ -27,7 +27,11 @@ def:pub FilterBar(
     tag: str = "All",
     estimate: str = "All",
     onTag: Callable[[str], None] = None,
-    onEstimate: Callable[[str], None] = None
+    onEstimate: Callable[[str], None] = None,
+    # "All", "current", "none" or an iteration jid; hidden with none defined.
+    iterations: list[IterationView] = [],
+    iteration: str = "All",
+    onIteration: Callable[[str], None] = None
 ) -> JsxElement {
     shownMembers = [
         m
@@ -112,6 +116,31 @@ def:pub FilterBar(
                     <SelectItem value="no">Unestimated</SelectItem>
                 </SelectContent>
             </Select>
+            {if len(iterations) > 0 {
+                <Select
+                    key="iteration"
+                    value={iteration}
+                    onValueChange={lambda (v: str) { if onIteration {
+                        onIteration(v);
+                    }}}
+                >
+                    <SelectTrigger
+                        className="h-8 w-36"
+                        size="sm"
+                        aria-label="Filter by iteration"
+                    >
+                        <SelectValue placeholder="Iteration"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">All iterations</SelectItem>
+                        <SelectItem value="current">Current iteration</SelectItem>
+                        {for it in iterations {
+                            <SelectItem key={it.id} value={it.id}>{it.name}</SelectItem>
+                        }}
+                        <SelectItem value="none">No iteration</SelectItem>
+                    </SelectContent>
+                </Select>
+            }}
             <Button
                 variant={"default" if hideDone else "outline"}
                 size="sm"

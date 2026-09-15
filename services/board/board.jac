@@ -14,6 +14,9 @@ import from models {
     RepoView,
     RoleView,
     StepView,
+    IterationView,
+    iteration_view,
+    iterations_of,
     member_view,
     repo_view,
     role_view,
@@ -42,6 +45,7 @@ obj BoardData {
         steps: list[StepView],
         repos: list[RepoView],
         roles: list[RoleView],
+        iterations: list[IterationView],
         github_connected: bool;
 }
 
@@ -86,6 +90,7 @@ walker BoardSnapshot {
         steps: list[StepView] = [];
         repos: list[RepoView] = [];
         roles: list[RoleView] = [];
+        iterations: list[IterationView] = [];
         connected = False;
         if self.with_workspace {
             for m in members_of(here) {
@@ -107,6 +112,10 @@ walker BoardSnapshot {
                 roles.append(role_view(ro));
             }
             roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });
+            for it in iterations_of(here) {
+                iterations.append(iteration_view(it));
+            }
+            iterations.sort(key=lambda (iv: IterationView) { iv.start_date; });
             connected = connection_view(connection_of(here)).connected;
         }
         report BoardData(
@@ -119,6 +128,7 @@ walker BoardSnapshot {
             steps=steps,
             repos=repos,
             roles=roles,
+            iterations=iterations,
             github_connected=connected
         );
     }

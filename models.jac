@@ -4,8 +4,9 @@ path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
 root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
-root ++> Logs ++> LogDay ++> LogEntry; repos and the GitHub connection hang
-off the root directly. `owned()` climbs those container edges.
+root ++> Logs ++> LogDay ++> LogEntry and root ++> Iterations ++> Iteration;
+repos and the GitHub connection hang off the root directly. `owned()` climbs
+those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -58,6 +59,7 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, WorkflowSteps)
         or isinstance(owner, Logs)
         or isinstance(owner, LogDay)
+        or isinstance(owner, Iterations)
     );
 }
 
@@ -191,7 +193,12 @@ node Task {
         done_at: str = "",
         # The card's own breakdown: {"id", "text", "done"} in display order.
         # Written only by the checklist walkers, never by UpdateTask.
-        checklist: list[dict[str, any]] = [];
+        checklist: list[dict[str, any]] = [],
+        # The Iteration this task is planned into, by jid ("" for none), and
+        # when work on it starts. Fields, not edges, so list rows stay
+        # hop-free; the roadmap falls back to the iteration's dates.
+        iteration_id: str = "",
+        start_date: str = "";
 
     # Every status write goes through here, so `done_at` stays true to the
     # move into Done: kept while the task stays Done, cleared when it leaves.
@@ -267,7 +274,9 @@ node Task {
             pr_state=self.pr_state,
             gh_assignees=self.gh_assignees,
             pr_review_state=self.pr_review_state,
-            checklist=self.checklist
+            checklist=self.checklist,
+            iteration_id=self.iteration_id,
+            start_date=self.start_date
         );
     }
 }
@@ -362,6 +371,17 @@ node WorkflowSteps {
 
 node Logs {}
 
+# A time box the team plans in: a name and an inclusive ISO date span. Tasks
+# point at one through Task.iteration_id.
+node Iteration {
+    has name: str,
+        start_date: str,
+        end_date: str,
+        created_at: str = "";
+}
+
+node Iterations {}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge By: LogEntry --> Member {}
@@ -403,7 +423,9 @@ obj TaskView {
         pr_state: str = "",
         gh_assignees: list[str] = [],
         pr_review_state: str = "",
-        checklist: list[dict[str, any]] = [];
+        checklist: list[dict[str, any]] = [],
+        iteration_id: str = "",
+        start_date: str = "";
 }
 
 # The Overview's charts over time, one entry per week oldest first: `weeks`
@@ -513,6 +535,19 @@ obj RoleView {
         blurb: str,
         color: str,
         sort_order: float;
+}
+
+obj IterationView {
+    has id: str,
+        name: str,
+        start_date: str,
+        end_date: str;
+}
+
+def iteration_view(it: Iteration) -> IterationView {
+    return IterationView(
+        id=jid(it), name=it.name, start_date=it.start_date, end_date=it.end_date
+    );
 }
 
 def role_view(r: Role) -> RoleView {
@@ -640,6 +675,15 @@ def roles_of(holder: Root) -> list[Role] {
 }
 
 
+def iterations_of(holder: Root) -> list[Iteration] {
+    out: list[Iteration] = [];
+    for box in [holder-->[?:Iterations]] {
+        out.extend([box-->[?:Iteration]]);
+    }
+    return out;
+}
+
+
 def steps_of(holder: Root) -> list[WorkflowStep] {
     out: list[WorkflowStep] = [];
     for box in [holder-->[?:WorkflowSteps]] {
@@ -719,6 +763,17 @@ def roles_box(holder: Root) -> Roles {
         return found[0];
     }
     box = holder ++> Roles();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def iterations_box(holder: Root) -> Iterations {
+    found = [holder-->[?:Iterations]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Iterations();
     on_attached(holder, box);
     return box;
 }
