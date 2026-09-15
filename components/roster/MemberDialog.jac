@@ -19,6 +19,7 @@ import from ..ui.label { Label }
 import from ..common.glyphs { Spinner }
 import from ..common.Avatar { Avatar }
 import from ..flowlines.kinds { COLOR_KEYS, DOT_FILL }
+import from ..workspace.icons { IconX }
 
 def:pub MemberDialog(
     open: bool,
@@ -58,13 +59,13 @@ def:pub MemberDialog(
     shown = (form["first_name"] + " " + form["last_name"]).strip();
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="bg-card sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>
-                        {"Edit member" if editing else "Add member"}
+                        {"Edit person" if editing else "Add person"}
                     </DialogTitle>
                     <DialogDescription>
-                        Members are roster records. They do not need accounts.
+                        People do not need an account. Tasks and log entries are assigned to them.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
@@ -158,13 +159,14 @@ def:pub MemberDialog(
                                     <Badge
                                         key={"x-" + extra}
                                         variant="secondary"
-                                        className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                        className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
                                         title="Not one of this flow line's roles. Click to remove"
                                         onClick={lambda { if onToggleRole {
                                             onToggleRole(extra);
                                         }}}
                                     >
-                                        {extra + " ✕"}
+                                        {extra}
+                                        <IconX size={12} className="text-subtle"/>
                                     </Badge>
                                 }}
                             </div>
@@ -177,15 +179,16 @@ def:pub MemberDialog(
                                     <Badge
                                         key={r}
                                         variant="secondary"
-                                        className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                        className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
                                         title="Click to remove"
                                         onClick={lambda { onRemoveRole(r); }}
                                     >
-                                        {r} ✕
+                                        {r}
+                                        <IconX size={12} className="text-subtle"/>
                                     </Badge>
                                 }}
                                 <Input
-                                    placeholder={"Add a role and press Enter"
+                                    placeholder={"Type a role and press Enter"
                                         if len(roles) == 0
                                         else "Another role…"}
                                     className="h-8 w-56"
@@ -209,18 +212,22 @@ def:pub MemberDialog(
                                 <Badge
                                     key={t}
                                     variant="default"
-                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                    className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
                                     title="Click to remove"
                                     onClick={lambda { onToggleTag(t); }}
                                 >
-                                    {t + " ✕"}
+                                    {t}
+                                    <IconX
+                                        size={12}
+                                        className="text-primary-foreground/70"
+                                    />
                                 </Badge>
                             }}
                             {for t in unselectedTags {
                                 <Badge
                                     key={"s-" + t}
                                     variant="outline"
-                                    className="cursor-pointer animate-in fade-in zoom-in-95 duration-150 hover:bg-accent hover:text-accent-foreground"
+                                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                                     title="Click to add"
                                     onClick={lambda { onToggleTag(t); }}
                                 >
@@ -228,7 +235,7 @@ def:pub MemberDialog(
                                 </Badge>
                             }}
                             <Input
-                                placeholder={"Add a tag and press Enter"
+                                placeholder={"Type a tag and press Enter"
                                     if len(memberTags) == 0
                                     else "Another tag…"}
                                 className="h-8 w-56"
@@ -309,7 +316,7 @@ def:pub MemberDialog(
                         }}
                         {"Saving…"
                             if saving
-                            else ("Save changes" if editing else "Add member")}
+                            else ("Save changes" if editing else "Add person")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

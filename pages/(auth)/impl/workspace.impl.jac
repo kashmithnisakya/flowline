@@ -6,18 +6,13 @@ impl WorkspacePage.loadAll -> None {
         pResult = root spawn ListProjects();
         members = mResult.reports[0] if mResult.reports else [];
         projects = pResult.reports[0] if pResult.reports else [];
-        # The member dialog offers the org's managed roles as toggle
-        # chips; an org with none (predates roles, or scratch and never
-        # added any) falls back to the free-text input.
+        # The org's managed roles drive the row menus and the member dialog;
+        # a workspace with none falls back to free text in the dialog.
         rResult = root spawn ListRoles();
-        roleRows = rResult.reports[0] if rResult.reports else [];
-        opts: list[str] = [];
-        for r in roleRows {
-            opts.append(r.name);
-        }
-        roleOptions = opts;
+        roles = rResult.reports[0] if rResult.reports else [];
+        orgName = await fetchOrgName();
     } except Exception as e {
-        toast("Failed to load the workspace");
+        toast.error("Could not load the workspace");
     }
     loading = False;
 }
@@ -118,12 +113,18 @@ impl WorkspacePage.openEdit(m: MemberView) -> None {
         "email": m.email,
         "github": m.github_username,
         "color": m.color,
-        "roleDraft": ""
+        "roleDraft": "",
+        "tagDraft": ""
     };
     mRoles = m.roles;
     mTags = m.tags;
     mProjects = m.project_ids;
     dialogOpen = True;
+}
+
+impl WorkspacePage.askArchive(m: MemberView) -> None {
+    archiveId = m.id;
+    archiveName = m.name;
 }
 
 impl WorkspacePage.saveMember -> None {
@@ -134,17 +135,17 @@ impl WorkspacePage.saveMember -> None {
     saving = True;
     # A role still sitting in the draft box counts; losing typed input on
     # save is the setup-wizard bug all over again.
-    roles = mRoles;
+    roleList = mRoles;
     draft = form["roleDraft"].strip();
-    if draft and draft not in roles {
-        roles = roles + [draft];
+    if draft and draft not in roleList {
+        roleList = roleList + [draft];
     }
     try {
         result = root spawn SaveMember(
             member_id=editingId,
             first_name=first,
             last_name=form["last_name"].strip(),
-            roles=roles,
+            roles=roleList,
             email=form["email"].strip(),
             github_username=form["github"].strip(),
             tags=mTags,
@@ -167,56 +168,111 @@ impl WorkspacePage.saveMember -> None {
         dialogOpen = False;
         await loadAll();
     } except Exception as e {
-        toast("Failed to save member");
+        toast.error("Could not save that person");
     }
     saving = False;
 }
 
-impl WorkspacePage.archiveMember(memberId: str) -> None {
-    try {
-        root spawn ArchiveMember(member_id=memberId);
-        await loadAll();
-    } except Exception as e {
-        toast("Failed to archive member");
-    }
-}
-
-impl WorkspacePage.assignTo(memberId: str, projectId: str) -> None {
-    if not projectId {
+impl WorkspacePage.archiveMember -> None {
+    target = archiveId;
+    name = archiveName;
+    if not target or archiving {
         return;
     }
+    archiving = True;
     try {
-        root spawn AssignToProject(member_id=memberId, project_id=projectId);
+        root spawn ArchiveMember(member_id=target);
+        archiveId = "";
         await loadAll();
+        toast.success(name + " archived");
     } except Exception as e {
-        toast("Failed to assign");
+        toast.error("Could not archive that person");
     }
+    archiving = False;
 }
 
-impl WorkspacePage.unassignFrom(memberId: str, projectName: str) -> None {
-    # The badge carries the project NAME; resolve it to a jid via the
-    # loaded projects list.
-    target = "";
-    for p in projects {
-        if p.name == projectName {
-            target = jid(p);
+impl WorkspacePage.applyRoles(memberId: str, next: list[str], undoable: bool) -> None {
+    # SetMemberRoles overwrites only the roles and answers with the saved row,
+    # so one call updates the table without reloading the roster.
+    was: list[str] = [];
+    who = "";
+    for m in members {
+        if m.id == memberId {
+            was = m.roles;
+            who = m.name;
         }
     }
-    if not target {
-        return;
-    }
     try {
-        root spawn UnassignFromProject(member_id=memberId, project_id=target);
-        await loadAll();
+        result = root spawn SetMemberRoles(member_id=memberId, roles=next);
+        saved = result.reports[0] if result.reports else None;
+        if saved {
+            members = [saved if m.id == memberId else m for m in members];
+        }
+        # A role typed on this member may be new to the workspace.
+        rResult = root spawn ListRoles();
+        roles = rResult.reports[0] if rResult.reports else roles;
+        if undoable {
+            toast.success(
+                "Roles saved for " + who,
+                {
+                    "action": {
+                        "label": "Undo",
+                        "onClick": lambda { applyRoles(memberId, was, False); }
+                    }
+                }
+            );
+        }
     } except Exception as e {
-        toast("Failed to unassign");
+        toast.error("Could not save those roles");
     }
 }
 
+impl WorkspacePage.applyProjects(
+    memberId: str, next: list[str], undoable: bool
+) -> None {
+    # Only the differences are written: a project the menu never listed (an
+    # archived one someone is still on) is left exactly as it was.
+    was: list[str] = [];
+    who = "";
+    for m in members {
+        if m.id == memberId {
+            was = m.project_ids;
+            who = m.name;
+        }
+    }
+    try {
+        for pid in next {
+            if pid not in was {
+                root spawn AssignToProject(member_id=memberId, project_id=pid);
+            }
+        }
+        for pid in was {
+            if pid not in next {
+                root spawn UnassignFromProject(member_id=memberId, project_id=pid);
+            }
+        }
+        mResult = root spawn ListMembers();
+        members = mResult.reports[0] if mResult.reports else members;
+        if undoable {
+            toast.success(
+                "Projects saved for " + who,
+                {
+                    "action": {
+                        "label": "Undo",
+                        "onClick": lambda { applyProjects(memberId, was, False); }
+                    }
+                }
+            );
+        }
+    } except Exception as e {
+        toast.error("Could not save those projects");
+    }
+}
 
 impl WorkspacePage.selectTab(value: str) -> None {
     tab = value;
-    # Keep the tab in the URL so it is linkable and survives a reload, but
+    query = "";
+    # Keep the section in the URL so it is linkable and survives a reload, but
     # replace rather than push: Back should leave the page, not undo a tab
     # flip. Any OAuth callback params are dropped here too, which is what
     # stops a refresh replaying a burned install nonce.
