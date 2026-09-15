@@ -170,7 +170,7 @@ def:pub StepTasksPanel(
                                         {if t.priority {
                                             <span
                                                 key="pr"
-                                                className={"text-destructive"
+                                                className={"font-medium text-foreground"
                                                     if t.priority == "High"
                                                     else ""}
                                             >

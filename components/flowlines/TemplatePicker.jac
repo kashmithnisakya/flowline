@@ -13,7 +13,7 @@ import from ..common.glyphs { Spinner }
 # to its own description.
 glob PLAIN: dict[str, str] = {
          "simple": "Four steps most teams already use. Work goes from To do to Doing to Review, and Review can send it back.",
-         "jaseci": "Seven steps across four roles, for teams that design before they build. Big changes get an architecture pass, small ones go straight to building, and nothing is done until review and a clean-up pass."
+         "jaseci": "Seven steps across four roles, for teams that design before they build. Big changes route through an architecture pass, small ones straight to building, and work reaches Done through review and a clean-up pass."
      },
      RECOMMENDED: str = "simple";
 

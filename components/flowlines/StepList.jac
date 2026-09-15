@@ -1,6 +1,6 @@
 """The flow line as an ordered list, the phone's default view: each step with
-its kind, owner and count, then where work can go from it. Order is flow depth,
-then sort order, so the list reads the way the diagram runs left to right."""
+its kind, owner, count and blurb, then where work can go from it. Order is flow
+depth, then sort order, so the list reads the way the diagram runs."""
 
 import from ...models { StepView }
 import from .kinds { KIND_LABEL, KIND_TONE, CARRY_LABEL, colorKey }
@@ -44,7 +44,12 @@ def:pub StepList(
         }
         owner = s.owner.strip() if s.owner else "";
         rows.append(
-            {"step": s, "owner": "Anyone" if owner == "anyone" else owner, "outs": outs}
+            {
+                "step": s,
+                "owner": "Anyone" if owner == "anyone" else owner,
+                "blurb": s.blurb.strip() if s.blurb else "",
+                "outs": outs
+            }
         );
     }
 
@@ -109,6 +114,14 @@ def:pub StepList(
                                     + (" · " + row["owner"] if row["owner"] else "")}
                             </span>
                         </span>
+                        {if row["blurb"] {
+                            <span
+                                key="blurb"
+                                className="line-clamp-2 text-[13px] leading-5 text-muted-foreground"
+                            >
+                                {row["blurb"]}
+                            </span>
+                        }}
                     </button>
                     {if len(row["outs"]) > 0 {
                         <ul

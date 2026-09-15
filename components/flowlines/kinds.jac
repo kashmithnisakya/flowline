@@ -110,7 +110,7 @@ glob COUNT_TINT: dict[str, str] = {
 # A legacy status as badge classes, for tables that still show one. Neutral:
 # the kind glyph (STATUS_KIND) carries the meaning.
 def:pub statusChip(status: str) -> str {
-    return COUNT_TINT["slate"] if status else COUNT_TINT["slate"];
+    return COUNT_TINT["slate"];
 }
 
 
