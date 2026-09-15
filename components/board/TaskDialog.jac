@@ -1,18 +1,7 @@
-"""Create/edit dialog for a kanban task. The form is a plain dict owned by the
-page; assignees ride separately as a list and group by project membership
-(picking someone outside the project adds them on save). A handoff step reveals
-the reviewer fields. One two-column grid, collapsing to one column below sm."""
-
-# constants.jac is server-only (imported by walkers); define board vocabulary locally.
-glob STATUSES: list[str] = [
-         "Backlog",
-         "In Progress",
-         "Review",
-         "Changes Requested",
-         "Done",
-         "Blocked"
-     ],
-     PRIORITIES: list[str] = ["High", "Medium", "Low"];
+"""The task sheet: a non-modal right-side Radix dialog (full screen below sm)
+with the route breadcrumb, title, properties, notes, checklist and travel so
+far. The page owns the form dict and UpdateTask overwrites every field, so
+every property here goes out on Save."""
 
 import from ...models {
     Project,
@@ -24,20 +13,16 @@ import from ...models {
     IterationView
 }
 import from ..common.Markdown { Markdown }
+import from ..common.StepName { StepName }
+import from ..common.Avatar { AvatarStack }
 import from .MiniLanes { MiniLanes }
 import from .Checklist { ChecklistEditor }
+import from .MoveMenu { MoveMenu, routeFrom }
+import from .TravelLog { TravelLog }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
-import from ..ui.badge { Badge }
-import from ..ui.dialog {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter
-}
+import from ..ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
 import from ..ui.input { Input }
-import from ..ui.label { Label }
 import from ..ui.textarea { Textarea }
 import from ..ui.select {
     Select,
@@ -57,13 +42,38 @@ import from ..ui.dropdown_menu {
 import from ..common.glyphs { Spinner }
 import from ...lib.dates { prettyDay }
 
-# Every control fills its cell, so the labels above them line up as a
-# grid instead of a ragged row of chips.
-glob FIELD: str = "w-full",
-     WIDE: str = "grid gap-2 sm:col-span-2";
+glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
+     # A legacy status column's colour, by the kind its status maps to.
+     LEGACY_COLOR: dict[str, str] = {
+         "Backlog": "sky",
+         "In Progress": "indigo",
+         "Review": "amber",
+         "Changes Requested": "indigo",
+         "Done": "emerald",
+         "Blocked": "rose"
+     },
+     # Property values read as text until hovered: ghost triggers and fields.
+     GHOST_SELECT: str = "h-8 w-full min-w-0 justify-between border-transparent bg-transparent px-2 font-normal shadow-none hover:bg-accent data-[state=open]:bg-accent [&>svg:last-child]:opacity-0 hover:[&>svg:last-child]:opacity-100 data-[state=open]:[&>svg:last-child]:opacity-100",
+     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:border-border md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
+     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-accent!";
 
-# Open-in-new-tab affordance for a link field: an external-link icon anchor
-# beside the input. Callers guard on a non-empty url, so this always renders.
+# One label/value row of the property list.
+def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
+    return
+        <div
+            className={"grid min-h-8 grid-cols-[6rem_minmax(0,1fr)] gap-x-2 "
+                + ("items-start" if top else "items-center")}
+        >
+            <dt
+                className={"text-[13px] text-muted-foreground "
+                    + ("pt-1.5" if top else "")}
+            >
+                {label}
+            </dt>
+            <dd className="m-0 min-w-0">{children}</dd>
+        </div>;
+}
+
 def OpenLink(url: str) -> JsxElement {
     return
         <a
@@ -71,11 +81,12 @@ def OpenLink(url: str) -> JsxElement {
             target="_blank"
             rel="noopener"
             title="Open in a new tab"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Open the link in a new tab"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
         >
             <svg
-                width={16}
-                height={16}
+                width={14}
+                height={14}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -91,10 +102,48 @@ def OpenLink(url: str) -> JsxElement {
         </a>;
 }
 
-# A field that takes the whole row rather than half of it.
+def Arrow -> JsxElement {
+    return
+        <svg
+            width={14}
+            height={14}
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            className="shrink-0 text-wire"
+        >
+            <path
+                d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>;
+}
+
+def Flag -> JsxElement {
+    return
+        <svg
+            width={12}
+            height={12}
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            className="shrink-0"
+        >
+            <path
+                d="M4 14V2.5M4 3h8l-1.8 3L12 9H4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+            />
+        </svg>;
+}
+
 # A family row's column label: the child's step (or legacy status) mapped
-# through the board's own key/label lists, so the pill says what the board
-# column says.
+# through the board's own key/label lists, so it says what the column says.
 def familyStepLabel(kid: TaskView, keys: list[str], labels: list[str]) -> str {
     for (i, k) in enumerate(keys) {
         if (k == kid.step_id or k == kid.status) and i < len(labels) {
@@ -118,7 +167,7 @@ def:pub TaskDialog(
     categories: list[str] = [],
     # The board's columns, as parallel key/label lists: a column is a
     # flow line step (keyed by its jid) or a legacy status (keyed by itself),
-    # so the dialog always offers exactly what the board shows.
+    # so the sheet always offers exactly what the board shows.
     columnKeys: list[str] = [],
     columnLabels: list[str] = [],
     handoffKeys: list[str] = [],
@@ -128,13 +177,12 @@ def:pub TaskDialog(
     ghConnected: bool = False,
     ghIssueNumber: int = 0,
     onCreateIssue: Callable[[str], None] = None,
-    # The flow line, for the "where is this task" picture above the notes.
-    # Empty (no flow line, or a new task with no position yet) draws nothing.
+    # The flow line: step colours, transitions for the Move menu and the
+    # breadcrumb, and the lanes picture at the foot of the sheet.
     steps: list[StepView] = [],
     roles: list[RoleView] = [],
     # Sub-issue family of the open card, resolved by the caller from rows it
-    # already holds; the dialog only draws it. onOpenTask jumps the dialog
-    # to another card of the family.
+    # already holds. onOpenTask jumps the sheet to another card of the family.
     family: list[TaskView] = [],
     familyTotal: int = 0,
     familyDone: int = 0,
@@ -147,22 +195,51 @@ def:pub TaskDialog(
     checklist: list[dict[str, any]] = [],
     onChecklist: Callable[[TaskView], None] = None,
     # The workspace's iterations; the form's "iteration" is a jid or "none".
-    # With none defined the field stays out of the way.
-    iterations: list[IterationView] = []
+    iterations: list[IterationView] = [],
+    # Move now (the board): the sheet's Move menu calls this with a column
+    # key. Without it a pick only sets the Step field, applied on Save.
+    onMove: Callable[[str], None] = None,
+    # The task's created_at, the start of its travel history, and a key that
+    # changes when the task does (its updated_at) so the history refreshes.
+    createdAt: str = "",
+    historyKey: str = ""
 ) -> JsxElement {
-    # Which repo a new issue goes in when the project tracks several: local.
-    # Notes open rendered (the markdown is the point); Edit flips to a textarea.
-    # pendingAction remembers which button started the shared `saving` flight
-    # so only that one shows the spinner; only read while saving is true.
+    # Which repo a new issue goes in when the project tracks several. Notes
+    # open rendered once written; pendingAction marks which button started
+    # the shared `saving` flight. topPx keeps the sheet under the app header.
     has repoChoice: str = "",
         notesEditing: bool = False,
-        pendingAction: str = "";
+        pendingAction: str = "",
+        moveOpen: bool = False,
+        topPx: int = 0;
+
+    async can with (open, taskId, editing) entry {
+        notesEditing = False;
+        moveOpen = False;
+        if open {
+            w: any = window;
+            header: any = document.querySelector("header");
+            bottom = 0;
+            if header and w.innerWidth >= 640 {
+                bottom = int(header.getBoundingClientRect().bottom);
+            }
+            topPx = bottom if bottom > 0 else 0;
+            if not editing {
+                w.setTimeout(
+                    lambda {
+                        field: any = document.querySelector("[data-task-title]");
+                        if field {
+                            field.focus();
+                        }
+                    },
+                    30
+                );
+            }
+        }
+    }
 
     hasNotes = bool(form["notes"] and form["notes"].strip());
-
     selectedProject = form["project"];
-    # Every task belongs to a project; Save waits for one. The unpicked
-    # state is "", the one value the Select renders as its placeholder.
     hasProject = bool(selectedProject);
     inProject = [
         m
@@ -180,6 +257,11 @@ def:pub TaskDialog(
             outsideSelected = True;
         }
     }
+    pickedNames = [
+        m.name
+        for m in members
+        if m.id in assignees
+    ];
     projectRepos = [
         r
         for r in repos
@@ -199,399 +281,395 @@ def:pub TaskDialog(
     canCreateIssue = (
         editing and ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0
     );
+    canSave = not saving and bool(form["title"].strip()) and hasProject;
 
-    # The picture's caption: which step of how many, who owns it, and who on
-    # this project holds that role (the person a save would hand it to).
-    # Only an existing task on a flow line has a position to show.
+    # The columns' colours and where this task stands on the route.
+    colors: list[str] = [];
+    for k in columnKeys {
+        found = LEGACY_COLOR[k] if k in LEGACY_COLOR else "slate";
+        for s in steps {
+            if s.id == k {
+                found = s.color;
+            }
+        }
+        colors.append(found);
+    }
+    hereKey = form["status"];
+    hereIdx = -1;
+    for (i, k) in enumerate(columnKeys) {
+        if k == hereKey {
+            hereIdx = i;
+        }
+    }
+    route = routeFrom(hereKey, columnKeys, steps);
+    prevIdx = -1;
+    nextIdx = -1;
+    if len(route["back"]) > 0 {
+        for (i, k) in enumerate(columnKeys) {
+            if k == route["back"][0] {
+                prevIdx = i;
+            }
+        }
+    }
+    if len(route["next"]) > 0 {
+        for (i, k) in enumerate(columnKeys) {
+            if k == route["next"][0] {
+                nextIdx = i;
+            }
+        }
+    }
+    hereLabel = columnLabels[hereIdx]
+        if hereIdx >= 0 and hereIdx < len(columnLabels)
+        else "";
+    hereColor = colors[hereIdx] if hereIdx >= 0 else "slate";
+
+    # The lanes picture's caption: which step of how many, who owns it, and
+    # who on this project holds that role (the person a move would hand to).
     showLanes = editing and len(steps) > 0;
     hereStep: list[StepView] = [
         s
         for s in steps
-        if s.id == form["status"]
+        if s.id == hereKey
     ];
-    herePos = 0;
-    for (si, s) in enumerate(steps) {
-        if s.id == form["status"] {
-            herePos = si + 1;
-        }
-    }
-    hereOwner = "";
-    hereHolders = "";
+    whereLine = "";
     if len(hereStep) > 0 {
+        herePos = 0;
+        for (si, s) in enumerate(steps) {
+            if s.id == hereKey {
+                herePos = si + 1;
+            }
+        }
         hereOwner = (hereStep[0].owner or "").strip();
         held: list[str] = [];
-        # Scoped to the project when there is one, like the hand-off rule.
         pool = inProject if hasProject else members;
         for m in pool {
             if hereOwner and hereOwner in m.roles {
                 held.append(m.name);
             }
         }
-        hereHolders = ", ".join(held);
-    }
-    whereLine = "";
-    if len(hereStep) > 0 {
-        whereLine = "step "
-            + str(herePos)
-            + " of "
-            + str(len(steps))
-            + " · "
-            + hereStep[0].name;
+        whereLine = "step " + str(herePos) + " of " + str(len(steps));
         if hereOwner == "anyone" {
             whereLine = whereLine + " · anyone";
         } elif hereOwner {
             whereLine = whereLine
                 + " · "
                 + hereOwner
-                + (" · " + hereHolders if hereHolders else " · no one on this project");
+                + (
+                    " · " + ", ".join(held)
+                        if len(held) > 0
+                        else " · no one on this project"
+                );
+        }
+    }
+    # CreateTask takes no reviewer or pull request, so those rows wait for
+    # an existing task rather than drop what is typed into them.
+    showReviewer = editing
+        and (
+            hereKey in handoffKeys
+            or form["reviewer"] != "none"
+            or bool(form["review_due"])
+        );
+
+    def pickStep(key: str) {
+        if onMove {
+            onMove(key);
+        } else {
+            onField("status", key);
+        }
+    }
+
+    def save {
+        if canSave {
+            pendingAction = "save";
+            onSave();
         }
     }
 
     return
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
-                className="grid max-h-[calc(100dvh-6rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-6 sm:max-w-3xl"
+        <Sheet open={open} onOpenChange={onOpenChange} modal={False}>
+            <SheetContent
+                side="right"
+                data-task-sheet="true"
+                showCloseButton={False}
+                className="gap-0 bg-card p-0 text-card-foreground outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[420px]"
+                style={{"top": str(topPx) + "px", "height": "auto", "bottom": "0px"}}
+                onOpenAutoFocus={lambda (e: Event) {
+                    e.preventDefault();
+                    box: any = e.target;
+                    if editing and box {
+                        box.focus({"preventScroll": True});
+                    }
+                }}
+                onInteractOutside={lambda (e: any) {
+                # Only Close, Cancel, Save and Escape close it: a click on
+                # the page (another card or row swaps the task) must not
+                # throw away unsaved edits.
+                e.preventDefault(); }}
+                onKeyDown={lambda (e: KeyboardEvent) {
+                    t: any = e.target;
+                    tag = str(t.tagName or "").lower() if t else "";
+                    typing = tag == "input"
+                        or tag == "textarea"
+                        or (t and t.isContentEditable);
+                    if (e.key == "m" or e.key == "M")
+                        and editing
+                        and not typing
+                        and not e.metaKey
+                        and not e.ctrlKey
+                        and not e.altKey
+                        and len(columnKeys) > 0 {
+                        e.preventDefault();
+                        moveOpen = True;
+                    }
+                }}
             >
-                <DialogHeader>
-                    <DialogTitle>{"Edit task" if editing else "New task"}</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 overflow-y-auto py-2">
-                    <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-                        <div className={WIDE}>
-                            <Label>Title</Label>
+                <div
+                    className="flex min-h-12 shrink-0 items-center gap-2 border-b px-4 py-2"
+                >
+                    <div
+                        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-[12.5px] whitespace-nowrap text-muted-foreground"
+                    >
+                        {if not editing and hereLabel {
+                            <span key="lands">Lands in</span>
+                        }}
+                        {if editing and prevIdx >= 0 {
+                            <span key="prev" className="min-w-0 truncate">
+                                {columnLabels[prevIdx]}
+                            </span>
+                        }}
+                        {if editing and prevIdx >= 0 {
+                            <Arrow key="prevarrow"/>
+                        }}
+                        {if hereLabel {
+                            <StepName
+                                key="here"
+                                name={hereLabel}
+                                color={hereColor}
+                                className="max-w-40 shrink-0 font-semibold text-foreground"
+                            />
+                        }}
+                        {if editing and nextIdx >= 0 {
+                            <Arrow key="nextarrow"/>
+                        }}
+                        {if editing and nextIdx >= 0 {
+                            <span key="next" className="min-w-0 truncate">
+                                {columnLabels[nextIdx]}
+                            </span>
+                        }}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                        {if editing and len(columnKeys) > 0 {
+                            <MoveMenu
+                                key="move"
+                                open={moveOpen}
+                                onOpenChange={lambda (o: bool) { moveOpen = o; }}
+                                current={hereKey}
+                                keys={columnKeys}
+                                labels={columnLabels}
+                                colors={colors}
+                                steps={steps}
+                                onPick={pickStep}
+                                showLabel={True}
+                                align="end"
+                                triggerClass="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card px-2 text-[12.5px] font-semibold text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                            />
+                        }}
+                        <button
+                            type="button"
+                            aria-label="Close"
+                            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                            onClick={lambda { onOpenChange(False); }}
+                        >
+                            <svg
+                                width={16}
+                                height={16}
+                                viewBox="0 0 16 16"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="m4 4 8 8M12 4l-8 8"
+                                    stroke="currentColor"
+                                    strokeWidth={1.6}
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div
+                        className="grid grid-cols-[minmax(0,1fr)] gap-5 px-4 pt-3 pb-6"
+                    >
+                        <div className="grid gap-0.5">
+                            <SheetTitle
+                                className="px-0 text-xs font-normal text-subtle"
+                            >
+                                {"Edit task" if editing else "New task"}
+                            </SheetTitle>
+                            <SheetDescription className="sr-only">
+                                {"The task's properties, notes and history."}
+                            </SheetDescription>
                             <Input
-                                className="h-10 md:text-base"
+                                data-task-title="true"
+                                aria-label="Title"
+                                placeholder="What needs doing?"
+                                className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[19px] leading-snug hover:border-border md:text-[19px]"
+                                style={{"fontWeight": 650, "fontStretch": "108%"}}
                                 value={form["title"]}
                                 onChange={lambda (e: ChangeEvent) { onField(
                                     "title", e.target.value
                                 ); }}
+                                onKeyDown={lambda (e: KeyboardEvent) { if e.key
+                                    == "Enter"
+                                    and not e.isComposing {
+                                    e.preventDefault();
+                                    save();
+                                }}}
                             />
                         </div>
-                        <div className={WIDE}>
-                            <Label>Assignees</Label>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger
-                                    asChild={False}
-                                    className="flex h-8 w-full cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-input bg-card py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                                >
-                                    <span
-                                        className={"truncate"
-                                            + (
-                                                ""
-                                                    if len(assignees) > 0
-                                                    else " text-muted-foreground"
-                                            )}
-                                    >
-                                        {", ".join(
-                                            [
-                                                m.name
-                                                for m in members
-                                                if m.id in assignees
-                                            ]
-                                        )
-                                            if len(assignees) > 0
-                                            else "Pick assignees"}
-                                    </span>
-                                    <svg
-                                        width={16}
-                                        height={16}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="pointer-events-none shrink-0 text-muted-foreground"
-                                    >
-                                        <path d="m6 9 6 6 6-6"/>
-                                    </svg>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-64">
-                                    {if len(inProject) > 0 {
-                                        <DropdownMenuLabel key="inl">
-                                            On this project
-                                        </DropdownMenuLabel>
-                                    }}
-                                    {for m in inProject {
-                                        <DropdownMenuCheckboxItem
-                                            key={m.id}
-                                            checked={m.id in assignees}
-                                            onCheckedChange={lambda { if onToggleAssignee {
-                                                onToggleAssignee(m.id);
-                                            }}}
-                                            onSelect={lambda (e: any) { e.preventDefault(); }}
-                                        >
-                                            {m.name}
-                                        </DropdownMenuCheckboxItem>
-                                    }}
-                                    {if len(inProject) > 0 and len(outsiders) > 0 {
-                                        <DropdownMenuSeparator key="sep"/>
-                                    }}
-                                    {if len(outsiders) > 0 {
-                                        <DropdownMenuLabel key="ol">
-                                            {"Other people" if hasProject else "People"}
-                                        </DropdownMenuLabel>
-                                    }}
-                                    {for m in outsiders {
-                                        <DropdownMenuCheckboxItem
-                                            key={m.id}
-                                            checked={m.id in assignees}
-                                            onCheckedChange={lambda { if onToggleAssignee {
-                                                onToggleAssignee(m.id);
-                                            }}}
-                                            onSelect={lambda (e: any) { e.preventDefault(); }}
-                                        >
-                                            {m.name}
-                                        </DropdownMenuCheckboxItem>
-                                    }}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            {if outsideSelected {
-                                <p key="hint" className="text-xs text-muted-foreground">
-                                    Some picks are not on this project yet. Saving adds them to it.
-                                </p>
-                            }}
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label>Project</Label>
-                            <Select
-                                value={form["project"]}
-                                onValueChange={lambda (v: str) { onField(
-                                    "project", v
-                                ); }}
-                            >
-                                <SelectTrigger className={FIELD}>
-                                    <SelectValue placeholder="Pick a project"/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {for p in projects {
-                                        <SelectItem key={jid(p)} value={jid(p)}>
-                                            {p.name}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label>Step</Label>
-                            <Select
-                                value={form["status"]}
-                                onValueChange={lambda (v: str) { onField(
-                                    "status", v
-                                ); }}
-                            >
-                                <SelectTrigger className={FIELD}>
-                                    <SelectValue placeholder="Step"/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {for (si, s) in enumerate(columnKeys) {
-                                        <SelectItem key={s} value={s}>
-                                            {columnLabels[si]}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label>Priority</Label>
-                            <Select
-                                value={form["priority"]}
-                                onValueChange={lambda (v: str) { onField(
-                                    "priority", v
-                                ); }}
-                            >
-                                <SelectTrigger className={FIELD}>
-                                    <SelectValue placeholder="Priority"/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {for p in PRIORITIES {
-                                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="task-category">Category</Label>
-                            <Input
-                                id="task-category"
-                                list="flowline-categories"
-                                className={FIELD}
-                                placeholder="Type or pick"
-                                value={form["category"]}
-                                onChange={lambda (e: any) { onField(
-                                    "category", e.target.value
-                                ); }}
-                            />
-                            <datalist id="flowline-categories">
-                                {for c in categories {
-                                    <option key={c} value={c}/>
-                                }}
-                            </datalist>
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="task-tags">Tags</Label>
-                            <Input
-                                id="task-tags"
-                                className={FIELD}
-                                placeholder="Comma-separated, e.g. bug, payments"
-                                value={form["tags"]}
-                                onChange={lambda (e: any) { onField(
-                                    "tags", e.target.value
-                                ); }}
-                            />
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="task-estimate">Estimate</Label>
-                            <Input
-                                id="task-estimate"
-                                type="number"
-                                min="0"
-                                step="0.5"
-                                className={FIELD}
-                                placeholder="Points or hours"
-                                value={form["estimate"]}
-                                onChange={lambda (e: any) { onField(
-                                    "estimate", e.target.value
-                                ); }}
-                            />
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label>Start date</Label>
-                            <DatePicker
-                                value={form["start_date"]}
-                                clearable={True}
-                                className="w-full justify-between"
-                                onChange={lambda (d: str) { onField("start_date", d); }}
-                            />
-                        </div>
-                        <div className="grid content-start gap-2">
-                            <Label>Due date</Label>
-                            <DatePicker
-                                value={form["due_date"]}
-                                clearable={True}
-                                className="w-full justify-between"
-                                onChange={lambda (d: str) { onField("due_date", d); }}
-                            />
-                            {if form["start_date"]
-                                and form["due_date"]
-                                and form["start_date"] > form["due_date"] {
-                                <span key="order" className="text-xs text-destructive">
-                                    Due before it starts.
-                                </span>
-                            }}
-                        </div>
-                        {if len(iterations) > 0 or form["iteration"] != "none" {
-                            <div key="iteration" className={WIDE}>
-                                <Label>Iteration</Label>
+                        <dl className="grid grid-cols-[minmax(0,1fr)] gap-y-px">
+                            <PropRow label="Step">
                                 <Select
-                                    value={form["iteration"]}
+                                    value={hereKey}
                                     onValueChange={lambda (v: str) { onField(
-                                        "iteration", v
+                                        "status", v
                                     ); }}
                                 >
-                                    <SelectTrigger className={FIELD}>
-                                        <SelectValue placeholder="No iteration"/>
+                                    <SelectTrigger
+                                        className={GHOST_SELECT}
+                                        aria-label="Step"
+                                    >
+                                        <SelectValue placeholder="Pick a step"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">
-                                            No iteration
-                                        </SelectItem>
-                                        {for it in iterations {
-                                            <SelectItem key={it.id} value={it.id}>
-                                                {it.name
-                                                    + " · "
-                                                    + prettyDay(it.start_date)
-                                                    + " – "
-                                                    + prettyDay(it.end_date)}
+                                        {for (si, s) in enumerate(columnKeys) {
+                                            <SelectItem key={s} value={s}>
+                                                <StepName
+                                                    name={columnLabels[si]}
+                                                    color={colors[si]}
+                                                />
                                             </SelectItem>
                                         }}
                                     </SelectContent>
                                 </Select>
-                            </div>
-                        }}
-                        <div className={WIDE}>
-                            <Label>GitHub issue (optional)</Label>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    className="flex-1"
-                                    placeholder="https://github.com/owner/repo/issues/12"
-                                    value={form["issue"]}
-                                    onChange={lambda (e: ChangeEvent) { onField(
-                                        "issue", e.target.value
-                                    ); }}
-                                />
-                                {if form["issue"].strip() {
-                                    <OpenLink url={form["issue"].strip()}/>
-                                }}
-                            </div>
-                        </div>
-                    </div>
-                    {if canCreateIssue {
-                        <div
-                            key="ghissue"
-                            className="grid gap-3 rounded-lg border bg-muted/30 p-3"
-                        >
-                            <div className="text-xs font-medium text-muted-foreground">
-                                GitHub
-                            </div>
-                            {if len(projectRepos) > 1 {
+                            </PropRow>
+                            <PropRow label="Project">
                                 <Select
-                                    key="repopick"
-                                    value={repoChoice}
-                                    onValueChange={lambda (v: str) { repoChoice = v; }}
+                                    value={form["project"]}
+                                    onValueChange={lambda (v: str) { onField(
+                                        "project", v
+                                    ); }}
                                 >
-                                    <SelectTrigger className={FIELD}>
-                                        <SelectValue placeholder="Pick a repo"/>
+                                    <SelectTrigger
+                                        className={GHOST_SELECT
+                                            + ("" if hasProject else " text-subtle")}
+                                        aria-label="Project"
+                                    >
+                                        <SelectValue placeholder="Pick a project"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {for r in projectRepos {
-                                            <SelectItem key={r.id} value={r.id}>
-                                                {r.full_name}
+                                        {for p in projects {
+                                            <SelectItem key={jid(p)} value={jid(p)}>
+                                                {p.name}
                                             </SelectItem>
                                         }}
                                     </SelectContent>
                                 </Select>
-                            }}
-                            <div>
-                                <Button
-                                    variant="outline"
-                                    disabled={saving or not chosenRepo}
-                                    onClick={lambda { if onCreateIssue and chosenRepo {
-                                        pendingAction = "issue";
-                                        onCreateIssue(chosenRepo);
-                                    }}}
-                                >
-                                    {if saving and pendingAction == "issue" {
-                                        <Spinner key="sp"/>
-                                    }}
-                                    {"Opening issue…"
-                                        if saving and pendingAction == "issue"
-                                        else "Create GitHub issue"}
-                                </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Opens a new issue from this task's title and notes, then links the two. Later edits here do not change the issue.
-                            </p>
-                        </div>
-                    }}
-                    {if form["status"] in handoffKeys {
-                        <div
-                            key="review"
-                            className="grid gap-3 rounded-lg border bg-muted/30 p-3"
-                        >
-                            <div className="text-xs font-medium text-muted-foreground">
-                                Review handoff (optional)
-                            </div>
-                            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-                                <div className="grid content-start gap-2">
-                                    <Label>Reviewer</Label>
+                            </PropRow>
+                            <PropRow label="Assignees" top={outsideSelected}>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:bg-accent"
+                                        aria-label="Assignees"
+                                    >
+                                        {if len(pickedNames) > 0 {
+                                            <AvatarStack
+                                                key="av"
+                                                names={pickedNames}
+                                                max={3}
+                                            />
+                                        }}
+                                        <span
+                                            className={"min-w-0 truncate"
+                                                + (
+                                                    ""
+                                                        if len(pickedNames) > 0
+                                                        else " text-subtle"
+                                                )}
+                                        >
+                                            {", ".join(pickedNames)
+                                                if len(pickedNames) > 0
+                                                else "Pick assignees"}
+                                        </span>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="w-64" align="start">
+                                        {if len(inProject) > 0 {
+                                            <DropdownMenuLabel key="inl">
+                                                On this project
+                                            </DropdownMenuLabel>
+                                        }}
+                                        {for m in inProject {
+                                            <DropdownMenuCheckboxItem
+                                                key={m.id}
+                                                checked={m.id in assignees}
+                                                onCheckedChange={lambda { if onToggleAssignee {
+                                                    onToggleAssignee(m.id);
+                                                }}}
+                                                onSelect={lambda (e: any) { e.preventDefault(); }}
+                                            >
+                                                {m.name}
+                                            </DropdownMenuCheckboxItem>
+                                        }}
+                                        {if len(inProject) > 0 and len(outsiders) > 0 {
+                                            <DropdownMenuSeparator key="sep"/>
+                                        }}
+                                        {if len(outsiders) > 0 {
+                                            <DropdownMenuLabel key="ol">
+                                                {"Other people"
+                                                    if hasProject
+                                                    else "People"}
+                                            </DropdownMenuLabel>
+                                        }}
+                                        {for m in outsiders {
+                                            <DropdownMenuCheckboxItem
+                                                key={m.id}
+                                                checked={m.id in assignees}
+                                                onCheckedChange={lambda { if onToggleAssignee {
+                                                    onToggleAssignee(m.id);
+                                                }}}
+                                                onSelect={lambda (e: any) { e.preventDefault(); }}
+                                            >
+                                                {m.name}
+                                            </DropdownMenuCheckboxItem>
+                                        }}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                {if outsideSelected {
+                                    <p
+                                        key="hint"
+                                        className="px-2 pb-1 text-xs text-muted-foreground"
+                                    >
+                                        Some picks are not on this project yet. Saving adds them to it.
+                                    </p>
+                                }}
+                            </PropRow>
+                            {if showReviewer {
+                                <PropRow key="reviewer" label="Reviewer">
                                     <Select
                                         value={form["reviewer"]}
                                         onValueChange={lambda (v: str) { onField(
                                             "reviewer", v
                                         ); }}
                                     >
-                                        <SelectTrigger className={FIELD}>
+                                        <SelectTrigger
+                                            className={GHOST_SELECT
+                                                + (
+                                                    " text-subtle"
+                                                        if form["reviewer"] == "none"
+                                                        else ""
+                                                )}
+                                            aria-label="Reviewer"
+                                        >
                                             <SelectValue placeholder="No reviewer"/>
                                         </SelectTrigger>
                                         <SelectContent>
@@ -605,185 +683,468 @@ def:pub TaskDialog(
                                             }}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                                <div className="grid content-start gap-2">
-                                    <Label>Review by</Label>
+                                </PropRow>
+                            }}
+                            {if showReviewer {
+                                <PropRow key="reviewby" label="Review by">
                                     <DatePicker
                                         value={form["review_due"]}
                                         clearable={True}
-                                        className="w-full justify-between"
+                                        className={GHOST_DATE
+                                            + (
+                                                " text-subtle!"
+                                                    if not form["review_due"]
+                                                    else ""
+                                            )}
                                         onChange={lambda (d: str) { onField(
                                             "review_due", d
                                         ); }}
                                     />
-                                </div>
-                                <div className={WIDE}>
-                                    <Label>PR link</Label>
-                                    <div className="flex items-center gap-2">
+                                </PropRow>
+                            }}
+                            <PropRow label="Due">
+                                <DatePicker
+                                    value={form["due_date"]}
+                                    clearable={True}
+                                    className={GHOST_DATE
+                                        + (
+                                            " text-subtle!"
+                                                if not form["due_date"]
+                                                else ""
+                                        )}
+                                    onChange={lambda (d: str) { onField(
+                                        "due_date", d
+                                    ); }}
+                                />
+                            </PropRow>
+                            <PropRow
+                                label="Start date"
+                                top={bool(
+                                    form["start_date"]
+                                        and form["due_date"]
+                                        and form["start_date"] > form["due_date"]
+                                )}
+                            >
+                                <DatePicker
+                                    value={form["start_date"]}
+                                    clearable={True}
+                                    className={GHOST_DATE
+                                        + (
+                                            " text-subtle!"
+                                                if not form["start_date"]
+                                                else ""
+                                        )}
+                                    onChange={lambda (d: str) { onField(
+                                        "start_date", d
+                                    ); }}
+                                />
+                                {if form["start_date"]
+                                    and form["due_date"]
+                                    and form["start_date"] > form["due_date"] {
+                                    <p
+                                        key="order"
+                                        className="px-2 pb-1 text-xs text-destructive"
+                                    >
+                                        Due before it starts.
+                                    </p>
+                                }}
+                            </PropRow>
+                            {if len(iterations) > 0 or form["iteration"] != "none" {
+                                <PropRow key="iteration" label="Iteration">
+                                    <Select
+                                        value={form["iteration"]}
+                                        onValueChange={lambda (v: str) { onField(
+                                            "iteration", v
+                                        ); }}
+                                    >
+                                        <SelectTrigger
+                                            className={GHOST_SELECT
+                                                + (
+                                                    " text-subtle"
+                                                        if form["iteration"] == "none"
+                                                        else ""
+                                                )}
+                                            aria-label="Iteration"
+                                        >
+                                            <SelectValue placeholder="No iteration"/>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">
+                                                No iteration
+                                            </SelectItem>
+                                            {for it in iterations {
+                                                <SelectItem key={it.id} value={it.id}>
+                                                    {it.name
+                                                        + " · "
+                                                        + prettyDay(it.start_date)
+                                                        + " to "
+                                                        + prettyDay(it.end_date)}
+                                                </SelectItem>
+                                            }}
+                                        </SelectContent>
+                                    </Select>
+                                </PropRow>
+                            }}
+                            <PropRow label="Priority">
+                                <Select
+                                    value={form["priority"]}
+                                    onValueChange={lambda (v: str) { onField(
+                                        "priority", v
+                                    ); }}
+                                >
+                                    <SelectTrigger
+                                        className={GHOST_SELECT}
+                                        aria-label="Priority"
+                                    >
+                                        <SelectValue placeholder="Priority"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {for p in PRIORITIES {
+                                            <SelectItem key={p} value={p}>
+                                                <span
+                                                    className="inline-flex items-center gap-1.5"
+                                                >
+                                                    {if p == "High" {
+                                                        <Flag key="flag"/>
+                                                    }}
+                                                    {p}
+                                                </span>
+                                            </SelectItem>
+                                        }}
+                                    </SelectContent>
+                                </Select>
+                            </PropRow>
+                            <PropRow label="Estimate">
+                                <Input
+                                    id="task-estimate"
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    aria-label="Estimate"
+                                    className={GHOST_INPUT + " num"}
+                                    placeholder="Points or hours"
+                                    value={form["estimate"]}
+                                    onChange={lambda (e: any) { onField(
+                                        "estimate", e.target.value
+                                    ); }}
+                                />
+                            </PropRow>
+                            <PropRow label="Category">
+                                <Input
+                                    id="task-category"
+                                    list="flowline-categories"
+                                    aria-label="Category"
+                                    className={GHOST_INPUT}
+                                    placeholder="Type or pick"
+                                    value={form["category"]}
+                                    onChange={lambda (e: any) { onField(
+                                        "category", e.target.value
+                                    ); }}
+                                />
+                                <datalist id="flowline-categories">
+                                    {for c in categories {
+                                        <option key={c} value={c}/>
+                                    }}
+                                </datalist>
+                            </PropRow>
+                            <PropRow label="Tags">
+                                <Input
+                                    id="task-tags"
+                                    aria-label="Tags"
+                                    className={GHOST_INPUT}
+                                    placeholder="Comma-separated, e.g. bug, payments"
+                                    value={form["tags"]}
+                                    onChange={lambda (e: any) { onField(
+                                        "tags", e.target.value
+                                    ); }}
+                                />
+                            </PropRow>
+                            {if editing {
+                                <PropRow key="pr" label="Pull request">
+                                    <div className="flex items-center">
                                         <Input
-                                            className="flex-1"
-                                            placeholder="https://github.com/..."
+                                            aria-label="Pull request link"
+                                            className={GHOST_INPUT
+                                                + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                            placeholder="Paste a pull request link"
                                             value={form["pr"]}
                                             onChange={lambda (e: ChangeEvent) { onField(
                                                 "pr", e.target.value
                                             ); }}
                                         />
                                         {if form["pr"].strip() {
-                                            <OpenLink url={form["pr"].strip()}/>
+                                            <OpenLink
+                                                key="open"
+                                                url={form["pr"].strip()}
+                                            />
                                         }}
                                     </div>
+                                </PropRow>
+                            }}
+                            <PropRow label="Issue">
+                                <div className="flex items-center">
+                                    <Input
+                                        aria-label="GitHub issue link"
+                                        className={GHOST_INPUT
+                                            + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                        placeholder="Paste a GitHub issue link"
+                                        value={form["issue"]}
+                                        onChange={lambda (e: ChangeEvent) { onField(
+                                            "issue", e.target.value
+                                        ); }}
+                                    />
+                                    {if form["issue"].strip() {
+                                        <OpenLink
+                                            key="open"
+                                            url={form["issue"].strip()}
+                                        />
+                                    }}
                                 </div>
-                            </div>
-                        </div>
-                    }}
-                    {if showLanes {
-                        <div key="lanes" className="grid gap-2">
-                            <div className="flex items-baseline justify-between gap-3">
-                                <Label>On the flow line</Label>
-                                <span
-                                    className="truncate text-xs text-muted-foreground"
-                                    title={whereLine}
-                                >
-                                    {whereLine}
-                                </span>
-                            </div>
-                            <MiniLanes
-                                steps={steps}
-                                roles={roles}
-                                members={inProject if hasProject else members}
-                                currentKey={form["status"]}
-                            />
-                        </div>
-                    }}
-                    {if editing and familyTotal > 0 {
-                        <div key="family" className="grid gap-2">
-                            <div className="flex items-baseline justify-between gap-3">
-                                <Label>Sub-issues</Label>
-                                <span
-                                    className="text-xs tabular-nums text-muted-foreground"
-                                >
-                                    {str(familyDone)
-                                        + " of "
-                                        + str(familyTotal)
-                                        + " done"}
-                                </span>
-                            </div>
-                            <div className="divide-y overflow-hidden rounded-lg border">
-                                {for kid in family {
-                                    <button
-                                        key={kid.id}
-                                        type="button"
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
-                                        title={"Open " + kid.title}
-                                        onClick={lambda { if onOpenTask {
-                                            onOpenTask(kid.id);
-                                        }}}
-                                    >
-                                        <span
-                                            className="flex-none text-xs tabular-nums text-muted-foreground"
+                            </PropRow>
+                            {if canCreateIssue {
+                                <PropRow key="ghissue" label="">
+                                    <div className="grid gap-1.5 px-2 pb-1">
+                                        {if len(projectRepos) > 1 {
+                                            <Select
+                                                key="repopick"
+                                                value={repoChoice}
+                                                onValueChange={lambda (v: str) { repoChoice = v; }}
+                                            >
+                                                <SelectTrigger className="h-8 w-full">
+                                                    <SelectValue
+                                                        placeholder="Pick a repo"
+                                                    />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {for r in projectRepos {
+                                                        <SelectItem
+                                                            key={r.id}
+                                                            value={r.id}
+                                                        >
+                                                            {r.full_name}
+                                                        </SelectItem>
+                                                    }}
+                                                </SelectContent>
+                                            </Select>
+                                        }}
+                                        <div
+                                            className="flex flex-wrap items-center gap-2"
                                         >
-                                            {"#" + str(kid.gh_issue_number)}
-                                        </span>
-                                        <span className="min-w-0 flex-1 truncate">
-                                            {kid.title}
-                                        </span>
-                                        <span
-                                            className={"flex-none rounded-full border px-2 text-xs "
-                                                + (
-                                                    "border-success/40 bg-success/10 text-success"
-                                                        if kid.status == "Done"
-                                                        else "text-muted-foreground"
-                                                )}
-                                        >
-                                            {familyStepLabel(
-                                                kid, columnKeys, columnLabels
-                                            )}
-                                        </span>
-                                    </button>
-                                }}
-                                {if len(family) < familyTotal {
-                                    <div
-                                        key="ghost"
-                                        className="px-3 py-2 text-xs text-muted-foreground"
-                                    >
-                                        {str(familyTotal - len(family))
-                                            + " more on GitHub, not on the board"}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={saving or not chosenRepo}
+                                                onClick={lambda { if onCreateIssue
+                                                    and chosenRepo {
+                                                    pendingAction = "issue";
+                                                    onCreateIssue(chosenRepo);
+                                                }}}
+                                            >
+                                                {if saving
+                                                    and pendingAction == "issue" {
+                                                    <Spinner key="sp"/>
+                                                }}
+                                                {"Opening issue…"
+                                                    if saving
+                                                        and pendingAction == "issue"
+                                                    else "Create GitHub issue"}
+                                            </Button>
+                                            <span
+                                                className="text-xs text-muted-foreground"
+                                            >
+                                                From the title and notes, then linked.
+                                            </span>
+                                        </div>
                                     </div>
+                                </PropRow>
+                            }}
+                        </dl>
+                        <section className="grid gap-1.5" aria-label="Notes">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[13px] font-semibold">Notes</h3>
+                                {if hasNotes {
+                                    <Button
+                                        key="toggle"
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={lambda { notesEditing = not notesEditing; }}
+                                    >
+                                        {"Preview" if notesEditing else "Edit"}
+                                    </Button>
                                 }}
                             </div>
-                        </div>
-                    }}
-                    {if editing and parentTaskId {
-                        <button
-                            key="parentlink"
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                            title={"Open the parent issue " + parentLabel}
-                            onClick={lambda { if onOpenTask {
-                                onOpenTask(parentTaskId);
-                            }}}
-                        >
-                            <span className="flex-none">↳ Part of</span>
-                            <span className="min-w-0 flex-1 truncate">
-                                {parentLabel}
-                            </span>
-                        </button>
-                    }}
-                    {if editing and taskId {
-                        <ChecklistEditor
-                            key={"checklist-" + taskId}
-                            taskId={taskId}
-                            items={checklist}
-                            onChange={onChecklist}
-                        />
-                    }}
-                    <div className="grid gap-2">
-                        <div className="flex items-center justify-between">
-                            <Label>Notes / blockers</Label>
-                            <Button
-                                variant="ghost"
-                                size="xs"
-                                onClick={lambda { notesEditing = not notesEditing; }}
+                            {if notesEditing or not hasNotes {
+                                <Textarea
+                                    key="write"
+                                    className="min-h-20 rounded-md text-[13px] md:text-[13px]"
+                                    placeholder="Add notes, acceptance criteria or links. Markdown works."
+                                    value={form["notes"]}
+                                    onChange={lambda (e: ChangeEvent) {
+                                        notesEditing = True;
+                                        onField("notes", e.target.value);
+                                    }}
+                                />
+                            } else {
+                                <div
+                                    key="preview"
+                                    className="min-h-12 cursor-text rounded-md border px-2.5 py-2 text-[13px]"
+                                    onClick={lambda { notesEditing = True; }}
+                                >
+                                    <Markdown text={form["notes"]}/>
+                                </div>
+                            } }
+                        </section>
+                        {if editing and familyTotal > 0 {
+                            <section
+                                key="family"
+                                className="grid gap-1.5"
+                                aria-label="Sub-issues"
                             >
-                                {"Preview" if notesEditing else "Edit"}
-                            </Button>
-                        </div>
-                        {if notesEditing {
-                            <Textarea
-                                key="write"
-                                className="min-h-40"
-                                placeholder="Markdown works here: **bold**, - lists, `code`, links."
-                                value={form["notes"]}
-                                onChange={lambda (e: ChangeEvent) { onField(
-                                    "notes", e.target.value
-                                ); }}
-                            />
-                        } elif hasNotes {
-                            <div
-                                key="preview"
-                                className="min-h-40 rounded-lg border bg-muted/30 p-3 text-sm"
-                            >
-                                <Markdown text={form["notes"]}/>
-                            </div>
-                        } else {
+                                <div
+                                    className="flex items-baseline justify-between gap-3"
+                                >
+                                    <h3 className="text-[13px] font-semibold">
+                                        Sub-issues
+                                    </h3>
+                                    <span className="num text-xs text-muted-foreground">
+                                        {str(familyDone)
+                                            + " of "
+                                            + str(familyTotal)
+                                            + " done"}
+                                    </span>
+                                </div>
+                                <div className="border-t">
+                                    {for kid in family {
+                                        <button
+                                            key={kid.id}
+                                            type="button"
+                                            className="flex w-full items-center gap-2 border-b px-1 py-1.5 text-left text-[13px] hover:bg-accent"
+                                            title={"Open " + kid.title}
+                                            onClick={lambda { if onOpenTask {
+                                                onOpenTask(kid.id);
+                                            }}}
+                                        >
+                                            <span
+                                                className="num flex-none text-xs text-subtle"
+                                            >
+                                                {"#" + str(kid.gh_issue_number)}
+                                            </span>
+                                            <span className="min-w-0 flex-1 truncate">
+                                                {kid.title}
+                                            </span>
+                                            <span
+                                                className={"flex-none text-xs "
+                                                    + (
+                                                        "text-success"
+                                                            if kid.status == "Done"
+                                                            else "text-muted-foreground"
+                                                    )}
+                                            >
+                                                {familyStepLabel(
+                                                    kid, columnKeys, columnLabels
+                                                )}
+                                            </span>
+                                        </button>
+                                    }}
+                                    {if len(family) < familyTotal {
+                                        <p
+                                            key="ghost"
+                                            className="px-1 py-1.5 text-xs text-muted-foreground"
+                                        >
+                                            {str(familyTotal - len(family))
+                                                + " more on GitHub, not on the board"}
+                                        </p>
+                                    }}
+                                </div>
+                            </section>
+                        }}
+                        {if editing and parentTaskId {
                             <button
-                                key="empty"
+                                key="parentlink"
                                 type="button"
-                                onClick={lambda { notesEditing = True; }}
-                                className="flex min-h-40 items-start rounded-lg border border-dashed bg-muted/30 p-3 text-left text-sm text-muted-foreground hover:bg-muted/50"
+                                className="-mt-2 flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                                title={"Open the parent issue " + parentLabel}
+                                onClick={lambda { if onOpenTask {
+                                    onOpenTask(parentTaskId);
+                                }}}
                             >
-                                Nothing yet. Click to write; markdown is rendered here.
+                                <span className="flex-none">Part of</span>
+                                <span
+                                    className="min-w-0 flex-1 truncate text-foreground"
+                                >
+                                    {parentLabel}
+                                </span>
                             </button>
-                        }  }
+                        }}
+                        {if editing and taskId {
+                            <ChecklistEditor
+                                key={"checklist-" + taskId}
+                                taskId={taskId}
+                                items={checklist}
+                                onChange={onChecklist}
+                            />
+                        }}
+                        {if editing and taskId {
+                            <TravelLog
+                                key={"travel-" + taskId}
+                                taskId={taskId}
+                                since={createdAt}
+                                refreshKey={historyKey}
+                            />
+                        }}
+                        {if showLanes {
+                            <details
+                                key="lanes"
+                                className="group grid grid-cols-[minmax(0,1fr)] gap-2"
+                            >
+                                <summary
+                                    className="flex cursor-pointer list-none items-baseline gap-2 text-[13px] font-semibold [&::-webkit-details-marker]:hidden"
+                                >
+                                    <svg
+                                        width={12}
+                                        height={12}
+                                        viewBox="0 0 16 16"
+                                        aria-hidden="true"
+                                        className="shrink-0 self-center text-subtle transition-transform duration-150 group-open:rotate-90"
+                                    >
+                                        <path
+                                            d="m6 3.5 4.5 4.5L6 12.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={1.8}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                    <span className="shrink-0 whitespace-nowrap">
+                                        On the flow line
+                                    </span>
+                                    <span
+                                        className="min-w-0 truncate text-xs font-normal text-muted-foreground"
+                                        title={whereLine}
+                                    >
+                                        {whereLine}
+                                    </span>
+                                </summary>
+                                <MiniLanes
+                                    className="mt-2"
+                                    steps={steps}
+                                    roles={roles}
+                                    members={inProject if hasProject else members}
+                                    currentKey={hereKey}
+                                />
+                            </details>
+                        }}
                     </div>
                 </div>
-                <DialogFooter
-                    className="-mx-6 -mb-6 gap-2 border-t px-6 pt-4 pb-4 sm:justify-between"
+                <div
+                    className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
                 >
                     {if editing {
                         <Button
                             key="del"
-                            variant="destructive"
+                            variant="ghost"
+                            className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={lambda {
                                 pendingAction = "delete";
                                 onDelete();
@@ -797,25 +1158,15 @@ def:pub TaskDialog(
                                 if saving and pendingAction == "delete"
                                 else "Delete"}
                         </Button>
-                    } else {
-                        <span key="spacer"/>
-                    } }
-                    <div className="flex gap-2">
+                    }}
+                    <div className="ml-auto flex gap-2">
                         <Button
                             variant="outline"
                             onClick={lambda { onOpenChange(False); }}
                         >
                             Cancel
                         </Button>
-                        <Button
-                            onClick={lambda {
-                                pendingAction = "save";
-                                onSave();
-                            }}
-                            disabled={saving
-                                or not form["title"].strip()
-                                or not hasProject}
-                        >
+                        <Button onClick={lambda { save(); }} disabled={not canSave}>
                             {if saving and pendingAction == "save" {
                                 <Spinner key="sp"/>
                             }}
@@ -824,7 +1175,7 @@ def:pub TaskDialog(
                                 else "Save"}
                         </Button>
                     </div>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>;
+                </div>
+            </SheetContent>
+        </Sheet>;
 }
