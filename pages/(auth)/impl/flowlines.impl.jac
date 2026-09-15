@@ -134,29 +134,24 @@ impl FlowLinePage.morePeek -> None {
 }
 
 impl FlowLinePage.loadTitles(wanted: str) -> None {
-    # Two titles per step with work on it; the count on the node says the rest.
+    # Two titles per step with work on it, every step's request at once; the
+    # count on the node says the rest.
     titlesFor = wanted;
     pid = projectId;
-    got: dict[str, list[str]] = {};
+    ids: list[str] = [];
+    jobs: list[any] = [];
+    for s in steps {
+        if s.task_count > 0 {
+            ids.append(s.id);
+            jobs.append(firstTitles(s.id, pid));
+        }
+    }
     try {
-        for s in steps {
-            if s.task_count <= 0 {
-                continue;
-            }
-            result = root spawn ListStepTasks(
-                step_id=s.id,
-                project_id=pid if pid and pid != "all" else "",
-                page=1,
-                page_size=2
-            );
-            page = result.reports[0] if result.reports else None;
-            names: list[str] = [];
-            if page {
-                for t in page.rows {
-                    names.append(t.title);
-                }
-            }
-            got[s.id] = names;
+        w: any = window;
+        lists: list[any] = await w.Promise.all(jobs);
+        got: dict[str, list[str]] = {};
+        for (i, sid) in enumerate(ids) {
+            got[sid] = lists[i];
         }
         if titlesFor == wanted {
             stepTitles = got;
@@ -164,6 +159,23 @@ impl FlowLinePage.loadTitles(wanted: str) -> None {
     } except Exception as e {
         titlesFor = "";
     }
+}
+
+impl FlowLinePage.firstTitles(stepId: str, pid: str) -> list[str] {
+    result = root spawn ListStepTasks(
+        step_id=stepId,
+        project_id=pid if pid and pid != "all" else "",
+        page=1,
+        page_size=2
+    );
+    page = result.reports[0] if result.reports else None;
+    names: list[str] = [];
+    if page {
+        for t in page.rows {
+            names.append(t.title);
+        }
+    }
+    return names;
 }
 
 impl FlowLinePage.closePeek -> None {
@@ -194,7 +206,7 @@ impl FlowLinePage.revealStep(stepId: str) -> None {
     pan: list[float] = panRef.current or [panX, panY];
     nx = pan[0];
     right = float(view.clientWidth) - PANEL_W - 28.0;
-    left = (LANE_LABEL_W + 16.0) if lanes else 16.0;
+    left = (laneLabelW() + 16.0) if lanes else 16.0;
     if nx + r[0] + r[2] > right {
         nx = right - r[0] - r[2];
     }
@@ -440,9 +452,16 @@ impl FlowLinePage.lanePlan -> dict[str, any] {
         or len(steps) == 0
         or (narrow and phoneView == "list")
     ) {
-        return {"positions": {}, "lanes": [], "laneOf": {}};
+        return {"positions": {}, "lanes": [], "laneOf": {}, "colOf": {}};
     }
-    return laneLayout(steps, roleRows, roleMembers, boxW, boxH, LANE_LABEL_W + 40.0);
+    hint = float(laneFitRef.current) if laneFitRef.current else 0.0;
+    return laneLayout(
+        steps, roleRows, roleMembers, boxW, boxH, laneLabelW() + 40.0, hint
+    );
+}
+
+impl FlowLinePage.laneLabelW -> float {
+    return LANE_LABEL_NARROW if narrow else LANE_LABEL_W;
 }
 
 impl FlowLinePage.pickTemplate(key: str) -> None {
@@ -828,24 +847,47 @@ def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[f
     return [minX, minY, maxX, maxY];
 }
 
-impl FlowLinePage.viewBounds -> list[float] {
-    # What the fit measures: the drawn diagram in Flow view; in Lane view the
-    # columns (the label gutter is fixed px) and the whole band stack.
-    plan = lanePlan();
-    bands: list[dict[str, any]] = plan["lanes"];
-    if len(bands) > 0 {
-        pose: dict[str, list[float]] = plan["positions"];
-        bounds = contentBounds(steps, pose);
-        deepest = 0.0;
-        for b in bands {
-            bandEnd = float(b["y"]) + float(b["h"]);
-            if bandEnd > deepest {
-                deepest = bandEnd;
-            }
-        }
-        return [bounds[0], 0.0, bounds[2], deepest];
+# Width of the lane columns at zoom z, with the text widths for its detail.
+def laneTotal(
+    steps: list[StepView],
+    pose: dict[str, list[float]],
+    colOf: dict[str, int],
+    z: float,
+    stepTitles: dict[str, list[str]],
+    low: dict[str, float],
+    mid: dict[str, float]
+) -> float {
+    need = low if detailOf(z) == "low" else mid;
+    return float(laneRects(steps, pose, colOf, z, stepTitles, need, 0.0)["total"]);
+}
+
+# The largest lane zoom whose columns fit `availW`. Column width only grows
+# with the zoom, so a bisection finds it.
+def laneWidthZoom(
+    steps: list[StepView],
+    pose: dict[str, list[float]],
+    colOf: dict[str, int],
+    stepTitles: dict[str, list[str]],
+    low: dict[str, float],
+    mid: dict[str, float],
+    availW: float
+) -> float {
+    if laneTotal(steps, pose, colOf, LANE_ZOOM_CAP, stepTitles, low, mid) <= availW {
+        return LANE_ZOOM_CAP;
     }
-    return contentBounds(steps, live);
+    lo = LANE_ZOOM_MIN;
+    hi = LANE_ZOOM_CAP;
+    k = 0;
+    while k < 16 {
+        m = (lo + hi) / 2.0;
+        if laneTotal(steps, pose, colOf, m, stepTitles, low, mid) <= availW {
+            lo = m;
+        } else {
+            hi = m;
+        }
+        k = k + 1;
+    }
+    return lo;
 }
 
 impl FlowLinePage.drawnRects -> dict[str, list[float]] {
@@ -860,30 +902,37 @@ impl FlowLinePage.drawnRects -> dict[str, list[float]] {
     );
 }
 
-impl FlowLinePage.laneOffset(z: float) -> float {
-    if lineView == "lanes" and not editing {
-        return LANE_LABEL_W + 16.0 - LANE_GUTTER * z;
+impl FlowLinePage.panRects(z: float) -> dict[str, list[float]] {
+    # The node rects the canvas draws at zoom z, in pan-origin screen px, with
+    # the text widths it measured last.
+    laid: any = layoutRef.current;
+    need: dict[str, float] = {};
+    if laid {
+        need = laid["needLow"] if detailOf(z) == "low" else laid["needMid"];
     }
-    return 0.0;
+    if lineView == "lanes" and not editing {
+        if laid and detailOf(z) != "low" {
+            need = laid["needLane"];
+        }
+        plan = lanePlan();
+        return laneRects(
+            steps,
+            plan["positions"],
+            plan["colOf"],
+            z,
+            stepTitles,
+            need,
+            laneLabelW() + 16.0
+        )["rects"];
+    }
+    return nodeRects(steps, live, z, stepTitles, 0.0, NODE_H, need);
 }
 
 impl FlowLinePage.contentBox(z: float) -> list[float] {
     # The drawn nodes at zoom z, in pan-origin screen px: [x0, y0, x1, y1].
     lanes = lineView == "lanes" and not editing;
-    plan = lanePlan();
-    bands: list[dict[str, any]] = plan["lanes"];
-    positions: dict[str, list[float]] = plan["positions"] if lanes else live;
-    laid: any = layoutRef.current;
-    need: dict[str, float] = laid["need"] if laid else {};
-    rects = nodeRects(
-        steps,
-        positions,
-        z,
-        stepTitles,
-        laneOffset(z),
-        LANE_NODE_H if lanes else NODE_H,
-        need
-    );
+    bands: list[dict[str, any]] = lanePlan()["lanes"] if lanes else [];
+    rects = panRects(z);
     x0 = 0.0;
     y0 = 0.0;
     x1 = 0.0;
@@ -921,18 +970,21 @@ impl FlowLinePage.contentBox(z: float) -> list[float] {
 }
 
 impl FlowLinePage.applyPan(x: float, y: float) -> None {
-    # Keep at least a strip of the drawing inside the viewport on both axes,
-    # so no zoom or drag can strand it out of reach.
+    # Keep a strip of the drawing's box inside the viewport on both axes, then
+    # make sure part of a step is in it too: a box can be in view while every
+    # step sits beyond one of its corners.
     view: any = viewportRef.current;
     nx = x;
     ny = y;
     if view {
         z = float(zoomRef.current) if zoomRef.current else zoom;
+        lanes = lineView == "lanes" and not editing;
         box = contentBox(z);
         w = float(view.clientWidth);
         h = float(view.clientHeight);
+        vx0 = laneLabelW() if lanes else 0.0;
         keep = 72.0;
-        loX = keep - box[2];
+        loX = vx0 + keep - box[2];
         hiX = w - keep - box[0];
         loY = keep - box[3];
         hiY = h - keep - box[1];
@@ -948,6 +1000,40 @@ impl FlowLinePage.applyPan(x: float, y: float) -> None {
         if ny > hiY {
             ny = hiY;
         }
+        rects = panRects(z);
+        bestDx = 0.0;
+        bestDy = 0.0;
+        bestCost = -1.0;
+        for s in steps {
+            if s.id not in rects {
+                continue;
+            }
+            r = rects[s.id];
+            kx = 72.0 if r[2] > 72.0 else r[2];
+            ky = 48.0 if r[3] > 48.0 else r[3];
+            dx = 0.0;
+            dy = 0.0;
+            if r[0] + r[2] + nx < vx0 + kx {
+                dx = vx0 + kx - (r[0] + r[2] + nx);
+            } elif r[0] + nx > w - kx {
+                dx = w - kx - (r[0] + nx);
+            }
+            if r[1] + r[3] + ny < ky {
+                dy = ky - (r[1] + r[3] + ny);
+            } elif r[1] + ny > h - ky {
+                dy = h - ky - (r[1] + ny);
+            }
+            cost = abs(dx) + abs(dy);
+            if bestCost < 0.0 or cost < bestCost {
+                bestCost = cost;
+                bestDx = dx;
+                bestDy = dy;
+            }
+        }
+        if bestCost > 0.0 {
+            nx = nx + bestDx;
+            ny = ny + bestDy;
+        }
     }
     panRef.current = [nx, ny];
     panX = nx;
@@ -957,9 +1043,9 @@ impl FlowLinePage.applyPan(x: float, y: float) -> None {
 impl FlowLinePage.zoomTo(z: float, sx: float, sy: float) -> None {
     lanes = lineView == "lanes" and not editing;
     target = clampZoom(z);
-    # Lane columns closer than a node's minimum width would overlap.
-    if lanes and target < 0.45 {
-        target = 0.45;
+    # Below this the lane bands get shorter than a card.
+    if lanes and target < LANE_ZOOM_MIN {
+        target = LANE_ZOOM_MIN;
     }
     z1 = float(zoomRef.current) if zoomRef.current else zoom;
     if z1 <= 0.0 {
@@ -968,9 +1054,37 @@ impl FlowLinePage.zoomTo(z: float, sx: float, sy: float) -> None {
     pan: list[float] = panRef.current or [panX, panY];
     # The canvas point under (sx, sy) stays put. The lane label gutter is
     # fixed px, so it stays out of the scaling.
-    g = (LANE_LABEL_W + 16.0) if lanes else 0.0;
+    g = (laneLabelW() + 16.0) if lanes else 0.0;
     nx = sx - g - (sx - pan[0] - g) * target / z1;
     ny = sy - (sy - pan[1]) * target / z1;
+    if lanes {
+        # Lane columns widen to fit their names, so they do not scale evenly:
+        # anchor on the step nearest the pointer instead of the origin.
+        before = panRects(z1);
+        after = panRects(target);
+        px = sx - pan[0];
+        py = sy - pan[1];
+        best = "";
+        bestD = -1.0;
+        for s in steps {
+            if s.id in before and s.id in after {
+                r = before[s.id];
+                ddx = px - (r[0] + r[2] / 2.0);
+                ddy = py - (r[1] + r[3] / 2.0);
+                d = ddx * ddx + ddy * ddy;
+                if bestD < 0.0 or d < bestD {
+                    bestD = d;
+                    best = s.id;
+                }
+            }
+        }
+        if best {
+            o = before[best];
+            n = after[best];
+            nx = sx - (n[0] + n[2] / 2.0) - (px - o[0] - o[2] / 2.0) * target / z1;
+            ny = sy - (n[1] + n[3] / 2.0) - (py - o[1] - o[3] / 2.0) * target / z1;
+        }
+    }
     zoomRef.current = target;
     zoom = target;
     applyPan(nx, ny);
@@ -1025,51 +1139,75 @@ impl FlowLinePage.fitZoom -> None {
         return;
     }
     lanes = lineView == "lanes" and not editing;
-    bounds = viewBounds();
-    spanW = bounds[2] - bounds[0];
-    spanH = bounds[3] - bounds[1];
     w = float(view.clientWidth);
     h = float(view.clientHeight);
-    # Label chips hang past the outer nodes by roughly the same screen px at
-    # any zoom, so the last render's overhang is reserved around the fit.
     laid: any = layoutRef.current;
-    mL = 0.0;
-    mT = 0.0;
-    mR = 0.0;
-    mB = 0.0;
-    if laid and not lanes {
-        nb: list[float] = laid["nodes"];
-        eb: list[float] = laid["extent"];
-        mL = nb[0] - eb[0];
-        mT = nb[1] - eb[1];
-        mR = eb[2] - nb[2];
-        mB = eb[3] - nb[3];
-    }
-    availW = (w - LANE_LABEL_W - 40.0) if lanes else (w - 48.0 - mL - mR);
-    availH = h if lanes else (h - 48.0 - mT - mB);
-    if spanW <= 0.0 or spanH <= 0.0 or availW <= 0.0 or availH <= 0.0 {
-        return;
-    }
-    byW = availW / spanW;
-    byH = availH / spanH;
-    best = byW if byW < byH else byH;
-    # The hand-drawn line stops at 100%, past which its nodes only grow
-    # emptier; the lane view is generated for its box and may go further.
-    cap = LANE_ZOOM_CAP if lanes else 1.0;
-    if best > cap {
-        best = cap;
-    }
-    best = clampZoom(best);
-    if lanes and best < 0.45 {
-        best = 0.45;
-    }
-    zoomRef.current = best;
-    zoom = best;
     if lanes {
+        # Lanes: the widest zoom whose columns fit beside the label gutter,
+        # no taller than the bands at their natural height. The bands then
+        # grow to fill the box at exactly this zoom (lanePlan's hint).
+        natural = laneLayout(steps, roleRows, roleMembers);
+        low: dict[str, float] = laid["needLow"] if laid else {};
+        mid: dict[str, float] = laid["needLane"] if laid else {};
+        zw = laneWidthZoom(
+            steps,
+            natural["positions"],
+            natural["colOf"],
+            stepTitles,
+            low,
+            mid,
+            w - laneLabelW() - 40.0
+        );
+        naturalH = float(natural["naturalH"]);
+        zh = h / naturalH if naturalH > 0.0 else LANE_ZOOM_CAP;
+        best = zw if zw < zh else zh;
+        cap = laneFitCap(h, naturalH);
+        if best > cap {
+            best = cap;
+        }
+        if best < LANE_ZOOM_MIN {
+            best = LANE_ZOOM_MIN;
+        }
+        laneFitRef.current = best;
+        zoomRef.current = best;
+        zoom = best;
         panRef.current = [0.0, 0.0];
         panX = 0.0;
         panY = 0.0;
+        lastFitRef.current = [best, 0.0, 0.0];
     } else {
+        bounds = contentBounds(steps, live);
+        spanW = bounds[2] - bounds[0];
+        spanH = bounds[3] - bounds[1];
+        # Label chips hang past the outer nodes by roughly the same screen px
+        # at any zoom, so the last render's overhang is reserved around it.
+        mL = 0.0;
+        mT = 0.0;
+        mR = 0.0;
+        mB = 0.0;
+        if laid {
+            nb: list[float] = laid["nodes"];
+            eb: list[float] = laid["extent"];
+            mL = nb[0] - eb[0];
+            mT = nb[1] - eb[1];
+            mR = eb[2] - nb[2];
+            mB = eb[3] - nb[3];
+        }
+        availW = w - 48.0 - mL - mR;
+        availH = h - 48.0 - mT - mB;
+        if spanW <= 0.0 or spanH <= 0.0 or availW <= 0.0 or availH <= 0.0 {
+            return;
+        }
+        byW = availW / spanW;
+        byH = availH / spanH;
+        # The hand-drawn line stops at 100%, past which its nodes only grow
+        # emptier.
+        best = clampZoom(byW if byW < byH else byH);
+        if best > 1.0 {
+            best = 1.0;
+        }
+        zoomRef.current = best;
+        zoom = best;
         box = contentBox(best);
         cw = box[2] - box[0] + mL + mR;
         ch = box[3] - box[1] + mT + mB;
@@ -1080,6 +1218,7 @@ impl FlowLinePage.fitZoom -> None {
         panRef.current = [px, py];
         panX = px;
         panY = py;
+        lastFitRef.current = [best, px, py];
     }
     fittedRef.current = True;
     # The overhang at the new zoom is only known once it is drawn: fit once
@@ -1092,6 +1231,15 @@ impl FlowLinePage.fitZoom -> None {
                 refitRef.current = False;
             }
         );
+    }
+}
+
+impl FlowLinePage.refitIfUntouched -> None {
+    last: any = lastFitRef.current;
+    pan: list[float] = panRef.current or [panX, panY];
+    z = float(zoomRef.current) if zoomRef.current else zoom;
+    if last and last[0] == z and last[1] == pan[0] and last[2] == pan[1] {
+        fitZoom();
     }
 }
 

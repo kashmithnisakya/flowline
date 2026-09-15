@@ -33,10 +33,12 @@ import from ...services.flowlines.flowlines {
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,
+    laneRects,
+    laneFitCap,
     LANE_ZOOM_CAP,
-    LANE_GUTTER,
+    LANE_ZOOM_MIN,
     LANE_LABEL_W,
-    LANE_NODE_H
+    LANE_LABEL_NARROW
 }
 import from ...components.flowlines.TemplatePicker { TemplatePicker }
 import from ...components.flowlines.StepInspector { StepInspector }
@@ -55,7 +57,7 @@ import from ...components.flowlines.geometry {
     NODE_H,
     DETAIL_HIGH
 }
-import from ...components.flowlines.kinds { KIND_LABEL, KIND_TONE }
+import from ...components.flowlines.kinds { KIND_LABEL, KIND_TONE, DOT_FILL, colorKey }
 import from ...components.common.KindGlyph { KindGlyph }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -69,6 +71,7 @@ import from ...components.ui.dialog {
     DialogFooter
 }
 import from ...components.ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
+import from ...components.ui.popover { Popover, PopoverTrigger, PopoverContent }
 import from ...components.ui.dropdown_menu {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -212,6 +215,10 @@ def:pub FlowLinePage -> JsxPage {
         liveRef: Ref[any] = Ref(),
         canvasRef: Ref[any] = Ref(),
         layoutRef: Ref[any] = Ref(),
+        # The zoom the last lane fit landed on (the bands grow for it), and
+        # the zoom and pan of the last fit, to tell whether anyone moved since.
+        laneFitRef: Ref[any] = Ref(),
+        lastFitRef: Ref[any] = Ref(),
         refitRef: Ref[any] = Ref();
 
     async can with entry {
@@ -229,11 +236,25 @@ def:pub FlowLinePage -> JsxPage {
         [len(steps), editing, lineView, boxW, boxH, narrow, phoneView, loading]
     );
 
+    # A resize refits through measureBox. Late web fonts widen the measured
+    # names, so they refit too, unless the view was moved since the last fit.
     useEffect(
         lambda {
             onResize: any = lambda { measureBox(); };
             window.addEventListener("resize", onResize);
-            return lambda { window.removeEventListener("resize", onResize); };
+            w: any = window;
+            alive: any = {"on": True};
+            if w.document and w.document.fonts {
+                w.document.fonts.ready.then(
+                    lambda { w.requestAnimationFrame(
+                        lambda { if alive["on"] { refitIfUntouched(); }}
+                    ); }
+                );
+            }
+            return lambda {
+                alive["on"] = False;
+                window.removeEventListener("resize", onResize);
+            };
         },
         []
     );
@@ -305,6 +326,7 @@ def:pub FlowLinePage -> JsxPage {
     async def refreshPeek(stepId: str, pid: str) -> None;
     async def morePeek -> None;
     async def loadTitles(wanted: str) -> None;
+    async def firstTitles(stepId: str, pid: str) -> list[str];
     def closePeek -> None;
     def revealStep(stepId: str) -> None;
     def openTask(tid: str) -> None;
@@ -320,7 +342,7 @@ def:pub FlowLinePage -> JsxPage {
     def switchMode(v: str) -> None;
     def finishEditing -> None;
     def lanePlan -> dict[str, any];
-    def viewBounds -> list[float];
+    def laneLabelW -> float;
     async def pickTemplate(key: str) -> None;
     def startScratch -> None;
     def startRename -> None;
@@ -343,10 +365,11 @@ def:pub FlowLinePage -> JsxPage {
     def zoomTo(z: float, sx: float, sy: float) -> None;
     def applyPan(x: float, y: float) -> None;
     def contentBox(z: float) -> list[float];
-    def laneOffset(z: float) -> float;
+    def panRects(z: float) -> dict[str, list[float]];
     def drawnRects -> dict[str, list[float]];
     def measureBox -> None;
     def fitZoom -> None;
+    def refitIfUntouched -> None;
     def onWheel(e: any) -> None;
     def onKeyDown(e: any) -> None;
     def swallowed -> bool;
@@ -392,6 +415,7 @@ def:pub FlowLinePage -> JsxPage {
     lanePose: dict[str, list[float]] = plan["positions"];
     laneBands: list[dict[str, any]] = plan["lanes"];
     laneOfStep: dict[str, str] = plan["laneOf"] if "laneOf" in plan else {};
+    laneColOf: dict[str, int] = plan["colOf"] if "colOf" in plan else {};
     listPlan: dict[str, any] = laneLayout(steps, roleRows, roleMembers)
         if showList
         else {"colOf": {}};
@@ -399,6 +423,25 @@ def:pub FlowLinePage -> JsxPage {
     taskTotal = 0;
     for s in steps {
         taskTotal = taskTotal + s.task_count;
+    }
+    # The org's roles and who holds them, for the key row's Roles popover.
+    roleList: list[dict[str, any]] = [];
+    for rr in roleRows {
+        held: list[str] = [];
+        for m in roleMembers {
+            if m.active and rr.name in m.roles {
+                held.append(m.name);
+            }
+        }
+        roleList.append(
+            {
+                "id": rr.id,
+                "name": rr.name,
+                "dot": DOT_FILL[colorKey(rr.color or "slate")],
+                "holders": ", ".join(held) if len(held) > 0 else "No one yet",
+                "none": len(held) == 0
+            }
+        );
     }
 
     peekScope = "across all projects";
@@ -858,6 +901,8 @@ def:pub FlowLinePage -> JsxPage {
                                         live={lanePose if laneMode else live}
                                         lanes={laneBands if laneMode else []}
                                         laneOf={laneOfStep}
+                                        laneCols={laneColOf}
+                                        laneLabelW={laneLabelW()}
                                         selectedId={selectedId if editing else peekId}
                                         connectFrom={connectFrom if editing else ""}
                                         selectedEdge={selectedEdge if editing else ""}
@@ -1162,7 +1207,74 @@ def:pub FlowLinePage -> JsxPage {
                                     </span>
                                 </span>
                             }}
-                            <span className="ml-auto text-xs text-subtle">
+                            <Popover>
+                                <PopoverTrigger
+                                    className="ml-auto inline-flex h-6 items-center gap-1.5 rounded-sm px-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                                >
+                                    Roles
+                                    <span className="num text-xs">
+                                        {str(len(roleList))}
+                                    </span>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    align="end"
+                                    collisionPadding={16}
+                                    className="w-72 gap-2.5 p-3"
+                                >
+                                    <div
+                                        className="flex items-baseline justify-between gap-2"
+                                    >
+                                        <h2 className="text-sm font-semibold">Roles</h2>
+                                        <a
+                                            href="/workspace?tab=roles"
+                                            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                                        >
+                                            Manage roles
+                                        </a>
+                                    </div>
+                                    {if len(roleList) == 0 {
+                                        <p
+                                            key="none"
+                                            className="text-[13px] text-muted-foreground"
+                                        >
+                                            No roles yet. A role says who holds a step.
+                                        </p>
+                                    } else {
+                                        <ul key="roles" className="flex flex-col gap-2">
+                                            {for rl in roleList {
+                                                <li
+                                                    key={rl["id"]}
+                                                    className="flex min-w-0 flex-col"
+                                                >
+                                                    <span
+                                                        className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium"
+                                                    >
+                                                        <span
+                                                            className={"step-swatch "
+                                                                + rl["dot"]}
+                                                            aria-hidden="true"
+                                                        />
+                                                        <span className="truncate">
+                                                            {rl["name"]}
+                                                        </span>
+                                                    </span>
+                                                    <span
+                                                        className={"pl-4 text-xs "
+                                                            + (
+                                                                "text-warning"
+                                                                    if rl["none"]
+                                                                    else "text-muted-foreground"
+                                                            )}
+                                                    >
+                                                        {rl["holders"]}
+                                                    </span>
+                                                </li>
+                                            }}
+                                        </ul>
+                                    } }
+                                </PopoverContent>
+                            </Popover>
+                            <span className="text-xs text-subtle">
                                 <span className="num">{str(len(steps))}</span>
                                 {" " + stepNoun + " · "}
                                 <span className="num">{str(linkCount)}</span>
