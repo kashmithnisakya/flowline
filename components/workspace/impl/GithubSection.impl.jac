@@ -57,12 +57,12 @@ impl GithubSection.finishInstall(code: str, installId: int, state: str) -> None 
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
-            toast("GitHub connected");
+            toast.success("GitHub connected");
         } else {
-            toast(payload["message"] or "That install could not be finished.");
+            toast.error(payload["message"] or "That install could not be finished.");
         }
     } except Exception as e {
-        toast("Could not finish the GitHub install");
+        toast.error("Could not finish the GitHub install");
     }
 }
 
@@ -75,7 +75,7 @@ impl GithubSection.loadStatus -> None {
             configGaps = view.missing_config;
         }
     } except Exception as e {
-        toast("Could not read the GitHub connection");
+        toast.error("Could not read the GitHub connection");
     }
 }
 
@@ -119,7 +119,7 @@ impl GithubSection.loadWorkspace -> None {
             repoId = fetched[0].id;
         }
     } except Exception as e {
-        toast("Could not load this workspace's repos");
+        toast.error("Could not load this workspace's repositories");
     }
 }
 
@@ -141,34 +141,91 @@ impl GithubSection.startInstall -> None {
         gaps = payload["missing"] or [];
         configGaps = gaps;
         if not gaps {
-            toast(payload["message"] or "Could not start the GitHub install");
+            toast.error(payload["message"] or "Could not start the GitHub install");
         }
     } except Exception as e {
-        toast("Could not start the GitHub install");
+        toast.error("Could not start the GitHub install");
     }
     starting = False;
 }
 
 impl GithubSection.disconnect -> None {
-    # Two clicks, no dialog: the first arms the button and reveals what is and
-    # is not lost, the second does it.
-    if not confirmDisconnect {
-        confirmDisconnect = True;
+    if disconnecting {
         return;
     }
-    confirmDisconnect = False;
+    disconnecting = True;
     try {
         root spawn DisconnectGithub();
+        confirmDisconnect = False;
         repoId = "";
         issues = [];
         pulls = [];
         selected = [];
         pickerRows = [];
         await loadStatus();
-        toast("Disconnected from GitHub");
+        toast.success("Disconnected from GitHub");
     } except Exception as e {
-        toast("Could not disconnect from GitHub");
+        toast.error("Could not disconnect from GitHub");
     }
+    disconnecting = False;
+}
+
+impl GithubSection.syncNow -> None {
+    # The same bounded loop the board runs, driven by hand: each increment is
+    # capped server-side, so this asks for the next one until it says done.
+    if syncing {
+        return;
+    }
+    syncing = True;
+    linked = 0;
+    added = 0;
+    moved = 0;
+    failure = "";
+    try {
+        rounds = 0;
+        more = True;
+        while more and rounds < SYNC_ROUNDS {
+            rounds = rounds + 1;
+            result = root spawn SyncGithub();
+            payload = result.reports[0] if result.reports else None;
+            if not payload or not payload["ok"] {
+                failure = str(payload["message"]) if payload else "Sync failed";
+                break;
+            }
+            linked = int(payload["linked"] or 0);
+            added = added + int(payload["auto_added"] or 0);
+            moved = moved + int(payload["auto_done"] or 0);
+            failure = str(payload["failure"] or "");
+            more = bool(payload["has_more"]) and not failure;
+        }
+        await loadStatus();
+        rResult = root spawn ListRepos();
+        repos = rResult.reports[0] if rResult.reports else repos;
+        if tab == "issues" {
+            await loadIssues(True);
+        } else {
+            await loadPulls(True);
+        }
+        if failure {
+            toast.error(failure);
+        } else {
+            msg: str = "Synced " + str(linked) + " tasks";
+            if added > 0 {
+                msg = msg + " · " + str(added) + " issues added";
+            }
+            if moved > 0 {
+                msg = msg + " · " + str(moved) + " moved to Done";
+            }
+            toast.success(msg);
+        }
+        # The board is a separate tree; without this it would not show what
+        # the sync just changed until its next poll.
+        w: any = window;
+        w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
+    } except Exception as e {
+        toast.error("Could not sync with GitHub");
+    }
+    syncing = False;
 }
 
 impl GithubSection.openPicker -> None {
@@ -191,10 +248,12 @@ impl GithubSection.searchRepos -> None {
         } else {
             pickerRows = [];
             pickerMore = False;
-            toast(payload["message"] or "GitHub would not list your repositories");
+            toast.error(
+                payload["message"] or "GitHub would not list your repositories"
+            );
         }
     } except Exception as e {
-        toast("Could not reach GitHub");
+        toast.error("Could not reach GitHub");
     }
     pickerLoading = False;
 }
@@ -222,10 +281,12 @@ impl GithubSection.moreRepos -> None {
             pickerPage = wanted;
             pickerMore = bool(payload["has_more"]);
         } else {
-            toast(payload["message"] or "GitHub would not list your repositories");
+            toast.error(
+                payload["message"] or "GitHub would not list your repositories"
+            );
         }
     } except Exception as e {
-        toast("Could not reach GitHub");
+        toast.error("Could not reach GitHub");
     }
     pickerLoadingMore = False;
 }
@@ -237,16 +298,16 @@ impl GithubSection.toggleAutoSync(rid: str, enabled: bool) -> None {
         if payload and payload["ok"] {
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
-            toast(
-                "New issues will be filed on the next sync"
+            toast.success(
+                "Importing issues on. This repository's existing issues arrive on the next sync."
                     if enabled
-                    else "Auto-add turned off"
+                    else "Importing issues turned off"
             );
         } else {
-            toast("Could not update that repo");
+            toast.error("Could not update that repository");
         }
     } except Exception as e {
-        toast("Could not update that repo");
+        toast.error("Could not update that repository");
     }
 }
 
@@ -257,16 +318,16 @@ impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
         if payload and payload["ok"] {
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
-            toast(
-                "Merged PRs and closed issues will move their cards to done on the next sync"
+            toast.success(
+                "Merged pull requests and closed issues will move their cards to Done"
                     if enabled
-                    else "Done on merge & close turned off"
+                    else "Moving cards to Done turned off"
             );
         } else {
-            toast("Could not update that repo");
+            toast.error("Could not update that repository");
         }
     } except Exception as e {
-        toast("Could not update that repo");
+        toast.error("Could not update that repository");
     }
 }
 
@@ -277,16 +338,16 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
         if payload and payload["ok"] {
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
-            toast(
-                "Cards will close their GitHub issues on done and reopen them when moved back"
+            toast.success(
+                "Cards reaching Done will close their GitHub issue, and reopen it when moved back"
                     if enabled
-                    else "Close & reopen issue turned off"
+                    else "Closing issues from flowline turned off"
             );
         } else {
-            toast("Could not update that repo");
+            toast.error("Could not update that repository");
         }
     } except Exception as e {
-        toast("Could not update that repo");
+        toast.error("Could not update that repository");
     }
 }
 
@@ -296,17 +357,23 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     }
     project = pickerProject;
     if not project {
-        toast("Pick a project for this repo");
+        toast.error("Pick the project its issues land in first");
         return;
     }
     attaching = fullName;
     try {
-        root spawn AddRepo(full_name=fullName, project_id=project);
+        result = root spawn AddRepo(full_name=fullName, project_id=project);
+        added = result.reports[0] if result.reports else None;
         await loadWorkspace();
         await searchRepos();
-        toast("Attached " + fullName);
+        # Land on the repository that was just added, so the panes show it
+        # when the dialog closes.
+        if added {
+            selectRepo(added.id);
+        }
+        toast.success("Added " + fullName);
     } except Exception as e {
-        toast("Could not attach " + fullName);
+        toast.error("Could not add " + fullName);
     }
     attaching = "";
 }
@@ -349,10 +416,10 @@ impl GithubSection.loadIssues(reset: bool) -> None {
                 selected = [];
             }
         } else {
-            toast(payload["message"] or "GitHub would not list those issues");
+            toast.error(payload["message"] or "GitHub would not list those issues");
         }
     } except Exception as e {
-        toast("Could not load issues");
+        toast.error("Could not load issues");
     }
     issueLoading = False;
     issueMore = False;
@@ -389,10 +456,12 @@ impl GithubSection.loadPulls(reset: bool) -> None {
             prPage = payload["page"] or wanted;
             prHasMore = bool(payload["has_more"]);
         } else {
-            toast(payload["message"] or "GitHub would not list those pull requests");
+            toast.error(
+                payload["message"] or "GitHub would not list those pull requests"
+            );
         }
     } except Exception as e {
-        toast("Could not load pull requests");
+        toast.error("Could not load pull requests");
     }
     prLoading = False;
     prMore = False;
@@ -461,7 +530,7 @@ impl GithubSection.importSelected -> None {
             if failed {
                 note = note + ", " + str(failed) + " GitHub would not return";
             }
-            toast(note);
+            toast.success(note);
             selected = [];
             await loadIssues(True);
             # The board is a separate tree; without this it would not show the
@@ -469,10 +538,10 @@ impl GithubSection.importSelected -> None {
             w: any = window;
             w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
         } else {
-            toast(payload["message"] or "Could not import those issues");
+            toast.error(payload["message"] or "Could not import those issues");
         }
     } except Exception as e {
-        toast("Could not import those issues");
+        toast.error("Could not import those issues");
     }
     importing = False;
 }
