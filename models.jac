@@ -184,7 +184,21 @@ node Task {
         # request, then the verdict a review submits. Its own clock, because
         # the PR's updated_at does not move when someone reviews it.
         pr_review_state: str = "",
-        pr_review_at: str = "";
+        pr_review_at: str = "",
+        # When the task last entered Done, "" while it is open. Written only
+        # by set_status; rows from before it read updated_at (done_day).
+        done_at: str = "";
+
+    # Every status write goes through here, so `done_at` stays true to the
+    # move into Done: kept while the task stays Done, cleared when it leaves.
+    def set_status(status: str, stamp: str) {
+        if status == "Done" and self.status != "Done" {
+            self.done_at = stamp;
+        } elif status != "Done" {
+            self.done_at = "";
+        }
+        self.status = status;
+    }
 
     # One task's view, hopping its own edges. Fine for a single task; for a
     # list use hydrate_views, which gets the same links in a few traversals
@@ -384,6 +398,17 @@ obj TaskView {
         pr_state: str = "",
         gh_assignees: list[str] = [],
         pr_review_state: str = "";
+}
+
+# The Overview's charts over time, one entry per week oldest first: `weeks`
+# holds each Monday, `added` / `finished` count that week, `scope` / `done`
+# are running totals at the week's end.
+obj WeeklyHistory {
+    has weeks: list[str] = [],
+        added: list[int] = [],
+        finished: list[int] = [],
+        scope: list[int] = [],
+        done: list[int] = [];
 }
 
 # One page of tasks. `total` counts every row that matched the filters, not

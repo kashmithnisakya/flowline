@@ -7,6 +7,7 @@ import from models {
     TaskView,
     TaskPage,
     TaskTotals,
+    WeeklyHistory,
     ProjectTally,
     MemberTally,
     WorkflowStep,
@@ -35,7 +36,9 @@ import from services.util {
     clean_tags,
     done_cutoff,
     is_older,
-    order_working
+    order_working,
+    done_day,
+    moved_to_done
 }
 import from services.log.log { record_task_event, sync_task_links }
 import from services.github.util { close_issue_on_done }
@@ -388,7 +391,10 @@ def task_totals(
             }
             continue;
         }
-        day = t.updated_at[:10];
+        if not moved_to_done(t) {
+            continue;
+        }
+        day = done_day(t);
         for i in range(4) {
             if day >= starts[i] and day < ends[i] {
                 by_week[i] = by_week[i] + 1;
@@ -426,7 +432,7 @@ def task_totals(
         for t in (by_member[mid] if mid in by_member else []) {
             if t.status != "Done" {
                 mine_open = mine_open + 1;
-            } elif t.updated_at[:10] >= week0 {
+            } elif moved_to_done(t) and done_day(t) >= week0 {
                 mine_done = mine_done + 1;
             }
         }
@@ -456,6 +462,89 @@ walker TaskCounts {
 
     can count with Root entry {
         report task_totals(here, all_tasks(here), task_links(here), self.monday);
+    }
+}
+
+
+# The week a day falls in: the last start on or before it, -1 before the
+# first. `starts` is ascending Mondays; an empty day is before them all.
+def week_slot(day: str, starts: list[str]) -> int {
+    slot = -1;
+    for (i, s) in enumerate(starts) {
+        if day and day >= s {
+            slot = i;
+        }
+    }
+    return slot;
+}
+
+
+walker TaskHistory {
+    """The Overview's charts over time: for the `weeks` weeks ending in
+    `monday`'s week, tasks added and moved to Done per week plus running
+    scope and done totals. `project_id` narrows it to that project. Node
+    fields only, one pass; a task created already Done counts nowhere."""
+    has project_id: str = "",
+        monday: str = "",
+        weeks: int = 12,
+        reports: list[WeeklyHistory] = [];
+
+    can start with Root entry {
+        if self.project_id {
+            p = resolve(self.project_id);
+            if isinstance(p, Project) and owned(here, p) {
+                visit [p];
+            } else {
+                report self.history_of([]);
+            }
+        } else {
+            report self.history_of(all_tasks(here));
+        }
+    }
+
+    can gather with Project entry {
+        report self.history_of([here-->[?:Task]]);
+        disengage;
+    }
+
+    def history_of(pool: list[Task]) -> WeeklyHistory {
+        count = min(max(self.weeks, 4), 52);
+        week0 = self.monday if len(self.monday) >= 10 else today_iso();
+        starts = [shift_day(week0, -7 * (count - 1 - i)) for i in range(count)];
+        added = [0 for _ in range(count)];
+        finished = [0 for _ in range(count)];
+        scope_before = 0;
+        done_before = 0;
+        for t in pool {
+            if t.status == "Done" and not moved_to_done(t) {
+                continue;
+            }
+            made = week_slot(t.created_at[:10], starts);
+            if made < 0 {
+                scope_before = scope_before + 1;
+            } else {
+                added[made] = added[made] + 1;
+            }
+            if t.status == "Done" {
+                closed = week_slot(done_day(t), starts);
+                if closed < 0 {
+                    done_before = done_before + 1;
+                } else {
+                    finished[closed] = finished[closed] + 1;
+                }
+            }
+        }
+        scope: list[int] = [];
+        done: list[int] = [];
+        for i in range(count) {
+            scope_before = scope_before + added[i];
+            done_before = done_before + finished[i];
+            scope.append(scope_before);
+            done.append(done_before);
+        }
+        return WeeklyHistory(
+            weeks=starts, added=added, finished=finished, scope=scope, done=done
+        );
     }
 }
 
@@ -521,6 +610,7 @@ walker CreateTask {
             issue_link=self.issue_link,
             created_at=stamp,
             updated_at=stamp,
+            done_at=stamp if col == "Done" else "",
             sort_order=peak + 1024.0
         );
         on_attached(holder, fresh);
@@ -585,7 +675,7 @@ walker UpdateTask(find_task) {
         here.tags = clean_tags(self.tags);
         here.estimate = self.estimate;
         here.priority = self.priority;
-        here.status = landing;
+        here.set_status(landing, now_iso());
         here.due_date = self.due_date;
         here.notes = self.notes;
         here.issue_link = self.issue_link;
@@ -757,7 +847,7 @@ walker MoveTask(find_task) {
         col.sort(key=lambda (t: Task) { jid(t); });
         col.sort(key=lambda (t: Task) { t.sort_order; });
         was = here.status;
-        here.status = landing;
+        here.set_status(landing, now_iso());
         here.sort_order = self.landing_sort(col, here);
         if not reorder {
             here.updated_at = now_iso();

@@ -835,7 +835,7 @@ def auto_done_land(
         }
     }
     peak = peak + 1024.0;
-    t.status = "Done";
+    t.set_status("Done", stamp);
     t.step_id = step_id;
     t.sort_order = peak;
     t.updated_at = stamp;
@@ -913,6 +913,7 @@ def file_issue_item(
         issue_link=str(item.get("html_url") or ""),
         created_at=stamp,
         updated_at=stamp,
+        done_at=stamp if landing == "Done" else "",
         sort_order=peaks[landing],
         gh_repo=full_name,
         gh_issue_number=number,

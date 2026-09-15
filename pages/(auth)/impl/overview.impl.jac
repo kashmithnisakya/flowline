@@ -40,3 +40,19 @@ impl OverviewPage.loadAll -> None {
     }
     loading = False;
 }
+
+impl OverviewPage.loadHistory -> None {
+    historyLoading = True;
+    try {
+        result = root spawn TaskHistory(
+            project_id="" if historyProject == "all" else historyProject,
+            monday=mondayOf(localIso(new(Date))),
+            weeks=int(historyWeeks)
+        );
+        history = result.reports[0] if result.reports else None;
+        historyFailed = False;
+    } except Exception as e {
+        historyFailed = True;
+    }
+    historyLoading = False;
+}
