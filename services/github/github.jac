@@ -1171,8 +1171,8 @@ walker SetRepoAutoDone {
 
 walker SetRepoAutoClose {
     """Per-repo policy, the reverse of auto_done and off by default: a card
-    landing on Done closes its GitHub issue. The receiver drops the App's
-    own echo of that close, so the card is never moved twice."""
+    landing on Done closes its GitHub issue and one leaving Done reopens it.
+    The receiver drops the App's own echo, so neither is applied twice."""
     has repo_id: str = "",
         enabled: bool = False,
         reports: list[dict[str, any]] = [];

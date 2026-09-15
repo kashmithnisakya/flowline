@@ -610,14 +610,14 @@ def user_owns_installation(user_token: str, installation_id: int) -> dict[str, a
 
 # ------------------------------------------------------------- write-back
 
-# Close the linked issue when a card lands on Done, for repos that opted in.
-# Returns the suffix for the move's own log line, or "" when nothing was
-# written. A failure is logged, never raised: the move already happened and
-# the card's issue state shows the mismatch until the next sync.
-def close_issue_on_done(holder: Root, t: Task, stamp: str) -> str {
+# Keep the linked issue's state with its card, for repos that opted in:
+# `closed` closes an open issue (the card reached Done), otherwise a closed
+# issue reopens (the card left Done). Returns the log-line suffix, or "" when
+# nothing was written; a failure is logged, never raised.
+def sync_issue_state(holder: Root, t: Task, closed: bool, stamp: str) -> str {
     if t.gh_issue_number <= 0
         or not valid_full_name(t.gh_repo)
-        or t.gh_issue_state == "closed" {
+        or (t.gh_issue_state == "closed") == closed {
         return "";
     }
     opted = False;
@@ -641,19 +641,20 @@ def close_issue_on_done(holder: Root, t: Task, stamp: str) -> str {
         return "";
     }
     where = t.gh_repo + " #" + str(t.gh_issue_number);
+    want = "closed" if closed else "open";
     result = gh_request(
         token,
         "PATCH",
         "/repos/" + t.gh_repo + "/issues/" + str(t.gh_issue_number),
         {},
-        {"state": "closed"}
+        {"state": want}
     );
     if not result["ok"] {
         if result.get("error") == "unauthorized" {
             c.status = "invalid";
         }
         log.warning(
-            "close on done skipped for "
+            "issue state write-back skipped for "
                 + where
                 + ": "
                 + str(result.get("message") or result.get("error"))
@@ -662,10 +663,10 @@ def close_issue_on_done(holder: Root, t: Task, stamp: str) -> str {
     }
     item = result["data"];
     updated = str(item.get("updated_at") or "") if isinstance(item, dict) else "";
-    t.gh_issue_state = "closed";
+    t.gh_issue_state = want;
     if updated > t.gh_updated_at {
         t.gh_updated_at = updated;
     }
     t.gh_synced_at = stamp;
-    return "closed " + where;
+    return ("closed " if closed else "reopened ") + where;
 }

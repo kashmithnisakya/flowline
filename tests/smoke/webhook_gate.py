@@ -478,12 +478,47 @@ def main() -> int:
     s = walker("SyncGithub")
     after = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
     check("the poll sees the same close and adds no line", s.get("ok") and len(after) == len(lines), (s, len(after), len(lines)))
+    W1_PATH = f"/repos/{REPO}/issues/{W1}"
+    mv = walker("MoveTask", {"task_id": t.get("id", ""), "status": "In Progress"})
+    patches = stub_patches()
+    check("moving it back out of Done PATCHes the issue open, once", mv.get("status") == "In Progress" and patches == [W1_PATH, W1_PATH], (mv.get("status"), patches))
+    st = (stub_state().get("repos", {}).get(REPO, {}) or {}).get(str(W1), {})
+    t = task_by_issue(W1) or {}
+    check("  the stub's issue is open again and the card knows", st.get("state") == "open" and t.get("gh_issue_state") == "open", (st.get("state"), t.get("gh_issue_state")))
+    lines = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    backs = [x for x in lines if "Moved to In Progress" in x.get("activity", "")]
+    check("  one log line, the move naming the reopen", len(backs) == 1 and f"reopened {REPO} #{W1}" in backs[0].get("activity", ""), [x.get("activity") for x in lines])
+    status, rep = deliver("issues", envelope("reopened", inst=INST_A2, sender=BOT, issue=issue(W1, "open", iso(2), title="Close-back probe")))
+    dr = drain()
+    after = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    t = task_by_issue(W1) or {}
+    check("the App's echo of that reopen is dropped: no second line, card stays put", rep.get("outcome") == "echo" and dr.get("drained") == 0 and len(after) == len(lines) and t.get("status") == "In Progress", (rep, dr, len(after), t.get("status")))
+    s = walker("SyncGithub")
+    after = [x for x in log_rows() if x.get("task_title") == "Close-back probe"]
+    check("the poll sees the same reopen and adds no line", s.get("ok") and len(after) == len(lines) and (task_by_issue(W1) or {}).get("status") == "In Progress", (s, len(after), len(lines)))
+    up = {"task_id": t.get("id", ""), "title": "Close-back probe", "priority": "Medium", "project_id": pid_a}
+    walker("UpdateTask", dict(up, status="Done"))
+    st = (stub_state().get("repos", {}).get(REPO, {}) or {}).get(str(W1), {})
+    check("a dialog save onto Done closes it too", stub_patches() == [W1_PATH] * 3 and st.get("state") == "closed", (stub_patches(), st.get("state")))
+    walker("UpdateTask", dict(up, status="In Progress"))
+    st = (stub_state().get("repos", {}).get(REPO, {}) or {}).get(str(W1), {})
+    t = task_by_issue(W1) or {}
+    # The log orders a day's rows by member and id, not time, so count the
+    # reopen lines (the move's and this save's) rather than pick the last.
+    reopens = [x for x in log_rows() if x.get("task_title") == "Close-back probe" and f"reopened {REPO} #{W1}" in x.get("activity", "")]
+    check("  and a dialog save out of Done reopens it, naming it on the line", stub_patches() == [W1_PATH] * 4 and st.get("state") == "open" and t.get("gh_issue_state") == "open" and len(reopens) == 2, (stub_patches(), st.get("state"), [x.get("activity") for x in reopens]))
+    walker("UpdateTask", dict(up, status="Backlog"))
+    check("  a save that does not cross Done writes nothing", stub_patches() == [W1_PATH] * 4, stub_patches())
     r = walker("SetRepoAutoClose", {"repo_id": rid_a, "enabled": False})
     rep, dr = push("issues", envelope("opened", inst=INST_A2, issue=issue(W2, "open", iso(0), title="Opt-out probe")))
     t2 = task_by_issue(W2) or {}
     mv = walker("MoveTask", {"task_id": t2.get("id", ""), "status": "Done"})
     t2 = task_by_issue(W2) or {}
-    check("opted-out repo: Done writes nothing to GitHub", mv.get("status") == "Done" and stub_patches() == [f"/repos/{REPO}/issues/{W1}"] and t2.get("gh_issue_state") == "open", (mv.get("status"), stub_patches(), t2.get("gh_issue_state")))
+    check("opted-out repo: Done writes nothing to GitHub", mv.get("status") == "Done" and stub_patches() == [W1_PATH] * 4 and t2.get("gh_issue_state") == "open", (mv.get("status"), stub_patches(), t2.get("gh_issue_state")))
+    rep, dr = push("issues", envelope("closed", inst=INST_A2, issue=issue(W2, "closed", iso(4), iso(4), title="Opt-out probe")))
+    mv = walker("MoveTask", {"task_id": t2.get("id", ""), "status": "In Progress"})
+    t2 = task_by_issue(W2) or {}
+    check("  and leaving Done with a closed issue writes nothing either", dr.get("applied") == 1 and mv.get("status") == "In Progress" and stub_patches() == [W1_PATH] * 4 and t2.get("gh_issue_state") == "closed", (dr, mv.get("status"), stub_patches(), t2.get("gh_issue_state")))
     # Hand the stub back exactly as this section found it: the sections
     # below reason about which fixtures a fresh workspace's first poll sees.
     req(STUB, "POST", "/_stub/reset", {

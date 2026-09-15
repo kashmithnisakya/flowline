@@ -224,12 +224,15 @@ in the tenant's session (from `DrainGithubEvents` or the start of
 binds that installation to this root (the workspace that last connected it),
 drops items older than the task's last applied `updated_at`, stamps the log
 with the event's own time, and applies through the helpers the poll uses.
-Neither side calls GitHub. The one write-back, closing the issue when a card
-lands on Done for a repo with `auto_close`, runs inside `MoveTask` /
-`UpdateTask` through `close_issue_on_done` in `services/github/util.jac` (not in
+Neither side calls GitHub. The one write-back is the issue's state for a repo
+with `auto_close`: a move that crosses Done closes the issue (landing) or
+reopens it (leaving). It runs inside `MoveTask` / `UpdateTask` through
+`sync_issue_state` in `services/github/util.jac` (not in
 `services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
 it back); it rides on the move's own log line, and the receiver drops the
-App's echo by sender login so the close is never applied a second time.
+App's echo by sender login so neither is applied a second time. An issue
+reopened on GitHub does not move its card; titles, assignees and labels are
+never written back.
 
 ### Client
 
