@@ -257,7 +257,7 @@ def:pub BurnUpChart(
                                 <div
                                     key={str(i)}
                                     tabIndex={0}
-                                    className="h-full flex-1 outline-none focus-visible:bg-muted/60"
+                                    className="h-full flex-1 focus-visible:bg-muted/60 focus-visible:-outline-offset-2"
                                     aria-label={"Week of "
                                         + lab
                                         + ": scope "
@@ -341,7 +341,7 @@ def:pub ThroughputChart(
                                 <div
                                     key={str(i)}
                                     tabIndex={0}
-                                    className={"relative flex h-full flex-1 items-end justify-center outline-none "
+                                    className={"relative flex h-full flex-1 items-end justify-center focus-visible:-outline-offset-2 "
                                         + ("bg-muted/60" if i == hover else "")}
                                     aria-label={"Week of "
                                         + labels[i]

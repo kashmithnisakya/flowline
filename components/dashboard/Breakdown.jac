@@ -100,10 +100,11 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
         </section>;
 }
 
-# A day cell's fill by entry count: none, one, two or three, four and up.
+# A day cell's fill by entry count: none, one, two or three, four and up. A
+# past day with none is an empty cell with a solid edge; days ahead are dashed.
 def dayFill(count: int) -> str {
     if count <= 0 {
-        return "var(--muted)";
+        return "transparent";
     }
     if count == 1 {
         return "color-mix(in oklab, var(--foreground) 30%, var(--card))";
@@ -197,7 +198,11 @@ def:pub PeopleTable(
                                         + (
                                             "border border-dashed border-input"
                                                 if di > todayIndex
-                                                else ""
+                                                else (
+                                                    "border border-input/70"
+                                                        if r["byDay"][di] <= 0
+                                                        else ""
+                                                )
                                         )
                                         + (
                                             " outline outline-[1.5px] outline-offset-1 outline-primary"
