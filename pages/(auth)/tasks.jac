@@ -1,7 +1,7 @@
 """flowline - Tasks (/tasks): a flat, sortable, filterable table over the whole
-task set, the cross-column view the board cannot give. A row opens the board's
-task dialog in place, and scope, filters, sort and page live in the URL, so a
-reload, the back button or a shared link keeps the view."""
+task set, the cross-column view the board cannot give. A row (or New task)
+opens the board's task dialog in place, and scope, filters, sort and page live
+in the URL, so a reload, the back button or a shared link keeps the view."""
 
 import from "react" { useEffect }
 import from ...models {
@@ -13,7 +13,7 @@ import from ...models {
     IterationView
 }
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
-import from ...services.tasks.tasks { ListTasks, UpdateTask, DeleteTask }
+import from ...services.tasks.tasks { ListTasks, CreateTask, UpdateTask, DeleteTask }
 import from ...services.roster.roster { ListMembers, ListRoles }
 import from ...services.iterations.iterations { ListIterations }
 import from ...services.projects.projects { ListProjects, AssignToProject }
@@ -29,15 +29,10 @@ import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.glyphs { Spinner }
 
 glob SCOPE_KEYS: list[str] = ["working", "done", "all", "attention"],
-     SORT_KEYS: list[str] = [
-         "title",
-         "step",
-         "priority",
-         "estimate",
-         "category",
-         "due",
-         "updated"
-     ],
+     # Only the table's sortable headers: an old ?sort=estimate link falls back
+     # to the default rather than ordering by a column nobody can see.
+     SORT_KEYS: list[str] = ["title", "step", "priority", "due", "updated"],
+     PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2},
      PRIORITY_KEYS: list[str] = ["All", "High", "Medium", "Low"],
      PAGE_SIZE: int = 50,
      # Step and priority are filtered here, over every matching page read at
@@ -111,6 +106,18 @@ def mergeSorted(existing: list[str], fresh: list[str]) -> list[str] {
     return merged;
 }
 
+def PlusGlyph -> JsxElement {
+    return
+        <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true">
+            <path
+                d="M8 3v10M3 8h10"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+            />
+        </svg>;
+}
+
 def PagerArrow(back: bool) -> JsxElement {
     return
         <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true">
@@ -148,8 +155,13 @@ def:pub TasksPage -> JsxPage {
         page: int = urlPage(),
         # The flow line and roles, for step names and the task dialog.
         steps: list[StepView] = [],
+        # The table waits for the flow line, so rows never flash legacy statuses.
+        stepsLoaded: bool = False,
+        workspaceReady: bool = False,
         roleRows: list[RoleView] = [],
         taskOpen: bool = False,
+        # The dialog is creating a task rather than editing `editTaskId`.
+        creating: bool = False,
         editTaskId: str = "",
         taskForm: dict[str, str] = BLANK_TASK,
         iterations: list[IterationView] = [],
@@ -225,6 +237,7 @@ def:pub TasksPage -> JsxPage {
     async def loadWorkspace -> None;
     async def loadTasks -> None;
     async def gatherPool(seq: int) -> list[TaskView];
+    def sortPool(pool: list[TaskView]) -> list[TaskView];
     def filtered -> bool;
     def forget -> None;
     def sortBy(field: str) -> None;
@@ -250,6 +263,7 @@ def:pub TasksPage -> JsxPage {
     def columnKeyOf(t: TaskView, keys: list[str]) -> str;
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
+    def openCreate -> None;
     def replaceRow(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
@@ -286,7 +300,10 @@ def:pub TasksPage -> JsxPage {
         }
         colLabels.append(label);
         colColors.append(color);
-        stepOptions.append([key, label, color]);
+        # A step shows its swatch; a legacy status its kind glyph (C10).
+        stepOptions.append(
+            [key, label, color] if len(steps) > 0 else [key, label, "", kind]
+        );
         if kind in HANDOFF_KINDS {
             handoffKeys.append(key);
         }
@@ -313,6 +330,8 @@ def:pub TasksPage -> JsxPage {
         }
     }
     isFiltered = filtered();
+    stepWord = "Status" if stepsLoaded and len(steps) == 0 else "Step";
+    waiting = loading or not stepsLoaded;
     leadName = "";
     for m in members {
         if m.id == fAssignee {
@@ -342,13 +361,26 @@ def:pub TasksPage -> JsxPage {
         <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h1 className="page-title">Tasks</h1>
-                <ScopeSwitch scope={scope} onScope={chooseScope}/>
+                <div className="max-sm:order-last">
+                    <ScopeSwitch scope={scope} onScope={chooseScope}/>
+                </div>
+                <Button
+                    className="ml-auto gap-1.5"
+                    disabled={not workspaceReady}
+                    onClick={lambda { openCreate(); }}
+                >
+                    <PlusGlyph/>
+                    New task
+                </Button>
             </div>
-            <div data-tasks-top="true" className="surface min-w-0 scroll-mt-16">
+            <div
+                data-tasks-top="true"
+                className="surface @container min-w-0 scroll-mt-16"
+            >
                 <TaskToolbar
                     projects={projects}
                     members={members}
-                    steps={stepOptions}
+                    steps={stepOptions if stepsLoaded else []}
                     project={fProject}
                     assignee={fAssignee}
                     step={fStep}
@@ -370,9 +402,9 @@ def:pub TasksPage -> JsxPage {
                     onEstimate={pickEstimate}
                     refreshing={refreshing}
                     countLabel={countLabel}
-                    stepLabel={"Step" if len(steps) > 0 else "Status"}
+                    stepLabel={stepWord}
                 />
-                {if loading {
+                {if waiting {
                     <div key="sk" className="space-y-2 px-4 py-3" aria-busy="true">
                         {for i in range(8) {
                             <Skeleton key={str(i)} className="h-9 w-full"/>
@@ -393,7 +425,7 @@ def:pub TasksPage -> JsxPage {
                         stepNames={stepNames}
                         stepColors={stepColors}
                         stepKinds={stepKinds}
-                        stepHeader={"Step" if len(steps) > 0 else "Status"}
+                        stepHeader={stepWord}
                         leadName={leadName}
                         cursor={cursor}
                         onCursor={pointAt}
@@ -404,7 +436,7 @@ def:pub TasksPage -> JsxPage {
                         onEmptyAction={clearFilters}
                     />
                 }  }
-                {if not loading and not failed {
+                {if not waiting and not failed {
                     <div
                         key="foot"
                         className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2 text-[12.5px] text-muted-foreground"
@@ -413,7 +445,7 @@ def:pub TasksPage -> JsxPage {
                         {if refreshing {
                             <span
                                 key="busy"
-                                className="inline-flex items-center gap-1.5 md:hidden"
+                                className="inline-flex items-center gap-1.5 @min-[50rem]:hidden"
                             >
                                 <Spinner/>
                                 Updating
@@ -425,7 +457,7 @@ def:pub TasksPage -> JsxPage {
                             {if len(rows) > 0 {
                                 <span
                                     key="keys"
-                                    className="hidden items-center gap-1 lg:inline-flex"
+                                    className="hidden items-center gap-1 @min-[50rem]:inline-flex"
                                 >
                                     <span className="kbd">J</span>
                                     <span className="kbd">K</span>
@@ -465,7 +497,7 @@ def:pub TasksPage -> JsxPage {
             </div>
             <TaskDialog
                 open={taskOpen}
-                editing={True}
+                editing={not creating}
                 form={taskForm}
                 projects={activeProjects}
                 members={activeMembers}
@@ -482,7 +514,7 @@ def:pub TasksPage -> JsxPage {
                 onToggleAssignee={toggleTaskAssignee}
                 steps={steps}
                 roles={roleRows}
-                taskId={editTaskId}
+                taskId={"" if creating else editTaskId}
                 checklist={taskChecklist}
                 onChecklist={replaceRow}
                 iterations={iterations}

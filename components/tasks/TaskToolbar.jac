@@ -1,10 +1,12 @@
 """The Tasks page controls: `ScopeSwitch` (Working, Done, All, the rest under
 More) and `TaskToolbar` (a live title search, Project, Assignee, Step and
 Priority, the rest under More). A set filter reads "Label: value" with its own
-clear button. Below md it folds into the search plus a Filters sheet."""
+clear button. In a surface under 50rem it folds into the search plus a Filters
+sheet (container width, so a docked Ask column counts)."""
 
 import from ...models { Project, MemberView }
 import from ..common.StepName { StepName }
+import from ..common.KindGlyph { KindGlyph }
 import from ..common.glyphs { Spinner }
 import from ..ui.button { Button }
 import from ..ui.dropdown_menu {
@@ -85,16 +87,24 @@ def optionLabel(options: list[list[str]], value: str) -> str {
     return value;
 }
 
-# An option row: a step's swatch and name when the option carries a colour.
+# An option row: [value, label] plain, [.., colour] a step's swatch and name,
+# [.., "", kind] a legacy status with its kind glyph (no flow line).
 def OptionText(o: list[str]) -> JsxElement {
-    if len(o) > 2 {
+    if len(o) > 3 and o[3] {
+        return
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+                <KindGlyph kind={o[3]} className="text-muted-foreground"/>
+                <span className="truncate">{o[1]}</span>
+            </span>;
+    }
+    if len(o) > 2 and o[2] {
         return <StepName name={o[1]} color={o[2]}/>;
     }
     return <span className="truncate">{o[1]}</span>;
 }
 
 def segClass(on: bool) -> str {
-    return "inline-flex h-7 items-center gap-1 rounded-sm px-2.5 text-[12.5px] whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:outline-ring "
+    return "inline-flex h-7 items-center gap-1 rounded-sm px-2.5 text-[12.5px] whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-solid "
         + (
             "bg-muted font-semibold text-foreground"
                 if on
@@ -148,7 +158,9 @@ def:pub ScopeSwitch(scope: str, onScope: Callable[[str], None]) -> JsxElement {
         </div>;
 }
 
-# A ghost trigger that turns into "Label: value ×" once a value is picked.
+# A ghost trigger that turns into "Label: value ×" once a value is picked. The
+# wrapper and trigger stay mounted either way, so the × can hand focus back to
+# the trigger before it unmounts itself.
 def FilterMenu(
     label: str,
     value: str,
@@ -157,36 +169,50 @@ def FilterMenu(
     onChange: Callable[[str], None]
 ) -> JsxElement {
     active = value != allValue;
+
+    def clear(e: MouseEvent) {
+        cell: any = e.currentTarget;
+        trigger: any = cell.previousElementSibling;
+        if trigger {
+            trigger.focus();
+        }
+        onChange(allValue);
+    }
+
     return
         <DropdownMenu>
-            {if active {
-                <span
-                    key="on"
-                    className="toolbar-filter gap-0! pr-0.5!"
-                    data-active="true"
+            <span
+                className={"toolbar-filter gap-0! pr-0.5!" if active else "inline-flex"}
+                data-active={"true" if active else "false"}
+            >
+                <DropdownMenuTrigger
+                    className={"inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-solid"
+                        if active
+                        else "toolbar-filter"}
                 >
-                    <DropdownMenuTrigger
-                        className="inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
-                    >
-                        <span className="truncate">
+                    {if active {
+                        <span key="on" className="truncate">
                             {label + ": " + optionLabel(options, value)}
                         </span>
-                    </DropdownMenuTrigger>
+                    } else {
+                        <span key="off" className="inline-flex items-center gap-1">
+                            {label}
+                            <Chevron/>
+                        </span>
+                    } }
+                </DropdownMenuTrigger>
+                {if active {
                     <button
+                        key="clear"
                         type="button"
                         aria-label={"Clear the " + label.lower() + " filter"}
                         className="ml-0.5 inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                        onClick={lambda { onChange(allValue); }}
+                        onClick={clear}
                     >
                         <Cross/>
                     </button>
-                </span>
-            } else {
-                <DropdownMenuTrigger key="off" className="toolbar-filter">
-                    {label}
-                    <Chevron/>
-                </DropdownMenuTrigger>
-            } }
+                }}
+            </span>
             <DropdownMenuContent
                 align="start"
                 collisionPadding={16}
@@ -243,7 +269,7 @@ def SheetSelect(
 }
 
 def SearchBox(
-    query: str, onQuery: Callable[[str], None], className: str
+    query: str, onQuery: Callable[[str], None], className: str, hint: bool = True
 ) -> JsxElement {
     return
         <label
@@ -298,10 +324,8 @@ def SearchBox(
                 >
                     <Cross size={12}/>
                 </button>
-            } else {
-                <span key="kbd" className="kbd max-md:hidden" aria-hidden="true">
-                    /
-                </span>
+            } elif hint {
+                <span key="kbd" className="kbd" aria-hidden="true">/</span>
             } }
         </label>;
 }
@@ -394,7 +418,7 @@ def:pub TaskToolbar(
 
     return
         <div className="min-w-0">
-            <div className="toolbar hidden rounded-t-md border-t-0 md:flex">
+            <div className="toolbar hidden rounded-t-md border-t-0 @min-[50rem]:flex">
                 <SearchBox
                     query={query}
                     onQuery={onQuery}
@@ -514,12 +538,13 @@ def:pub TaskToolbar(
                 </span>
             </div>
             <div
-                className="toolbar flex-nowrap rounded-t-md border-t-0 px-3 py-2.5 md:hidden"
+                className="toolbar flex-nowrap rounded-t-md border-t-0 px-3 py-2.5 @min-[50rem]:hidden"
             >
                 <SearchBox
                     query={query}
                     onQuery={onQuery}
                     className="h-10 min-w-0 flex-1"
+                    hint={False}
                 />
                 <Button
                     variant="outline"

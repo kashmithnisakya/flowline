@@ -1,6 +1,22 @@
 """Implementations for the Tasks page."""
 
 impl TasksPage.loadWorkspace -> None {
+    # The flow line first: the table waits for it, and a step filter places
+    # rows by it.
+    try {
+        sResult = root spawn GetFlowLine(with_counts=False);
+        steps = sResult.reports[0] if sResult.reports else [];
+        if fStep != "All" and fStep not in columnKeys() {
+            fStep = "All";
+        }
+    } except Exception as e {
+        steps = [];
+    }
+    stepsLoaded = True;
+    readyRef.current = True;
+    if fStep != "All" {
+        loadTasks();
+    }
     try {
         mResult = root spawn ListMembers();
         pResult = root spawn ListProjects();
@@ -31,11 +47,6 @@ impl TasksPage.loadWorkspace -> None {
         if not knownMember {
             fAssignee = "All";
         }
-        sResult = root spawn GetFlowLine(with_counts=False);
-        steps = sResult.reports[0] if sResult.reports else [];
-        if fStep != "All" and fStep not in columnKeys() {
-            fStep = "All";
-        }
         rResult = root spawn ListRoles();
         roleRows = rResult.reports[0] if rResult.reports else [];
         iResult = root spawn ListIterations();
@@ -45,12 +56,7 @@ impl TasksPage.loadWorkspace -> None {
         # failure panel for the table itself.
         members = [];
     }
-    # Only a step filter waits for the flow line; every other view is already
-    # loading from the view effect.
-    readyRef.current = True;
-    if fStep != "All" {
-        await loadTasks();
-    }
+    workspaceReady = True;
 }
 
 impl TasksPage.loadTasks -> None {
@@ -148,8 +154,9 @@ impl TasksPage.loadTasks -> None {
 }
 
 # Every task the view matches once step and priority apply, read page by page
-# at the walker's largest size and kept for paging until the view or the data
-# changes. `steps` is part of the key: placement depends on the flow line.
+# at the walker's largest size and kept until the filters or the data change.
+# A new sort re-sorts the kept rows. A step filter keys on the flow line too,
+# since placement depends on it.
 impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
     keys = columnKeys();
     sig = "|".join(
@@ -163,14 +170,18 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
             fEstimate,
             fStep,
             fPriority,
-            sort,
-            sortDir,
-            str(len(steps))
+            str(len(steps)) if fStep != "All" else ""
         ]
     );
+    order = sort + "|" + sortDir;
     cached: any = poolRef.current;
     if cached and cached["sig"] == sig {
-        return cached["rows"];
+        kept: list[TaskView] = cached["rows"];
+        if cached["order"] != order {
+            kept = sortPool(kept);
+            poolRef.current = {"sig": sig, "order": order, "rows": kept};
+        }
+        return kept;
     }
     pool: list[TaskView] = [];
     pg = 1;
@@ -201,9 +212,44 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
         pg = pg + 1;
     }
     if reqRef.current == seq {
-        poolRef.current = {"sig": sig, "rows": pool};
+        poolRef.current = {"sig": sig, "order": order, "rows": pool};
     }
     return pool;
+}
+
+# The walker's column sort (sort_tasks) over rows already in hand: a jid pass,
+# then the key. A descending pass runs on the reversed list and reverses back,
+# which keeps ties in jid order as Python's reverse=True does.
+impl TasksPage.sortPool(pool: list[TaskView]) -> list[TaskView] {
+    rows = [t for t in pool];
+    rows.sort(key=lambda (t: TaskView) { t.id; });
+    desc = sortDir == "desc";
+    keys = columnKeys();
+    if sort == "step" {
+        rows.sort(key=lambda (t: TaskView) { t.sort_order; });
+    }
+    if desc {
+        rows.reverse();
+    }
+    if sort == "step" {
+        rows.sort(key=lambda (t: TaskView) { keys.index(columnKeyOf(t, keys)); });
+    } elif sort == "title" {
+        rows.sort(key=lambda (t: TaskView) { t.title.lower(); });
+    } elif sort == "priority" {
+        rows.sort(
+            key=lambda (t: TaskView) { PRIORITY_RANK[t.priority]
+                if t.priority in PRIORITY_RANK
+                else 1; }
+        );
+    } elif sort == "due" {
+        rows.sort(key=lambda (t: TaskView) { t.due_date or "9999-12-31"; });
+    } else {
+        rows.sort(key=lambda (t: TaskView) { t.updated_at; });
+    }
+    if desc {
+        rows.reverse();
+    }
+    return rows;
 }
 
 impl TasksPage.filtered -> bool {
@@ -539,6 +585,7 @@ impl TasksPage.openTask(tid: str) -> None {
         if t.id == tid {
             cursor = i;
             editTaskId = t.id;
+            creating = False;
             taskForm = {
                 "title": t.title,
                 "category": t.category,
@@ -560,6 +607,33 @@ impl TasksPage.openTask(tid: str) -> None {
             taskOpen = True;
         }
     }
+}
+
+# New task from the table: the board's defaults, narrowed by the view's own
+# filters, so the task lands where the table is looking when it can.
+impl TasksPage.openCreate -> None {
+    d = new(Date);
+    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
+    keys = columnKeys();
+    landing = fStep
+        if fStep != "All" and fStep in keys
+        else (keys[0] if len(keys) > 0 else "Backlog");
+    firstProject = "";
+    for pr in projects {
+        if pr.active and not firstProject {
+            firstProject = jid(pr);
+        }
+    }
+    fresh = {** BLANK_TASK};
+    fresh["project"] = fProject if fProject != "all" else firstProject;
+    fresh["status"] = landing;
+    fresh["priority"] = fPriority if fPriority != "All" else "Medium";
+    fresh["due_date"] = shifted.toISOString()[:10];
+    taskForm = fresh;
+    taskAssignees = [fAssignee] if fAssignee != "All" else [];
+    editTaskId = "";
+    creating = True;
+    taskOpen = True;
 }
 
 # A checklist write reports the task's fresh view; the table row takes it.
@@ -589,7 +663,7 @@ impl TasksPage.toggleTaskAssignee(memberId: str) -> None {
 
 impl TasksPage.saveTask -> None {
     title = taskForm["title"].strip();
-    if not title or not editTaskId {
+    if not title or (not creating and not editTaskId) {
         return;
     }
     project = taskForm["project"];
@@ -619,15 +693,54 @@ impl TasksPage.saveTask -> None {
             mResult = root spawn ListMembers();
             members = mResult.reports[0] if mResult.reports else members;
         }
+        tagList = [
+            s.strip()
+            for s in taskForm["tags"].split(",")
+            if s.strip()
+        ];
+        if creating {
+            made = root spawn CreateTask(
+                title=title,
+                category=taskForm["category"],
+                tags=tagList,
+                estimate=parseEstimate(taskForm["estimate"]),
+                priority=taskForm["priority"],
+                status=mappedStatus(taskForm["status"]),
+                step_id=taskForm["status"] if len(steps) > 0 else "",
+                due_date=taskForm["due_date"],
+                start_date=taskForm["start_date"],
+                iteration_id=taskForm["iteration"]
+                    if taskForm["iteration"] != "none"
+                    else "",
+                notes=taskForm["notes"],
+                issue_link=taskForm["issue"].strip(),
+                assignee_ids=taskAssignees,
+                project_id=project
+            );
+            if not made.reports {
+                toast.error("Could not create the task");
+                taskSaving = False;
+                return;
+            }
+            editTaskId = made.reports[0].id;
+            creating = False;
+            taskOpen = False;
+            forget();
+            await loadTasks();
+            for (i, t) in enumerate(rows) {
+                if t.id == editTaskId {
+                    cursor = i;
+                }
+            }
+            toast.success("Task created");
+            taskSaving = False;
+            return;
+        }
         root spawn UpdateTask(
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
-            tags=[
-                s.strip()
-                for s in taskForm["tags"].split(",")
-                if s.strip()
-            ],
+            tags=tagList,
             estimate=parseEstimate(taskForm["estimate"]),
             priority=taskForm["priority"],
             status=mappedStatus(taskForm["status"]),
@@ -655,7 +768,7 @@ impl TasksPage.saveTask -> None {
             }
         }
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Could not save the task");
     }
     taskSaving = False;
 }
@@ -676,7 +789,7 @@ impl TasksPage.deleteTask -> None {
             await loadTasks();
         }
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Could not delete the task");
     }
     taskSaving = False;
 }

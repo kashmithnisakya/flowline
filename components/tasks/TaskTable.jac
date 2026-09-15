@@ -1,7 +1,7 @@
-"""One page of tasks: a table from lg up and a two-line list below it. The page
-places each row on its board column (`stepNames`, `stepColors`), keeps the J/K
-`cursor`, and gets `onOpen` from a row click or Enter on a title. Only the
-sortable headers carry a button, and only the active one shows an arrow."""
+"""One page of tasks: a fixed-layout table once its container (the page's
+`@container` surface) is 50rem wide, a two-line list below that. The page
+places each row on its board column (`stepNames`, `stepColors`) and keeps the
+J/K `cursor`; only the active sort header shows an arrow."""
 
 import from ...models { TaskView }
 import from ..common.Avatar { AvatarStack }
@@ -24,15 +24,16 @@ glob MONTHS: list[str] = [
          "Dec"
      ],
      WEEKDAYS: list[str] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-     # [sort key or "" for a plain header, label, width class]
+     # [sort key or "" for a plain header, label, width class]. Task takes
+     # what is left; the rest widen once the surface reaches 72rem.
      COLUMNS: list[list[str]] = [
-         ["title", "Task", "w-[38%]"],
-         ["step", "Step", ""],
-         ["", "People", ""],
-         ["due", "Due", ""],
-         ["priority", "Priority", ""],
-         ["", "GitHub", ""],
-         ["updated", "Updated", ""]
+         ["title", "Task", ""],
+         ["step", "Step", "w-[9rem] @6xl:w-[10rem]"],
+         ["", "People", "w-[6rem] @6xl:w-[8.5rem]"],
+         ["due", "Due", "w-[7rem] @6xl:w-[7.5rem]"],
+         ["priority", "Priority", "w-[5.5rem]"],
+         ["", "GitHub", "w-[4.5rem] @6xl:w-[5rem]"],
+         ["updated", "Updated", "w-[7.5rem] @6xl:w-[8rem]"]
      ];
 
 # "2026-09-16" -> "Wed 16 Sep", with the year when it is not this one.
@@ -198,17 +199,21 @@ def leadFirst(names: list[str], lead: str) -> list[str] {
         ];
 }
 
+# Faces, at most two plus a count; a sole assignee is also named once the
+# table is wide enough. Every name is in the title and the avatars' labels.
 def People(names: list[str]) -> JsxElement {
     if len(names) == 0 {
         return <span className="text-muted-foreground">Unassigned</span>;
     }
     return
-        <span className="inline-flex items-center gap-1.5" title={", ".join(names)}>
-            <AvatarStack names={names} max={3} size="sm"/>
-            <span className="max-w-24 truncate">{firstName(names[0])}</span>
-            {if len(names) > 1 {
-                <span key="more" className="num text-xs text-muted-foreground">
-                    {"+" + str(len(names) - 1)}
+        <span
+            className="inline-flex max-w-full min-w-0 items-center gap-1.5"
+            title={", ".join(names)}
+        >
+            <AvatarStack names={names} max={2} size="sm"/>
+            {if len(names) == 1 {
+                <span key="name" className="hidden min-w-0 truncate @6xl:inline">
+                    {firstName(names[0])}
                 </span>
             }}
         </span>;
@@ -335,7 +340,7 @@ def:pub TaskTable(
     }
     return
         <div className="min-w-0" aria-busy={refreshing}>
-            <table className="data-table hidden lg:table">
+            <table className="data-table hidden table-fixed @min-[50rem]:table">
                 <thead>
                     <tr>
                         {for col in COLUMNS {
@@ -369,7 +374,7 @@ def:pub TaskTable(
                             onClick={lambda { onOpen(t.id); }}
                         >
                             <td
-                                className={"min-w-[200px] whitespace-normal "
+                                className={"overflow-hidden whitespace-normal "
                                     + (
                                         "shadow-[inset_2px_0_0_var(--primary)]"
                                             if i == cursor
@@ -379,7 +384,7 @@ def:pub TaskTable(
                                 <button
                                     type="button"
                                     data-task-row={str(i)}
-                                    className="scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                    className="max-w-full scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
                                     onFocus={lambda { pointAt(i); }}
                                 >
                                     {t.title}
@@ -390,7 +395,12 @@ def:pub TaskTable(
                                     </div>
                                 }}
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td
+                                className="overflow-hidden whitespace-nowrap"
+                                title={stepNames[t.id]
+                                    if t.id in stepNames
+                                    else t.status}
+                            >
                                 <StepLabel
                                     name={stepNames[t.id]
                                         if t.id in stepNames
@@ -399,24 +409,30 @@ def:pub TaskTable(
                                         if t.id in stepColors
                                         else "slate"}
                                     kind={stepKinds[t.id] if t.id in stepKinds else ""}
-                                    className="max-w-44 text-[13px] font-semibold"
+                                    className="text-[13px] font-semibold"
                                 />
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td className="overflow-hidden whitespace-nowrap">
                                 <People names={leadFirst(t.assignee_names, leadName)}/>
                             </td>
                             {if dueTone(t.due_date, t.status, today) == "overdue" {
                                 <td
                                     key="due"
-                                    className="num whitespace-nowrap font-semibold text-destructive"
-                                    title={lateText(t.due_date, today)}
+                                    className="overflow-hidden text-destructive"
                                 >
-                                    {dayText(t.due_date)}
+                                    <span
+                                        className="num block text-[13px] font-semibold"
+                                    >
+                                        {dayText(t.due_date)}
+                                    </span>
+                                    <span className="block text-xs font-medium">
+                                        {lateText(t.due_date, today)}
+                                    </span>
                                 </td>
                             } else {
                                 <td
                                     key="due"
-                                    className={"num whitespace-nowrap "
+                                    className={"num overflow-hidden text-[13px] "
                                         + (
                                             "text-muted-foreground"
                                                 if t.status == "Done"
@@ -426,7 +442,7 @@ def:pub TaskTable(
                                     {dayText(t.due_date)}
                                 </td>
                             } }
-                            <td className="whitespace-nowrap">
+                            <td className="overflow-hidden whitespace-nowrap">
                                 {if t.priority == "High" {
                                     <span
                                         key="high"
@@ -441,11 +457,13 @@ def:pub TaskTable(
                                     </span>
                                 } }
                             </td>
-                            <td className="whitespace-nowrap">
+                            <td
+                                className="overflow-hidden text-[13px] whitespace-nowrap"
+                            >
                                 <GitHubCell task={t}/>
                             </td>
                             <td
-                                className="num whitespace-nowrap text-muted-foreground"
+                                className="num overflow-hidden text-[13px] text-muted-foreground"
                                 title={stampTitle(t.updated_at)}
                             >
                                 {agoText(t.updated_at)}
@@ -455,7 +473,7 @@ def:pub TaskTable(
                 </tbody>
             </table>
             <ul
-                className={"divide-y transition-opacity duration-150 motion-reduce:transition-none lg:hidden "
+                className={"divide-y transition-opacity duration-150 motion-reduce:transition-none @min-[50rem]:hidden "
                     + ("opacity-60" if refreshing else "")}
             >
                 {for (i, t) in enumerate(rows) {
@@ -473,7 +491,7 @@ def:pub TaskTable(
                             onClick={lambda { onOpen(t.id); }}
                         >
                             <span
-                                className="line-clamp-2 text-[15px] leading-snug font-medium"
+                                className="line-clamp-2 text-[15px] leading-snug font-medium [overflow-wrap:anywhere]"
                             >
                                 {t.title}
                             </span>
