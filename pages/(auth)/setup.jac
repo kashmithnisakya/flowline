@@ -28,6 +28,24 @@ glob SCRATCH: str = "scratch",
          3: "The preview follows your choice. The steps are created when you open the board."
      };
 
+# A skipped step 2 leaves nothing on the server, so this browser remembers per
+# project that it was answered and a revisit resumes at step 3.
+def rememberPeopleStep(project: str) -> None {
+    try {
+        localStorage.setItem("flowline-setup-people:" + project, "1");
+    } except Exception {
+        return;
+    }
+}
+
+def peopleStepDone(project: str) -> bool {
+    try {
+        return localStorage.getItem("flowline-setup-people:" + project) == "1";
+    } except Exception {
+        return False;
+    }
+}
+
 # The columns a choice gives the board, or none for a flow line drawn by hand.
 def stepsFor(key: str) -> list[dict[str, any]] {
     for t in FLOW_LINE_TEMPLATES {

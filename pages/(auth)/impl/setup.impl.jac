@@ -2,8 +2,8 @@
 
 impl SetupPage.boot -> None {
     # Resume at the first open step: no name or no project is step 1; a
-    # project with no flow line is step 2, or 3 once people exist; a flow
-    # line means setup is done.
+    # project with no flow line is step 2, or 3 once people exist or step 2
+    # was answered here; a flow line means setup is done.
     try {
         profile = await fetchProfile();
         existingOrg = str(profile["org_name"]) if profile["org_name"] else "";
@@ -30,7 +30,7 @@ impl SetupPage.boot -> None {
         roster = root spawn ListMembers();
         members = roster.reports[0] if roster.reports else [];
         added = members;
-        step = 3 if len(members) > 0 else 2;
+        step = 3 if len(members) > 0 or peopleStepDone(projectId) else 2;
     } except Exception as e {
         step = 1;
     }
@@ -153,6 +153,7 @@ impl SetupPage.continuePeople -> None {
     }
     firstError = "";
     saveError = "";
+    rememberPeopleStep(projectId);
     step = 3;
 }
 
@@ -162,6 +163,7 @@ impl SetupPage.skipPeople -> None {
     mRole = "";
     firstError = "";
     saveError = "";
+    rememberPeopleStep(projectId);
     step = 3;
 }
 
