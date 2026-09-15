@@ -1,196 +1,76 @@
-"""First-run gallery: pick how the team moves work. Previews render from
-FLOW_LINE_TEMPLATES itself, so they cannot drift from what ApplyTemplate seeds.
-Each thumbnail's viewBox comes from its own step extents, and the curve math is
-a thumb-scale copy of geometry.wire() so previews read like the real canvas."""
+"""First-run gallery: pick how the team moves work. Every card reads its steps,
+roles and send-backs from FLOW_LINE_TEMPLATES itself, so what a team sees is
+what ApplyTemplate seeds. The "simple" template is the recommended one."""
 
 import from ...constants { FLOW_LINE_TEMPLATES }
-import from .geometry { NODE_W, NODE_H }
-import from .kinds { TEXT_FILL, colorKey }
+import from .kinds { colorKey }
+import from ..common.StepName { StepName }
 import from ..ui.button { Button }
-import from ..ui.card { Card, CardContent }
+import from ..ui.badge { Badge }
 import from ..common.glyphs { Spinner }
 
-# Preview canvas: template px scaled down to a card-sized thumbnail.
-glob THUMB_SCALE: float = 0.2,
-     THUMB_PAD: float = 8.0;
+# Plain-language summaries by template key; a template without one falls back
+# to its own description.
+glob PLAIN: dict[str, str] = {
+         "simple": "Four steps most teams already use. Work goes from To do to Doing to Review, and Review can send it back.",
+         "jaseci": "Seven steps across four roles, for teams that design before they build. Big changes get an architecture pass, small ones go straight to building, and nothing is done until review and a clean-up pass."
+     },
+     RECOMMENDED: str = "simple";
 
 
-# The svg viewBox for one template, sized from its step extents. Explicit
-# loop rather than max(): max() over a list compiles to Math.max(array),
-# which is NaN.
-def thumbBox(t: dict[str, any]) -> str {
-    raws: list[dict[str, any]] = t["steps"];
-    maxX = 0.0;
-    maxY = 0.0;
-    for s in raws {
-        if s["x"] > maxX {
-            maxX = s["x"];
-        }
-        if s["y"] > maxY {
-            maxY = s["y"];
+# Template rows ready for JSX: steps as name and colour, the roles, and each
+# send-back spelled out. Typed locals, the checker cannot subscript the
+# template's nested `any` values inside the tree.
+def templateRows -> list[dict[str, any]] {
+    hasRecommended = False;
+    for t in FLOW_LINE_TEMPLATES {
+        if t["key"] == RECOMMENDED {
+            hasRecommended = True;
         }
     }
-    w = (maxX + NODE_W) * THUMB_SCALE + THUMB_PAD * 2.0;
-    h = (maxY + NODE_H) * THUMB_SCALE + THUMB_PAD * 2.0;
-    return "0 0 " + str(w) + " " + str(h);
-}
-
-
-# Render-ready node rects, materialised through typed locals, the checker
-# cannot subscript the template's nested `any` values inside JSX.
-def thumbRects(t: dict[str, any]) -> list[dict[str, any]] {
-    raws: list[dict[str, any]] = t["steps"];
-    out: list[dict[str, any]] = [];
-    for (i, s) in enumerate(raws) {
-        out.append(
+    rows: list[dict[str, any]] = [];
+    for (i, t) in enumerate(FLOW_LINE_TEMPLATES) {
+        raws: list[dict[str, any]] = t["steps"];
+        steps: list[dict[str, any]] = [];
+        for (si, s) in enumerate(raws) {
+            steps.append(
+                {
+                    "name": str(s["name"]),
+                    "color": colorKey(str(s["color"])),
+                    "first": si == 0
+                }
+            );
+        }
+        roleNames: list[str] = [];
+        roleRaws: list[dict[str, any]] = t["roles"] if "roles" in t else [];
+        for r in roleRaws {
+            roleNames.append(str(r["name"]));
+        }
+        backs: list[str] = [];
+        pairs: list[list[int]] = t["links"] if "links" in t else [];
+        for pair in pairs {
+            if pair[1] < pair[0] and pair[0] < len(raws) {
+                backs.append(steps[pair[0]]["name"] + " to " + steps[pair[1]]["name"]);
+            }
+        }
+        key = str(t["key"]);
+        lead = key == RECOMMENDED if hasRecommended else i == 0;
+        rows.append(
             {
-                "key": "n" + str(i),
-                "x": s["x"] * THUMB_SCALE + THUMB_PAD,
-                "y": s["y"] * THUMB_SCALE + THUMB_PAD,
-                "w": NODE_W * THUMB_SCALE,
-                "h": NODE_H * THUMB_SCALE,
-                "tone": TEXT_FILL[colorKey(s["color"])]
+                "key": key,
+                "name": str(t["name"]),
+                "about": PLAIN[key] if key in PLAIN else str(t["description"]),
+                "steps": steps,
+                "roles": ", ".join(roleNames),
+                "backs": ", ".join(backs),
+                "recommended": key == RECOMMENDED,
+                "lead": lead
             }
         );
     }
-    return out;
-}
-
-
-# Curved, directed edges at thumbnail scale: same facing-border layout and
-# two-way sideways shift as geometry.wire(), with a small arrowhead.
-def thumbLinks(t: dict[str, any]) -> list[dict[str, any]] {
-    raws: list[dict[str, any]] = t["steps"];
-    pairs: list[list[int]] = t["links"];
-    nw = NODE_W * THUMB_SCALE;
-    nh = NODE_H * THUMB_SCALE;
-    seen: dict[str, bool] = {};
-    for pair in pairs {
-        seen[str(pair[0]) + ">" + str(pair[1])] = True;
-    }
-    out: list[dict[str, any]] = [];
-    for (i, pair) in enumerate(pairs) {
-        a = raws[pair[0]];
-        b = raws[pair[1]];
-        aX = a["x"] * THUMB_SCALE + THUMB_PAD;
-        aY = a["y"] * THUMB_SCALE + THUMB_PAD;
-        bX = b["x"] * THUMB_SCALE + THUMB_PAD;
-        bY = b["y"] * THUMB_SCALE + THUMB_PAD;
-        dx = bX - aX;
-        dy = bY - aY;
-        adx = dx if dx >= 0.0 else 0.0 - dx;
-        ady = dy if dy >= 0.0 else 0.0 - dy;
-        horizontal = adx >= ady;
-        twoWay = (str(pair[1]) + ">" + str(pair[0])) in seen;
-        # A name first assigned inside a branch is block-scoped in the
-        # compiled JS, so everything the branches write starts here.
-        sx = 0.0;
-        sy = 0.0;
-        ex = 0.0;
-        ey = 0.0;
-        h1x = 0.0;
-        h1y = 0.0;
-        h2x = 0.0;
-        h2y = 0.0;
-        a1x = 0.0;
-        a1y = 0.0;
-        a2x = 0.0;
-        a2y = 0.0;
-        dirn = 1.0;
-        shift = 0.0;
-        if horizontal {
-            dirn = 1.0 if dx >= 0.0 else -1.0;
-            if twoWay {
-                shift = -2.5 if dx >= 0.0 else 2.5;
-            }
-            sx = aX + nw if dx >= 0.0 else aX;
-            sy = aY + nh / 2.0 + shift;
-            ex = bX if dx >= 0.0 else bX + nw;
-            ey = bY + nh / 2.0 + shift;
-            span = ex - sx;
-            if span < 0.0 {
-                span = 0.0 - span;
-            }
-            bend = span * 0.45;
-            if bend < 7.0 {
-                bend = 7.0;
-            }
-            if bend > 24.0 {
-                bend = 24.0;
-            }
-            h1x = sx + bend * dirn;
-            h1y = sy;
-            h2x = ex - bend * dirn;
-            h2y = ey;
-            a1x = ex - 4.0 * dirn;
-            a1y = ey - 2.4;
-            a2x = ex - 4.0 * dirn;
-            a2y = ey + 2.4;
-        } else {
-            dirn = 1.0 if dy >= 0.0 else -1.0;
-            if twoWay {
-                shift = -2.5 if dy >= 0.0 else 2.5;
-            }
-            sy = aY + nh if dy >= 0.0 else aY;
-            sx = aX + nw / 2.0 + shift;
-            ey = bY if dy >= 0.0 else bY + nh;
-            ex = bX + nw / 2.0 + shift;
-            span = ey - sy;
-            if span < 0.0 {
-                span = 0.0 - span;
-            }
-            bend = span * 0.45;
-            if bend < 7.0 {
-                bend = 7.0;
-            }
-            if bend > 24.0 {
-                bend = 24.0;
-            }
-            h1x = sx;
-            h1y = sy + bend * dirn;
-            h2x = ex;
-            h2y = ey - bend * dirn;
-            a1x = ex - 2.4;
-            a1y = ey - 4.0 * dirn;
-            a2x = ex + 2.4;
-            a2y = ey - 4.0 * dirn;
-        }
-        d = (
-            "M "
-            + str(sx)
-            + " "
-            + str(sy)
-            + " C "
-            + str(h1x)
-            + " "
-            + str(h1y)
-            + ", "
-            + str(h2x)
-            + " "
-            + str(h2y)
-            + ", "
-            + str(ex)
-            + " "
-            + str(ey)
-        );
-        arrow = (
-            "M "
-            + str(ex)
-            + " "
-            + str(ey)
-            + " L "
-            + str(a1x)
-            + " "
-            + str(a1y)
-            + " L "
-            + str(a2x)
-            + " "
-            + str(a2y)
-            + " Z"
-        );
-        out.append({"key": "l" + str(i), "d": d, "arrow": arrow});
-    }
-    return out;
+    # The recommended template leads the list wherever it sits in constants.
+    rows.sort(key=lambda (r: dict[str, any]) { 0 if r["lead"] else 1; });
+    return rows;
 }
 
 
@@ -199,158 +79,128 @@ def:pub TemplatePicker(
     onPick: Callable[[str], None] = None,
     onScratch: Callable[[], None] = None
 ) -> JsxElement {
+    rows = templateRows();
     return
-        <div className="flex w-full flex-col gap-8">
-            <div className="flex flex-col items-center gap-2 pt-6 text-center">
-                <h2 className="font-display text-2xl font-semibold tracking-tight">
-                    How does your team move work?
-                </h2>
-                <p className="max-w-md text-sm text-muted-foreground">
-                    Start from a template or design your own. You can reshape everything later, steps, names, connections, loops.
+        <div className="flex w-full flex-col gap-5">
+            <div className="flex flex-col gap-1">
+                <h2 className="section-title text-lg">How does your team move work?</h2>
+                <p className="text-sm text-muted-foreground">
+                    Pick a starting point. Steps, names and connections can all change later.
                 </p>
             </div>
             <div
-                className="grid gap-4"
-                style={{
-                    "gridTemplateColumns": "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))"
-                }}
+                className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
             >
-                {for t in FLOW_LINE_TEMPLATES {
-                    <Card
-                        key={t["key"]}
-                        className={"group flex flex-col hover:ring-foreground/20 transition-opacity"
-                            + (
-                                " opacity-60"
-                                    if applying != "" and applying != t["key"]
-                                    else ""
-                            )}
-                    >
-                        <CardContent className="flex flex-1 flex-col gap-3 py-4">
-                            <div
-                                className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2"
-                            >
-                                <svg
-                                    viewBox={thumbBox(t)}
-                                    preserveAspectRatio="xMidYMid meet"
-                                    className="h-20 w-full"
-                                >
-                                    {for l in thumbLinks(t) {
-                                        <g
-                                            key={l["key"]}
-                                            className="text-muted-foreground/60"
-                                        >
-                                            <path
-                                                d={l["d"]}
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={1.25}
-                                                strokeLinecap="round"
-                                                vectorEffect="non-scaling-stroke"
-                                            />
-                                            <path
-                                                d={l["arrow"]}
-                                                fill="currentColor"
-                                                stroke="none"
-                                            />
-                                        </g>
-                                    }}
-                                    {for n in thumbRects(t) {
-                                        <rect
-                                            key={n["key"]}
-                                            x={n["x"]}
-                                            y={n["y"]}
-                                            width={n["w"]}
-                                            height={n["h"]}
-                                            rx={3}
-                                            className={n["tone"]}
-                                            fill="currentColor"
-                                            fillOpacity={0.18}
-                                            stroke="currentColor"
-                                            strokeWidth={1.25}
-                                            vectorEffect="non-scaling-stroke"
-                                        />
-                                    }}
-                                </svg>
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <h3 className="font-display text-sm font-semibold">
-                                    {t["name"]}
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                    {t["description"]}
-                                </p>
-                            </div>
-                            <Button
-                                variant="outline"
-                                disabled={bool(applying)}
-                                onClick={lambda { if onPick { onPick(t["key"]); }}}
-                            >
-                                {if applying == t["key"] {
-                                    <Spinner key="sp"/>
+                <div className="flex min-w-0 flex-col gap-4">
+                    {for t in rows {
+                        <section
+                            key={t["key"]}
+                            aria-label={t["name"]}
+                            className={"surface flex flex-col gap-3 p-5"
+                                + (
+                                    " opacity-60"
+                                        if applying != "" and applying != t["key"]
+                                        else ""
+                                )}
+                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="section-title">{t["name"]}</h3>
+                                {if t["recommended"] {
+                                    <Badge key="rec" variant="secondary">
+                                        Recommended
+                                    </Badge>
                                 }}
-                                {"Setting up…"
-                                    if applying == t["key"]
-                                    else "Use template"}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                }}
-                <Card
-                    key="scratch"
-                    className={"group flex flex-col hover:ring-foreground/20 transition-opacity"
+                            </div>
+                            <p className="max-w-prose text-sm text-muted-foreground">
+                                {t["about"]}
+                            </p>
+                            <ol
+                                className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5"
+                                aria-label="Steps"
+                            >
+                                {for st in t["steps"] {
+                                    <li
+                                        key={st["name"]}
+                                        className="flex items-center gap-1.5 text-[13px] font-medium"
+                                    >
+                                        {if not st["first"] {
+                                            <span
+                                                key="arrow"
+                                                className="text-subtle"
+                                                aria-hidden="true"
+                                            >
+                                                →
+                                            </span>
+                                        }}
+                                        <StepName
+                                            name={st["name"]}
+                                            color={st["color"]}
+                                        />
+                                    </li>
+                                }}
+                            </ol>
+                            {if t["roles"] or t["backs"] {
+                                <dl
+                                    key="facts"
+                                    className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_minmax(0,1fr)]"
+                                >
+                                    {if t["roles"] {
+                                        <div key="roles" className="contents">
+                                            <dt className="text-subtle">Roles</dt>
+                                            <dd className="text-muted-foreground">
+                                                {t["roles"]}
+                                            </dd>
+                                        </div>
+                                    }}
+                                    {if t["backs"] {
+                                        <div key="backs" className="contents">
+                                            <dt className="text-subtle">Sends back</dt>
+                                            <dd className="text-muted-foreground">
+                                                {t["backs"]}
+                                            </dd>
+                                        </div>
+                                    }}
+                                </dl>
+                            }}
+                            <div className="pt-1">
+                                <Button
+                                    variant={"default" if t["lead"] else "outline"}
+                                    disabled={bool(applying)}
+                                    aria-label={None
+                                        if t["lead"]
+                                        else "Use template: " + t["name"]}
+                                    onClick={lambda { if onPick { onPick(t["key"]); }}}
+                                >
+                                    {if applying == t["key"] {
+                                        <Spinner key="sp"/>
+                                    }}
+                                    {"Setting up"
+                                        if applying == t["key"]
+                                        else "Use template"}
+                                </Button>
+                            </div>
+                        </section>
+                    }}
+                </div>
+                <section
+                    aria-label="Start from scratch"
+                    className={"surface flex flex-col gap-3 p-5"
                         + (" opacity-60" if applying != "" else "")}
                 >
-                    <CardContent className="flex flex-1 flex-col gap-3 py-4">
-                        <div
-                            className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2"
-                        >
-                            <svg
-                                viewBox="0 0 204 66"
-                                preserveAspectRatio="xMidYMid meet"
-                                className="h-20 w-full"
-                            >
-                                <rect
-                                    x={72}
-                                    y={10}
-                                    width={60}
-                                    height={46}
-                                    rx={9}
-                                    className="text-muted-foreground/60"
-                                    stroke="currentColor"
-                                    strokeWidth={1.5}
-                                    strokeDasharray="4 4"
-                                    fill="none"
-                                />
-                                <path
-                                    d="M 102 24 V 42 M 93 33 H 111"
-                                    className="text-muted-foreground/60"
-                                    stroke="currentColor"
-                                    strokeWidth={1.5}
-                                    strokeLinecap="round"
-                                    fill="none"
-                                />
-                            </svg>
-                        </div>
-                        <div className="flex-1 space-y-1">
-                            <h3 className="font-display text-sm font-semibold">
-                                Start from scratch
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                A blank canvas. Add steps and connect them yourself.
-                            </p>
-                        </div>
+                    <h3 className="section-title">Start from scratch</h3>
+                    <p className="text-sm text-muted-foreground">
+                        A blank canvas. Add your own steps and draw how work moves between them.
+                    </p>
+                    <div className="pt-1">
                         <Button
                             variant="outline"
                             disabled={bool(applying)}
                             onClick={lambda { if onScratch { onScratch(); }}}
                         >
-                            Open designer
+                            Open a blank canvas
                         </Button>
-                    </CardContent>
-                </Card>
+                    </div>
+                </section>
             </div>
-            <p className="text-center text-xs text-muted-foreground">
-                Templates seed the steps and connections, then open the designer.
-            </p>
         </div>;
 }
