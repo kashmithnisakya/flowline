@@ -1,19 +1,19 @@
-"""flowline - Login / Signup, the public front door. Signup asks for credentials
-only; naming the org and yourself belongs to the setup wizard. jacSignup does
-NOT create a session: signup, check success, then login. Brand panel beside a
-tabbed card with Google/GitHub SSO; no "Forgot?" link because there is no flow."""
+"""flowline - sign in and sign up, one quiet column. Signup asks for credentials
+only; the setup wizard names the workspace. jacSignup does NOT create a
+session: sign up, check success, then log in. The submit button stays enabled
+and validation shows inline under the field it is about.
+"""
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
-import from ...components.auth.AuthAside { AuthAside }
 import from ...components.auth.SsoButtons { SsoButtons }
+import from ...components.landing.Wordmark { Wordmark }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }
-import from ...lib.utils { cn }
-import from ...components.common.glyphs { Spinner }
-import from ...components.common.ErrorNote { ErrorNote }
+import from ...components.common.glyphs { Spinner, WarnIcon }
 
-glob MIN_PASSWORD: int = 8;
+glob MIN_PASSWORD: int = 8,
+     MODE_TAB: str = "h-8 rounded-[3px] px-3 text-[13px] transition-colors";
 
 def:pub LoginPage -> JsxPage {
     has mode: str = "login",
@@ -22,6 +22,8 @@ def:pub LoginPage -> JsxPage {
         showPassword: bool = False,
         expired: bool = False,
         busy: bool = False,
+        emailError: str = "",
+        passwordError: str = "",
         error: str = "";
 
     can with entry {
@@ -45,87 +47,75 @@ def:pub LoginPage -> JsxPage {
     def switchMode(next: str) -> None;
 
     signup = mode == "signup";
-    # Sign-up asks for eight characters; sign-in accepts whatever was set.
-    longEnough = len(password) >= MIN_PASSWORD or not signup;
-    ready = not busy and bool(email.strip()) and bool(password) and longEnough;
-    tabBase = "relative z-10 rounded-lg py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
-    tabOn = "text-foreground";
-    tabOff = "text-muted-foreground hover:text-foreground";
+    longEnough = len(password) >= MIN_PASSWORD;
 
-    # items-start on purpose: the two modes differ slightly in height, and
-    # centering would let that push the card upward so the tabs and heading
-    # jumped on every switch. Anchored at the top, the form only grows down.
     return
-        <div className="relative overflow-hidden">
-            <div
-                className="relative z-10 mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20"
-            >
-                <AuthAside/>
-                <div className="mx-auto w-full max-w-md">
-                    <div className="mb-6 flex justify-center lg:hidden">
-                        <img
-                            src="/static/brand/logo-full.svg"
-                            alt="flowline"
-                            width={132}
-                            height={35}
-                            className="dark:hidden"
-                        />
-                        <img
-                            src="/static/brand/logo-full-dark.svg"
-                            alt="flowline"
-                            width={132}
-                            height={35}
-                            className="hidden dark:block"
-                        />
-                    </div>
-                    <div
-                        className="relative grid grid-cols-2 rounded-xl bg-foreground/[0.06] p-1"
-                    >
-                        <span
-                            aria-hidden="true"
-                            className={cn(
-                                "pointer-events-none absolute inset-y-1 left-1 w-[calc(50%_-_4px)] rounded-lg bg-card transition-transform duration-200",
-                                "translate-x-full" if signup else "translate-x-0"
+        <div className="min-h-svh bg-background px-4 text-foreground sm:px-6">
+            <div className="mx-auto flex h-14 max-w-[1180px] items-center">
+                <a href="/" aria-label="flowline home" className="rounded-sm">
+                    <Wordmark/>
+                </a>
+            </div>
+            <main className="mx-auto w-full max-w-[400px] pt-8 pb-16 sm:pt-16">
+                <div
+                    role="tablist"
+                    aria-label="Sign in or create a workspace"
+                    className="inline-flex gap-0.5 rounded-md border bg-card p-0.5"
+                >
+                    <button
+                        type="button"
+                        role="tab"
+                        id="tab-login"
+                        aria-selected={not signup}
+                        aria-controls="auth-panel"
+                        className={MODE_TAB
+                            + (
+                                " bg-muted font-semibold text-foreground"
+                                    if not signup
+                                    else " font-medium text-muted-foreground hover:text-foreground"
                             )}
-                        ></span>
-                        <button
-                            type="button"
-                            className={cn(tabBase, tabOff if signup else tabOn)}
-                            onClick={lambda { switchMode("login"); }}
-                        >
-                            Log in
-                        </button>
-                        <button
-                            type="button"
-                            className={cn(tabBase, tabOn if signup else tabOff)}
-                            onClick={lambda { switchMode("signup"); }}
-                        >
-                            Sign up
-                        </button>
-                    </div>
-                    <div
-                        key={mode}
-                        className="mt-7 animate-in fade-in slide-in-from-bottom-1 duration-300"
+                        onClick={lambda { switchMode("login"); }}
                     >
-                        <h1
-                            className="font-display text-3xl font-bold leading-none tracking-tight"
-                        >
-                            {"Start your first flow line."
-                                if signup
-                                else "Welcome back."}
-                        </h1>
-                        <p
-                            className="mt-2 text-sm leading-relaxed text-muted-foreground"
-                        >
-                            {"Email and a password is all it takes. You'll name your organization next."
-                                if signup
-                                else "Your team's log is waiting in the archive."}
-                        </p>
-                    </div>
+                        Sign in
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        id="tab-signup"
+                        aria-selected={signup}
+                        aria-controls="auth-panel"
+                        className={MODE_TAB
+                            + (
+                                " bg-muted font-semibold text-foreground"
+                                    if signup
+                                    else " font-medium text-muted-foreground hover:text-foreground"
+                            )}
+                        onClick={lambda { switchMode("signup"); }}
+                    >
+                        Create workspace
+                    </button>
+                </div>
+                <div
+                    id="auth-panel"
+                    role="tabpanel"
+                    aria-labelledby={"tab-signup" if signup else "tab-login"}
+                >
+                    <h1
+                        className="mt-7 text-[28px] leading-[1.15] font-bold tracking-[-0.01em] [font-stretch:112%]"
+                    >
+                        {"Start your first flow line."
+                            if signup
+                            else "Sign in to Flowline"}
+                    </h1>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        {"Next you name your workspace, add your people and choose how work moves."
+                            if signup
+                            else "Your board and log are where you left them."}
+                    </p>
                     {if expired {
-                        <div
+                        <p
                             key="expired"
-                            className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-accent px-3 py-2 text-sm text-muted-foreground animate-in fade-in slide-in-from-top-1"
+                            className="mt-4 flex items-start gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground"
                         >
                             <svg
                                 className="mt-0.5 shrink-0"
@@ -142,8 +132,8 @@ def:pub LoginPage -> JsxPage {
                                 <circle cx={12} cy={12} r={10}/>
                                 <path d="M12 6v6l4 2"/>
                             </svg>
-                            Your session expired. Please sign in again.
-                        </div>
+                            Your session expired. Sign in again to pick up where you were.
+                        </p>
                     }}
                     <div className="mt-6">
                         <SsoButtons
@@ -151,97 +141,116 @@ def:pub LoginPage -> JsxPage {
                             onFailure={lambda (msg: str) { error = msg; }}
                         />
                     </div>
-                    <div className="my-5 flex items-center gap-3">
-                        <span className="h-px flex-1 bg-border"></span>
-                        <span className="text-xs font-medium text-muted-foreground">
-                            or with email
-                        </span>
-                        <span className="h-px flex-1 bg-border"></span>
-                    </div>
-                    <form onSubmit={submit} className="flex flex-col gap-3.5">
+                    <form onSubmit={submit} noValidate={True} className="grid gap-4">
                         <div className="grid gap-1.5">
-                            <Label className="text-xs">Work email</Label>
+                            <Label
+                                htmlFor="auth-email"
+                                className="text-[13px] font-semibold"
+                            >
+                                Email
+                            </Label>
                             <Input
+                                id="auth-email"
                                 type="email"
+                                name="email"
+                                autoComplete="email"
                                 value={email}
-                                onChange={lambda (ev: ChangeEvent) { email = ev.target.value; }}
+                                aria-invalid={emailError != ""}
+                                aria-describedby={"auth-email-error"
+                                    if emailError
+                                    else None}
+                                onChange={lambda (ev: ChangeEvent) {
+                                    email = ev.target.value;
+                                    emailError = "";
+                                }}
                                 placeholder="you@company.com"
-                                className="h-11"
+                                className="h-10"
                             />
+                            {if emailError {
+                                <p
+                                    key="email-error"
+                                    id="auth-email-error"
+                                    className="text-xs text-destructive"
+                                >
+                                    {emailError}
+                                </p>
+                            }}
                         </div>
                         <div className="grid gap-1.5">
-                            <Label className="text-xs">Password</Label>
+                            <Label
+                                htmlFor="auth-password"
+                                className="text-[13px] font-semibold"
+                            >
+                                Password
+                            </Label>
                             <div className="relative flex items-center">
                                 <Input
+                                    id="auth-password"
                                     type={"text" if showPassword else "password"}
+                                    name="password"
+                                    autoComplete={"new-password"
+                                        if signup
+                                        else "current-password"}
                                     value={password}
-                                    onChange={lambda (ev: ChangeEvent) { password = ev.target.value; }}
+                                    aria-invalid={passwordError != ""}
+                                    aria-describedby={"auth-password-note"
+                                        if signup or passwordError
+                                        else None}
+                                    onChange={lambda (ev: ChangeEvent) {
+                                        password = ev.target.value;
+                                        passwordError = "";
+                                    }}
                                     placeholder="••••••••••"
-                                    className="h-11 pr-11"
+                                    className="h-10 pr-11"
                                 />
                                 <button
                                     type="button"
                                     aria-label={"Hide password"
                                         if showPassword
                                         else "Show password"}
-                                    className="absolute right-1.5 inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                    aria-pressed={showPassword}
+                                    className="absolute right-1 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                     onClick={lambda { showPassword = not showPassword; }}
                                 >
-                                    {if showPassword {
-                                        <svg
-                                            key="eyeoff"
-                                            width={16}
-                                            height={16}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            aria-hidden="true"
-                                        >
-                                            <path
-                                                d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
-                                            />
-                                            <path
-                                                d="M14.084 14.158a3 3 0 0 1-4.242-4.242"
-                                            />
-                                            <path
-                                                d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
-                                            />
-                                            <path d="m2 2 20 20"/>
-                                        </svg>
-                                    } else {
-                                        <svg
-                                            key="eye"
-                                            width={16}
-                                            height={16}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            aria-hidden="true"
-                                        >
-                                            <path
-                                                d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
-                                            />
-                                            <circle cx={12} cy={12} r={3}/>
-                                        </svg>
-                                    } }
+                                    <svg
+                                        width={16}
+                                        height={16}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+                                        />
+                                        <circle cx={12} cy={12} r={3}/>
+                                        {if showPassword {
+                                            <path key="slash" d="m3 3 18 18"/>
+                                        }}
+                                    </svg>
                                 </button>
                             </div>
-                            {if signup {
+                            {if passwordError {
+                                <p
+                                    key="password-error"
+                                    id="auth-password-note"
+                                    className="text-xs text-destructive"
+                                >
+                                    {passwordError}
+                                </p>
+                            } elif signup {
                                 <p
                                     key="rule"
-                                    className={"flex items-center gap-1.5 text-xs transition-colors "
+                                    id="auth-password-note"
+                                    className={"flex items-center gap-1.5 text-xs "
                                         + (
                                             "text-success"
-                                                if len(password) >= MIN_PASSWORD
+                                                if longEnough
                                                 else "text-muted-foreground"
                                         )}
-                                    aria-live="polite"
                                 >
                                     <svg
                                         width={12}
@@ -254,23 +263,31 @@ def:pub LoginPage -> JsxPage {
                                         strokeLinejoin="round"
                                         aria-hidden="true"
                                     >
-                                        {if len(password) >= MIN_PASSWORD {
-                                            <path key="ok" d="m5 12 5 5L20 7"/>
-                                        } else {
-                                            <circle key="dot" cx={12} cy={12} r={4}/>
-                                        } }
+                                        <path
+                                            d={"m5 12 5 5L20 7"
+                                                if longEnough
+                                                else "M8 12h8"}
+                                        />
                                     </svg>
                                     {"At least " + str(MIN_PASSWORD) + " characters"}
                                 </p>
-                            }}
+                            } }
                         </div>
                         {if error {
-                            <ErrorNote key="err" message={error}/>
+                            <p
+                                key="err"
+                                role="alert"
+                                className="flex items-start gap-2 text-sm text-destructive"
+                            >
+                                <WarnIcon className="mt-0.5 shrink-0"/>
+                                <span>{error}</span>
+                            </p>
                         }}
                         <Button
                             type="submit"
-                            className="mt-1 h-11"
-                            disabled={not ready}
+                            className="h-10 w-full text-sm font-semibold"
+                            disabled={busy}
+                            aria-busy={busy}
                         >
                             {if busy {
                                 <Spinner key="sp"/>
@@ -280,21 +297,10 @@ def:pub LoginPage -> JsxPage {
                                 else ("Create workspace" if signup else "Sign in")}
                         </Button>
                     </form>
-                    <p className="mt-5 text-center text-xs text-muted-foreground">
-                        {"Already have a workspace? "
-                            if signup
-                            else "New to Flowline? "}
-                        <button
-                            type="button"
-                            className="rounded-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                            onClick={lambda { switchMode(
-                                "login" if signup else "signup"
-                            ); }}
-                        >
-                            {"Sign in" if signup else "Create one"}
-                        </button>
+                    <p className="mt-6 text-[13px] text-muted-foreground">
+                        Your workspace is private to your account.
                     </p>
                 </div>
-            </div>
+            </main>
         </div>;
 }

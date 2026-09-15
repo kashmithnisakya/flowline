@@ -6,6 +6,7 @@ this page stores the token like a password login would and hands off.
 import from "@jac/runtime" { jacSetToken }
 import from ....components.ui.button { Button }
 import from ....components.common.glyphs { WarnIcon }
+import from ....components.landing.Wordmark { Wordmark }
 
 def:pub SsoCallbackPage -> JsxPage {
     has failure: str = "";
@@ -41,55 +42,42 @@ def:pub SsoCallbackPage -> JsxPage {
     }
 
     return
-        <div
-            className="flex min-h-[70svh] flex-col items-center justify-center gap-4 px-6 text-center"
-        >
-            {if failure {
-                <div
-                    key="failed"
-                    className="w-full max-w-sm rounded-2xl border border-border bg-card p-8"
-                >
-                    <div
-                        className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-                    >
-                        <WarnIcon size={20}/>
+        <div className="min-h-svh bg-background px-4 text-foreground sm:px-6">
+            <div className="mx-auto flex h-14 max-w-[1180px] items-center">
+                <a href="/" aria-label="flowline home" className="rounded-sm">
+                    <Wordmark/>
+                </a>
+            </div>
+            <main className="mx-auto w-full max-w-[400px] pt-8 pb-16 sm:pt-16">
+                {if failure {
+                    <div key="failed" role="alert" className="grid gap-3">
+                        <h1
+                            className="flex items-center gap-2 text-[28px] leading-[1.15] font-bold tracking-[-0.01em] [font-stretch:112%]"
+                        >
+                            <WarnIcon size={22} className="shrink-0 text-destructive"/>
+                            Could not sign you in
+                        </h1>
+                        <p className="text-sm text-muted-foreground">{failure}</p>
+                        <Button
+                            className="mt-2 h-10 w-full text-sm font-semibold"
+                            onClick={lambda { window.location.href = "/login"; }}
+                        >
+                            Back to sign in
+                        </Button>
                     </div>
-                    <h1 className="font-display mt-4 text-2xl font-bold tracking-tight">
-                        Could not sign you in
-                    </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">{failure}</p>
-                    <Button
-                        className="mt-5 h-11 w-full"
-                        onClick={lambda { window.location.href = "/login"; }}
+                } else {
+                    <div
+                        key="working"
+                        role="status"
+                        className="flex items-center gap-3 text-sm text-muted-foreground"
                     >
-                        Back to sign in
-                    </Button>
-                </div>
-            } else {
-                <div
-                    key="working"
-                    className="flex flex-col items-center gap-5 animate-in fade-in duration-500"
-                >
-                    <img
-                        src="/static/brand/logo-full.svg"
-                        alt="flowline"
-                        width={150}
-                        height={40}
-                        className="dark:hidden"
-                    />
-                    <img
-                        src="/static/brand/logo-full-dark.svg"
-                        alt="flowline"
-                        width={150}
-                        height={40}
-                        className="hidden dark:block"
-                    />
-                    <span
-                        aria-hidden="true"
-                        className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
-                    ></span>
-                    <p className="text-sm text-muted-foreground">Signing you in…</p>
-                </div>
-            } }
+                        <span
+                            aria-hidden="true"
+                            className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                        ></span>
+                        Signing you in…
+                    </div>
+                } }
+            </main>
         </div>;
 }
