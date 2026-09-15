@@ -36,7 +36,7 @@ glob STATUSES: list[str] = [
          {
              "key": "simple",
              "name": "Simple",
-             "description": "To do, Doing, Review, Done. Review can send work back to Doing.",
+             "description": "Four steps, and Review can send work back to Doing.",
              "steps": [
                  {
                      "name": "To do",

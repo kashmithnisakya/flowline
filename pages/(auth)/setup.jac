@@ -23,9 +23,9 @@ import from ...components.common.StepName { StepName }
 glob SCRATCH: str = "scratch",
      FIELD_LABEL: str = "text-[13px] font-semibold",
      HINTS: dict[int, str] = {
-         1: "The board is named after your first project. Its columns come from step 3.",
+         1: "Cards on the board belong to a project. Its columns come from step 3.",
          2: "People you add here can be assigned to cards on this board.",
-         3: "The preview follows your choice. Nothing is created until you open the board."
+         3: "The preview follows your choice. The steps are created when you open the board."
      };
 
 # The columns a choice gives the board, or none for a flow line drawn by hand.

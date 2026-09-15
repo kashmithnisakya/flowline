@@ -103,7 +103,7 @@ def run(page, tag: str) -> list[str]:
     dialog.get_by_role("button", name="Cancel", exact=True).click()
     expect(dialog).to_be_hidden()
     for column in ("To do", "Doing", "Review", "Done"):
-        expect(page.get_by_text(column, exact=True).first).to_be_visible()
+        expect(page.get_by_text(column, exact=True).filter(visible=True).first).to_be_visible()
 
     step("board: open via the nav")
     page.get_by_role("link", name="Board", exact=True).click()

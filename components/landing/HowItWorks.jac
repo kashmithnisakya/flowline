@@ -16,7 +16,7 @@ def:pub HowItWorks -> JsxElement {
             >
                 From sign-up to a first card in three steps
             </h2>
-            <ol className="mt-6 grid border-b md:grid-cols-3 md:border-t md:py-6">
+            <ol className="mt-6 grid md:grid-cols-3 md:border-t md:pt-6">
                 <li className={STEP_ROW}>
                     <span className="font-mono text-[12.5px] text-subtle">1</span>
                     <h3 className="text-base font-semibold [font-stretch:108%]">

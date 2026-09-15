@@ -2,7 +2,7 @@
 mono between hairlines. No logos, counts or quotes."""
 
 glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
-     FACT: str = "py-2 pr-4 sm:mr-3.5 sm:border-r sm:pr-3.5 sm:last:mr-0 sm:last:border-r-0";
+     FACT: str = "py-1.5 pr-4 sm:mr-3.5 sm:border-r sm:py-2 sm:pr-3.5 sm:last:mr-0 sm:last:border-r-0";
 
 def:pub ProofStrip -> JsxElement {
     return
