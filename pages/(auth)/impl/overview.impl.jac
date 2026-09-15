@@ -46,13 +46,19 @@ impl OverviewPage.loadAll -> None {
         }
         blockedInfo = info;
         blockedList = every;
-        # Every task hangs under a project, so the tallies add up to all of them.
+        # Every task hangs under a project, so the tallies add up to all of
+        # them. The checklist's reads are needed until a card reaches Done.
         total = 0;
+        doneSum = 0;
         for pt in (data["counts"]["projects"] if data else []) {
             total = total + pt["total"];
+            doneSum = doneSum + pt["done"];
+        }
+        for v in (data["counts"]["done_by_week"] if data else []) {
+            doneSum = doneSum + v;
         }
         taskTotal = total;
-        if data and total == 0 {
+        if data and doneSum == 0 {
             loadSetup();
         }
     } except Exception as e {
@@ -96,8 +102,9 @@ impl OverviewPage.loadDue -> None {
 }
 
 # This week's log, a day wider on each side: rows carry the server's UTC
-# date, and the page buckets them by the local day of their stamp.
-impl OverviewPage.fetchWeekLog(monday: str) -> list[any] {
+# date, and the page buckets them by the local day of their stamp. `full`
+# is False when the page cap cut the read short.
+impl OverviewPage.fetchWeekLog(monday: str) -> any {
     rows: list[any] = [];
     pageNo = 1;
     more = True;
@@ -119,7 +126,7 @@ impl OverviewPage.fetchWeekLog(monday: str) -> list[any] {
         }
         pageNo = pageNo + 1;
     }
-    return rows;
+    return {"rows": rows, "full": not more};
 }
 
 # Tasks that entered Done per local weekday. A task counts once, on the day
@@ -135,10 +142,15 @@ impl OverviewPage.loadMoves -> None {
         LOADS[key] = fetchWeekLog(monday);
         mine = True;
     }
+    movesLoaded = False;
+    movesFailed = False;
     pending: any = LOADS[key];
     try {
-        rows: list[any] = await pending;
+        got: any = await pending;
+        rows: list[any] = got["rows"];
         perDay = [0, 0, 0, 0, 0, 0, 0];
+        people: dict[str, list[int]] = {};
+        entriesWeek = 0;
         movesOf: dict[str, list[dict]] = {};
         taskIds: list[str] = [];
         sinceAt: dict[str, str] = {};
@@ -151,10 +163,28 @@ impl OverviewPage.loadMoves -> None {
             day = localDayOf(row.at, row.date)
                 if row.task_id and row.at[:10] == row.date
                 else row.date;
-            if day == today {
-                entriesToday = entriesToday + 1;
+            slot = -1;
+            for i in range(7) {
+                if days[i] == day {
+                    slot = i;
+                }
+            }
+            if slot >= 0 {
+                entriesWeek = entriesWeek + 1;
+                for who in row.member_name.split(",") {
+                    name = who.strip();
+                    if name and name not in people {
+                        people[name] = [0, 0, 0, 0, 0, 0, 0];
+                    }
+                    if name {
+                        people[name][slot] = people[name][slot] + 1;
+                    }
+                }
             }
             if not row.task_id {
+                if day == today {
+                    entriesToday = entriesToday + 1;
+                }
                 continue;
             }
             tid = row.task_id;
@@ -193,7 +223,8 @@ impl OverviewPage.loadMoves -> None {
         doneMoves = perDay;
         blockedSince = sinceDay;
         todayEntries = entriesToday;
-        movesFailed = False;
+        weekPeople = people;
+        weekEntries = entriesWeek if got["full"] else -1;
     } except Exception as e {
         movesFailed = True;
     }
@@ -205,29 +236,50 @@ impl OverviewPage.loadMoves -> None {
 
 # What the first-run checklist ticks off: a flow line, its first column, the
 # template it came from, and whether GitHub is configured and connected.
-impl OverviewPage.loadSetup -> None {
-    try {
-        line = root spawn GetFlowLine(with_counts=False);
-        views = line.reports[0] if line.reports else [];
-        stepCount = len(views);
-        firstStepName = views[0].name if len(views) > 0 else "";
-        meta = root spawn GetFlowLineMeta();
-        key = meta.reports[0]["template_key"] if meta.reports else "";
-        named = "";
-        for tpl in FLOW_LINE_TEMPLATES {
-            if key and tpl["key"] == key {
-                named = tpl["name"];
-            }
+impl OverviewPage.fetchSetup -> any {
+    line = root spawn GetFlowLine(with_counts=False);
+    views = line.reports[0] if line.reports else [];
+    meta = root spawn GetFlowLineMeta();
+    key = meta.reports[0]["template_key"] if meta.reports else "";
+    named = "";
+    for tpl in FLOW_LINE_TEMPLATES {
+        if key and tpl["key"] == key {
+            named = tpl["name"];
         }
-        templateName = named;
-        gh = root spawn GithubStatus();
-        conn = gh.reports[0] if gh.reports else None;
-        ghConfigured = bool(conn and conn.configured);
-        ghConnected = bool(conn and conn.connected);
-        ghLogin = conn.account_login if conn else "";
+    }
+    gh = root spawn GithubStatus();
+    conn = gh.reports[0] if gh.reports else None;
+    return {
+        "steps": len(views),
+        "first": views[0].name if len(views) > 0 else "",
+        "template": named,
+        "configured": bool(conn and conn.configured),
+        "connected": bool(conn and conn.connected),
+        "login": conn.account_login if conn else ""
+    };
+}
+
+impl OverviewPage.loadSetup -> None {
+    mine = False;
+    if not inflight("setup") {
+        LOADS["setup"] = fetchSetup();
+        mine = True;
+    }
+    pending: any = LOADS["setup"];
+    try {
+        got: any = await pending;
+        stepCount = got["steps"];
+        firstStepName = got["first"];
+        templateName = got["template"];
+        ghConfigured = got["configured"];
+        ghConnected = got["connected"];
+        ghLogin = got["login"];
     } except Exception as e {
         # A checklist with defaults still points at every next step.
         templateName = "";
+    }
+    if mine {
+        LOADS["setup"] = None;
     }
     setupLoaded = True;
 }

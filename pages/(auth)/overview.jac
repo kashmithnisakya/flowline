@@ -1,8 +1,6 @@
 """flowline - Overview: what needs someone now, then how the week is going.
-Counts come from the server over the whole history (OverviewSnapshot); the
-page adds three small reads: the working set sorted by due date (due this
-week, overdue per project), this week's log (moves to Done per day) and the
-weekly history. A workspace with no tasks gets a first-run checklist."""
+Until the first card reaches Done a first-run checklist stands in for the
+figures and charts; the impl annex documents each read."""
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
@@ -126,6 +124,14 @@ def plural(n: int, one: str, many: str) -> str {
     return str(n) + " " + (one if n == 1 else many);
 }
 
+def countAll(xs: list[int]) -> int {
+    n = 0;
+    for x in xs {
+        n = n + x;
+    }
+    return n;
+}
+
 def splitNames(joined: str) -> list[str] {
     return [
         n.strip()
@@ -177,6 +183,31 @@ def withBlocked(
     return row;
 }
 
+# A review queue entry's context (reviewer note, PR, avatars) on a row, so a
+# review that turns late keeps it in Overdue. `held` is the task, if read.
+def withReview(row: dict[str, any], r: dict[str, any], held: any) -> dict[str, any] {
+    reviewer = r["reviewer"];
+    pr = "PR linked" if r["pr_link"] else "";
+    if held and held.pr_number > 0 {
+        pr = "PR #" + str(held.pr_number);
+    }
+    if reviewer {
+        row["names"] = [reviewer];
+    }
+    row["meta"] = " · ".join(
+        [
+            part
+            for part in [row["meta"], pr]
+            if part
+        ]
+    );
+    row["note"] = (reviewer.split(" ")[0] + " reviewing")
+        if reviewer
+        else "no reviewer";
+    row["noteWarn"] = not reviewer;
+    return row;
+}
+
 def:pub OverviewPage -> JsxPage {
     has attention: list[TaskView] = [],
         attentionTotal: int = 0,
@@ -206,6 +237,10 @@ def:pub OverviewPage -> JsxPage {
         doneMoves: list[int] = [0, 0, 0, 0, 0, 0, 0],
         todayEntries: int = 0,
         blockedSince: dict[str, str] = {},
+        # The week's entries by the same local day rule, per roster name, for
+        # the People strip and the entries figure. -1 until a complete read.
+        weekPeople: dict[str, list[int]] = {},
+        weekEntries: int = -1,
         movesLoaded: bool = False,
         movesFailed: bool = False,
         weekAdded: int = -1,
@@ -240,7 +275,8 @@ def:pub OverviewPage -> JsxPage {
 
     async def fetchSnapshot(monday: str) -> any;
     async def fetchDue -> any;
-    async def fetchWeekLog(monday: str) -> list[any];
+    async def fetchWeekLog(monday: str) -> any;
+    async def fetchSetup -> any;
     async def fetchHistory(projectId: str, weeks: int) -> any;
     async def loadAll -> None;
     async def loadDue -> None;
@@ -266,7 +302,6 @@ def:pub OverviewPage -> JsxPage {
         for p in projects
         if p.active
     ];
-    fresh = (True if counts else False) and taskTotal == 0;
     # Weekly counts, oldest first, four weeks ending in this one. Guarded
     # with len(): both lists are empty until the counts land.
     doneSpark = counts.done_by_week
@@ -277,6 +312,13 @@ def:pub OverviewPage -> JsxPage {
         if logs and len(logs.by_day) == 7
         else [0, 0, 0, 0, 0, 0, 0];
     openCount = counts.open if counts else 0;
+    # Figures and charts wait for the first card in Done (loadAll reads the
+    # same rule); until then the page is early and a checklist leads.
+    doneEver = countAll(doneSpark);
+    for pt in (counts.projects if counts else []) {
+        doneEver = doneEver + pt.done;
+    }
+    early = (True if counts else False) and doneEver == 0;
 
     # ---- Needs you: each task sits in the first group it qualifies for, and
     # `flagged` collects the ids the snapshot's attention_total counts.
@@ -286,8 +328,15 @@ def:pub OverviewPage -> JsxPage {
     blockedRows: list[dict] = [];
     earlyDue: list[dict] = [];
     byId: dict[str, TaskView] = {};
+    for t in attention {
+        byId[t.id] = t;
+    }
     for t in dueRows {
         byId[t.id] = t;
+    }
+    reviewOf: dict[str, dict] = {};
+    for r in reviewQueue {
+        reviewOf[r["task_id"]] = r;
     }
     for t in attention {
         flagged.append(t.id);
@@ -308,9 +357,14 @@ def:pub OverviewPage -> JsxPage {
             );
         } elif t.due_date < today {
             shown.append(t.id);
-            overdueRows.append(dueRow(t, today));
-        } else {
-            # Late by the server's day, due today by the viewer's.
+            overdueRows.append(
+                withReview(dueRow(t, today), reviewOf[t.id], t)
+                    if t.id in reviewOf
+                    else dueRow(t, today)
+            );
+        } elif t.id not in reviewOf {
+            # Late by the server's day, due today by the viewer's. A review
+            # due today stays in Waiting on review.
             shown.append(t.id);
             earlyDue.append(dueRow(t, today));
         }
@@ -361,7 +415,11 @@ def:pub OverviewPage -> JsxPage {
         }
         if t.id not in shown and t.due_date < today {
             shown.append(t.id);
-            overdueRows.append(dueRow(t, today));
+            overdueRows.append(
+                withReview(dueRow(t, today), reviewOf[t.id], t)
+                    if t.id in reviewOf
+                    else dueRow(t, today)
+            );
         }
     }
     reviewRows: list[dict] = [];
@@ -370,47 +428,37 @@ def:pub OverviewPage -> JsxPage {
             continue;
         }
         shown.append(r["task_id"]);
-        reviewer = r["reviewer"];
         waited = r["waiting_days"];
         # The review's own due date, else the task's; the reviewer's avatar,
         # else whoever holds the card while it waits.
+        held = byId[r["task_id"]] if r["task_id"] in byId else None;
         due = r["review_due"];
-        who: list[str] = [reviewer] if reviewer else [];
-        pr = "PR linked" if r["pr_link"] else "";
-        if r["task_id"] in byId {
-            held = byId[r["task_id"]];
-            if len(due) < 10 {
-                due = held.due_date;
-            }
-            if not reviewer {
-                who = held.assignee_names;
-            }
-            if held.pr_number > 0 {
-                pr = "PR #" + str(held.pr_number);
-            }
+        if len(due) < 10 and held {
+            due = held.due_date;
         }
-        row = workRow(
-            r["task_id"],
-            r["title"],
-            " · ".join(
-                [
-                    part
-                    for part in [r["project"], pr]
-                    if part
-                ]
+        dated = len(due) >= 10;
+        reviewRow = withReview(
+            workRow(
+                r["task_id"],
+                r["title"],
+                r["project"],
+                held.assignee_names if held else [],
+                relDay(due, today)
+                    if dated
+                    else (
+                        "waiting " + plural(waited, "day", "days") if waited > 0 else ""
+                    ),
+                dated and due < today
             ),
-            who,
-            relDay(due, today)
-                if len(due) >= 10
-                else ("waiting " + plural(waited, "day", "days") if waited > 0 else ""),
-            len(due) >= 10 and due < today
+            r,
+            held
         );
-        row["note"] = (reviewer.split(" ")[0] + " reviewing")
-            if reviewer
-            else "no reviewer";
-        row["noteWarn"] = not reviewer;
-        reviewRows.append(row);
+        # Soonest due first, undated last; the sort is stable, so ties keep
+        # the snapshot's longest wait first.
+        reviewRow["sortDue"] = due[:10] if dated else "9999-12-31";
+        reviewRows.append(reviewRow);
     }
+    reviewRows.sort(key=lambda (x: dict[str, any]) { x["sortDue"]; });
     weekDueRows: list[dict] = earlyDue;
     for t in dueRows {
         if t.status == "Done"
@@ -519,14 +567,22 @@ def:pub OverviewPage -> JsxPage {
     }
     needsTotal = len(shown) + hiddenAttention;
 
-    # ---- This week: four figures and tasks that entered Done per day.
+    # ---- This week: four figures and tasks that entered Done per day. Log
+    # counts come from the page's own week read once it lands, so every day
+    # on the page follows one rule; the snapshot's UTC days are the fallback.
+    useWeekLog = movesLoaded and not movesFailed and weekEntries >= 0;
     figures = [
         {"label": "moved to Done", "value": str(doneSpark[3])},
         {
             "label": "tasks added",
             "value": str(weekAdded) if weekAdded >= 0 else ("-" if addedFailed else "…")
         },
-        {"label": "log entries", "value": str(entrySpark[3])},
+        {
+            "label": "log entries",
+            "value": str(weekEntries)
+                if useWeekLog
+                else ("…" if not movesLoaded else str(entrySpark[3]))
+        },
         {"label": "open tasks", "value": str(openCount)}
     ];
     anyDone = False;
@@ -598,11 +654,11 @@ def:pub OverviewPage -> JsxPage {
         personOpen[mt.member_id] = mt.open;
         personDone[mt.member_id] = mt.done_in_week;
     }
-    personDays: dict[str, list[int]] = {};
-    personTotal: dict[str, int] = {};
-    for md in (logs.members if logs else []) {
-        personDays[md.name] = md.by_day;
-        personTotal[md.name] = md.total;
+    personDays: dict[str, list[int]] = weekPeople if useWeekLog else {};
+    if not useWeekLog {
+        for md in (logs.members if logs else []) {
+            personDays[md.name] = md.by_day;
+        }
     }
     peopleRows = [
         {
@@ -614,15 +670,16 @@ def:pub OverviewPage -> JsxPage {
             "byDay": personDays[m.name]
                 if m.name in personDays and len(personDays[m.name]) == 7
                 else [0, 0, 0, 0, 0, 0, 0],
-            "total": personTotal[m.name] if m.name in personTotal else 0
+            "total": countAll(personDays[m.name]) if m.name in personDays else 0
         } for m in activeMembers
     ];
 
-    # ---- First run: every item from state the page already read.
+    # ---- First run: every item from state the page already read. Only a
+    # hand-written line ticks the log item (task events are log rows too).
     noPeople = len(activeMembers) == 0;
     loggedToday = todayEntries > 0
         if movesLoaded and not movesFailed
-        else dayCounts[todayIdx] > 0;
+        else (taskTotal == 0 and dayCounts[todayIdx] > 0);
     steps: list[dict] = [];
     steps.append(
         {
@@ -682,25 +739,37 @@ def:pub OverviewPage -> JsxPage {
             }
         );
     }
+    requiredOpen = 0;
     for s in steps {
         if not s["done"] and s["key"] != "github" {
-            s["primary"] = True;
-            break;
+            if requiredOpen == 0 {
+                s["primary"] = True;
+            }
+            requiredOpen = requiredOpen + 1;
         }
     }
+    # The checklist stays until its required items are ticked or a card
+    # reaches Done; it waits on both reads so an item never flips on arrival.
+    checklistReady = setupLoaded and movesLoaded;
+    showChecklist = early and not (checklistReady and requiredOpen == 0);
+    needsHas = len(groups) > 0 or dueFailed;
+    earlyNote = "Figures and charts appear after the first card moves to Done."
+        + (
+            " Until then there is nothing to count, so nothing is shown."
+                if taskTotal == 0
+                else ""
+        );
 
     histWeeks = history.weeks if history else [];
     histLabels = [prettyDay(w) for w in histWeeks];
-    histAny = False;
-    for v in (history.scope if history else []) {
-        if v > 0 {
-            histAny = True;
-        }
-    }
-    zones = "flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-start";
+    histAny = countAll(history.scope if history else []) > 0;
+    histFinished = countAll(history.finished if history else []) > 0;
+    # Layout follows the width the page is given (Ask docks beside it at
+    # 1280px), not the viewport.
+    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start";
 
     return
-        <div className="max-w-[1200px] space-y-4">
+        <div className="@container max-w-[1200px] space-y-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="page-title">Overview</h1>
                 <span className="num text-[12.5px] text-subtle">
@@ -731,32 +800,45 @@ def:pub OverviewPage -> JsxPage {
                     title="Could not load the overview"
                     onRetry={loadAll}
                 />
-            } elif fresh {
+            } elif early {
                 <div key="first" className={zones}>
-                    {if setupLoaded {
-                        <FirstRun
-                            key="list"
-                            title={"Get " + (orgName or "your workspace") + " moving"}
-                            items={steps}
-                        />
-                    } else {
-                        <div key="listsk" className="surface space-y-3 p-3.5">
-                            <Skeleton className="h-4 w-48"/>
-                            {for i in range(4) {
-                                <Skeleton key={str(i)} className="h-10 w-full"/>
-                            }}
-                        </div>
-                    } }
-                    <ThisWeek
-                        figures={[]}
-                        days={[]}
-                        note="Figures and charts appear once the first task is on the board. Until then there is nothing to count, so nothing is shown."
-                    />
+                    <div className="flex min-w-0 flex-col gap-4">
+                        {if taskTotal > 0 and (needsHas or not showChecklist) {
+                            <NeedsYou
+                                key="needs"
+                                groups={groups}
+                                total={needsTotal}
+                                totalPlus={dueCut}
+                                pending={not dueLoaded}
+                                failNote={"Could not check what is due this week."
+                                    if dueFailed
+                                    else ""}
+                                onRetry={loadDue}
+                            />
+                        }}
+                        {if showChecklist and checklistReady {
+                            <FirstRun
+                                key="list"
+                                title={"Get "
+                                    + (orgName or "your workspace")
+                                    + " moving"}
+                                items={steps}
+                            />
+                        } elif showChecklist {
+                            <div key="listsk" className="surface space-y-3 p-3.5">
+                                <Skeleton className="h-4 w-48"/>
+                                {for i in range(4) {
+                                    <Skeleton key={str(i)} className="h-10 w-full"/>
+                                }}
+                            </div>
+                        } }
+                    </div>
+                    <ThisWeek figures={[]} days={[]} note={earlyNote}/>
                 </div>
             } else {
                 <div key="body" className={zones}>
-                    <div className="flex min-w-0 flex-col gap-4 max-lg:contents">
-                        <div className="min-w-0 max-lg:order-1">
+                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
+                        <div className="min-w-0 @max-[52rem]:order-1">
                             <NeedsYou
                                 groups={groups}
                                 total={needsTotal}
@@ -768,33 +850,30 @@ def:pub OverviewPage -> JsxPage {
                                 onRetry={loadDue}
                             />
                         </div>
-                        {if len(peopleRows) > 0 {
-                            <div key="people" className="min-w-0 max-lg:order-5">
-                                <PeopleTable
-                                    rows={peopleRows}
-                                    dayNames={DAY_LABELS}
-                                    todayIndex={todayIdx}
-                                />
-                            </div>
-                        }}
+                        <div className="min-w-0 @max-[52rem]:order-5">
+                            <PeopleTable
+                                rows={peopleRows}
+                                dayNames={DAY_LABELS}
+                                todayIndex={todayIdx}
+                            />
+                        </div>
                     </div>
-                    <div className="flex min-w-0 flex-col gap-4 max-lg:contents">
-                        <div className="min-w-0 max-lg:order-2">
+                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
+                        <div className="min-w-0 @max-[52rem]:order-2">
                             <ThisWeek
                                 figures={figures}
                                 days={dayRows}
                                 chartState={chartState}
                                 chartNote={chartNote}
+                                onRetry={loadMoves if movesFailed else None}
                             />
                         </div>
-                        {if len(projRows) > 0 {
-                            <div key="projects" className="min-w-0 max-lg:order-3">
-                                <ProjectBars rows={projRows}/>
-                            </div>
-                        }}
+                        <div className="min-w-0 @max-[52rem]:order-3">
+                            <ProjectBars rows={projRows}/>
+                        </div>
                     </div>
                     <section
-                        className="min-w-0 space-y-3 pt-2 max-lg:order-4 lg:col-span-2"
+                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-4 @min-[52rem]:col-span-2"
                         aria-labelledby="over-time"
                     >
                         <div className="flex flex-wrap items-center gap-2">
@@ -851,7 +930,10 @@ def:pub OverviewPage -> JsxPage {
                                 onRetry={loadHistory}
                             />
                         } elif not history {
-                            <div key="hsk" className="grid gap-4 lg:grid-cols-2">
+                            <div
+                                key="hsk"
+                                className="grid gap-4 @min-[52rem]:grid-cols-2"
+                            >
                                 <Skeleton className="h-64 w-full"/>
                                 <Skeleton className="h-64 w-full"/>
                             </div>
@@ -869,18 +951,36 @@ def:pub OverviewPage -> JsxPage {
                                     + ("opacity-60" if historyLoading else "")}
                             >
                                 <div
-                                    className="grid gap-4 lg:grid-cols-2 lg:items-start"
+                                    className="grid gap-4 @min-[52rem]:grid-cols-2 @min-[52rem]:items-start"
                                 >
                                     <BurnUpChart
                                         labels={histLabels}
                                         scope={history.scope}
                                         done={history.done}
                                     />
-                                    <ThroughputChart
-                                        labels={histLabels}
-                                        finished={history.finished}
-                                        added={history.added}
-                                    />
+                                    {if histFinished {
+                                        <ThroughputChart
+                                            key="tp"
+                                            labels={histLabels}
+                                            finished={history.finished}
+                                            added={history.added}
+                                        />
+                                    } else {
+                                        <section
+                                            key="tpnone"
+                                            className="surface min-w-0 px-3.5 pt-3 pb-4"
+                                            aria-label="Throughput"
+                                        >
+                                            <h3 className="section-title text-[15px]">
+                                                Throughput
+                                            </h3>
+                                            <p
+                                                className="mt-1.5 text-[13.5px] text-muted-foreground"
+                                            >
+                                                Nothing moved to Done in these weeks, so there are no bars to draw.
+                                            </p>
+                                        </section>
+                                    } }
                                 </div>
                                 <details className="text-[13px]">
                                     <summary
