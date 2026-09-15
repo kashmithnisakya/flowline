@@ -30,7 +30,7 @@ supervisor configures multi-process mode (jaseci-labs/jac#9190); prefer
 
 | Logger | What it reports |
 | --- | --- |
-| `flowline.github` | Unbound installations, docs store failures, deliveries that raised, skipped close-on-done writes |
+| `flowline.github` | Unbound installations, docs store failures, deliveries that raised, skipped issue state write-backs |
 | `flowline.assistant` | LLM failures, with the hint to check `OPENAI_API_KEY`, `LLM_MODEL` and the model account's credit |
 
 **GitHub deliveries.** The App's **Advanced** tab lists every delivery with its

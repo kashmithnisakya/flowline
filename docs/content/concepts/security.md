@@ -112,7 +112,7 @@ binds that installation to its root. No walker ever writes a foreign root.
 | Forged install callbacks | `StartGithubInstall` stores a one-shot nonce. `CompleteGithubInstall` burns it before any check, requires it to match, and expires it after 15 minutes. |
 | Claiming someone else's installation | Installation ids are small integers, so completing a connection exchanges GitHub's OAuth code for the installer's user token and requires that installation to be visible to that user. The user token is then dropped. |
 | Repo names in API paths | `valid_full_name` accepts exactly `owner/repo` with alphanumerics and `-_.`, so `..`, `?` or `#` cannot redirect a request. |
-| The App's own writes | Closing an issue on Done comes back as a webhook; the receiver drops it by sender login so it is never applied twice. |
+| The App's own writes | Closing or reopening an issue as a card crosses Done comes back as a webhook; the receiver drops it by sender login so it is never applied twice. |
 
 ## Errors do not leak internals
 

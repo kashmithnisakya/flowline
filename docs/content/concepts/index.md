@@ -46,7 +46,7 @@ still has to be followed by hand.
 | Path | Holds |
 | --- | --- |
 | `models.jac` | Every `node`, `edge` and `obj` archetype, plus the graph helpers (`owned`, the `*_box` get-or-create helpers, the `*_of` readers, `hydrate_views`). Nothing else, and no Python imports. |
-| `services/<section>/` | The API, one folder per section: `projects`, `roster`, `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`, `github`. `services/util.jac` holds shared server-only helpers such as `now_iso` and `page_bounds`. |
+| `services/<section>/` | The API, one folder per section: `projects`, `roster`, `tasks`, `board`, `log`, `flowlines`, `iterations`, `insights`, `assistant`, `github`. `services/util.jac` holds shared server-only helpers such as `now_iso` and `page_bounds`. |
 | `constants.jac` | The vocabularies shared by client dropdowns and server validation: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_STATUS`, `FLOW_LINE_TEMPLATES` and friends. |
 | `main.jac` | The entry point. **Its import list is the router**: a walker missing from it returns 404. |
 
@@ -130,7 +130,7 @@ File-based routing under `pages/`, with route groups:
 | `/` | `pages/(public)/index.jac` | Public landing page |
 | `/login` | `pages/(public)/login.jac` | Public; `?mode=signup` opens sign-up |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | Receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/...` | Signed in |
+| `/flowlines`, `/board`, `/tasks`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/...` | Signed in |
 
 - `pages/layout.jac` is path-aware: the app chrome renders only for signed-in,
   non-public paths.

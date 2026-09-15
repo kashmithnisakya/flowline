@@ -53,7 +53,8 @@ hide:
 Most tools hand every team the same columns. In flowline a team draws the
 steps it really uses, connects them however work moves (loops and branches
 included), and **the board becomes those steps**. Every move the board makes
-lands in a written daily log, so the standup note is already there.
+lands in a written daily log, so the standup note is already there. Work can
+be planned into iterations and followed on a twelve-week roadmap.
 
 ![A tour of flowline: sign in, design a flow line, the board it becomes, a task on its flow line, and the log it writes](gifs/flowline-demo.gif){ .fl-demo loading=lazy }
 

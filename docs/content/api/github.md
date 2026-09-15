@@ -168,8 +168,10 @@ to the done step.
 
 ::: walker SetRepoAutoClose h3
 
-**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With close-on-done,
-`MoveTask` and `UpdateTask` close the linked issue when a card lands on Done.
+**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With close and
+reopen on ("Close & reopen issue" in the UI), `MoveTask` and `UpdateTask`
+close the linked issue when a card lands on Done and reopen it when the card
+leaves Done.
 
 ## Reconcile
 

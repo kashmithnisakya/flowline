@@ -181,6 +181,7 @@ nav:
       - Roster and roles: api/roster.md
       - Tasks: api/tasks.md
       - Board: api/board.md
+      - Iterations and roadmap: api/iterations.md
       - Daily log: api/log.md
       - Flow lines: api/flow-lines.md
       - Insights: api/insights.md

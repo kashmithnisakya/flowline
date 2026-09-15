@@ -19,11 +19,12 @@ flowchart LR
     root --> roles["Roles"] --> role["Role"]
     root --> steps["WorkflowSteps<br/><small>name, template_key</small>"] --> step["WorkflowStep"]
     root --> logs["Logs"] --> day["LogDay"] --> entry["LogEntry"]
+    root --> iterations["Iterations"] --> iteration["Iteration"]
     root --> repo["Repo"]
     root --> conn["GithubConnection"]
 
     classDef box stroke-dasharray:4 3
-    class projects,members,roles,steps,logs box
+    class projects,members,roles,steps,logs,iterations box
 ```
 
 **Typed edges.** Five edges declared in `models.jac` link rows across boxes.
@@ -44,6 +45,7 @@ flowchart LR
 | `root ++> Roles ++> Role` | Org-level roles; a member holds one through a `HasRole` edge. |
 | `root ++> WorkflowSteps ++> WorkflowStep` | The flow line. The box also carries the flow line's display name and the template that seeded it. |
 | `root ++> Logs ++> LogDay ++> LogEntry` | The daily log, one `LogDay` per date. |
+| `root ++> Iterations ++> Iteration` | Time boxes the team plans in; a task points at one through `iteration_id`. |
 | `root ++> Repo`, `root ++> GithubConnection` | Repos and the GitHub App installation hang off the root directly. |
 
 ## Design rules
@@ -51,10 +53,12 @@ flowchart LR
 ### Boxes, made on first write
 
 One box per kind sits under the root. Writers get or create it through a helper
-(`projects_box(root)`, `members_box`, `roles_box`, `steps_box`, `logs_box`);
+(`projects_box(root)`, `members_box`, `roles_box`, `steps_box`, `logs_box`,
+`iterations_box`);
 reads look it up and return nothing when it is absent, so a read never writes.
 Two overlapping first writes can leave two boxes of one kind, so the cross-kind
-readers (`projects_of`, `members_of`, `roles_of`, `steps_of`, `all_tasks`)
+readers (`projects_of`, `members_of`, `roles_of`, `steps_of`, `iterations_of`,
+`all_tasks`)
 merge every box while writers always take the first.
 
 ### Containment is ownership
@@ -71,6 +75,8 @@ Some references are stored as jid strings on purpose:
 | Field | Why not an edge |
 | --- | --- |
 | `Task.step_id` | Empty on tasks older than flow lines and on tasks whose step was deleted. The board falls back to `status`. |
+| `Task.iteration_id` | Keeps list rows free of edge hops. `DeleteIteration` clears it on every task that pointed at the iteration. |
+| `Task.checklist` | The card's own `{id, text, done}` items, written only by the checklist walkers. |
 | `WorkflowStep.transitions` | A list of `{to, label, carries}`. Cycles are allowed, so a step can point back upstream. Deleting a step strips its id from every other step's list. |
 | `Task.reviewer_id`, `reviewer_name` | A snapshot of who was asked to review. |
 | `Task.gh_parent_repo`, `gh_parent_number` | GitHub sub-issue family. An edge would cost a traversal per row in every list. |
@@ -116,6 +122,8 @@ See [GitHub sync](github-sync.md).
 
 ::: node LogEntry h3
 
+::: node Iteration h3
+
 ::: node Repo h3
 
 ::: node GithubConnection h3
@@ -125,6 +133,8 @@ See [GitHub sync](github-sync.md).
 ::: node Members h3
 
 ::: node Roles h3
+
+::: node Iterations h3
 
 ## Typed edges
 

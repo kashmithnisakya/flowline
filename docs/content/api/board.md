@@ -13,7 +13,7 @@ The page calls it two ways:
 
 | Call | `with_workspace` | What comes back |
 | --- | --- | --- |
-| Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles and whether GitHub is connected |
+| Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles, iterations and whether GitHub is connected |
 | Poll | `false` | Tasks and categories only; the workspace lists are `[]` and `github_connected` is `false` |
 
 - `rows` is one page of the **working set**: open tasks plus Done tasks updated

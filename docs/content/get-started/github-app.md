@@ -80,7 +80,7 @@ that, attach repos to projects and decide per repo:
 | --- | --- |
 | Auto-sync | New issues are filed onto the flow line's first start step. Turning it on back-fills the repo's history (closed issues land on Done). |
 | Auto-done | A merged pull request or a closed issue moves the linked card to the done step. |
-| Close issue on done | A card landing on Done closes its GitHub issue. Off by default; the only automatic write to GitHub. |
+| Close & reopen issue | A card landing on Done closes its GitHub issue, and moving it back out reopens it. Off by default; the only automatic write to GitHub. |
 
 ## Local development: tunnel the webhook
 
@@ -106,7 +106,7 @@ delivery on its own.
 | `exchange_failed` | GitHub sent no OAuth code: turn on **Request user authorization (OAuth) during installation**. |
 | `not_yours` | The GitHub account that authorized cannot see that installation. |
 | Delivery response `unknown_installation` | No workspace has completed a connection for that installation id. |
-| Delivery response `echo` | The App's own write (closing an issue) coming back. Dropped on purpose. |
+| Delivery response `echo` | The App's own write (closing or reopening an issue) coming back. Dropped on purpose. |
 | Delivery status `401` | The signature did not match: the App's webhook secret and `GITHUB_APP_WEBHOOK_SECRET` differ. |
 | Delivery status `415` | The webhook content type is not `application/json`. |
 | A reconnect banner on the board | A GitHub call returned `401` or `404` and the connection was marked invalid. Reconnect from the GitHub tab. |

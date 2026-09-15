@@ -14,7 +14,7 @@ flowline/
 ├── jac.toml                 # project, dependencies, serve, scale, placement
 ├── services/                # the walker API, one folder per section
 │   ├── projects/  roster/  tasks/  board/  log/
-│   ├── flowlines/  insights/  assistant/
+│   ├── flowlines/  iterations/  insights/  assistant/
 │   ├── github/    # github.jac, events.jac (webhook), util.jac
 │   └── util.jac   # server-only helpers (dates, paging, tags)
 ├── pages/                   # file-based routes

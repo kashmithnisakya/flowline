@@ -139,6 +139,23 @@ clean and only fail at runtime, in the browser, or on the deployed build.
     If a fix does not appear under `/compiled/...`, delete `.jac/cache` and
     `.jac/client/compiled`, then restart.
 
+??? danger "Write `status` through `Task.set_status`, never by assignment"
+
+    `set_status(status, stamp)` stamps `done_at` when a task enters Done and
+    clears it when it leaves (a constructor passes `done_at` itself). The
+    Overview's weekly Done count, `TaskHistory` and the snapshot's
+    done-in-period read `done_day(t)` and `moved_to_done(t)` from
+    `services/util.jac`, so a bare `t.status = ...` makes them disagree.
+
+??? danger "`UpdateTask` overwrites every field it is sent"
+
+    Every page that opens `TaskDialog` must carry `start_date` and the
+    iteration (a jid or `"none"`) in its form and pass them on save, or a save
+    clears them. The checklist is deliberately **not** part of the form: only
+    `AddChecklistItem`, `SetChecklistItem` and `RemoveChecklistItem` write it,
+    each applied at once, and a page that opens the dialog passes `taskId`,
+    `checklist` and an `onChecklist` that swaps the reported view into its rows.
+
 ??? note "`Root` is not a runtime name in `models.jac`"
 
     Nothing there may `isinstance(x, Root)`. Inside a `Task` or `LogDay`

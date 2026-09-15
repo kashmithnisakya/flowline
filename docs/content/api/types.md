@@ -13,6 +13,8 @@ nodes (`Project`, `LogEntry` and the rest) are documented on the
 
 ::: obj TaskTotals h3
 
+::: obj WeeklyHistory h3
+
 ::: obj ProjectTally h3
 
 ::: obj MemberTally h3
@@ -20,6 +22,12 @@ nodes (`Project`, `LogEntry` and the rest) are documented on the
 ## Board
 
 ::: obj BoardData h3
+
+## Iterations
+
+::: obj IterationView h3
+
+::: obj RoadmapData h3
 
 ## Roster
 

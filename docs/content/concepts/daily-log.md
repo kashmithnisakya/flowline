@@ -31,11 +31,12 @@ change, issue and PR links, and the project's name. Their `activity` reads:
 | Event | `activity` |
 | --- | --- |
 | `CreateTask` | `Added to Backlog` (the mapped status) |
-| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` when the move closed an issue |
+| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on a close-and-reopen repo |
 | `UpdateTask` that changes status | `Moved to Done` |
 | A merged PR or closed issue on an auto-done repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
 | An issue imported or auto-filed | `Imported from GitHub org/repo #12` |
 | An issue opened from a card | `Opened GitHub issue org/repo #12` |
+| A checklist item checked off | `Checked off: Draft the rollback steps (2/5)` |
 
 A pure reorder inside a column writes nothing, and neither does deleting a
 task. `SetMoveInfo` (the reviewer, PR link or blocker note a handoff asks for)

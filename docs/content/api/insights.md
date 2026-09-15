@@ -24,6 +24,8 @@ Everything `/overview` renders, in one call.
 | `blocked` | Blocked tasks with the reason from their latest Blocked log entry since `from_date` (or the task notes) |
 
 `monday` anchors the week (today when empty). "Today" is the server's UTC day.
+The burn-up and throughput charts come from a separate call,
+[`TaskHistory`](tasks.md#taskhistory).
 
 ::: walker Digest
 
@@ -35,7 +37,8 @@ in the period as an activity line. This is exactly the object the
 
 !!! info "How the snapshot counts"
 
-    - `done_in_period` counts Done tasks updated on or after `from_date`.
+    - `done_in_period` counts tasks that moved to Done on or after `from_date`
+      (by `done_at`); a task created already Done counts nowhere.
     - People are matched to tasks and log entries by name, on the
       comma-joined assignee names.
     - Project stats cover active projects and match tasks by project name.

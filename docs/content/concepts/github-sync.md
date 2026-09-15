@@ -145,21 +145,25 @@ request in a tracked repo gets its `pr_number` filled in.
 | --- | --- | --- |
 | `auto_sync` | off | File new issues as tasks. Turning it on clears the cursor, so the next sync back-fills the repo's history. |
 | `auto_done` | off | A closed issue, or a merged PR on a card In Progress or in Review, moves the card to the done step. |
-| `auto_close` | off | A card landing on Done closes its GitHub issue. |
+| `auto_close` | off | A card landing on Done closes its GitHub issue; a card leaving Done reopens it. |
 
 ## Writing back to GitHub
 
 flowline writes to GitHub in exactly two cases:
 
 1. **Opening an issue from a task** (`CreateIssueFromTask`), an explicit action.
-2. **Closing an issue when its card reaches Done**, only on repos with
-   `auto_close`, inside `MoveTask` and `UpdateTask`. The close is noted on the
-   move's own log line (`Moved to Done · closed org/repo #12`).
+2. **Keeping an issue's state with its card**, only on repos with
+   `auto_close`, inside `MoveTask` and `UpdateTask`: a move that lands on Done
+   closes the issue, and a move that leaves Done reopens it. The write is noted
+   on the move's own log line (`Moved to Done · closed org/repo #12`,
+   `Moved to Implement · reopened org/repo #12`).
 
-GitHub then sends an `issues.closed` delivery for that close, sent by
-`<slug>[bot]`, and the receiver drops it as an `echo`, so the card is not moved
-or logged twice. Nothing runs on a schedule: a workspace nobody opens stays as
-it was.
+GitHub then sends an `issues.closed` or `issues.reopened` delivery for that
+write, sent by `<slug>[bot]`, and the receiver drops it as an `echo`, so the
+card is not moved or logged twice. The other direction is deliberately
+one-way: an issue reopened on GitHub does not move its card, and titles,
+assignees and labels are never written back. Nothing runs on a schedule: a
+workspace nobody opens stays as it was.
 
 ## When a connection goes invalid
 

@@ -91,7 +91,7 @@ fine until you [connect a real GitHub App](github-app.md).
 | --- | --- |
 | `/` | The public landing page |
 | `/login` | Sign in; `?mode=signup` opens the sign-up tab |
-| `/board`, `/flowlines`, `/overview`, `/log`, `/workspace`, `/settings` | The app (signed in) |
+| `/board`, `/flowlines`, `/tasks`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings` | The app (signed in) |
 | `/docs` | The runtime's Swagger UI for every walker, unless `[serve] docs_enabled = false` |
 | `/healthz/live`, `/healthz/ready` | Liveness and readiness probes |
 
