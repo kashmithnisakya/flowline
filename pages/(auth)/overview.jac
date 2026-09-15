@@ -14,7 +14,7 @@ import from ...models {
     LogTotals,
     WeeklyHistory
 }
-import from ...constants { FLOW_LINE_TEMPLATES }
+import from ...constants { FLOW_LINE_TEMPLATES, STATUS_KIND }
 import from ...services.insights.insights { OverviewSnapshot }
 import from ...services.tasks.tasks { TaskHistory, ListTasks }
 import from ...services.log.log { ListLogEntries }
@@ -53,6 +53,15 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
          ["26", "Last 26 weeks"]
      ];
 
+# Reads in flight, by name. A full load mounts the page twice; the second
+# mount awaits the first one's request instead of sending its own. A dict
+# cell, so a function never rebinds a glob.
+glob LOADS: dict[str, any] = {};
+
+def inflight(key: str) -> any {
+    return LOADS[key] if key in LOADS else None;
+}
+
 def localIso(d: any) -> str {
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
     return shifted.toISOString()[:10];
@@ -68,6 +77,16 @@ def mondayOf(iso: str) -> str {
     d = new(Date, iso + "T00:00:00");
     offset = int((d.getDay() + 6) % 7);
     return shiftDay(iso, -offset);
+}
+
+# The local day of a log row's UTC stamp ("2026-09-15T20:39:12.123456Z"),
+# else the server's date for it.
+def localDayOf(at: str, fallback: str) -> str {
+    base = at.replace("Z", "");
+    if len(base) < 19 or base[10] != "T" or base[13] != ":" {
+        return fallback[:10];
+    }
+    return localIso(new(Date, base[:23] + "Z"));
 }
 
 # A due date as the worklist reads it: "today", "tomorrow", a weekday later
@@ -107,6 +126,57 @@ def plural(n: int, one: str, many: str) -> str {
     return str(n) + " " + (one if n == 1 else many);
 }
 
+def splitNames(joined: str) -> list[str] {
+    return [
+        n.strip()
+        for n in joined.split(",")
+        if n.strip()
+    ];
+}
+
+# One worklist row; the note, kind and flags are filled in by the caller.
+def workRow(
+    id: str, title: str, meta: str, names: list[str], time: str, late: bool
+) -> dict[str, any] {
+    return {
+        "id": id,
+        "title": title,
+        "meta": meta,
+        "note": "",
+        "noteWarn": False,
+        "names": names,
+        "time": time,
+        "late": late,
+        "kind": "",
+        "kindLabel": ""
+    };
+}
+
+def dueRow(t: TaskView, today: str) -> dict[str, any] {
+    return workRow(
+        t.id,
+        t.title,
+        t.project_name,
+        t.assignee_names,
+        relDay(t.due_date, today),
+        t.due_date < today
+    );
+}
+
+# Fills in a blocked row: its reason from the snapshot's blocked list
+# (`info`), then a red due date when late, else the day it stopped.
+def withBlocked(
+    row: dict[str, any], due: str, today: str, info: dict[str, any], since: str
+) -> dict[str, any] {
+    late = len(due) >= 10 and due < today;
+    row["late"] = late;
+    row["time"] = relDay(due, today)
+        if late
+        else ("since " + prettyDay(since) if len(since) >= 10 else "");
+    row["note"] = plainLine(info["reason"]) if "reason" in info else "";
+    return row;
+}
+
 def:pub OverviewPage -> JsxPage {
     has attention: list[TaskView] = [],
         attentionTotal: int = 0,
@@ -123,16 +193,23 @@ def:pub OverviewPage -> JsxPage {
         reviewQueue: list[dict] = [],
         quiet: list[dict] = [],
         blockedInfo: dict[str, dict] = {},
+        blockedList: list[dict] = [],
         loading: bool = True,
         failed: bool = False,
         # Open work sorted by due date, for due this week and per-project overdue.
         dueRows: list[TaskView] = [],
         dueLoaded: bool = False,
-        # This week's moves to Done per weekday, read off the log.
+        dueHasMore: bool = False,
+        dueFailed: bool = False,
+        # This week off the log, by local day: tasks that entered Done per
+        # weekday, entries written today, and when each blocked task stopped.
         doneMoves: list[int] = [0, 0, 0, 0, 0, 0, 0],
+        todayEntries: int = 0,
+        blockedSince: dict[str, str] = {},
         movesLoaded: bool = False,
         movesFailed: bool = False,
         weekAdded: int = -1,
+        addedFailed: bool = False,
         orgName: str = "",
         # First-run state, read only for a workspace with no tasks.
         setupLoaded: bool = False,
@@ -161,13 +238,21 @@ def:pub OverviewPage -> JsxPage {
         loadHistory();
     }
 
+    async def fetchSnapshot(monday: str) -> any;
+    async def fetchDue -> any;
+    async def fetchWeekLog(monday: str) -> list[any];
+    async def fetchHistory(projectId: str, weeks: int) -> any;
     async def loadAll -> None;
     async def loadDue -> None;
     async def loadMoves -> None;
     async def loadSetup -> None;
     async def loadHistory -> None;
+    async def loadWeekAdded -> None;
 
     today = todayIso();
+    # The snapshot flags overdue by the server's UTC day; this is that day,
+    # so the page can tell which of its rows the snapshot already counted.
+    serverToday = new(Date).toISOString()[:10];
     monday = mondayOf(today);
     todayIdx = daysUntil(today, monday);
     sunday = shiftDay(monday, 6);
@@ -193,49 +278,91 @@ def:pub OverviewPage -> JsxPage {
         else [0, 0, 0, 0, 0, 0, 0];
     openCount = counts.open if counts else 0;
 
-    # ---- Needs you: each task sits in the first group it qualifies for.
+    # ---- Needs you: each task sits in the first group it qualifies for, and
+    # `flagged` collects the ids the snapshot's attention_total counts.
     shown: list[str] = [];
+    flagged: list[str] = [];
     overdueRows: list[dict] = [];
     blockedRows: list[dict] = [];
-    for t in attention {
-        shown.append(t.id);
-        late = len(t.due_date) >= 10 and t.due_date < today;
-        if t.status == "Blocked" {
-            info = blockedInfo[t.id] if t.id in blockedInfo else {};
-            reason = plainLine(info["reason"]) if t.id in blockedInfo else "";
-            since = info["since"] if t.id in blockedInfo else t.updated_at[:10];
-            blockedRows.append(
-                {
-                    "id": t.id,
-                    "title": t.title,
-                    "meta": t.project_name,
-                    "note": reason,
-                    "noteWarn": False,
-                    "names": t.assignee_names,
-                    "time": relDay(t.due_date, today)
-                        if late
-                        else ("since " + prettyDay(since) if len(since) >= 10 else ""),
-                    "late": late
-                }
-            );
-        } else {
-            overdueRows.append(
-                {
-                    "id": t.id,
-                    "title": t.title,
-                    "meta": t.project_name,
-                    "note": "",
-                    "noteWarn": False,
-                    "names": t.assignee_names,
-                    "time": relDay(t.due_date, today),
-                    "late": True
-                }
-            );
-        }
-    }
+    earlyDue: list[dict] = [];
     byId: dict[str, TaskView] = {};
     for t in dueRows {
         byId[t.id] = t;
+    }
+    for t in attention {
+        flagged.append(t.id);
+        if t.status == "Blocked" {
+            shown.append(t.id);
+            info: dict[str, any] = blockedInfo[t.id] if t.id in blockedInfo else {};
+            since = blockedSince[t.id]
+                if t.id in blockedSince
+                else (info["since"] if "since" in info else t.updated_at[:10]);
+            blockedRows.append(
+                withBlocked(
+                    workRow(t.id, t.title, t.project_name, t.assignee_names, "", False),
+                    t.due_date,
+                    today,
+                    info,
+                    since
+                )
+            );
+        } elif t.due_date < today {
+            shown.append(t.id);
+            overdueRows.append(dueRow(t, today));
+        } else {
+            # Late by the server's day, due today by the viewer's.
+            shown.append(t.id);
+            earlyDue.append(dueRow(t, today));
+        }
+    }
+    # The snapshot's blocked list is complete; its attention page is not.
+    for b in blockedList {
+        bid = b["task_id"];
+        if bid not in flagged {
+            flagged.append(bid);
+        }
+        if bid in shown {
+            continue;
+        }
+        shown.append(bid);
+        held = byId[bid] if bid in byId else None;
+        blockedRows.append(
+            withBlocked(
+                workRow(
+                    bid, b["title"], b["project"], splitNames(b["assignees"]), "", False
+                ),
+                held.due_date if held else "",
+                today,
+                b,
+                blockedSince[bid] if bid in blockedSince else b["since"]
+            )
+        );
+    }
+    # Everything late past the attention page, most overdue first, before
+    # any other group can claim it.
+    overdueByProject: dict[str, int] = {};
+    for t in dueRows {
+        if t.status == "Done" or len(t.due_date) < 10 {
+            continue;
+        }
+        if t.due_date < serverToday and t.id not in flagged {
+            flagged.append(t.id);
+        }
+        if t.status == "Blocked" {
+            continue;
+        }
+        if t.due_date < today and t.project_id {
+            overdueByProject[t.project_id] = (
+                overdueByProject[t.project_id]
+                    if t.project_id in overdueByProject
+                    else 0
+            )
+                + 1;
+        }
+        if t.id not in shown and t.due_date < today {
+            shown.append(t.id);
+            overdueRows.append(dueRow(t, today));
+        }
     }
     reviewRows: list[dict] = [];
     for r in reviewQueue {
@@ -249,6 +376,7 @@ def:pub OverviewPage -> JsxPage {
         # else whoever holds the card while it waits.
         due = r["review_due"];
         who: list[str] = [reviewer] if reviewer else [];
+        pr = "PR linked" if r["pr_link"] else "";
         if r["task_id"] in byId {
             held = byId[r["task_id"]];
             if len(due) < 10 {
@@ -257,82 +385,74 @@ def:pub OverviewPage -> JsxPage {
             if not reviewer {
                 who = held.assignee_names;
             }
-        }
-        reviewRows.append(
-            {
-                "id": r["task_id"],
-                "title": r["title"],
-                "meta": r["project"],
-                "note": (reviewer.split(" ")[0] + " reviewing")
-                    if reviewer
-                    else "no reviewer",
-                "noteWarn": not reviewer,
-                "names": who,
-                "time": relDay(due, today)
-                    if len(due) >= 10
-                    else (
-                        "waiting " + plural(waited, "day", "days") if waited > 0 else ""
-                    ),
-                "late": len(due) >= 10 and due < today
+            if held.pr_number > 0 {
+                pr = "PR #" + str(held.pr_number);
             }
+        }
+        row = workRow(
+            r["task_id"],
+            r["title"],
+            " · ".join(
+                [
+                    part
+                    for part in [r["project"], pr]
+                    if part
+                ]
+            ),
+            who,
+            relDay(due, today)
+                if len(due) >= 10
+                else ("waiting " + plural(waited, "day", "days") if waited > 0 else ""),
+            len(due) >= 10 and due < today
         );
+        row["note"] = (reviewer.split(" ")[0] + " reviewing")
+            if reviewer
+            else "no reviewer";
+        row["noteWarn"] = not reviewer;
+        reviewRows.append(row);
     }
-    weekDueRows: list[dict] = [];
-    overdueByProject: dict[str, int] = {};
+    weekDueRows: list[dict] = earlyDue;
     for t in dueRows {
-        if t.status == "Done" or len(t.due_date) < 10 {
-            continue;
-        }
-        if t.due_date < today and t.status != "Blocked" and t.project_id {
-            overdueByProject[t.project_id] = (
-                overdueByProject[t.project_id]
-                    if t.project_id in overdueByProject
-                    else 0
-            )
-                + 1;
-        }
-        if t.status == "Blocked" or t.id in shown or t.due_date > sunday {
+        if t.status == "Done"
+            or t.status == "Blocked"
+            or len(t.due_date) < 10
+            or t.id in shown
+            or t.due_date > sunday {
             continue;
         }
         shown.append(t.id);
-        weekDueRows.append(
-            {
-                "id": t.id,
-                "title": t.title,
-                "meta": t.project_name,
-                "note": "",
-                "noteWarn": False,
-                "names": t.assignee_names,
-                "time": relDay(t.due_date, today),
-                "late": t.due_date < today
-            }
-        );
+        weekDueRows.append(dueRow(t, today));
     }
+    # A page that ends inside this week may have left some due tasks out.
+    lastDue = dueRows[len(dueRows) - 1].due_date if len(dueRows) > 0 else "";
+    dueCut = dueHasMore and len(lastDue) >= 10 and lastDue <= sunday;
     quietRows: list[dict] = [];
     for q in quiet {
         if q["task_id"] in shown {
             continue;
         }
-        quietRows.append(
-            {
-                "id": q["task_id"],
-                "title": q["title"],
-                "meta": q["project"],
-                "note": "",
-                "noteWarn": False,
-                "names": [
-                    n.strip()
-                    for n in q["assignees"].split(",")
-                    if n.strip()
-                ],
-                "time": plural(q["idle_days"], "day", "days") + " idle",
-                "late": False
-            }
+        shown.append(q["task_id"]);
+        row = workRow(
+            q["task_id"],
+            q["title"],
+            q["project"],
+            splitNames(q["assignees"]),
+            plural(q["idle_days"], "day", "days") + " idle",
+            False
         );
+        row["kind"] = STATUS_KIND[q["status"]]
+            if q["status"] in STATUS_KIND
+            else "active";
+        row["kindLabel"] = q["status"];
+        quietRows.append(row);
     }
-    hiddenAttention = attentionTotal - len(attention);
+    # Flagged tasks the page holds no row for: overdue past both reads.
+    hiddenAttention = attentionTotal - len(flagged);
+    if hiddenAttention < 0 {
+        hiddenAttention = 0;
+    }
     groups: list[dict] = [];
-    if len(overdueRows) > 0 {
+    if len(overdueRows) > 0 or hiddenAttention > 0 {
         groups.append(
             {
                 "key": "overdue",
@@ -340,8 +460,8 @@ def:pub OverviewPage -> JsxPage {
                 "glyph": "blocked",
                 "alarm": True,
                 "rows": overdueRows,
-                "more": hiddenAttention if len(blockedRows) == 0 else 0,
-                "moreLabel": "overdue or blocked "
+                "more": hiddenAttention,
+                "moreLabel": "overdue "
             }
         );
     }
@@ -353,8 +473,8 @@ def:pub OverviewPage -> JsxPage {
                 "glyph": "blocked",
                 "alarm": True,
                 "rows": blockedRows,
-                "more": hiddenAttention,
-                "moreLabel": "overdue or blocked "
+                "more": 0,
+                "moreLabel": "blocked "
             }
         );
     }
@@ -379,7 +499,7 @@ def:pub OverviewPage -> JsxPage {
                 "glyph": "calendar",
                 "alarm": False,
                 "rows": weekDueRows,
-                "more": 0,
+                "more": -1 if dueCut else 0,
                 "moreLabel": "due this week "
             }
         );
@@ -397,12 +517,15 @@ def:pub OverviewPage -> JsxPage {
             }
         );
     }
-    needsTotal = attentionTotal + len(reviewRows) + len(weekDueRows) + len(quietRows);
+    needsTotal = len(shown) + hiddenAttention;
 
-    # ---- This week: four figures and moves to Done per day.
+    # ---- This week: four figures and tasks that entered Done per day.
     figures = [
         {"label": "moved to Done", "value": str(doneSpark[3])},
-        {"label": "tasks added", "value": str(weekAdded) if weekAdded >= 0 else "…"},
+        {
+            "label": "tasks added",
+            "value": str(weekAdded) if weekAdded >= 0 else ("-" if addedFailed else "…")
+        },
         {"label": "log entries", "value": str(entrySpark[3])},
         {"label": "open tasks", "value": str(openCount)}
     ];
@@ -434,7 +557,7 @@ def:pub OverviewPage -> JsxPage {
     chartState = "loading"
         if not movesLoaded
         else ("chart" if anyDone and not movesFailed else "none");
-    chartNote = "Moved to Done per day. Days still ahead are outlined."
+    chartNote = "Tasks moved to Done per day. Days still ahead are outlined."
         if chartState != "none"
         else (
             "The day chart could not load."
@@ -496,6 +619,10 @@ def:pub OverviewPage -> JsxPage {
     ];
 
     # ---- First run: every item from state the page already read.
+    noPeople = len(activeMembers) == 0;
+    loggedToday = todayEntries > 0
+        if movesLoaded and not movesFailed
+        else dayCounts[todayIdx] > 0;
     steps: list[dict] = [];
     steps.append(
         {
@@ -531,10 +658,12 @@ def:pub OverviewPage -> JsxPage {
         {
             "key": "log",
             "title": "Write today's first log line",
-            "detail": "One sentence about what you worked on.",
-            "done": dayCounts[todayIdx] > 0,
-            "action": "Open log",
-            "to": "/log",
+            "detail": "Add a person first, then log what they worked on."
+                if noPeople and not loggedToday
+                else "One sentence about what you worked on.",
+            "done": loggedToday,
+            "action": "Add a person" if noPeople else "Open log",
+            "to": "/workspace?tab=people" if noPeople else "/log",
             "primary": False
         }
     );
@@ -631,7 +760,12 @@ def:pub OverviewPage -> JsxPage {
                             <NeedsYou
                                 groups={groups}
                                 total={needsTotal}
+                                totalPlus={dueCut}
                                 pending={not dueLoaded}
+                                failNote={"Could not check what is due this week."
+                                    if dueFailed
+                                    else ""}
+                                onRetry={loadDue}
                             />
                         </div>
                         {if len(peopleRows) > 0 {
