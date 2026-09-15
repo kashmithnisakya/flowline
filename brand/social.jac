@@ -1,13 +1,13 @@
 """The link preview card (og:image): the route mark, the landing headline and a
-four-step flow line on the light ground. `jac run brand/social.jac` writes
-assets/brand/og-image.png at 1200x630; it reads Archivo and Plex Mono from the
-client's node_modules, so run `jac install` (or boot the app once) first.
+flow line strip. `jac run --no-takeover brand/social.jac` writes
+assets/brand/og-image.png at 1200x630 with the fonts from the client's
+node_modules, so run `jac install` (or boot the app once) first.
 """
 
 import os;
 import from PIL { Image, ImageDraw, ImageFont }
 
-glob SCALE: int = 3,
+glob SCALE: int = 4,
      WIDTH: int = 1200,
      HEIGHT: int = 630,
      OUT_PATH: str = "assets/brand/og-image.png",
@@ -53,8 +53,11 @@ def px(v: float) -> int {
 }
 
 # The route mark on its 24-unit grid, drawn at `unit` pixels per grid unit.
+# Pillow strokes a ring or arc inside its box, so boxes grow by half a stroke,
+# and dots at each joint stand in for the round caps Pillow lines lack.
 def draw_mark(draw: any, ox: float, oy: float, unit: float) {
-    stroke = max(1, px(2.2 * unit));
+    stroke = 2.2;
+    width = max(1, px(stroke * unit));
     def at(x: float, y: float) -> tuple[int, int] {
         return (px(ox + x * unit), px(oy + y * unit));
     }
@@ -63,15 +66,22 @@ def draw_mark(draw: any, ox: float, oy: float, unit: float) {
         (x1, y1) = at(cx + r, cy + r);
         return [x0, y0, x1, y1];
     }
-    draw.ellipse(box(5.0, 17.0, 3.0), outline=MARK, width=stroke);
-    draw.ellipse(box(19.0, 7.0, 3.0), fill=MARK);
-    draw.line([at(8.0, 17.0), at(11.5, 17.0)], fill=MARK, width=stroke);
-    draw.arc(box(11.5, 14.0, 3.0), start=0, end=90, fill=MARK, width=stroke);
-    draw.line([at(14.5, 14.0), at(14.5, 10.0)], fill=MARK, width=stroke);
-    draw.arc(box(17.5, 10.0, 3.0), start=180, end=240, fill=MARK, width=stroke);
-    for (cx, cy) in [(8.0, 17.0), (16.0, 7.4)] {
-        draw.ellipse(box(cx, cy, 1.1), fill=MARK);
+    half = stroke / 2;
+    draw.ellipse(box(5.0, 17.0, 3.0 + half), outline=MARK, width=width);
+    draw.line([at(8.0, 17.0), at(11.5, 17.0)], fill=MARK, width=width);
+    draw.arc(box(11.5, 14.0, 3.0 + half), start=0, end=90, fill=MARK, width=width);
+    draw.line([at(14.5, 14.0), at(14.5, 10.0)], fill=MARK, width=width);
+    draw.arc(box(17.5, 10.0, 3.0 + half), start=180, end=240, fill=MARK, width=width);
+    for (cx, cy) in [
+        (8.0, 17.0),
+        (11.5, 17.0),
+        (14.5, 14.0),
+        (14.5, 10.0),
+        (16.0, 7.4)
+    ] {
+        draw.ellipse(box(cx, cy, half), fill=MARK);
     }
+    draw.ellipse(box(19.0, 7.0, 3.0), fill=MARK);
 }
 
 def render {
