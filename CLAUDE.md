@@ -466,6 +466,12 @@ tracker ignores, making working inputs look broken). Use `agent-browser
 keyboard type` for real key events. Assert on rendered text, not just
 coordinates — a stale `@eN` ref can produce a phantom pass.
 
+**Docs site** (`docs/`, MkDocs Material, published to GitHub Pages by
+`.github/workflows/docs.yml`). The API and data graph reference is generated
+from the `.jac` sources by `docs/hooks/jac_docs.py`: a new or renamed walker
+needs a `::: walker <Name>` line on its `docs/content/api/` page, or the
+strict build fails. Build with `mkdocs build -f docs/mkdocs.yml --strict`.
+
 **CI** (`.github/workflows/ci.yml`) runs on every PR and on pushes to
 `main`/`dev`. The `serve` job installs the pinned jac, runs `jac install`,
 asserts the deploy dry run would build the client bundle with two workers

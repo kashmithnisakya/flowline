@@ -1,0 +1,8 @@
+# Build dependencies for the docs site (docs/mkdocs.yml). Pinned so a CI build
+# renders exactly what a local build does; bump deliberately. MkDocs stays on
+# 1.x: 2.0 removes the plugin and hook system this site's reference relies on.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==11.0.2
+Pygments==2.21.0
+Markdown==3.10.3

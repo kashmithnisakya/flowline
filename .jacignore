@@ -1,0 +1,3 @@
+# Left out of Jac compilation passes and of deploy bundles (jac scale deploy,
+# jachammer deploy). The docs site is built and published on its own.
+docs/
