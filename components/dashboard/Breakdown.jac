@@ -1,8 +1,9 @@
 """Projects and People on the Overview, as aligned rows. Project rows (id,
-name, done, open, alarm, total) draw one stacked bar whose legend keys are
-the same marks; people rows (id, name, color, open, done, byDay, total) draw
-a Monday to Sunday strip where days still ahead are outlined, not empty."""
+name, done, open, alarm, total) draw one stacked bar with matching legend
+keys; people rows (id, name, color, open, done, byDay, total) draw a Monday
+to Sunday strip. Either list empty shows a line linking to Workspace."""
 
+import from "@jac/runtime" { Link }
 import from ..common.Avatar { Avatar }
 
 # Share of a total as a CSS width.
@@ -11,6 +12,19 @@ def share(part: int, whole: int) -> str {
         return "0%";
     }
     return str(part * 100.0 / whole) + "%";
+}
+
+def EmptyLine(text: str, action: str, to: str) -> JsxElement {
+    return
+        <p className="px-3.5 pt-1 pb-3 text-[13.5px] text-muted-foreground">
+            {text + " "}
+            <Link
+                to={to}
+                className="text-primary underline underline-offset-[3px] hover:decoration-2"
+            >
+                {action}
+            </Link>
+        </p>;
 }
 
 def Key(color: str, label: str) -> JsxElement {
@@ -31,7 +45,15 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
             <div className="px-3.5 pt-3 pb-1">
                 <h2 id="projects-h" className="section-title text-[15px]">Projects</h2>
             </div>
-            <ul className="px-3.5 pb-2">
+            {if len(rows) == 0 {
+                <EmptyLine
+                    key="empty"
+                    text="No active projects."
+                    action="Add a project"
+                    to="/workspace?tab=projects"
+                />
+            }}
+            <ul className="px-3.5 pb-2" hidden={len(rows) == 0}>
                 {for (i, r) in enumerate(rows) {
                     <li
                         key={r["id"]}
@@ -92,6 +114,7 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
             </ul>
             <div
                 className="flex flex-wrap gap-x-3.5 gap-y-1 px-3.5 pb-3 text-xs text-muted-foreground"
+                hidden={len(rows) == 0}
             >
                 <Key color="var(--series-done)" label="Done"/>
                 <Key color="var(--series-open)" label="Open"/>
@@ -118,16 +141,31 @@ def dayFill(count: int) -> str {
 def:pub PeopleTable(
     rows: list[dict], dayNames: list[str], todayIndex: int
 ) -> JsxElement {
-    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_3rem_6rem_auto_4rem]";
+    # Columns follow the panel's own width: beside a docked Ask it is too
+    # narrow for five, so the counts fold under the name as on a phone.
+    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,1fr)_3rem_6rem_auto_4rem]";
     return
-        <section className="surface min-w-0" aria-labelledby="people-h">
+        <section className="@container surface min-w-0" aria-labelledby="people-h">
             <div className="px-3.5 pt-3 pb-1">
                 <h2 id="people-h" className="section-title text-[15px]">People</h2>
             </div>
-            <div className="px-3.5 pb-2" role="table" aria-labelledby="people-h">
+            {if len(rows) == 0 {
+                <EmptyLine
+                    key="empty"
+                    text="No active people."
+                    action="Add a person"
+                    to="/workspace?tab=people"
+                />
+            }}
+            <div
+                className="px-3.5 pb-2"
+                role="table"
+                aria-labelledby="people-h"
+                hidden={len(rows) == 0}
+            >
                 <div
                     className={cols
-                        + " py-1.5 text-xs text-muted-foreground max-sm:hidden"}
+                        + " py-1.5 text-xs text-muted-foreground @max-[36rem]:hidden"}
                     role="row"
                 >
                     <span role="columnheader">Name</span>
@@ -149,7 +187,7 @@ def:pub PeopleTable(
                             <span className="min-w-0">
                                 <span className="block truncate">{r["name"]}</span>
                                 <span
-                                    className="block truncate text-xs tabular-nums text-muted-foreground sm:hidden"
+                                    className="block truncate text-xs tabular-nums text-muted-foreground @min-[36rem]:hidden"
                                 >
                                     {str(r["open"])
                                         + " open · "
@@ -160,14 +198,20 @@ def:pub PeopleTable(
                                 </span>
                             </span>
                         </span>
-                        <span className="num text-right max-sm:hidden" role="cell">
+                        <span
+                            className="num text-right @max-[36rem]:hidden"
+                            role="cell"
+                        >
                             {str(r["open"])}
                         </span>
-                        <span className="num text-right max-sm:hidden" role="cell">
+                        <span
+                            className="num text-right @max-[36rem]:hidden"
+                            role="cell"
+                        >
                             {str(r["done"])}
                         </span>
                         <span
-                            className="inline-flex gap-[3px] sm:gap-1"
+                            className="inline-flex gap-[3px] @min-[36rem]:gap-1"
                             role="cell"
                             aria-label={"Logged on "
                                 + str(
@@ -194,7 +238,7 @@ def:pub PeopleTable(
                                                     + str(r["byDay"][di])
                                                     + " entries"
                                         )}
-                                    className={"size-3 rounded-[2px] sm:size-3.5 "
+                                    className={"size-3 rounded-[2px] @min-[36rem]:size-3.5 "
                                         + (
                                             "border border-dashed border-input"
                                                 if di > todayIndex
@@ -218,7 +262,7 @@ def:pub PeopleTable(
                             }}
                         </span>
                         <span
-                            className="num text-right text-muted-foreground max-sm:hidden"
+                            className="num text-right text-muted-foreground @max-[36rem]:hidden"
                             role="cell"
                         >
                             {str(r["total"])}

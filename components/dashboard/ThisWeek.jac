@@ -1,6 +1,7 @@
 """The Overview's "This week" panel: four figures as a quiet two by two
-ledger, then moves to Done per day (`chartState` is chart, loading or none).
-An empty `figures` list shows `note` instead: nothing to count, no zeros."""
+ledger, then moves to Done per day (`chartState` is chart, loading or none;
+`onRetry` adds Try again to the chart note). An empty `figures` list shows
+`note` instead: nothing to count, no zeros."""
 
 import from .HistoryCharts { DayChart }
 import from ..ui.skeleton { Skeleton }
@@ -10,7 +11,8 @@ def:pub ThisWeek(
     days: list[dict],
     chartState: str = "chart",
     chartNote: str = "",
-    note: str = ""
+    note: str = "",
+    onRetry: any = None
 ) -> JsxElement {
     return
         <section className="surface min-w-0" aria-labelledby="this-week">
@@ -50,7 +52,21 @@ def:pub ThisWeek(
                         } elif chartState == "loading" {
                             <Skeleton key="sk" className="mt-4 h-[134px] w-full"/>
                         } }
-                        <p className="mt-2 text-xs text-subtle">{chartNote}</p>
+                        <p
+                            className="mt-2 flex flex-wrap items-baseline gap-x-2 text-xs text-subtle"
+                        >
+                            {chartNote}
+                            {if onRetry {
+                                <button
+                                    key="retry"
+                                    type="button"
+                                    className="text-[12.5px] text-primary underline underline-offset-[3px] hover:decoration-2"
+                                    onClick={lambda { onRetry(); }}
+                                >
+                                    Try again
+                                </button>
+                            }}
+                        </p>
                     </div>
                 </div>
             } }
