@@ -4,7 +4,17 @@ loops terminate), so it recomputes from live data and cannot drift. Wires are
 elbows in the column gaps, drawn in screen px from the canvas's node rects."""
 
 import from ...models { StepView, RoleView, MemberView }
-import from .geometry { NODE_W, polySamples }
+import from .geometry {
+    NODE_W,
+    MIN_NODE_W,
+    MAX_NODE_W,
+    DETAIL_LOW,
+    CHIP_H,
+    detailOf,
+    nodeTitles,
+    nodeHeight,
+    polySamples
+}
 
 # Label gutter on the left, column pitch, lane breathing room and the card
 # footprint height, in canvas px. The viewer draws the gutter at a fixed
@@ -15,13 +25,17 @@ glob LANE_GUTTER: float = 176.0,
      LANE_ROW_GAP: float = 14.0,
      LANE_NODE_H: float = 72.0,
      LANE_LABEL_W: float = 184.0,
-     # Fan spacing for ports sharing a card side, and the part of the gap
-     # trunks may occupy (the rest keeps them off the card borders). Screen px.
+     LANE_LABEL_NARROW: float = 128.0,
+     # Fan spacing for ports sharing a card side, the part of a gap kept off
+     # the card borders, and the room each trunk in a gap claims. Screen px.
      PORT_STEP: float = 10.0,
      TRUNK_INSET: float = 6.0,
-     # How far the viewer's fit may scale the lane view up, shared with the
-     # growth target below so the bands and the fit agree.
-     LANE_ZOOM_CAP: float = 1.25;
+     TRUNK_STEP: float = 7.0,
+     LANE_MIN_GAP: float = 24.0,
+     # The zoom range of the lane view, shared by the viewer's fit and the
+     # band growth below so the bands drawn are the bands fitted.
+     LANE_ZOOM_CAP: float = 1.25,
+     LANE_ZOOM_MIN: float = 0.45;
 
 
 # First names, "Kasun, Nina, Priya +1", for a lane label that has to fit.
@@ -39,16 +53,17 @@ def shortHolders(names: list[str]) -> str {
 
 
 # `boxW`/`boxH` are the fit's inner box in screen px, 0 when nothing has been
-# measured yet. The lane view is width-bound on any normal screen, so the bands
-# grow into the spare height. With `gutterPx` >= 0 the viewer draws the label
-# gutter at that fixed screen width, and the growth target accounts for it.
+# measured yet; the bands grow into the height the fitted zoom leaves spare.
+# `zoomHint` is that zoom when the viewer has fitted, else it is estimated from
+# boxW and `gutterPx` (the fixed label gutter). Both clamp to the zoom range.
 def:pub laneLayout(
     steps: list[StepView],
     roles: list[RoleView],
     members: list[MemberView],
     boxW: float = 0.0,
     boxH: float = 0.0,
-    gutterPx: float = -1.0
+    gutterPx: float = -1.0,
+    zoomHint: float = 0.0
 ) -> dict[str, any] {
     # Column = longest forward path. sort_order is a topological order for
     # forward edges by construction, so one relaxation pass in that order
@@ -210,17 +225,23 @@ def:pub laneLayout(
     contentW = LANE_GUTTER + float(maxCol) * LANE_COL_W + NODE_W;
     scale = 1.0;
     if boxW > 0.0 and boxH > 0.0 and naturalH > 0.0 {
-        # The zoom the fit will land on, so the bands grow to exactly the
-        # height that zoom draws into the box.
-        z = boxW / contentW;
-        if gutterPx >= 0.0 {
-            z = (boxW - gutterPx) / (contentW - LANE_GUTTER);
+        # The zoom the fit lands on, so the bands grow to exactly the height
+        # that zoom draws into the box.
+        z = zoomHint;
+        if z <= 0.0 {
+            z = boxW / contentW;
+            if gutterPx >= 0.0 {
+                z = (boxW - gutterPx) / (contentW - LANE_GUTTER);
+            }
         }
         if z > LANE_ZOOM_CAP {
             z = LANE_ZOOM_CAP;
         }
+        if z < LANE_ZOOM_MIN {
+            z = LANE_ZOOM_MIN;
+        }
         target = boxH / z;
-        if z > 0.0 and target > naturalH {
+        if target > naturalH {
             scale = target / naturalH;
         }
     }
@@ -249,22 +270,231 @@ def:pub laneLayout(
         "laneOf": laneOf,
         "colOf": depth,
         "slotOf": slotOf,
-        "cols": maxCol + 1
+        "cols": maxCol + 1,
+        "naturalH": naturalH
     };
 }
 
 
+# The highest zoom a lane fit may pick for a box `boxH` tall. Fitted bands
+# fill the box, so a one-row band is a fixed share of it; when that share
+# cannot hold a label chip beside a mid-detail card, the fit stays at low detail.
+def:pub laneFitCap(boxH: float, naturalH: float) -> float {
+    if naturalH <= 0.0 {
+        return LANE_ZOOM_CAP;
+    }
+    rowPx = (LANE_PAD * 2.0 + LANE_NODE_H) * boxH / naturalH;
+    room = (rowPx - nodeHeight("mid", 0, False)) / 2.0;
+    if room < CHIP_H + 15.0 {
+        return DETAIL_LOW - 0.005;
+    }
+    return LANE_ZOOM_CAP;
+}
+
+
+# Screen px between column c and c + 1: the zoomed pitch, but never less than
+# the trunks routed through that gap need, so a wire never runs behind a card.
+def:pub laneGaps(
+    steps: list[StepView], colOf: dict[str, int], cols: int, z: float
+) -> list[float] {
+    uses: list[int] = [];
+    k = 0;
+    while k < cols {
+        uses.append(0);
+        k = k + 1;
+    }
+    for s in steps {
+        if s.id not in colOf {
+            continue;
+        }
+        cs = colOf[s.id];
+        for nid in s.next_ids {
+            if nid not in colOf or colOf[nid] == cs {
+                continue;
+            }
+            gi = cs if colOf[nid] > cs else cs - 1;
+            if gi >= 0 and gi < cols {
+                uses[gi] = uses[gi] + 1;
+            }
+        }
+    }
+    gaps: list[float] = [];
+    for n in uses {
+        g = (LANE_COL_W - NODE_W) * z;
+        want = TRUNK_INSET * 2.0 + float(n + 1) * TRUNK_STEP;
+        if want > g {
+            g = want;
+        }
+        if LANE_MIN_GAP > g {
+            g = LANE_MIN_GAP;
+        }
+        gaps.append(g);
+    }
+    return gaps;
+}
+
+
+# Node rects in the lane view, screen px from the pan origin. Columns are as
+# wide as their widest name needs (up to MAX_NODE_W), so nothing truncates and
+# nothing spills into a gap; `total` is the columns' width for the fit.
+def:pub laneRects(
+    steps: list[StepView],
+    positions: dict[str, list[float]],
+    colOf: dict[str, int],
+    z: float,
+    stepTitles: dict[str, list[str]],
+    need: dict[str, float],
+    originX: float
+) -> dict[str, any] {
+    detail = detailOf(z);
+    base = NODE_W * z;
+    if base < MIN_NODE_W {
+        base = MIN_NODE_W;
+    }
+    cols = 1;
+    for s in steps {
+        if s.id in colOf and colOf[s.id] + 1 > cols {
+            cols = colOf[s.id] + 1;
+        }
+    }
+    widths: list[float] = [];
+    k = 0;
+    while k < cols {
+        widths.append(base);
+        k = k + 1;
+    }
+    for s in steps {
+        c = colOf[s.id] if s.id in colOf else 0;
+        want = need[s.id] if s.id in need else 0.0;
+        if want > MAX_NODE_W {
+            want = MAX_NODE_W;
+        }
+        if want > widths[c] {
+            widths[c] = want;
+        }
+    }
+    gaps = laneGaps(steps, colOf, cols, z);
+    lefts: list[float] = [];
+    x = originX;
+    for (c, cw) in enumerate(widths) {
+        lefts.append(x);
+        x = x + cw + (gaps[c] if c < cols - 1 else 0.0);
+    }
+    rects: dict[str, list[float]] = {};
+    for s in steps {
+        c = colOf[s.id] if s.id in colOf else 0;
+        pos: list[float] = positions[s.id] if s.id in positions else [0.0, 0.0];
+        shown = len(nodeTitles(s, stepTitles)) if detail == "high" else 0;
+        more = detail == "high" and s.task_count > shown and s.id in stepTitles;
+        h = nodeHeight(detail, shown, more);
+        cy = (pos[1] + LANE_NODE_H / 2.0) * z;
+        rects[s.id] = [lefts[c], cy - h / 2.0, widths[c], h];
+    }
+    return {"rects": rects, "total": x - originX};
+}
+
+
+# True when a level run at `y` between x0 and x1 would cross a drawn card other
+# than the two it connects.
+def runBlocked(
+    steps: list[StepView],
+    rects: dict[str, list[float]],
+    x0: float,
+    x1: float,
+    y: float,
+    a: str,
+    b: str
+) -> bool {
+    lo = x0 if x0 < x1 else x1;
+    hi = x1 if x0 < x1 else x0;
+    for o in steps {
+        if o.id == a or o.id == b or o.id not in rects {
+            continue;
+        }
+        r = rects[o.id];
+        if r[0] < hi
+            and r[0] + r[2] > lo
+            and r[1] - 4.0 < y
+            and r[1] + r[3] + 4.0 > y {
+            return True;
+        }
+    }
+    return False;
+}
+
+
+# A clear level for a detour between x0 and x1: just above or below the
+# target's row first (the side facing the source), then the source's. 0 when
+# every candidate crosses a card.
+def laneChannel(
+    steps: list[StepView],
+    rects: dict[str, list[float]],
+    x0: float,
+    x1: float,
+    sr: list[float],
+    tr: list[float],
+    a: str,
+    b: str
+) -> float {
+    above = sr[1] < tr[1];
+    tUp = tr[1] - 14.0;
+    tDown = tr[1] + tr[3] + 14.0;
+    sUp = sr[1] - 14.0;
+    sDown = sr[1] + sr[3] + 14.0;
+    tries = [tUp, tDown, sDown, sUp] if above else [tDown, tUp, sUp, sDown];
+    for y in tries {
+        if y > 0.0 and not runBlocked(steps, rects, x0, x1, y, a, b) {
+            return y;
+        }
+    }
+    return 0.0;
+}
+
+
 # One elbow per transition in SCREEN px, from the node rects the canvas draws
-# ([left, top, w, h]). `colGap` is the screen gap between two columns. Each
-# entry carries d, arrow, and label `anchors` for geometry.placeChips.
+# ([left, top, w, h]). With `colOf` each trunk runs in the drawn gap between two
+# columns; without it `colGap` is assumed. Each entry carries d, arrow, and
+# label `anchors` for geometry.placeChips.
 def:pub laneWires(
-    steps: list[StepView], rects: dict[str, list[float]], colGap: float
+    steps: list[StepView],
+    rects: dict[str, list[float]],
+    colGap: float,
+    colOf: dict[str, int]
 ) -> list[dict[str, any]] {
     byId: dict[str, StepView] = {};
+    useCols = False;
+    cols = 0;
     for s in steps {
         byId[s.id] = s;
+        if s.id in colOf and s.id in rects {
+            useCols = True;
+            if colOf[s.id] + 1 > cols {
+                cols = colOf[s.id] + 1;
+            }
+        }
     }
     gap = colGap if colGap > 8.0 else 8.0;
+    # The drawn left and right edge of every column.
+    colL: list[float] = [];
+    colR: list[float] = [];
+    k = 0;
+    while k < cols {
+        colL.append(1000000000.0);
+        colR.append(-1000000000.0);
+        k = k + 1;
+    }
+    for s in steps {
+        if useCols and s.id in colOf and s.id in rects {
+            c = colOf[s.id];
+            r = rects[s.id];
+            if r[0] < colL[c] {
+                colL[c] = r[0];
+            }
+            if r[0] + r[2] > colR[c] {
+                colR[c] = r[0] + r[2];
+            }
+        }
+    }
 
     # Every edge once, with the geometry it needs decided up front: which
     # side it leaves and enters, and which gap its trunk lives in.
@@ -287,11 +517,72 @@ def:pub laneWires(
             # edge can point at a deeper column when the flow forks.
             rightward = tr[0] > sr[0] + sr[2] / 2.0;
             leftward = tr[0] + tr[2] < sr[0] + sr[2] / 2.0;
-            gapX = 0.0;
-            if rightward {
-                gapX = sr[0] + sr[2];
-            } elif leftward {
-                gapX = sr[0] - gap;
+            gapX = sr[0] + sr[2] if rightward else sr[0] - gap;
+            gapW = gap;
+            gk = str(int(gapX));
+            # A detour for when both rows are blocked: along `chanY`, with a
+            # second trunk in the gap beside the target.
+            chanY = 0.0;
+            gapX2 = 0.0;
+            gapW2 = 0.0;
+            gk2 = "";
+            if useCols and s.id in colOf and nid in colOf {
+                cs = colOf[s.id];
+                ct = colOf[nid];
+                rightward = ct > cs;
+                leftward = ct < cs;
+                sy = sr[1] + sr[3] / 2.0;
+                ty = tr[1] + tr[3] / 2.0;
+                gi = -1;
+                # By default the trunk sits beside the source and the run
+                # follows the target's row; when that row has cards in the
+                # way and the source's row does not, the trunk moves across.
+                gi2 = -1;
+                if rightward {
+                    gi = cs;
+                    if ct > cs + 1
+                        and runBlocked(steps, rects, colR[cs], tr[0], ty, s.id, nid) {
+                        if not runBlocked(
+                            steps, rects, sr[0] + sr[2], colL[ct], sy, s.id, nid
+                        ) {
+                            gi = ct - 1;
+                        } else {
+                            chanY = laneChannel(
+                                steps, rects, colR[cs], colL[ct], sr, tr, s.id, nid
+                            );
+                            gi2 = ct - 1 if chanY > 0.0 else -1;
+                        }
+                    }
+                } elif leftward {
+                    gi = cs - 1;
+                    if cs > ct + 1
+                        and runBlocked(
+                            steps, rects, tr[0] + tr[2], colL[cs], ty, s.id, nid
+                        ) {
+                        if not runBlocked(
+                            steps, rects, colR[ct], sr[0], sy, s.id, nid
+                        ) {
+                            gi = ct;
+                        } else {
+                            chanY = laneChannel(
+                                steps, rects, colR[ct], colL[cs], sr, tr, s.id, nid
+                            );
+                            gi2 = ct if chanY > 0.0 else -1;
+                        }
+                    }
+                }
+                if gi >= 0 and gi + 1 < cols {
+                    gapX = colR[gi];
+                    gapW = colL[gi + 1] - colR[gi];
+                    gk = "c" + str(gi);
+                }
+                if gi2 >= 0 and gi2 + 1 < cols {
+                    gapX2 = colR[gi2];
+                    gapW2 = colL[gi2 + 1] - colR[gi2];
+                    gk2 = "c" + str(gi2);
+                } else {
+                    chanY = 0.0;
+                }
             }
             edges.append(
                 {
@@ -302,6 +593,13 @@ def:pub laneWires(
                     "rightward": rightward,
                     "leftward": leftward,
                     "gapX": gapX,
+                    "gapW": gapW,
+                    "gk": gk,
+                    "chanY": chanY,
+                    "gapX2": gapX2,
+                    "gapW2": gapW2,
+                    "gk2": gk2,
+                    "trunkX2": 0.0,
                     "back": isReturn,
                     "label": said,
                     "carries": carried,
@@ -369,39 +667,45 @@ def:pub laneWires(
 
     # Spread the trunks that share a gap across its inner width, rightward
     # travellers first then leftward, each by source y.
+    # A use is edge index * 2, plus 1 for a detour's second trunk.
     gapUsers: dict[str, list[int]] = {};
     for (idx, e) in enumerate(edges) {
         if not (e["rightward"] or e["leftward"]) {
             continue;
         }
-        gk = str(int(float(e["gapX"])));
-        if gk not in gapUsers {
-            gapUsers[gk] = [];
+        for (which, key) in enumerate([str(e["gk"]), str(e["gk2"])]) {
+            if key {
+                if key not in gapUsers {
+                    gapUsers[key] = [];
+                }
+                gapUsers[key].append(idx * 2 + which);
+            }
         }
-        gapUsers[gk].append(idx);
     }
     for gk in list(gapUsers.keys()) {
         users = gapUsers[gk];
         ranked: list[list[float]] = [];
-        for idx in users {
-            e = edges[idx];
+        for use in users {
+            e = edges[use // 2];
             sr: list[float] = e["sr"];
             primary = 0.0 if e["rightward"] else 1.0;
-            ranked.append([primary * 100000.0 + sr[1], float(idx)]);
+            ranked.append([primary * 100000.0 + sr[1], float(use)]);
         }
         ranked.sort(key=lambda (row: list[float]) { row[0]; });
         n = len(ranked);
-        inner = gap - TRUNK_INSET * 2.0;
-        if inner < 0.0 {
-            inner = 0.0;
-        }
         for (rank, row) in enumerate(ranked) {
-            idx = int(row[1]);
+            use = int(row[1]);
+            idx = use // 2;
+            second = use % 2 == 1;
             e = edges[idx];
-            x = float(e["gapX"])
+            inner = float(e["gapW2" if second else "gapW"]) - TRUNK_INSET * 2.0;
+            if inner < 0.0 {
+                inner = 0.0;
+            }
+            x = float(e["gapX2" if second else "gapX"])
                 + TRUNK_INSET
                 + inner * (float(rank) + 1.0) / (float(n) + 1.0);
-            edges[idx]["trunkX"] = x;
+            edges[idx]["trunkX2" if second else "trunkX"] = x;
         }
     }
 
@@ -426,10 +730,63 @@ def:pub laneWires(
             dirn = 1.0 if e["rightward"] else -1.0;
             stop = ix - 9.0 * dirn;
             sameRow = (iy - ey) < 1.0 and (ey - iy) < 1.0;
-            if sameRow {
+            chanY = float(e["chanY"]);
+            if chanY > 0.0 {
+                t2 = float(e["trunkX2"]);
+                d = (
+                    "M "
+                    + str(ex)
+                    + " "
+                    + str(ey)
+                    + " L "
+                    + str(trunk)
+                    + " "
+                    + str(ey)
+                    + " L "
+                    + str(trunk)
+                    + " "
+                    + str(chanY)
+                    + " L "
+                    + str(t2)
+                    + " "
+                    + str(chanY)
+                    + " L "
+                    + str(t2)
+                    + " "
+                    + str(iy)
+                    + " L "
+                    + str(stop)
+                    + " "
+                    + str(iy)
+                );
+                poly = [ex, ey, trunk, ey, trunk, chanY, t2, chanY, t2, iy, stop, iy];
+                anchors.append(
+                    [
+                        trunk,
+                        (ey + chanY) / 2.0,
+                        1.0,
+                        0.0,
+                        -1.0 if e["rightward"] else 1.0,
+                        ey if ey < chanY else chanY,
+                        chanY if ey < chanY else ey,
+                        ey
+                    ]
+                );
+                for t in [0.5, 0.25, 0.75] {
+                    anchors.append([trunk + (t2 - trunk) * t, chanY, 0.0, 1.0, 1.0]);
+                }
+            } elif sameRow {
                 d = "M " + str(ex) + " " + str(ey) + " L " + str(stop) + " " + str(iy);
                 poly = [ex, ey, stop, iy];
                 anchors.append([(ex + ix) / 2.0, ey, 0.0, 1.0, 1.0]);
+                # The run is only a gap long, so between two tall cards the
+                # chip has to clear their top or bottom edge instead.
+                topY = sr[1] if sr[1] < tr[1] else tr[1];
+                botY = sr[1] + sr[3]
+                    if sr[1] + sr[3] > tr[1] + tr[3]
+                    else tr[1] + tr[3];
+                anchors.append([(ex + ix) / 2.0, topY - 16.0, 0.0, 1.0, 1.0]);
+                anchors.append([(ex + ix) / 2.0, botY + 16.0, 0.0, 1.0, -1.0]);
             } else {
                 d = (
                     "M "
@@ -452,9 +809,19 @@ def:pub laneWires(
                 poly = [ex, ey, trunk, ey, trunk, iy, stop, iy];
                 # Beside the trunk first (rightward on the source side,
                 # leftward on the other, so a two-way pair parts), then the
-                # two horizontal runs.
+                # two horizontal runs. The trunk anchor also carries its span
+                # and start, so the canvas can slide it along the source band.
                 anchors.append(
-                    [trunk, (ey + iy) / 2.0, 1.0, 0.0, -1.0 if e["rightward"] else 1.0]
+                    [
+                        trunk,
+                        (ey + iy) / 2.0,
+                        1.0,
+                        0.0,
+                        -1.0 if e["rightward"] else 1.0,
+                        ey if ey < iy else iy,
+                        iy if ey < iy else ey,
+                        ey
+                    ]
                 );
                 anchors.append([(ex + trunk) / 2.0, ey, 0.0, 1.0, 1.0]);
                 anchors.append([(trunk + ix) / 2.0, iy, 0.0, 1.0, 1.0]);

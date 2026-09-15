@@ -6,7 +6,6 @@ text never shrinks: the zoom picks how much a node shows instead."""
 import from "react" { useEffect }
 import from ...models { StepView }
 import from .geometry {
-    NODE_W,
     NODE_H,
     CHIP_H,
     CHIP_PAD_X,
@@ -18,7 +17,7 @@ import from .geometry {
     cubicSamples,
     placeChips
 }
-import from .lanes { LANE_NODE_H, LANE_GUTTER, LANE_COL_W, LANE_LABEL_W, laneWires }
+import from .lanes { LANE_LABEL_W, laneRects, laneWires }
 import from .kinds { KIND_LABEL, KIND_TONE, DOT_FILL, CARRY_LABEL, colorKey }
 import from ..common.KindGlyph { KindGlyph }
 import from ..ui.button { Button }
@@ -69,6 +68,40 @@ def clearMeasure {
 }
 
 
+# Label anchors kept inside the source lane's band ([lo, hi] for a chip's
+# centre). A trunk anchor ([5] and [6] its span, [7] its start) becomes spots
+# along the part of the trunk inside the band: below or above the card row.
+def bandAnchors(anchors: list[list[float]], lo: float, hi: float) -> list[list[float]] {
+    out: list[list[float]] = [];
+    for an in anchors {
+        if lo >= hi or an[2] != 1.0 {
+            out.append(an);
+            continue;
+        }
+        if len(an) > 7 {
+            a0 = an[5] if an[5] > lo else lo;
+            a1 = an[6] if an[6] < hi else hi;
+            if a0 <= a1 {
+                far = a1 if an[6] > an[7] + 0.5 else a0;
+                for y in [far, (far + an[7]) / 2.0, (a0 + a1) / 2.0] {
+                    out.append([an[0], y, 1.0, 0.0, an[4]]);
+                }
+                continue;
+            }
+        }
+        y = an[1];
+        if y < lo {
+            y = lo;
+        }
+        if y > hi {
+            y = hi;
+        }
+        out.append([an[0], y, an[2], an[3], an[4]]);
+    }
+    return out;
+}
+
+
 def:pub FlowCanvas(
     steps: list[StepView],
     live: dict[str, list[float]] = {},
@@ -86,6 +119,9 @@ def:pub FlowCanvas(
     # a fixed label column, and `live` holds the computed lane positions.
     lanes: list[dict[str, any]] = [],
     laneOf: dict[str, str] = {},
+    # Column per step from the same plan, and the label gutter's screen width.
+    laneCols: dict[str, int] = {},
+    laneLabelW: float = LANE_LABEL_W,
     # First task titles per step, shown on nodes above the high-detail zoom.
     stepTitles: dict[str, list[str]] = {},
     canvasRef: Ref[any] = None,
@@ -132,28 +168,39 @@ def:pub FlowCanvas(
     }
     laneMode = len(lanes) > 0;
     detail = detailOf(zoom);
-    footH = LANE_NODE_H if laneMode else NODE_H;
-    ox = LANE_LABEL_W + 16.0 - LANE_GUTTER * zoom if laneMode else 0.0;
-    # What each node's text needs at this detail: border and padding (20),
-    # swatch and gap (16) beside the name, count, kind word and glyph below.
+    # What each node's text needs: border and padding (22), swatch and gap
+    # (16) beside the name; below LOW detail the name alone, above it also
+    # the count, kind word and glyph. A lane column sizes to the name, count
+    # and glyph, and shows the kind word where it fits. All go to the page.
+    needLow: dict[str, float] = {};
+    needMid: dict[str, float] = {};
+    needLane: dict[str, float] = {};
     need: dict[str, float] = {};
     metaNeed: dict[str, float] = {};
     for s in steps {
         wantName = 16.0 + textWidth(s.name, NAME_FONT, 8.0);
         kindWord = KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind;
         countText = str(s.task_count) + (" task" if s.task_count == 1 else " tasks");
-        wantMeta = textWidth(countText, COUNT_FONT, 7.3)
-            + 8.0
-            + textWidth(kindWord, META_FONT, 6.6)
-            + 18.0;
+        wantCount = textWidth(countText, COUNT_FONT, 7.3) + 8.0 + 18.0;
+        wantMeta = wantCount + textWidth(kindWord, META_FONT, 6.6);
         metaNeed[s.id] = wantMeta + 22.0;
-        want = wantName;
-        if detail != "low" and wantMeta > want {
-            want = wantMeta;
+        needLow[s.id] = wantName + 22.0;
+        needMid[s.id] = (wantMeta if wantMeta > wantName else wantName) + 22.0;
+        needLane[s.id] = (wantCount if wantCount > wantName else wantName) + 22.0;
+        if detail == "low" {
+            need[s.id] = needLow[s.id];
+        } else {
+            need[s.id] = needLane[s.id] if laneMode else needMid[s.id];
         }
-        need[s.id] = want + 22.0;
     }
-    rects = nodeRects(steps, live, zoom, stepTitles, ox, footH, need);
+    rects: dict[str, list[float]] = {};
+    if laneMode {
+        rects = laneRects(
+            steps, live, laneCols, zoom, stepTitles, need, laneLabelW + 16.0
+        )["rects"];
+    } else {
+        rects = nodeRects(steps, live, zoom, stepTitles, 0.0, NODE_H, need);
+    }
 
     # The SVG covers the drawing; a little slack keeps arrowheads and chips
     # that sit past the last node inside it.
@@ -170,6 +217,11 @@ def:pub FlowCanvas(
         }
         obstacles.append([r[0] - 6.0, r[1] - 6.0, r[2] + 12.0, r[3] + 12.0]);
     }
+    # The lane label column covers the left of the drawing at the fitted pan;
+    # a chip placed under it would be hidden. It carries no 6px margin.
+    if laneMode {
+        obstacles.append([-100000.0, -100000.0, 100006.0 + laneLabelW, 200000.0]);
+    }
 
     # The lane band each step sits in, in screen px, so a chip prefers the
     # band its wire leaves from.
@@ -183,28 +235,16 @@ def:pub FlowCanvas(
 
     links: list[dict[str, any]] = [];
     if laneMode {
-        colGap = LANE_COL_W * zoom - (NODE_W * zoom if NODE_W * zoom > 88.0 else 88.0);
-        links = laneWires(steps, rects, colGap);
+        links = laneWires(steps, rects, 24.0, laneCols);
         for l in links {
             src = str(l["from"]);
             anchors: list[list[float]] = l["anchors"];
             if src in laneOf and laneOf[src] in bandOf {
                 band = bandOf[laneOf[src]];
                 l["band"] = band;
-                # A trunk leaves its source row inside the source band, so
-                # sliding its anchor into that band keeps it on the wire.
                 lo = band[0] + CHIP_H / 2.0 + 2.0;
                 hi = band[1] - CHIP_H / 2.0 - 2.0;
-                for an in anchors {
-                    if an[2] == 1.0 and lo < hi {
-                        if an[1] < lo {
-                            an[1] = lo;
-                        }
-                        if an[1] > hi {
-                            an[1] = hi;
-                        }
-                    }
-                }
+                l["anchors"] = bandAnchors(anchors, lo, hi);
             }
             l["mx"] = anchors[0][0] if len(anchors) > 0 else 0.0;
             l["my"] = anchors[0][1] if len(anchors) > 0 else 0.0;
@@ -324,6 +364,9 @@ def:pub FlowCanvas(
         layoutRef.current = {
             "rects": rects,
             "need": need,
+            "needLow": needLow,
+            "needMid": needMid,
+            "needLane": needLane,
             "zoom": zoom,
             "nodes": [nx0, ny0, nx1, ny1],
             "extent": [ex0, ey0, ex1, ey1]
@@ -429,6 +472,7 @@ def:pub FlowCanvas(
                     {for l in links {
                         <g
                             key={l["key"]}
+                            data-wire={l["key"]}
                             className={(
                                 "text-primary"
                                     if selectedEdge == l["key"]
@@ -482,6 +526,7 @@ def:pub FlowCanvas(
                             <span
                                 key="lab"
                                 data-chip="label"
+                                data-for={l["key"]}
                                 className={"absolute whitespace-nowrap rounded-sm bg-background text-xs leading-5"
                                     + (
                                         " cursor-pointer hover:text-foreground"
@@ -681,7 +726,7 @@ def:pub FlowCanvas(
                     className="absolute inset-y-0 z-30 border-r bg-background"
                     style={{
                         "left": str(labelLeft) + "px",
-                        "width": str(LANE_LABEL_W) + "px"
+                        "width": str(laneLabelW) + "px"
                     }}
                     onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
                     onPointerDown={lambda (e: any) { e.stopPropagation(); }}
@@ -729,10 +774,15 @@ def:pub FlowCanvas(
                                     {lr["short"]}
                                 </div>
                             }}
-                            {if lr["rows"] >= 3 {
+                            {if lr["rows"] >= 3 and laneLabelW >= LANE_LABEL_W {
                                 <div
                                     key="totals"
-                                    className="num truncate pl-4 text-xs leading-[18px] text-subtle"
+                                    className={"num truncate pl-4 text-xs leading-[18px] "
+                                        + (
+                                            "text-muted-foreground"
+                                                if lr["hover"]
+                                                else "text-subtle"
+                                        )}
                                 >
                                     {lr["totals"]}
                                 </div>

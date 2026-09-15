@@ -479,23 +479,40 @@ def placeChips(links: list[dict[str, any]], nodes: list[list[float]]) {
                 CHIP_H + 6.0
             ];
             score = tr[2];
-            # Covering a node or a chip clips words, the one thing a label
-            # must never do, so it outweighs leaving the lane band.
+            core = [cx - cw / 2.0, cy - CHIP_H / 2.0, cw, CHIP_H];
+            # Crowding a node's or chip's margin costs by area. Covering its
+            # words outright outranks everything; leaving the source lane
+            # costs about as much as sitting 5px deep in a margin.
             for n in nodes {
                 score = score + overlapArea(rect, n) * 40.0;
+                if overlapArea(core, [n[0] + 6.0, n[1] + 6.0, n[2] - 12.0, n[3] - 12.0])
+                    > 0.0 {
+                    score = score + 100000.0;
+                }
             }
             for q in placed {
                 score = score + overlapArea(rect, q) * 40.0;
+                if overlapArea(core, [q[0] + 2.0, q[1] + 2.0, q[2] - 4.0, q[3] - 4.0])
+                    > 0.0 {
+                    score = score + 100000.0;
+                }
             }
-            if len(band) > 0 and (cy < band[0] or cy > band[1]) {
-                score = score + 2000.0;
+            if len(band) > 0
+                and (cy - CHIP_H / 2.0 < band[0] or cy + CHIP_H / 2.0 > band[1]) {
+                score = score + 30000.0;
             }
             for o in links {
                 if "samples" not in o {
                     continue;
                 }
-                # Across the partner wire a label reads as the partner's.
-                weight = 40.0 if o["from"] == l["to"] and o["to"] == l["from"] else 3.0;
+                # Across the partner wire a label reads as the partner's, and
+                # over any other wire it hides it, so both beat a step outwards.
+                weight = 20.0;
+                if o["from"] == l["to"] and o["to"] == l["from"] {
+                    weight = 40.0;
+                } elif o["from"] == l["from"] and o["to"] == l["to"] {
+                    weight = 3.0;
+                }
                 pts: list[list[float]] = o["samples"];
                 for pt in pts {
                     if pt[0] > rect[0]
