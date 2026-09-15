@@ -413,7 +413,7 @@ def:pub Tour -> JsxElement {
                     body="Name the steps your team really uses and connect them the way work moves, branches and loops included. Each step says what it means (start, active, handoff, blocked or done) and can name who owns it; a connection can say whether it carries an issue or a pull request."
                 >
                     <FlowDiagram/>
-                    <p className="mt-2 text-xs text-subtle md:hidden">
+                    <p className="mt-2 text-xs text-subtle min-[792px]:hidden">
                         Scroll sideways to see the whole flow line.
                     </p>
                 </TourRow>
@@ -422,6 +422,9 @@ def:pub Tour -> JsxElement {
                     body="The board's columns are those steps, in order. Drag a card to move it, filter by project or person, and open a card for its details, checklist and GitHub links. Moving a card to Review can ask for a reviewer and a pull request; a blocked card asks for a note."
                 >
                     <BoardFragment/>
+                    <p className="mt-2 text-xs text-subtle min-[748px]:hidden">
+                        Scroll sideways to see every column.
+                    </p>
                 </TourRow>
                 <TourRow
                     title="Log"
