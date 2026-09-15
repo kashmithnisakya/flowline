@@ -29,14 +29,51 @@ glob STATUSES: list[str] = [
      # What a transition carries: an issue (no code yet) or a PR (code,
      # waiting on a person). Empty is fine and means untagged.
      CARRY_KINDS: list[str] = ["issue", "pr"],
-     # The one prebuilt flow. The picker offers exactly this or a blank
-     # canvas; the removed Kanban/Software/Support entries only ever seeded
-     # steps, so workspaces created from them keep working untouched.
+     # Prebuilt flows, recommended first. The key persists on the flow line
+     # (WorkflowSteps.template_key), so rename a template, never re-key it.
+     # Roles, link_labels and link_carries are optional per template.
      FLOW_LINE_TEMPLATES: list[dict[str, any]] = [
          {
+             "key": "simple",
+             "name": "Simple",
+             "description": "To do, Doing, Review, Done. Review can send work back to Doing.",
+             "steps": [
+                 {
+                     "name": "To do",
+                     "kind": "start",
+                     "color": "sky",
+                     "x": 60.0,
+                     "y": 60.0
+                 },
+                 {
+                     "name": "Doing",
+                     "kind": "active",
+                     "color": "indigo",
+                     "x": 400.0,
+                     "y": 60.0
+                 },
+                 {
+                     "name": "Review",
+                     "kind": "handoff",
+                     "color": "rose",
+                     "x": 740.0,
+                     "y": 60.0
+                 },
+                 {
+                     "name": "Done",
+                     "kind": "done",
+                     "color": "emerald",
+                     "x": 1080.0,
+                     "y": 60.0
+                 }
+             ],
+             "links": [[0, 1], [1, 2], [2, 3], [2, 1]],
+             "link_labels": ["", "", "", "Changes requested"]
+         },
+         {
              "key": "jaseci",
-             "name": "Jaseci flow",
-             "description": "Specify, triage, architect, build, review, de-slop. Four roles, loops included.",
+             "name": "Software team",
+             "description": "Seven steps from writing the issue to done, with a design step for big changes and loops back from review. Adds four roles.",
              # The four Jaseci roles. ApplyTemplate seeds these as Role
              # nodes (editable org data from then on); colors match the
              # step each role owns so the Roles tab echoes the canvas.
