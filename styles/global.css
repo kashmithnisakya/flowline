@@ -1,133 +1,152 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/bricolage-grotesque";
-@import "@fontsource-variable/space-grotesk";
+/* wdth.css is the Archivo file that carries the width axis (62% to 125%);
+   the package index is weight-only, so font-stretch would do nothing. */
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* flowline brand, light — ink on warm paper with an ember accent.
-       Generated palette source of truth: brand/logo.jac.
-       Dark mode deliberately switches families: pine ink + teal (below). */
+    /* Traveler palette, light: a neutral ground, white surfaces, one rust
+       primary for the main action, today and selection. Names stay shadcn's
+       so the registry primitives restyle without edits. */
     color-scheme: light;
-    --background: #F6F2EB;          /* paper */
-    --foreground: #14120F;          /* ink */
-    --card: #FFFDFA;                /* surface */
-    --card-foreground: #14120F;
-    --popover: #FFFDFA;
-    --popover-foreground: #14120F;
-    --primary: #E8552F;             /* ember */
-    --primary-foreground: #F6F2EB;
-    --secondary: #EFE9DE;
-    --secondary-foreground: #3C372F;
-    --muted: #EFE9DE;
-    --muted-foreground: #6B6459;
-    --accent: #F1ECE3;
-    --accent-foreground: #14120F;
-    --destructive: #C81E3C;         /* crimson — must not read as brand ember */
-    --border: #E6DDCC;              /* visible on both paper and muted surfaces */
-    --input: #E2DACC;
-    --ring: #E8552F;
-    --success: #2C5545;             /* pine */
-    --warning: #8F6314;             /* amber dark enough for small text on paper (4.7:1) */
-    /* Flow line step colours (keys in components/flowlines/kinds.jac). Warmer,
-       lower-chroma neighbours of Tailwind's sky/indigo/amber/rose/emerald/slate
-       so six lanes sit in one family with ember and paper. -ink is the text
-       weight (>= 4.5:1 on paper); -wash is an opaque pale fill for cards that
-       sit over the canvas dot grid. */
-    --step-sky: #3D7EA6;      --step-sky-ink: #285F80;
-    --step-indigo: #6F63B8;   --step-indigo-ink: #504590;
-    --step-amber: #C4891F;    --step-amber-ink: #855A0F;
-    --step-rose: #C6544D;     --step-rose-ink: #993D37;
-    --step-emerald: #4E8C5E;  --step-emerald-ink: #366A44;
-    --step-slate: #7C7568;    --step-slate-ink: #59534A;
+    --background: #F2F3F1;          /* ground */
+    --foreground: #161A18;
+    --card: #FFFFFF;                /* surface: cards, panels, tables */
+    --card-foreground: #161A18;
+    --popover: #FFFFFF;
+    --popover-foreground: #161A18;
+    --primary: #BF3F0B;             /* rust; white label 5.3:1 */
+    --primary-foreground: #FFFFFF;
+    --secondary: #E7EAE6;           /* inset fill */
+    --secondary-foreground: #161A18;
+    --muted: #E7EAE6;
+    --muted-foreground: #4F5753;
+    --subtle: #636B67;              /* captions, placeholders */
+    --accent: #E2E6E1;              /* hover and selected row */
+    --accent-foreground: #161A18;
+    --destructive: #B3261E;         /* andon: blocked, overdue, destructive */
+    --border: #D3D8D2;              /* hairline */
+    --input: #78807B;               /* control edge, 3:1 on surface and ground */
+    --ring: #BF3F0B;
+    --success: #1C6E45;
+    --warning: #8A5A00;
+    --wire: #6F7672;                /* flow line diagram wires */
+    --mark: #D9530F;                /* logo mark only */
+    /* Step colours (keys in components/flowlines/kinds.jac): fill, -ink for
+       text and -wash (12% fill into the card) for a pale opaque fill. The
+       persisted key rose renders orchid so it never reads as andon red. */
+    --step-sky: #2E6C97;      --step-sky-ink: #245A80;
+    --step-indigo: #5550AC;   --step-indigo-ink: #46419A;
+    --step-amber: #A1711A;    --step-amber-ink: #74510F;
+    --step-rose: #A34B83;     --step-rose-ink: #86386A;
+    --step-emerald: #387A51;  --step-emerald-ink: #2B6041;
+    --step-slate: #6A726E;    --step-slate-ink: #4F5753;
     --step-sky-wash: color-mix(in oklab, var(--step-sky) 12%, var(--card));
     --step-indigo-wash: color-mix(in oklab, var(--step-indigo) 12%, var(--card));
     --step-amber-wash: color-mix(in oklab, var(--step-amber) 12%, var(--card));
     --step-rose-wash: color-mix(in oklab, var(--step-rose) 12%, var(--card));
     --step-emerald-wash: color-mix(in oklab, var(--step-emerald) 12%, var(--card));
     --step-slate-wash: color-mix(in oklab, var(--step-slate) 12%, var(--card));
-    --chart-1: #E8552F;
-    --chart-2: #2C5545;
-    --chart-3: #E8A22F;
-    --chart-4: #8A8275;
-    --chart-5: #5E574B;
-    --radius: 0.75rem;              /* 12px — design uses 11-13px controls */
+    /* Chart series by meaning, never by index: done, open, active, blocked,
+       today. chart-N stays for old call sites and follows the same rule. They
+       reference tokens, so the .dark block below re-derives them. */
+    --series-done: var(--success);
+    --series-open: var(--input);
+    --series-active: var(--step-indigo);
+    --series-blocked: var(--destructive);
+    --series-today: var(--primary);
+    --chart-1: var(--success);
+    --chart-2: var(--step-indigo);
+    --chart-3: var(--step-amber);
+    --chart-4: var(--step-sky);
+    --chart-5: var(--step-rose);
+    --radius: 4px;
     /* Flow line canvas height. The diagram and the panel beside it are flex
        siblings, so both need the same height from one place. */
     --canvas-h: max(26rem, calc(100dvh - 15rem));
-    --sidebar: #FFFDFA;
-    --sidebar-foreground: #14120F;
-    --sidebar-primary: #E8552F;
-    --sidebar-primary-foreground: #F6F2EB;
-    --sidebar-accent: #F1ECE3;
-    --sidebar-accent-foreground: #14120F;
-    --sidebar-border: #EFE9DE;
-    --sidebar-ring: #E8552F;
-    /* Elevation ladder — warm-tinted so shadows sit naturally on paper. */
-    --elev-xs: 0 1px 2px rgb(30 24 15 / 0.05);
-    --elev-sm: 0 1px 2px rgb(30 24 15 / 0.05), 0 2px 8px -2px rgb(30 24 15 / 0.07);
-    --elev-md: 0 2px 4px rgb(30 24 15 / 0.05), 0 10px 24px -8px rgb(30 24 15 / 0.13);
-    --elev-lg: 0 4px 10px rgb(30 24 15 / 0.07), 0 24px 48px -12px rgb(30 24 15 / 0.20);
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #161A18;
+    --sidebar-primary: #BF3F0B;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #E2E6E1;
+    --sidebar-accent-foreground: #161A18;
+    --sidebar-border: #D3D8D2;
+    --sidebar-ring: #BF3F0B;
+    /* Only floating layers cast a shadow: menus (float-1) and dialogs,
+       sheets, the palette and toasts (float-2). Resting surfaces use borders. */
+    --float-1: 0 1px 2px rgb(22 26 24 / 0.06), 0 4px 12px -2px rgb(22 26 24 / 0.12);
+    --float-2: 0 1px 2px rgb(22 26 24 / 0.06), 0 8px 24px rgb(22 26 24 / 0.10), 0 16px 40px -8px rgb(22 26 24 / 0.18);
+    --scrim: rgb(17 20 19 / 0.45);
 }
 
 .dark {
-    /* Native chrome (scrollbars, form controls) must follow the theme or
-       the canvas scrollbars render as white strips on the dark ground. */
+    /* Same system on a charcoal ground; the primary brightens and takes a
+       dark label. Native chrome (scrollbars, form controls) follows the theme. */
     color-scheme: dark;
-    --background: #101514;
-    --foreground: #E6EDEB;
-    --card: #181F1E;
-    --card-foreground: #E6EDEB;
-    --popover: #181F1E;
-    --popover-foreground: #E6EDEB;
-    --primary: #2DD4BF;
-    --primary-foreground: #06211D;
-    --secondary: #1F2827;
-    --secondary-foreground: #E6EDEB;
-    --muted: #1F2827;
-    --muted-foreground: #93A5A1;
-    --accent: #24302E;
-    --accent-foreground: #E6EDEB;
-    --destructive: #E11D48;
-    --border: rgba(230, 237, 235, .12);
-    --input: rgba(230, 237, 235, .16);
-    --ring: #2DD4BF;
-    --success: #34D399;
-    --warning: #FBBF24;
-    /* Step colours lifted for the dark ground; ink equals fill, which already
-       clears 7:1 on pine. The washes re-derive from the dark --card. */
-    --step-sky: #6FB1D6;      --step-sky-ink: #8FC6E4;
-    --step-indigo: #A29BE0;   --step-indigo-ink: #B8B2EA;
-    --step-amber: #E5B14C;    --step-amber-ink: #EFC46E;
-    --step-rose: #E8827B;     --step-rose-ink: #F09D97;
-    --step-emerald: #7DC08C;  --step-emerald-ink: #98D0A4;
-    --step-slate: #A79F92;    --step-slate-ink: #BDB6AB;
-    --chart-1: #2DD4BF;
-    --chart-2: #818CF8;
-    --chart-3: #FBBF24;
-    --chart-4: #38BDF8;
-    --chart-5: #FB7185;
-    --sidebar: #181F1E;
-    --sidebar-foreground: #E6EDEB;
-    --sidebar-primary: #2DD4BF;
-    --sidebar-primary-foreground: #06211D;
-    --sidebar-accent: #24302E;
-    --sidebar-accent-foreground: #E6EDEB;
-    --sidebar-border: rgba(230, 237, 235, .12);
-    --sidebar-ring: #2DD4BF;
-    --elev-xs: 0 1px 2px rgb(0 0 0 / 0.40);
-    --elev-sm: 0 1px 2px rgb(0 0 0 / 0.35), 0 2px 8px -2px rgb(0 0 0 / 0.35);
-    --elev-md: 0 2px 4px rgb(0 0 0 / 0.35), 0 10px 24px -8px rgb(0 0 0 / 0.50);
-    --elev-lg: 0 4px 12px rgb(0 0 0 / 0.45), 0 24px 48px -12px rgb(0 0 0 / 0.60);
+    --background: #111413;
+    --foreground: #E4E8E5;
+    --card: #191D1B;
+    --card-foreground: #E4E8E5;
+    --popover: #191D1B;
+    --popover-foreground: #E4E8E5;
+    --primary: #F0702E;
+    --primary-foreground: #1B0B02;
+    --secondary: #1F2421;
+    --secondary-foreground: #E4E8E5;
+    --muted: #1F2421;
+    --muted-foreground: #A0A8A4;
+    --subtle: #8F9793;
+    --accent: #232826;
+    --accent-foreground: #E4E8E5;
+    --destructive: #FF7B6E;
+    --border: #2D3330;
+    --input: #6E7772;
+    --ring: #F0702E;
+    --success: #56C28C;
+    --warning: #E3AB48;
+    --wire: #7C8580;
+    --mark: #F47C3F;
+    --step-sky: #6FAED6;      --step-sky-ink: #8FC2E3;
+    --step-indigo: #A29DE3;   --step-indigo-ink: #B9B5EC;
+    --step-amber: #DDAE52;    --step-amber-ink: #E9C375;
+    --step-rose: #D98BC2;     --step-rose-ink: #E6A8D3;
+    --step-emerald: #79C08E;  --step-emerald-ink: #98D0A7;
+    --step-slate: #A3ABA7;    --step-slate-ink: #BCC3BF;
+    --sidebar: #191D1B;
+    --sidebar-foreground: #E4E8E5;
+    --sidebar-primary: #F0702E;
+    --sidebar-primary-foreground: #1B0B02;
+    --sidebar-accent: #232826;
+    --sidebar-accent-foreground: #E4E8E5;
+    --sidebar-border: #2D3330;
+    --sidebar-ring: #F0702E;
+    --float-1: 0 1px 2px rgb(0 0 0 / 0.40), 0 4px 12px -2px rgb(0 0 0 / 0.45);
+    --float-2: 0 1px 2px rgb(0 0 0 / 0.40), 0 12px 32px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.55);
+    --scrim: rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
-    --font-sans: 'Space Grotesk Variable', system-ui, sans-serif;
-    --font-display: 'Bricolage Grotesque Variable', 'Space Grotesk Variable', sans-serif;
+    /* One family: Archivo for UI and display (a wider cut, see .font-display
+       below), IBM Plex Mono for data. */
+    --font-sans: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-display: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --color-success: var(--success);
     --color-warning: var(--warning);
+    --color-subtle: var(--subtle);
+    --color-wire: var(--wire);
+    --color-mark: var(--mark);
+    --color-series-done: var(--series-done);
+    --color-series-open: var(--series-open);
+    --color-series-active: var(--series-active);
+    --color-series-blocked: var(--series-blocked);
+    --color-series-today: var(--series-today);
     --color-step-sky: var(--step-sky);
     --color-step-sky-ink: var(--step-sky-ink);
     --color-step-sky-wash: var(--step-sky-wash);
@@ -177,22 +196,26 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) + 4px);
-    --radius-2xl: calc(var(--radius) + 8px);
-    --radius-3xl: calc(var(--radius) + 12px);
-    --radius-4xl: calc(var(--radius) + 16px);
-    /* Themed shadow scale: every shadow-* utility resolves to the elevation
-       ladder above, so depth stays warm in light and inky in dark. */
-    --shadow-2xs: var(--elev-xs);
-    --shadow-xs: var(--elev-xs);
-    --shadow-sm: var(--elev-sm);
-    --shadow-md: var(--elev-md);
-    --shadow-lg: var(--elev-md);
-    --shadow-xl: var(--elev-lg);
-    --shadow-2xl: var(--elev-lg);
+    /* Explicit radius scale: the registry's rounded-lg (buttons, inputs,
+       selects) lands on 4px and rounded-xl (dialogs) on 6px. Cards, badges
+       and menus are pinned in the registry block below. */
+    --radius-xs: 2px;
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 4px;
+    --radius-xl: 6px;
+    --radius-2xl: 6px;
+    --radius-3xl: 8px;
+    --radius-4xl: 8px;
+    /* Resting shadows are gone: the small steps resolve to nothing, and the
+       larger ones are the two floating levels. */
+    --shadow-2xs: 0 0 #0000;
+    --shadow-xs: 0 0 #0000;
+    --shadow-sm: 0 0 #0000;
+    --shadow-md: var(--float-1);
+    --shadow-lg: var(--float-1);
+    --shadow-xl: var(--float-2);
+    --shadow-2xl: var(--float-2);
 }
 
 @layer base {
@@ -201,13 +224,21 @@
     }
     body {
         @apply font-sans bg-background text-foreground;
+        font-stretch: 100%;
+        -webkit-font-smoothing: antialiased;
     }
     html {
         @apply font-sans;
         scroll-behavior: smooth;
     }
     ::selection {
-        background: color-mix(in oklab, var(--primary) 24%, transparent);
+        background: color-mix(in oklab, var(--primary) 22%, transparent);
+    }
+    /* Keyboard focus: a 2px primary outline. A focus-visible utility at the
+       call site still wins, being in a later layer. */
+    :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
     }
     /* Thin themed scrollbars everywhere native chrome shows one. */
     * {
@@ -217,162 +248,153 @@
 }
 
 @layer components {
-    /* ---- Depth for the locked jac-shadcn primitives (components/ui/ is
-       import-only; these data-slot hooks are the sanctioned restyling path). */
-    [data-slot="card"] {
-        box-shadow: var(--elev-sm);
-        transition: box-shadow .2s ease, transform .2s cubic-bezier(.16, 1, .3, 1);
-    }
-    .dark [data-slot="card"] {
-        /* faint top bevel so dark cards catch light at the edge */
-        box-shadow: var(--elev-sm), inset 0 1px 0 0 rgb(255 255 255 / 0.04);
-    }
-    [data-slot="dialog-content"] {
-        box-shadow: var(--elev-lg);
-    }
-    [data-slot="dialog-overlay"] {
-        background: rgb(25 18 10 / 0.32) !important;
-        backdrop-filter: blur(6px) !important;
-    }
-    .dark [data-slot="dialog-overlay"] {
-        background: rgb(0 0 0 / 0.55) !important;
-    }
-    /* Dialogs breathe open instead of snapping (primitives ship duration-100). */
-    [data-slot="dialog-overlay"],
-    [data-slot="dialog-content"] {
-        animation-duration: .22s !important;
-        animation-timing-function: cubic-bezier(.16, 1, .3, 1) !important;
-    }
-    [data-slot="dropdown-menu-content"],
-    [data-slot="select-content"],
-    [data-slot="dropdown-menu-sub-content"] {
-        animation-duration: .16s !important;
-        animation-timing-function: cubic-bezier(.16, 1, .3, 1) !important;
-        box-shadow: var(--elev-md);
-    }
-    /* The primary button variant ships with no <button> hover (only [a]:hover);
-       give every solid primary control a real hover + press. */
-    [data-slot="button"][data-variant="default"]:not(:disabled):hover {
-        background-color: color-mix(in oklab, var(--primary) 86%, var(--foreground) 14%);
-    }
-    [data-slot="button"]:not(:disabled) {
-        cursor: pointer;
-    }
-    [data-slot="button"]:not(:disabled):active {
-        transform: scale(.97);
-    }
-    [data-slot="tabs-trigger"] {
-        cursor: pointer;
-    }
-
-    /* ---- Skeletons: shimmer sweep on a ground mixed from foreground so it
-       stays visible on paper (bg-muted is nearly invisible there). */
-    [data-slot="skeleton"] {
-        position: relative;
-        overflow: hidden;
-        background-color: color-mix(in oklab, var(--foreground) 8%, var(--background));
-        animation: none !important;
-    }
-    [data-slot="skeleton"]::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        transform: translateX(-100%);
-        background-image: linear-gradient(
-            90deg,
-            transparent,
-            color-mix(in oklab, var(--foreground) 7%, transparent),
-            transparent
-        );
-        animation: shimmer 1.8s ease-in-out infinite;
-    }
-
-    /* ---- Motion foundation. Entrance-only, ease-out-expo family. */
-    .anim-fade-up {
-        animation: rise .5s cubic-bezier(.16, 1, .3, 1) both;
-    }
-    .anim-fade-in {
-        animation: appear .4s ease-out both;
-    }
-    .anim-scale-in {
-        animation: pop .3s cubic-bezier(.16, 1, .3, 1) both;
-    }
-    .anim-d1 { animation-delay: 60ms; }
-    .anim-d2 { animation-delay: 120ms; }
-    .anim-d3 { animation-delay: 180ms; }
-    .anim-d4 { animation-delay: 240ms; }
-    .anim-d5 { animation-delay: 300ms; }
-    .anim-d6 { animation-delay: 360ms; }
-    .anim-d7 { animation-delay: 420ms; }
-    .anim-d8 { animation-delay: 480ms; }
-
-    /* ---- Shared page furniture. */
+    /* In-app page title: 24px Archivo at a 112% width. */
     .page-title {
-        @apply font-display text-2xl font-bold tracking-tight sm:text-3xl;
+        @apply font-display text-2xl leading-tight font-bold tracking-[-0.01em];
+        font-stretch: 112%;
     }
+    /* One muted line under a page title. */
     .page-subtitle {
         @apply text-sm text-muted-foreground;
     }
-    /* Card hover lift; pair with hover:ring-foreground/20 at the call site. */
-    .card-hover:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--elev-md);
-    }
+}
 
-    /* ---- Ambient backgrounds (landing, auth, setup). Token-driven so both
-       palettes stay correct; the KineticGrid canvas replaces .bg-dotgrid
-       wherever scripting is available. */
-    .bg-dotgrid {
-        background-image: radial-gradient(
-            color-mix(in oklab, var(--foreground) 11%, transparent) 1px,
-            transparent 1px
-        );
-        background-size: 26px 26px;
-    }
-    .bg-glow {
-        background-image: radial-gradient(
-            46rem 30rem at 50% -8rem,
-            color-mix(in oklab, var(--primary) 13%, transparent),
-            transparent 70%
-        );
-    }
-    .text-gradient-brand {
-        background-image: linear-gradient(115deg, var(--foreground) 55%, var(--primary));
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-    }
+/* The wide cut: display text renders at 118% width. */
+.font-display {
+    font-stretch: 118%;
+}
+
+/* ---- Registry restyle (components/ui/ is import-only, so these data-slot
+   hooks are the sanctioned path). Unlayered so they beat the primitives'
+   utilities: radius per role, hairline rings, flat scrim, quiet fills. */
+[data-slot="card"],
+[data-slot="badge"] {
+    border-radius: var(--radius-md);
+}
+[data-slot="card"],
+[data-slot="dialog-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"],
+[data-slot="select-content"],
+[data-slot="popover-content"] {
+    --tw-ring-color: var(--border);
+}
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"],
+[data-slot="select-content"],
+[data-slot="popover-content"] {
+    border-radius: var(--radius-xl);
+    --tw-shadow: var(--float-1);
+    animation-duration: 150ms;
+}
+[data-slot="dialog-content"],
+[data-slot="sheet-content"] {
+    --tw-shadow: var(--float-2);
+    animation-duration: 180ms;
+}
+[data-slot="sheet-content"] {
+    background-color: var(--card);
+}
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+    background: var(--scrim);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    animation-duration: 150ms;
+}
+/* Controls keep a surface fill in both themes; the registry's bg-input tints
+   would turn the 3:1 control-edge grey into a fill. */
+.dark [data-slot="input"],
+.dark [data-slot="textarea"],
+.dark [data-slot="select-trigger"]:not(.toolbar-filter) {
+    background-color: transparent;
+}
+.dark [data-slot="checkbox"]:not([data-state="checked"]) {
+    background-color: transparent;
+}
+[data-slot="input"]:disabled,
+[data-slot="textarea"]:disabled {
+    background-color: var(--muted);
+}
+[data-slot="button"][data-variant="outline"] {
+    border-color: var(--border);
+    background-color: var(--card);
+}
+[data-slot="button"][data-variant="outline"]:not(:disabled):hover,
+[data-slot="button"][data-variant="outline"][aria-expanded="true"] {
+    background-color: var(--accent);
+}
+/* Focus is a 2px outline, not the registry's 3px halo plus a recoloured
+   border (which read as a validation error). */
+[data-slot="button"]:focus-visible,
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible,
+[data-slot="select-trigger"]:focus-visible,
+[data-slot="checkbox"]:focus-visible,
+[data-slot="switch"]:focus-visible,
+[data-slot="tabs-trigger"]:focus-visible {
+    --tw-ring-shadow: 0 0 #0000;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+/* Fields draw it over their own border: an offset outline gets clipped by
+   the scrolling body of a dialog or sheet. */
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible,
+[data-slot="select-trigger"]:focus-visible {
+    border-color: var(--input);
+    outline-offset: -1px;
+}
+[data-slot="button"]:not(:disabled),
+[data-slot="tabs-trigger"] {
+    cursor: pointer;
+}
+/* The primary variant ships no <button> hover (only [a]:hover). Mixing in
+   the foreground darkens rust in light and lightens it in dark. */
+[data-slot="button"][data-variant="default"]:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--primary) 88%, var(--foreground) 12%);
+}
+
+/* Skeletons: a shimmer on a ground mixed from foreground so it stays visible
+   on the light ground; the reduced-motion block below stops the sweep. */
+[data-slot="skeleton"] {
+    position: relative;
+    overflow: hidden;
+    background-color: color-mix(in oklab, var(--foreground) 8%, var(--background));
+    animation: none;
+}
+[data-slot="skeleton"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in oklab, var(--foreground) 7%, transparent),
+        transparent
+    );
+    animation: shimmer 1.8s ease-in-out infinite;
 }
 
 @keyframes shimmer {
     to { transform: translateX(100%); }
 }
-@keyframes rise {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: none; }
-}
-@keyframes appear {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-@keyframes pop {
-    from { opacity: 0; transform: scale(.96); }
-    to { opacity: 1; transform: none; }
-}
 
+/* Motion is for state changes only, and none of it survives reduced motion
+   (a spinner still turns: it is the only sign that work is in flight). */
 @media (prefers-reduced-motion: reduce) {
     html {
         scroll-behavior: auto;
     }
+    *:not(.animate-spin),
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
     [data-slot="skeleton"]::after {
-        animation: none;
-    }
-    .anim-fade-up,
-    .anim-fade-in,
-    .anim-scale-in {
-        animation: none;
-    }
-    [data-slot="button"]:not(:disabled):active {
-        transform: none;
+        animation: none !important;
     }
 }
