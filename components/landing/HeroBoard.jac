@@ -165,8 +165,21 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
         showColumn(target);
     }
 
-    def advance(card: dict[str, any]) {
+    # A moved card remounts in its new column, so a keyboard move puts focus
+    # back on it and Enter keeps moving the same card.
+    def advance(card: dict[str, any], index: int, keyboard: bool) {
         moveTo(card["title"], (laneOf(card) + 1) % len(ROUTE));
+        if keyboard {
+            window.requestAnimationFrame(
+                lambda {
+                    doc: any = document;
+                    el: any = doc.getElementById("demo-card-" + str(index));
+                    if el {
+                        el.focus({"preventScroll": True});
+                    }
+                }
+            );
+        }
     }
 
     # Phones scroll the columns sideways; bring one into view without moving
@@ -311,10 +324,11 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                     {counts[li]}
                                 </span>
                             </div>
-                            {for c in CARDS {
+                            {for (ci, c) in enumerate(CARDS) {
                                 if laneOf(c) == li {
                                     <div
                                         key={c["title"]}
+                                        id={"demo-card-" + str(ci)}
                                         role="button"
                                         tabIndex={0}
                                         draggable={True}
@@ -336,12 +350,12 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                             dragTitle = "";
                                             overLane = -1;
                                         }}
-                                        onClick={lambda { advance(c); }}
+                                        onClick={lambda { advance(c, ci, False); }}
                                         onKeyDown={lambda (e: KeyboardEvent) { if e.key
                                             == "Enter"
                                             or e.key == " " {
                                             e.preventDefault();
-                                            advance(c);
+                                            advance(c, ci, True);
                                         }}}
                                         className={"grid cursor-grab gap-1.5 rounded-md border bg-card px-2.5 py-2 text-left transition-[border-color,box-shadow,opacity] duration-150 select-none active:cursor-grabbing "
                                             + (
