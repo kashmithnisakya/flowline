@@ -279,6 +279,7 @@ def:pub BoardPage -> JsxPage {
     # Empty inKey lands the task in the first column.
     def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
+    def replaceRow(view: TaskView) -> None;
     async def syncGithub -> None;
     async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
@@ -389,9 +390,11 @@ def:pub BoardPage -> JsxPage {
     famDone: int = 0;
     famParentId: str = "";
     famParentLabel: str = "";
+    editingChecklist: list[dict[str, any]] = [];
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
+            editingChecklist = t.checklist;
             famTotal = t.gh_sub_total;
             famDone = t.gh_sub_done;
             if t.gh_sub_total > 0 {
@@ -728,6 +731,9 @@ def:pub BoardPage -> JsxPage {
                 parentTaskId={famParentId}
                 parentLabel={famParentLabel}
                 onOpenTask={openTaskById}
+                taskId={editingId}
+                checklist={editingChecklist}
+                onChecklist={replaceRow}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

@@ -17,6 +17,7 @@ glob STATUSES: list[str] = [
 import from ...models { Project, MemberView, RepoView, StepView, RoleView, TaskView }
 import from ..common.Markdown { Markdown }
 import from .MiniLanes { MiniLanes }
+import from .Checklist { ChecklistEditor }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -130,7 +131,12 @@ def:pub TaskDialog(
     familyDone: int = 0,
     parentTaskId: str = "",
     parentLabel: str = "",
-    onOpenTask: Callable[[str], None] = None
+    onOpenTask: Callable[[str], None] = None,
+    # The open task's checklist. Edits write at once, not on Save, and each
+    # reports the task view to `onChecklist`; no `taskId` hides the section.
+    taskId: str = "",
+    checklist: list[dict[str, any]] = [],
+    onChecklist: Callable[[TaskView], None] = None
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -669,6 +675,14 @@ def:pub TaskDialog(
                                 {parentLabel}
                             </span>
                         </button>
+                    }}
+                    {if editing and taskId {
+                        <ChecklistEditor
+                            key={"checklist-" + taskId}
+                            taskId={taskId}
+                            items={checklist}
+                            onChange={onChecklist}
+                        />
                     }}
                     <div className="grid gap-2">
                         <div className="flex items-center justify-between">

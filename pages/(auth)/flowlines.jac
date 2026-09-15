@@ -241,6 +241,7 @@ def:pub FlowLinePage -> JsxPage {
     async def morePeek -> None;
     def closePeek -> None;
     def openTask(tid: str) -> None;
+    def replacePeekRow(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
     async def saveTask -> None;
@@ -357,6 +358,12 @@ def:pub FlowLinePage -> JsxPage {
     }
     # Category suggestions from what is on this step; the board's full list
     # would cost a second fetch for a datalist.
+    taskChecklist: list[dict[str, any]] = [];
+    for t in peekTasks {
+        if t.id == editTaskId {
+            taskChecklist = t.checklist;
+        }
+    }
     taskCategories: list[str] = [];
     for t in peekTasks {
         if t.category and t.category not in taskCategories {
@@ -967,6 +974,9 @@ def:pub FlowLinePage -> JsxPage {
                 onToggleAssignee={toggleTaskAssignee}
                 steps={steps}
                 roles={roleRows}
+                taskId={editTaskId}
+                checklist={taskChecklist}
+                onChecklist={replacePeekRow}
             />
         </div>;
 }

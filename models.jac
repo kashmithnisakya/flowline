@@ -188,7 +188,10 @@ node Task {
         pr_review_at: str = "",
         # When the task last entered Done, "" while it is open. Written only
         # by set_status; rows from before it read updated_at (done_day).
-        done_at: str = "";
+        done_at: str = "",
+        # The card's own breakdown: {"id", "text", "done"} in display order.
+        # Written only by the checklist walkers, never by UpdateTask.
+        checklist: list[dict[str, any]] = [];
 
     # Every status write goes through here, so `done_at` stays true to the
     # move into Done: kept while the task stays Done, cleared when it leaves.
@@ -263,7 +266,8 @@ node Task {
             pr_number=self.pr_number,
             pr_state=self.pr_state,
             gh_assignees=self.gh_assignees,
-            pr_review_state=self.pr_review_state
+            pr_review_state=self.pr_review_state,
+            checklist=self.checklist
         );
     }
 }
@@ -398,7 +402,8 @@ obj TaskView {
         pr_number: int = 0,
         pr_state: str = "",
         gh_assignees: list[str] = [],
-        pr_review_state: str = "";
+        pr_review_state: str = "",
+        checklist: list[dict[str, any]] = [];
 }
 
 # The Overview's charts over time, one entry per week oldest first: `weeks`

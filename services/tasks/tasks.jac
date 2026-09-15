@@ -34,6 +34,7 @@ import from services.util {
     shift_day,
     page_bounds,
     clean_tags,
+    short_id,
     done_cutoff,
     is_older,
     order_working,
@@ -737,6 +738,133 @@ walker GetTask(find_task) {
         disengage;
     }
 }
+
+# ---------------------------------------------------------------- checklist
+
+glob CHECKLIST_MAX: int = 50,
+     CHECKLIST_TEXT_MAX: int = 200;
+
+# A copy of the stored checklist, so a write assigns a new list (the store
+# sees the field change) and a malformed row from any source is dropped.
+def checklist_rows(t: Task) -> list[dict[str, any]] {
+    rows: list[dict[str, any]] = [];
+    for item in t.checklist {
+        if isinstance(item, dict) and item.get("id") and item.get("text") {
+            rows.append(
+                {
+                    "id": str(item["id"]),
+                    "text": str(item["text"]),
+                    "done": bool(item.get("done"))
+                }
+            );
+        }
+    }
+    return rows;
+}
+
+
+walker AddChecklistItem(find_task) {
+    """Append one item to the task's checklist. Blank text or a full list
+    (CHECKLIST_MAX) adds nothing; the task view is reported either way."""
+    has text: str = "",
+        reports: list[TaskView] = [];
+
+    can add with Task entry {
+        text = self.text.strip()[:CHECKLIST_TEXT_MAX];
+        rows = checklist_rows(here);
+        if text and len(rows) < CHECKLIST_MAX {
+            rows.append({"id": short_id(), "text": text, "done": False});
+            here.checklist = rows;
+            here.updated_at = now_iso();
+        }
+        report here.to_view();
+        disengage;
+    }
+}
+
+
+walker SetChecklistItem(find_task) {
+    """Check, uncheck or rename one item: `done` is "yes", "no" or "" to leave
+    it, `text` renames when not blank. Checking an item off writes a log
+    line with the progress; nothing else does."""
+    has item_id: str = "",
+        done: str = "",
+        text: str = "",
+        reports: list[TaskView] = [];
+
+    can set with Task entry {
+        rows = checklist_rows(here);
+        checked = "";
+        changed = False;
+        for item in rows {
+            if item["id"] != self.item_id {
+                continue;
+            }
+            fresh = self.text.strip()[:CHECKLIST_TEXT_MAX];
+            if fresh and fresh != item["text"] {
+                item["text"] = fresh;
+                changed = True;
+            }
+            if self.done == "yes" and not item["done"] {
+                item["done"] = True;
+                checked = str(item["text"]);
+                changed = True;
+            } elif self.done == "no" and item["done"] {
+                item["done"] = False;
+                changed = True;
+            }
+        }
+        if changed {
+            here.checklist = rows;
+            here.updated_at = now_iso();
+            if checked {
+                ticked = 0;
+                for item in rows {
+                    if item["done"] {
+                        ticked = ticked + 1;
+                    }
+                }
+                record_task_event(
+                    root,
+                    here,
+                    "Checked off: "
+                        + checked
+                        + " ("
+                        + str(ticked)
+                        + "/"
+                        + str(len(rows))
+                        + ")",
+                    here.updated_at
+                );
+            }
+        }
+        report here.to_view();
+        disengage;
+    }
+}
+
+
+walker RemoveChecklistItem(find_task) {
+    """Drop one item from the task's checklist; an unknown id removes nothing."""
+    has item_id: str = "",
+        reports: list[TaskView] = [];
+
+    can remove with Task entry {
+        rows = checklist_rows(here);
+        kept = [
+            item
+            for item in rows
+            if item["id"] != self.item_id
+        ];
+        if len(kept) != len(rows) {
+            here.checklist = kept;
+            here.updated_at = now_iso();
+        }
+        report here.to_view();
+        disengage;
+    }
+}
+
 
 walker SetMoveInfo(find_task) {
     """The move handoff, all fields optional. Review gets a reviewer, an

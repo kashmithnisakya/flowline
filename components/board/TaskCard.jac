@@ -98,7 +98,15 @@ def:pub TaskCard(
     today = todayIso();
     tone = dueTone(task.due_date, task.status, today);
     showPriority = task.priority == "High" or task.priority == "Low";
+    clTotal = len(task.checklist);
+    clDone = 0;
+    for item in task.checklist {
+        if item["done"] {
+            clDone = clDone + 1;
+        }
+    }
     hasFooter = len(task.assignee_names) > 0
+        or clTotal > 0
         or bool(task.category)
         or len(task.tags) > 0
         or task.estimate > 0.0
@@ -223,13 +231,34 @@ def:pub TaskCard(
                                 {"+" + str(len(task.tags) - 3)}
                             </Badge>
                         }}
-                        {if showPriority or task.due_date or task.estimate > 0.0 {
+                        {if showPriority
+                            or task.due_date
+                            or task.estimate > 0.0
+                            or clTotal > 0 {
                             # Right-aligned; wraps to its own line, still
                             # right-aligned, when the lane is narrow.
                             <span
                                 key="when"
                                 className="ml-auto flex shrink-0 items-center gap-1.5"
                             >
+                                {if clTotal > 0 {
+                                    <span
+                                        key="checklist"
+                                        className={"rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums "
+                                            + (
+                                                "bg-success/10 text-success"
+                                                    if clDone == clTotal
+                                                    else "bg-muted text-muted-foreground"
+                                            )}
+                                        title={"Checklist: "
+                                            + str(clDone)
+                                            + " of "
+                                            + str(clTotal)
+                                            + " done"}
+                                    >
+                                        {"✓ " + str(clDone) + "/" + str(clTotal)}
+                                    </span>
+                                }}
                                 {if task.estimate > 0.0 {
                                     <span
                                         key="est"
