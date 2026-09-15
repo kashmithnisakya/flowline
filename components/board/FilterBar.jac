@@ -76,7 +76,7 @@ def FilterMenu(
                     data-active="true"
                 >
                     <DropdownMenuTrigger
-                        className="inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
+                        className="inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring"
                     >
                         <span className="truncate">{label + ": " + shown}</span>
                     </DropdownMenuTrigger>

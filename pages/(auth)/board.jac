@@ -237,7 +237,8 @@ def:pub BoardPage -> JsxPage {
             onResize = lambda { scheduleMeasure(); };
             window.addEventListener("resize", onResize);
             # "/" focuses the title filter and N opens a new task, unless the
-            # keys are being typed or a dialog or menu has them.
+            # keys are being typed or a dialog or menu has them. "/" in the
+            # sheet stays there: focus behind it would lose the next Escape.
             onKey = lambda (e: any) {
                 t: any = e.target;
                 tag = str(t.tagName or "").lower() if t else "";
@@ -251,7 +252,8 @@ def:pub BoardPage -> JsxPage {
                 if document.querySelector("[role=menu], [role=listbox]") {
                     return;
                 }
-                if e.key == "/" {
+                inSheet = bool(t and t.closest and t.closest("[data-task-sheet]"));
+                if e.key == "/" and not inSheet {
                     boxes: any = document.querySelectorAll("[data-board-search]");
                     for i in range(int(boxes.length)) {
                         box: any = boxes[i];
@@ -315,7 +317,8 @@ def:pub BoardPage -> JsxPage {
             fEstimate,
             fIteration,
             fPriority,
-            bool(boardQuery)
+            bool(boardQuery),
+            dialogOpen
         ]
     );
 
@@ -385,6 +388,9 @@ def:pub BoardPage -> JsxPage {
     def scrollToLane(key: str) -> None;
     def scrollToHidden -> None;
     def revealCard(tid: str) -> None;
+    # Where an open task sheet starts on screen (md+), else -1: the lanes
+    # under it count as out of view.
+    def sheetEdge -> float;
     # A drag near either edge of the lanes scrolls them, so a card can reach
     # a lane that starts off screen.
     def dragEdgeScroll(e: DragEvent) -> None;
@@ -514,6 +520,7 @@ def:pub BoardPage -> JsxPage {
     # The dialog hides its create-issue button once a task carries an issue,
     # so the number comes from server truth rather than the form dict.
     editingIssueNumber = 0;
+    editingPrState = "";
     # The open card's sub-issue family, resolved from rows already loaded:
     # its children when it is a parent, its parent's card when it is a child.
     famRows: list[TaskView] = [];
@@ -525,6 +532,7 @@ def:pub BoardPage -> JsxPage {
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
+            editingPrState = t.pr_state;
             editingChecklist = t.checklist;
             famTotal = t.gh_sub_total;
             famDone = t.gh_sub_done;
@@ -937,6 +945,7 @@ def:pub BoardPage -> JsxPage {
                 onMove={sheetMove}
                 createdAt={editingCreated}
                 historyKey={editingUpdated}
+                prState={editingPrState}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

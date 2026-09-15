@@ -14,7 +14,7 @@ import from .MoveMenu { MoveMenu }
 glob WEEKDAY: list[str] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
      # Visible on phones and touch screens; on a desktop pointer it shrinks
      # to an invisible anchor at the card's lower left for the M menu.
-     MOVE_TRIGGER: str = "absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-sm text-subtle outline-none hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:pointer-fine:pointer-events-none md:pointer-fine:top-auto md:pointer-fine:right-auto md:pointer-fine:bottom-0 md:pointer-fine:left-2.5 md:pointer-fine:size-px md:pointer-fine:opacity-0";
+     MOVE_TRIGGER: str = "absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-sm text-subtle outline-none hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring md:pointer-fine:pointer-events-none md:pointer-fine:top-auto md:pointer-fine:right-auto md:pointer-fine:bottom-0 md:pointer-fine:left-2.5 md:pointer-fine:size-px md:pointer-fine:opacity-0";
 
 # The due date as a person says it: today, tomorrow, a weekday within the
 # week, else a short date. Overdue and Done return "" (the red line and

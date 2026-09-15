@@ -3,6 +3,7 @@ with the route breadcrumb, title, properties, notes, checklist and travel so
 far. The page owns the form dict and UpdateTask overwrites every field, so
 every property here goes out on Save."""
 
+import from "react" { useEffect }
 import from ...models {
     Project,
     MemberView,
@@ -55,6 +56,8 @@ glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
      # Property values read as text until hovered: ghost triggers and fields.
      GHOST_SELECT: str = "h-8 w-full min-w-0 justify-between border-transparent bg-transparent px-2 font-normal shadow-none hover:bg-accent data-[state=open]:bg-accent [&>svg:last-child]:opacity-0 hover:[&>svg:last-child]:opacity-100 data-[state=open]:[&>svg:last-child]:opacity-100",
      GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:border-border md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
+     # Targets whose letter keys belong to a select or menu, not the sheet.
+     WIDGET_ROLES: str = "[role=combobox], [role=listbox], [role=menu], [role=option], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [data-slot=select-trigger]",
      GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-accent!";
 
 # One label/value row of the property list.
@@ -202,28 +205,59 @@ def:pub TaskDialog(
     # The task's created_at, the start of its travel history, and a key that
     # changes when the task does (its updated_at) so the history refreshes.
     createdAt: str = "",
-    historyKey: str = ""
+    historyKey: str = "",
+    # The linked pull request's GitHub state (open, draft, merged, closed).
+    prState: str = ""
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several. Notes
     # open rendered once written; pendingAction marks which button started
-    # the shared `saving` flight. topPx keeps the sheet under the app header.
+    # the shared `saving` flight. topPx and rightPx fit the sheet between the
+    # app header and the right edge of <main>, so a docked column stays clear.
     has repoChoice: str = "",
         notesEditing: bool = False,
         pendingAction: str = "",
         moveOpen: bool = False,
-        topPx: int = 0;
+        topPx: int = 0,
+        rightPx: int = 0;
+
+    def placeSheet {
+        w: any = window;
+        header: any = document.querySelector("header");
+        main: any = document.querySelector("main");
+        bottom = 0;
+        inset = 0;
+        if w.innerWidth >= 640 {
+            if header {
+                bottom = int(header.getBoundingClientRect().bottom);
+            }
+            if main {
+                inset = int(
+                    document.documentElement.clientWidth
+                        - main.getBoundingClientRect().right
+                );
+            }
+        }
+        topPx = bottom if bottom > 0 else 0;
+        rightPx = inset if inset > 0 else 0;
+    }
+
+    useEffect(
+        lambda {
+            onResize: any = lambda { placeSheet(); };
+            if open {
+                window.addEventListener("resize", onResize);
+            }
+            return lambda { window.removeEventListener("resize", onResize); };
+        },
+        [open]
+    );
 
     async can with (open, taskId, editing) entry {
         notesEditing = False;
         moveOpen = False;
         if open {
             w: any = window;
-            header: any = document.querySelector("header");
-            bottom = 0;
-            if header and w.innerWidth >= 640 {
-                bottom = int(header.getBoundingClientRect().bottom);
-            }
-            topPx = bottom if bottom > 0 else 0;
+            placeSheet();
             if not editing {
                 w.setTimeout(
                     lambda {
@@ -385,6 +419,61 @@ def:pub TaskDialog(
         }
     }
 
+    # M opens the move menu only for keys the sheet itself receives: React
+    # bubbles portalled select, menu and popover keys here too, and a select
+    # trigger takes letters as typeahead, so those keys are left alone.
+    def onSheetKey(e: KeyboardEvent) {
+        t: any = e.target;
+        box: any = e.currentTarget;
+        tag = str(t.tagName or "").lower() if t else "";
+        typing = tag == "input"
+            or tag == "textarea"
+            or tag == "select"
+            or bool(t and t.isContentEditable);
+        inside = bool(box and t and box.contains(t));
+        widget = bool(t and t.closest(WIDGET_ROLES));
+        popup = bool(document.querySelector("[role=listbox], [role=menu]"));
+        if (e.key == "m" or e.key == "M")
+            and editing
+            and inside
+            and not typing
+            and not widget
+            and not popup
+            and not e.defaultPrevented
+            and not e.metaKey
+            and not e.ctrlKey
+            and not e.altKey
+            and len(columnKeys) > 0 {
+            e.preventDefault();
+            moveOpen = True;
+        }
+    }
+
+    # Keyboard users land back on the card they opened, when the page has one.
+    def returnFocus(e: Event) {
+        card: any = None;
+        if taskId {
+            card = document.querySelector('[data-task-card="' + taskId + '"]');
+        }
+        if card {
+            e.preventDefault();
+            card.focus({"preventScroll": True});
+        }
+    }
+
+    # Escape in a field outside the sheet (the board's title filter) is that
+    # field's, so it must not close the sheet and drop unsaved edits.
+    def keepOnOutsideEscape(e: any) {
+        active: any = document.activeElement;
+        sheet: any = document.querySelector("[data-task-sheet]");
+        tag = str(active.tagName or "").lower() if active else "";
+        if (tag == "input" or tag == "textarea")
+            and sheet
+            and not sheet.contains(active) {
+            e.preventDefault();
+        }
+    }
+
     return
         <Sheet open={open} onOpenChange={onOpenChange} modal={False}>
             <SheetContent
@@ -392,7 +481,12 @@ def:pub TaskDialog(
                 data-task-sheet="true"
                 showCloseButton={False}
                 className="gap-0 bg-card p-0 text-card-foreground outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[420px]"
-                style={{"top": str(topPx) + "px", "height": "auto", "bottom": "0px"}}
+                style={{
+                    "top": str(topPx) + "px",
+                    "right": str(rightPx) + "px",
+                    "height": "auto",
+                    "bottom": "0px"
+                }}
                 onOpenAutoFocus={lambda (e: Event) {
                     e.preventDefault();
                     box: any = e.target;
@@ -400,28 +494,14 @@ def:pub TaskDialog(
                         box.focus({"preventScroll": True});
                     }
                 }}
+                onCloseAutoFocus={returnFocus}
+                onEscapeKeyDown={keepOnOutsideEscape}
                 onInteractOutside={lambda (e: any) {
                 # Only Close, Cancel, Save and Escape close it: a click on
                 # the page (another card or row swaps the task) must not
                 # throw away unsaved edits.
                 e.preventDefault(); }}
-                onKeyDown={lambda (e: KeyboardEvent) {
-                    t: any = e.target;
-                    tag = str(t.tagName or "").lower() if t else "";
-                    typing = tag == "input"
-                        or tag == "textarea"
-                        or (t and t.isContentEditable);
-                    if (e.key == "m" or e.key == "M")
-                        and editing
-                        and not typing
-                        and not e.metaKey
-                        and not e.ctrlKey
-                        and not e.altKey
-                        and len(columnKeys) > 0 {
-                        e.preventDefault();
-                        moveOpen = True;
-                    }
-                }}
+                onKeyDown={onSheetKey}
             >
                 <div
                     className="flex min-h-12 shrink-0 items-center gap-2 border-b px-4 py-2"
@@ -579,7 +659,7 @@ def:pub TaskDialog(
                             <PropRow label="Assignees" top={outsideSelected}>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger
-                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring data-[state=open]:bg-accent"
+                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring data-[state=open]:bg-accent"
                                         aria-label="Assignees"
                                     >
                                         {if len(pickedNames) > 0 {
@@ -872,6 +952,15 @@ def:pub TaskDialog(
                                                 "pr", e.target.value
                                             ); }}
                                         />
+                                        {if prState {
+                                            <span
+                                                key="state"
+                                                className="shrink-0 px-1 text-xs text-muted-foreground"
+                                                title={"Pull request " + prState}
+                                            >
+                                                {prState}
+                                            </span>
+                                        }}
                                         {if form["pr"].strip() {
                                             <OpenLink
                                                 key="open"

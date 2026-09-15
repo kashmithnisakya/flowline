@@ -1009,6 +1009,11 @@ impl BoardPage.measureLanes -> None {
     w: any = window;
     wide = bool(w.innerWidth >= 768);
     box = el.getBoundingClientRect();
+    boxRight = float(box.right);
+    sheetX = sheetEdge();
+    if wide and sheetX > 0 and sheetX < boxRight {
+        boxRight = sheetX;
+    }
     lanes: any = el.querySelectorAll("[data-lane]");
     shown: list[str] = [];
     best = "";
@@ -1019,7 +1024,7 @@ impl BoardPage.measureLanes -> None {
         r = lane.getBoundingClientRect();
         key = str(lane.getAttribute("data-lane"));
         left = r.left if r.left > box.left else box.left;
-        right = r.right if r.right < box.right else box.right;
+        right = r.right if r.right < boxRight else boxRight;
         seen = right - left;
         if r.width > 0 and seen >= r.width * 0.6 {
             shown.append(key);
@@ -1093,11 +1098,16 @@ impl BoardPage.scrollToHidden -> None {
         return;
     }
     box = el.getBoundingClientRect();
+    boxRight = float(box.right);
+    sheetX = sheetEdge();
+    if sheetX > 0 and sheetX < boxRight {
+        boxRight = sheetX;
+    }
     lanes: any = el.querySelectorAll("[data-lane]");
     for i in range(int(lanes.length)) {
         lane: any = lanes[i];
         r = lane.getBoundingClientRect();
-        if r.right > box.right + 1 {
+        if r.right > boxRight + 1 {
             scrollToLane(str(lane.getAttribute("data-lane")));
             return;
         }
@@ -1107,13 +1117,12 @@ impl BoardPage.scrollToHidden -> None {
 impl BoardPage.revealCard(tid: str) -> None {
     el: any = lanesRef.current;
     card: any = document.querySelector('[data-task-card="' + tid + '"]');
-    sheet: any = document.querySelector("[data-task-sheet]");
-    if not el or not card or not sheet {
+    sheetX = sheetEdge();
+    if not el or not card or sheetX < 0 {
         return;
     }
-    # offsetWidth, not the rect: the sheet is still sliding in.
     w: any = window;
-    limit = float(w.innerWidth - sheet.offsetWidth) - 16.0;
+    limit = sheetX - 16.0;
     r = card.getBoundingClientRect();
     if r.right > limit {
         still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1121,6 +1130,20 @@ impl BoardPage.revealCard(tid: str) -> None {
             {"left": r.right - limit, "behavior": "auto" if still else "smooth"}
         );
     }
+}
+
+impl BoardPage.sheetEdge -> float {
+    sheet: any = document.querySelector("[data-task-sheet][data-state=open]");
+    w: any = window;
+    if not sheet or w.innerWidth < 768 {
+        return -1.0;
+    }
+    # offsetWidth and the inline right, not the rect: the sheet may still be
+    # sliding in.
+    right = float(w.parseFloat(sheet.style.right) or 0);
+    return float(document.documentElement.clientWidth)
+        - right
+        - float(sheet.offsetWidth);
 }
 
 impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
