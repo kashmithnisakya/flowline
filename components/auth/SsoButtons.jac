@@ -10,7 +10,29 @@ glob PROVIDERS: list[dict[str, str]] = [
          {"key": "github", "label": "GitHub"}
      ],
      # Both mounts of a full page load share the one in-flight probe.
-     PROBE: dict[str, any] = {"promise": None};
+     PROBE: dict[str, any] = {"promise": None},
+     # The last probe's answer, so a return visit draws the buttons at once.
+     SSO_CACHE: str = "flowline-sso";
+
+def cachedProviders -> list[str] {
+    try {
+        raw = localStorage.getItem(SSO_CACHE);
+        if raw {
+            return str(raw).split(",");
+        }
+    } except Exception {
+        return [];
+    }
+    return [];
+}
+
+def rememberProviders(found: list[str]) -> None {
+    try {
+        localStorage.setItem(SSO_CACHE, ",".join(found));
+    } except Exception {
+        return;
+    }
+}
 
 async def probeProvider(platform: str) -> bool {
     try {
@@ -62,10 +84,12 @@ def providerPhrase(found: list[str]) -> str {
 
 def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxElement {
     has pending: str = "",
-        found: list[str] = [];
+        found: list[str] = cachedProviders();
 
     async can with entry {
-        found = await configuredProviders();
+        fresh: list[str] = await configuredProviders();
+        found = fresh;
+        rememberProviders(fresh);
     }
 
     async def start(platform: str) -> None;
