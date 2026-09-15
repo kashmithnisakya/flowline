@@ -21,5 +21,8 @@ package.json
 # Jachammer / jaccoder tool artifacts
 .jaccoder/
 *.log
-docs/
+# docs site build output and local venv (the sources in docs/ are tracked)
+docs/site/
+.venv-docs/
+__pycache__/
 plan-archive/
