@@ -11,7 +11,7 @@ impl TasksPage.loadWorkspace -> None {
             for p in allProjects
             if p.active
         ];
-        # A project or assignee id from the URL that is not in the dropdowns
+        # A project or assignee id from the URL that is not in the menus
         # (archived, or another workspace's) would show a blank filter.
         knownProject = fProject == "all";
         for p in projects {
@@ -33,6 +33,9 @@ impl TasksPage.loadWorkspace -> None {
         }
         sResult = root spawn GetFlowLine(with_counts=False);
         steps = sResult.reports[0] if sResult.reports else [];
+        if fStep != "All" and fStep not in columnKeys() {
+            fStep = "All";
+        }
         rResult = root spawn ListRoles();
         roleRows = rResult.reports[0] if rResult.reports else [];
         iResult = root spawn ListIterations();
@@ -42,36 +45,80 @@ impl TasksPage.loadWorkspace -> None {
         # failure panel for the table itself.
         members = [];
     }
-    await loadTasks();
+    # Only a step filter waits for the flow line; every other view is already
+    # loading from the view effect.
+    readyRef.current = True;
+    if fStep != "All" {
+        await loadTasks();
+    }
 }
 
 impl TasksPage.loadTasks -> None {
+    # A step filter places rows by the flow line, so it waits for the steps.
+    if fStep != "All" and not readyRef.current {
+        return;
+    }
     seq = (reqRef.current or 0) + 1;
     reqRef.current = seq;
+    if not loading {
+        refreshing = True;
+    }
     try {
-        result = root spawn ListTasks(
-            scope=scope,
-            q=query,
-            project_id="" if fProject == "all" else fProject,
-            assignee_id="" if fAssignee == "All" else fAssignee,
-            category="" if fCategory == "All" else fCategory,
-            tag="" if fTag == "All" else fTag,
-            estimated="" if fEstimate == "All" else fEstimate,
-            sort=sort,
-            sort_dir=sortDir,
-            page=page,
-            page_size=PAGE_SIZE
-        );
-        data = result.reports[0] if result.reports else None;
+        fetched: list[TaskView] = [];
+        matched = 0;
+        more = False;
+        if fStep != "All" or fPriority != "All" {
+            pool = await gatherPool(seq);
+            start = (page - 1) * PAGE_SIZE;
+            fetched = pool[start:start + PAGE_SIZE];
+            matched = len(pool);
+            more = len(pool) > start + PAGE_SIZE;
+        } else {
+            result = root spawn ListTasks(
+                scope=scope,
+                q=query,
+                project_id="" if fProject == "all" else fProject,
+                assignee_id="" if fAssignee == "All" else fAssignee,
+                category="" if fCategory == "All" else fCategory,
+                tag="" if fTag == "All" else fTag,
+                estimated="" if fEstimate == "All" else fEstimate,
+                sort=sort,
+                sort_dir=sortDir,
+                page=page,
+                page_size=PAGE_SIZE
+            );
+            data = result.reports[0] if result.reports else None;
+            fetched = data.rows if data else [];
+            matched = data.total if data else 0;
+            more = data.has_more if data else False;
+        }
+        # The scope's unfiltered count, read once per scope while a filter is
+        # on; any write forgets them.
+        totals: any = totalsRef.current or {};
+        if not filtered() {
+            totals[scope] = matched;
+        } elif reqRef.current == seq and scope not in totals {
+            whole = root spawn ListTasks(scope=scope, page=1, page_size=1);
+            wholePage = whole.reports[0] if whole.reports else None;
+            totals[scope] = wholePage.total if wholePage else -1;
+        }
+        totalsRef.current = totals;
+        # A page past the end (an old link, or the last row deleted elsewhere)
+        # steps back to the last page; the view effect reloads it.
+        if reqRef.current == seq and len(fetched) == 0 and page > 1 and matched > 0 {
+            page = (matched + PAGE_SIZE - 1) // PAGE_SIZE;
+            return;
+        }
         if reqRef.current == seq {
-            fetched: list[TaskView] = data.rows if data else [];
             rows = fetched;
-            total = data.total if data else 0;
-            hasMore = data.has_more if data else False;
-            # Distinct categories and tags present, for the filter dropdowns.
-            # Read the local `fetched`, not the just-assigned `rows` has,
-            # which is the pre-call value for the rest of this handler.
-            # The active filters count as seen, so a view from the URL that
+            total = matched;
+            hasMore = more;
+            scopeTotal = totals[scope] if scope in totals else -1;
+            if cursor >= len(fetched) {
+                cursor = len(fetched) - 1;
+            }
+            # Distinct categories and tags present, for the filter menus. The
+            # active filters count as seen, so a view from the URL that
             # matches nothing still shows what it filtered on.
             seenCats: list[str] = [fCategory] if fCategory != "All" else [];
             seenTags: list[str] = [fTag] if fTag != "All" else [];
@@ -96,7 +143,84 @@ impl TasksPage.loadTasks -> None {
     }
     if reqRef.current == seq {
         loading = False;
+        refreshing = False;
     }
+}
+
+# Every task the view matches once step and priority apply, read page by page
+# at the walker's largest size and kept for paging until the view or the data
+# changes. `steps` is part of the key: placement depends on the flow line.
+impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
+    keys = columnKeys();
+    sig = "|".join(
+        [
+            scope,
+            query,
+            fProject,
+            fAssignee,
+            fCategory,
+            fTag,
+            fEstimate,
+            fStep,
+            fPriority,
+            sort,
+            sortDir,
+            str(len(steps))
+        ]
+    );
+    cached: any = poolRef.current;
+    if cached and cached["sig"] == sig {
+        return cached["rows"];
+    }
+    pool: list[TaskView] = [];
+    pg = 1;
+    more = True;
+    while more and pg <= GATHER_PAGES and reqRef.current == seq {
+        result = root spawn ListTasks(
+            scope=scope,
+            q=query,
+            project_id="" if fProject == "all" else fProject,
+            assignee_id="" if fAssignee == "All" else fAssignee,
+            category="" if fCategory == "All" else fCategory,
+            tag="" if fTag == "All" else fTag,
+            estimated="" if fEstimate == "All" else fEstimate,
+            sort=sort,
+            sort_dir=sortDir,
+            page=pg,
+            page_size=GATHER_SIZE
+        );
+        data = result.reports[0] if result.reports else None;
+        got: list[TaskView] = data.rows if data else [];
+        for t in got {
+            if (fPriority == "All" or t.priority == fPriority)
+                and (fStep == "All" or columnKeyOf(t, keys) == fStep) {
+                pool.append(t);
+            }
+        }
+        more = data.has_more if data else False;
+        pg = pg + 1;
+    }
+    if reqRef.current == seq {
+        poolRef.current = {"sig": sig, "rows": pool};
+    }
+    return pool;
+}
+
+impl TasksPage.filtered -> bool {
+    return bool(query)
+        or fProject != "all"
+        or fAssignee != "All"
+        or fStep != "All"
+        or fPriority != "All"
+        or fCategory != "All"
+        or fTag != "All"
+        or fEstimate != "All";
+}
+
+# A write can change what any view matches: drop the kept pool and totals.
+impl TasksPage.forget -> None {
+    poolRef.current = None;
+    totalsRef.current = {};
 }
 
 impl TasksPage.sortBy(field: str) -> None {
@@ -109,14 +233,16 @@ impl TasksPage.sortBy(field: str) -> None {
         sortDir = "asc";
     }
     page = 1;
+    cursor = -1;
 }
 
 impl TasksPage.chooseScope(value: str) -> None {
     scope = value;
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.setProject(value: str) -> None {
+impl TasksPage.pickProject(value: str) -> None {
     fProject = value;
     # A member outside the newly picked project must not stay the filter.
     if value != "all" and fAssignee != "All" {
@@ -131,43 +257,86 @@ impl TasksPage.setProject(value: str) -> None {
         }
     }
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.setAssignee(value: str) -> None {
+impl TasksPage.pickAssignee(value: str) -> None {
     fAssignee = value;
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.setCategory(value: str) -> None {
+impl TasksPage.pickStep(value: str) -> None {
+    fStep = value;
+    page = 1;
+    cursor = -1;
+}
+
+impl TasksPage.pickPriority(value: str) -> None {
+    fPriority = value;
+    page = 1;
+    cursor = -1;
+}
+
+impl TasksPage.pickCategory(value: str) -> None {
     fCategory = value;
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.setTag(value: str) -> None {
+impl TasksPage.pickTag(value: str) -> None {
     fTag = value;
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.setEstimate(value: str) -> None {
+impl TasksPage.pickEstimate(value: str) -> None {
     fEstimate = value;
     page = 1;
+    cursor = -1;
 }
 
-impl TasksPage.runSearch -> None {
-    query = queryDraft.strip();
-    page = 1;
+impl TasksPage.typeSearch(value: str) -> None {
+    queryDraft = value;
+    # Clearing the box applies at once; typing waits for the pause.
+    if not value.strip() {
+        commitSearch();
+    }
 }
 
-impl TasksPage.clearSearch -> None {
-    query = "";
+impl TasksPage.commitSearch -> None {
+    q = queryDraft.strip();
+    if q != query {
+        query = q;
+        page = 1;
+        cursor = -1;
+    }
+}
+
+impl TasksPage.clearFilters -> None {
+    fProject = "all";
+    fAssignee = "All";
+    fStep = "All";
+    fPriority = "All";
+    fCategory = "All";
+    fTag = "All";
+    fEstimate = "All";
     queryDraft = "";
+    query = "";
     page = 1;
+    cursor = -1;
 }
 
 impl TasksPage.goPage(delta: int) -> None {
     next = page + delta;
-    if next >= 1 {
-        page = next;
+    if next < 1 {
+        return;
+    }
+    page = next;
+    cursor = -1;
+    top: any = document.querySelector("[data-tasks-top]");
+    if top and top.getBoundingClientRect().top < 0 {
+        top.scrollIntoView({"block": "start"});
     }
 }
 
@@ -176,7 +345,7 @@ impl TasksPage.writeUrl -> None {
     # is not a page the back button should step through.
     w: any = window;
     params: any = new(w.URLSearchParams);
-    if scope != "all" {
+    if scope != "working" {
         params.set("scope", scope);
     }
     if fProject != "all" {
@@ -184,6 +353,12 @@ impl TasksPage.writeUrl -> None {
     }
     if fAssignee != "All" {
         params.set("assignee", fAssignee);
+    }
+    if fStep != "All" {
+        params.set("step", fStep);
+    }
+    if fPriority != "All" {
+        params.set("priority", fPriority);
     }
     if fCategory != "All" {
         params.set("category", fCategory);
@@ -207,7 +382,96 @@ impl TasksPage.writeUrl -> None {
     qs = str(params);
     target = str(w.location.pathname) + ("?" + qs if qs else "");
     if target != str(w.location.pathname) + str(w.location.search) {
-        w.history.replaceState(None, "", target);
+        # Keep the router's own history state, only the address changes.
+        w.history.replaceState(w.history.state, "", target);
+    }
+}
+
+# ----------------------------------------------------------------- keyboard
+
+impl TasksPage.handleKey(e: any) -> None {
+    t: any = e.target;
+    tag = str(t.tagName or "").lower() if t else "";
+    typing = tag == "input"
+        or tag == "textarea"
+        or tag == "select"
+        or bool(t and t.isContentEditable);
+    if typing or e.metaKey or e.ctrlKey or e.altKey or e.defaultPrevented {
+        return;
+    }
+    if document.querySelector(
+        "[role=dialog][data-state=open], [role=menu], [role=listbox]"
+    ) {
+        return;
+    }
+    key = str(e.key);
+    if key == "/" {
+        boxes: any = document.querySelectorAll("[data-tasks-search]");
+        for i in range(int(boxes.length)) {
+            box: any = boxes[i];
+            if box.offsetParent {
+                e.preventDefault();
+                box.focus();
+            }
+        }
+    } elif key == "j" or key == "J" or key == "k" or key == "K" {
+        e.preventDefault();
+        moveCursor(1 if key == "j" or key == "J" else -1);
+    } elif key == "Enter" and cursor >= 0 and cursor < len(rows) {
+        # A focused title button opens on its own click; this is the path for
+        # a cursor whose focus has gone back to the page.
+        active: any = document.activeElement;
+        activeTag = str(active.tagName or "").lower() if active else "body";
+        if activeTag == "body" {
+            e.preventDefault();
+            openTask(rows[cursor].id);
+        }
+    }
+}
+
+impl TasksPage.moveCursor(delta: int) -> None {
+    n = len(rows);
+    if n == 0 {
+        return;
+    }
+    next = (0 if delta > 0 else n - 1) if cursor < 0 else cursor + delta;
+    if next < 0 {
+        next = 0;
+    }
+    if next > n - 1 {
+        next = n - 1;
+    }
+    cursor = next;
+    targets: any = document.querySelectorAll("[data-task-row='" + str(next) + "']");
+    for i in range(int(targets.length)) {
+        el: any = targets[i];
+        if el.offsetParent {
+            el.focus({"preventScroll": True});
+            el.scrollIntoView({"block": "nearest"});
+        }
+    }
+}
+
+impl TasksPage.pointAt(i: int) -> None {
+    if cursor != i {
+        cursor = i;
+    }
+}
+
+# The table header sticks under the app bar, whatever height the bar has.
+impl TasksPage.measureHeader -> None {
+    bar: any = document.querySelector("header");
+    height = 0;
+    if bar {
+        w: any = window;
+        style: any = w.getComputedStyle(bar);
+        position = str(style.position);
+        if position == "sticky" or position == "fixed" {
+            height = int(Math.round(bar.getBoundingClientRect().height));
+        }
+    }
+    if height != stickyTop {
+        stickyTop = height;
     }
 }
 
@@ -271,8 +535,9 @@ impl TasksPage.mappedStatus(key: str) -> str {
 
 impl TasksPage.openTask(tid: str) -> None {
     keys = columnKeys();
-    for t in rows {
+    for (i, t) in enumerate(rows) {
         if t.id == tid {
+            cursor = i;
             editTaskId = t.id;
             taskForm = {
                 "title": t.title,
@@ -300,6 +565,7 @@ impl TasksPage.openTask(tid: str) -> None {
 # A checklist write reports the task's fresh view; the table row takes it.
 impl TasksPage.replaceRow(view: TaskView) -> None {
     rows = [view if t.id == view.id else t for t in rows];
+    poolRef.current = None;
 }
 
 impl TasksPage.setTaskField(key: str, value: str) -> None {
@@ -380,7 +646,14 @@ impl TasksPage.saveTask -> None {
             project_id=project
         );
         taskOpen = False;
+        forget();
         await loadTasks();
+        # The saved row may have moved in the order; the cursor follows it.
+        for (i, t) in enumerate(rows) {
+            if t.id == editTaskId {
+                cursor = i;
+            }
+        }
     } except Exception as e {
         toast("Failed to save task");
     }
@@ -395,6 +668,7 @@ impl TasksPage.deleteTask -> None {
     try {
         root spawn DeleteTask(task_id=editTaskId);
         taskOpen = False;
+        forget();
         # The last row of a later page: step back, and the effect reloads.
         if len(rows) == 1 and page > 1 {
             page = page - 1;
