@@ -229,6 +229,19 @@ impl BoardPage.filtersOn(pid: str, who: str, cat: str) -> bool {
     return pid != "all" or who != "All" or cat != "All";
 }
 
+impl BoardPage.clearFilters -> None {
+    boardQuery = "";
+    fAssignee = "All";
+    fCategory = "All";
+    fTag = "All";
+    fEstimate = "All";
+    fIteration = "All";
+    fPriority = "All";
+    fProject = "all";
+    localStorage.setItem("flowline_project", "all");
+    refreshOlder("all", "All", "All");
+}
+
 impl BoardPage.setProjectFilter(v: str) -> None {
     # The new value is handed to refreshOlder rather than read back: a
     # `has` assigned here is still the old value for the rest of this call.
@@ -381,11 +394,11 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
             planned = it.id;
         }
     }
+    # No due date: a quick capture must not be born due today.
     form = {
         ** BLANK_TASK,
         "project": fProject if fProject != "all" else firstProject,
         "status": landing,
-        "due_date": shifted.toISOString()[:10],
         "iteration": planned
     };
     fAssignees = [];
@@ -638,7 +651,11 @@ impl BoardPage.columnKeyOf(t: TaskView) -> str {
 }
 
 impl BoardPage.moveTo(
-    taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+    taskId: str,
+    columnKey: str,
+    anchorId: str = "",
+    ahead: bool = False,
+    askDetails: bool = True
 ) -> None {
     # Optimistic: mutate the card in state and rebind; the server owns the
     # order. movesRef fences the poll so a stale fetch cannot snap the card
@@ -682,6 +699,11 @@ impl BoardPage.moveTo(
     }
     reorder = positioned and oldKey == columnKey;
     landing = mappedStatus(columnKey);
+    # An open sheet on this task follows the move, or its Save (which sends
+    # every field) would put the card back.
+    if dialogOpen and editingId == taskId and not reorder {
+        setField("status", columnKey);
+    }
     # The rendered order is the array order, so a positioned drop splices
     # the row beside its anchor; an append keeps the sort_order patch.
     row: list[TaskView] = [];
@@ -770,6 +792,9 @@ impl BoardPage.moveTo(
         if len(after) == 1 and (len(before) != 1 or before[0] != after[0]) {
             handedTo = after[0];
         }
+        if dialogOpen and editingId == taskId {
+            fAssignees = landed[0].assignee_ids;
+        }
         # `tasks` read after the await is the pre-call snapshot, which is
         # exactly the list the optimistic patch produced; swap the row in.
         swapped: list[TaskView] = [];
@@ -787,20 +812,25 @@ impl BoardPage.moveTo(
     if reorder {
         return;
     }
-    # Every successful move confirms itself and offers the undo: a card can
-    # land out of sight (Hide Done, or a column below the fold), and the
-    # handoff dialog is skippable, so it cannot be the only feedback.
-    toast(
-        "Moved to " + label + (" · " + handedTo if handedTo else ""),
-        {
-            "description": title,
-            "action": {"label": "Undo", "onClick": lambda { moveTo(taskId, oldKey); }}
-        }
-    );
+    # A board move confirms itself with an undo: the card can land out of
+    # sight and the handoff dialog is skippable. A sheet move does not: its
+    # breadcrumb shows the step, and a toast would cover the sheet's Save.
+    if askDetails {
+        toast(
+            "Moved to " + label + (" · " + handedTo if handedTo else ""),
+            {
+                "description": title,
+                "action": {
+                    "label": "Undo",
+                    "onClick": lambda { moveTo(taskId, oldKey); }
+                }
+            }
+        );
+    }
     if cameFromHistory {
         await refreshOlder(fProject, fAssignee, fCategory);
     }
-    if columnKind(columnKey) in HANDOFF_KINDS {
+    if askDetails and columnKind(columnKey) in HANDOFF_KINDS {
         # A handoff or a stop also asks for the optional detail.
         mForm = BLANK_MOVE;
         moveStatus = label;
@@ -861,6 +891,12 @@ impl BoardPage.saveMoveInfo -> None {
         toast("Failed to save the handoff details");
     }
     saving = False;
+}
+
+impl BoardPage.sheetMove(columnKey: str) -> None {
+    if editingId {
+        moveTo(editingId, columnKey, "", False, False);
+    }
 }
 
 impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
@@ -948,4 +984,155 @@ impl BoardPage.createIssue(repoId: str) -> None {
         toast("Failed to open a GitHub issue");
     }
     saving = False;
+}
+
+
+# ------------------------------------------------------------------- lanes
+
+impl BoardPage.scheduleMeasure -> None {
+    if frameRef.current {
+        return;
+    }
+    frameRef.current = window.requestAnimationFrame(
+        lambda {
+            frameRef.current = 0;
+            measureLanes();
+        }
+    );
+}
+
+impl BoardPage.measureLanes -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    w: any = window;
+    wide = bool(w.innerWidth >= 768);
+    box = el.getBoundingClientRect();
+    lanes: any = el.querySelectorAll("[data-lane]");
+    shown: list[str] = [];
+    best = "";
+    bestWidth = 0.0;
+    after = 0;
+    for i in range(int(lanes.length)) {
+        lane: any = lanes[i];
+        r = lane.getBoundingClientRect();
+        key = str(lane.getAttribute("data-lane"));
+        left = r.left if r.left > box.left else box.left;
+        right = r.right if r.right < box.right else box.right;
+        seen = right - left;
+        if r.width > 0 and seen >= r.width * 0.6 {
+            shown.append(key);
+        } elif r.left >= box.left {
+            after = after + 1;
+        }
+        if seen > bestWidth {
+            bestWidth = seen;
+            best = key;
+        }
+    }
+    joined = ",".join(shown);
+    if joined != viewKeys {
+        viewKeys = joined;
+    }
+    if after != hiddenAfter {
+        hiddenAfter = after;
+    }
+    if wide != wideView {
+        wideView = wide;
+    }
+    if best and best != activeLane {
+        activeLane = best;
+        if not wide {
+            # Keep the phone's current tab in sight inside its own row.
+            tab: any = document.querySelector('[data-step-tab="' + best + '"]');
+            row: any = tab.parentElement if tab else None;
+            if row {
+                at = tab.getBoundingClientRect().left - row.getBoundingClientRect().left
+                    + row.scrollLeft;
+                row.scrollTo({"left": at - 24, "behavior": "smooth"});
+            }
+        }
+    }
+    # On md+ the lanes fill the window below them, less the page's own
+    # bottom padding, so the page itself does not scroll.
+    height = 0;
+    if wide {
+        main: any = el.closest("main");
+        pad = 0.0;
+        if main {
+            pad = float(w.parseFloat(w.getComputedStyle(main).paddingBottom) or 0);
+        }
+        height = int(w.innerHeight - (box.top + w.scrollY) - pad);
+        if height < 320 {
+            height = 320;
+        }
+    }
+    if height != laneH {
+        laneH = height;
+    }
+}
+
+impl BoardPage.scrollToLane(key: str) -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    lane: any = el.querySelector('[data-lane="' + key + '"]');
+    if not lane {
+        return;
+    }
+    w: any = window;
+    still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    el.scrollTo({"left": lane.offsetLeft, "behavior": "auto" if still else "smooth"});
+}
+
+impl BoardPage.scrollToHidden -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    box = el.getBoundingClientRect();
+    lanes: any = el.querySelectorAll("[data-lane]");
+    for i in range(int(lanes.length)) {
+        lane: any = lanes[i];
+        r = lane.getBoundingClientRect();
+        if r.right > box.right + 1 {
+            scrollToLane(str(lane.getAttribute("data-lane")));
+            return;
+        }
+    }
+}
+
+impl BoardPage.revealCard(tid: str) -> None {
+    el: any = lanesRef.current;
+    card: any = document.querySelector('[data-task-card="' + tid + '"]');
+    sheet: any = document.querySelector("[data-task-sheet]");
+    if not el or not card or not sheet {
+        return;
+    }
+    # offsetWidth, not the rect: the sheet is still sliding in.
+    w: any = window;
+    limit = float(w.innerWidth - sheet.offsetWidth) - 16.0;
+    r = card.getBoundingClientRect();
+    if r.right > limit {
+        still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        el.scrollBy(
+            {"left": r.right - limit, "behavior": "auto" if still else "smooth"}
+        );
+    }
+}
+
+impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
+    el: any = lanesRef.current;
+    if not el or not wideView {
+        return;
+    }
+    box = el.getBoundingClientRect();
+    x = float(e.clientX);
+    if x > float(box.right) - 64.0 {
+        el.scrollLeft = el.scrollLeft + 14;
+    } elif x < float(box.left) + 64.0 {
+        el.scrollLeft = el.scrollLeft - 14;
+    }
 }

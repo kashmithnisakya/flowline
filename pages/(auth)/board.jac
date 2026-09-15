@@ -1,7 +1,8 @@
 """flowline - Board page (/board): the org's flow line as a kanban. The columns
 ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
-shell: data and handlers here, columns/cards/filters/dialog presentational."""
+shell: data and handlers here; route strip, toolbar, lanes and sheet are
+presentational."""
 
 import from ...models {
     Project,
@@ -15,7 +16,7 @@ import from ...models {
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
-import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
+import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 
 import from ...services.board.board { BoardSnapshot }
 import from ...services.projects.projects { AssignToProject }
@@ -34,8 +35,8 @@ import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
+import from ...components.board.RouteStrip { RouteStrip }
 import from ...components.ui.button { Button }
-import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from "sonner" { toast }
 import from "react" { useEffect }
@@ -130,6 +131,7 @@ def:pub BoardPage -> JsxPage {
         fEstimate: str = "All",
         # "All", "current" (whichever iterations hold today), "none" or a jid.
         fIteration: str = "All",
+        fPriority: str = "All",
         iterations: list[IterationView] = [],
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
@@ -154,7 +156,18 @@ def:pub BoardPage -> JsxPage {
         # A /board?task=<id> deep link (the overview's attention list, the
         # palette) opens that card once the first load has landed; "new"
         # opens the create dialog (/board?new=1).
-        pendingTaskId: str = "";
+        pendingTaskId: str = "",
+        # The lane scroller and what it shows: keys of lanes mostly on screen
+        # (comma-joined, so an unchanged view is a no-op write), the lane most
+        # on screen (the phone tab), lanes past the right edge, the lane
+        # height on md+ and whether the md+ layout applies.
+        lanesRef: Ref[any] = Ref(),
+        frameRef: Ref[any] = Ref(),
+        viewKeys: str = "",
+        activeLane: str = "",
+        hiddenAfter: int = 0,
+        laneH: int = 0,
+        wideView: bool = True;
 
     async can with entry {
         movesRef.current = 0;
@@ -221,7 +234,42 @@ def:pub BoardPage -> JsxPage {
             window.addEventListener("flowline:open-task", onOpenTask);
             window.addEventListener("flowline:new-task", onNewTask);
             timer = window.setInterval(lambda { refreshTasks(); }, 60000);
+            onResize = lambda { scheduleMeasure(); };
+            window.addEventListener("resize", onResize);
+            # "/" focuses the title filter and N opens a new task, unless the
+            # keys are being typed or a dialog or menu has them.
+            onKey = lambda (e: any) {
+                t: any = e.target;
+                tag = str(t.tagName or "").lower() if t else "";
+                typing = tag == "input"
+                    or tag == "textarea"
+                    or tag == "select"
+                    or bool(t and t.isContentEditable);
+                if typing or e.metaKey or e.ctrlKey or e.altKey or e.defaultPrevented {
+                    return;
+                }
+                if document.querySelector("[role=menu], [role=listbox]") {
+                    return;
+                }
+                if e.key == "/" {
+                    boxes: any = document.querySelectorAll("[data-board-search]");
+                    for i in range(int(boxes.length)) {
+                        box: any = boxes[i];
+                        if box.offsetParent {
+                            e.preventDefault();
+                            box.focus();
+                        }
+                    }
+                } elif (e.key == "n" or e.key == "N")
+                    and not document.querySelector("[role=dialog][data-state=open]") {
+                    e.preventDefault();
+                    pendingTaskId = "new";
+                }
+            };
+            window.addEventListener("keydown", onKey);
             return lambda {
+                window.removeEventListener("resize", onResize);
+                window.removeEventListener("keydown", onKey);
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("flowline:refresh", onFocus);
                 window.removeEventListener("flowline:open-task", onOpenTask);
@@ -244,6 +292,44 @@ def:pub BoardPage -> JsxPage {
             return lambda { if timer { window.clearTimeout(timer); }};
         },
         [ghConnected, loading, drainTick]
+    );
+
+    # Measure after the lanes lay out, and again whenever what sits above
+    # them or how many there are changes.
+    useEffect(
+        lambda {
+            frame: any = window.requestAnimationFrame(lambda { measureLanes(); });
+            return lambda { window.cancelAnimationFrame(frame); };
+        },
+        [
+            loading,
+            len(steps),
+            len(tasks),
+            loadFailed,
+            workingTruncated,
+            hideDone,
+            fProject,
+            fAssignee,
+            fCategory,
+            fTag,
+            fEstimate,
+            fIteration,
+            fPriority,
+            bool(boardQuery)
+        ]
+    );
+
+    # An open sheet covers the right of the board, so the lanes gain room
+    # past their end and the open card scrolls out from under it.
+    useEffect(
+        lambda {
+            frame: any = 0;
+            if dialogOpen and editingId and wideView {
+                frame = window.requestAnimationFrame(lambda { revealCard(editingId); });
+            }
+            return lambda { if frame { window.cancelAnimationFrame(frame); }};
+        },
+        [dialogOpen, editingId, wideView]
     );
 
     async def boot -> None;
@@ -275,15 +361,33 @@ def:pub BoardPage -> JsxPage {
     def columnKeyOf(t: TaskView) -> str;
     def mappedStatus(key: str) -> str;
     def doneColumnKey -> str;
+    # askDetails=False is a move from the task sheet: no handoff dialog (the
+    # sheet has those fields, a second form would race its Save), no toast.
     async def moveTo(
-        taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+        taskId: str,
+        columnKey: str,
+        anchorId: str = "",
+        ahead: bool = False,
+        askDetails: bool = True
     ) -> None;
+    def sheetMove(columnKey: str) -> None;
     def moveBeside(draggedId: str, targetId: str, ahead: bool) -> None;
     def arrowMove(t: TaskView, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
     def setCategoryFilter(v: str) -> None;
     def filtersOn(pid: str, who: str, cat: str) -> bool;
+    def clearFilters -> None;
+    # Lane geometry: which lanes are on screen, the lane height on md+, and
+    # scrolling a lane (or the first one past the edge) into view.
+    def measureLanes -> None;
+    def scheduleMeasure -> None;
+    def scrollToLane(key: str) -> None;
+    def scrollToHidden -> None;
+    def revealCard(tid: str) -> None;
+    # A drag near either edge of the lanes scrolls them, so a card can reach
+    # a lane that starts off screen.
+    def dragEdgeScroll(e: DragEvent) -> None;
     def setField(key: str, value: str) -> None;
     def setMoveField(key: str, value: str) -> None;
     def toggleAssignee(memberId: str) -> None;
@@ -362,6 +466,7 @@ def:pub BoardPage -> JsxPage {
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)
+            and (fPriority == "All" or t.priority == fPriority)
             and (
                 fIteration == "All"
                 or (fIteration == "none" and not t.iteration_id)
@@ -451,95 +556,142 @@ def:pub BoardPage -> JsxPage {
         }
     }
 
+    # One pass over the filtered set per lane: its rows, overdue count and
+    # colour, shared by the route strip, the lanes and the move menus.
+    colLabels: list[str] = [columnLabel(k) for k in colKeys];
+    colColors: list[str] = [];
+    laneRows: list[list[TaskView]] = [];
+    laneCounts: list[int] = [];
+    laneOverdue: list[int] = [];
+    for key in colKeys {
+        stepColor = columnColor(key);
+        kind = columnKind(key);
+        if stepColor {
+            colColors.append(stepColor);
+        } else {
+            colColors.append(KIND_COLORS[kind] if kind in KIND_COLORS else "slate");
+        }
+        rows: list[TaskView] = (recentDone + olderShown)
+            if key == doneKey
+            else [
+                t
+                for t in visible
+                if columnKeyOf(t) == key
+            ];
+        laneRows.append(rows);
+        laneCounts.append(len(rows));
+        late = 0;
+        if key != doneKey {
+            for t in rows {
+                if dueTone(t.due_date, t.status, today) == "overdue" {
+                    late = late + 1;
+                }
+            }
+        }
+        laneOverdue.append(late);
+    }
+    inView: list[str] = [
+        k
+        for k in viewKeys.split(",")
+        if k
+    ];
+    shownCount = len(visible) + len(olderShown);
+    selectedId = editingId if dialogOpen else "";
+    editingCreated = "";
+    editingUpdated = "";
+    for t in tasks + olderDone {
+        if t.id == editingId {
+            editingCreated = t.created_at;
+            editingUpdated = t.updated_at;
+        }
+    }
+    laneStyle: dict[str, str] = {};
+    if wideView and laneH > 0 {
+        laneStyle["height"] = str(laneH) + "px";
+    }
+    if wideView and dialogOpen and editingId {
+        laneStyle["paddingRight"] = "436px";
+    }
+    if wideView and hiddenAfter > 0 {
+        # The right edge fades while lanes sit past it.
+        laneStyle["maskImage"] = "linear-gradient(to right, #000 calc(100% - 56px), transparent)";
+        laneStyle["WebkitMaskImage"] = "linear-gradient(to right, #000 calc(100% - 56px), transparent)";
+    }
+
     return
-        <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-h-9 flex-wrap items-center gap-3">
                 <h1 className="page-title">Board</h1>
-                {if loading {
-                    <div key="tools-skel" className="flex flex-wrap items-center gap-2">
-                        <Skeleton className="h-8 w-44"/>
-                        <Skeleton className="h-8 w-40"/>
-                        <Skeleton className="h-8 w-40"/>
-                        <Skeleton className="h-8 w-24"/>
-                        <Skeleton className="h-8 w-24"/>
-                    </div>
-                } elif not noFlowLine and not nothingLoaded {
-                    <div key="tools" className="flex flex-wrap items-center gap-2">
-                        <div key="search" className="relative">
-                            <Input
-                                className="h-8 w-52 pr-7"
-                                placeholder="Search title or #issue"
-                                aria-label="Search the board"
-                                value={boardQuery}
-                                onChange={lambda (e: any) { boardQuery = e.target.value; }}
-                            />
-                            {if boardQuery {
-                                <button
-                                    key="clear"
-                                    type="button"
-                                    aria-label="Clear search"
-                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                                    onClick={lambda { boardQuery = ""; }}
-                                >
-                                    <svg
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        aria-hidden="true"
-                                    >
-                                        <path d="M18 6 6 18"/>
-                                        <path d="m6 6 12 12"/>
-                                    </svg>
-                                </button>
-                            }}
-                        </div>
-                        <FilterBar
-                            projects={activeProjects}
-                            members={activeMembers}
-                            project={fProject}
-                            assignee={fAssignee}
-                            category={fCategory}
-                            hideDone={hideDone}
-                            onProject={setProjectFilter}
-                            onAssignee={setAssigneeFilter}
-                            onCategory={setCategoryFilter}
-                            onHideDone={lambda { hideDone = not hideDone; }}
-                            categories={allCategories}
-                            tags={allTags}
-                            tag={fTag}
-                            estimate={fEstimate}
-                            onTag={lambda (v: str) { fTag = v; }}
-                            onEstimate={lambda (v: str) { fEstimate = v; }}
-                            iterations={iterations}
-                            iteration={fIteration}
-                            onIteration={lambda (v: str) { fIteration = v; }}
-                        />
+                {if not loading and not noFlowLine and not nothingLoaded {
+                    <div key="actions" className="ml-auto flex items-center gap-2">
                         {if ghConnected {
                             <Button
                                 key="sync"
                                 variant="outline"
                                 disabled={syncing}
+                                aria-label={"Sync GitHub" if not syncing else None}
+                                title="Sync GitHub"
                                 onClick={syncGithub}
                             >
                                 {if syncing {
                                     <Spinner key="sp"/>
-                                }}
-                                {(syncNote or "Syncing…") if syncing else "Sync GitHub"}
+                                } else {
+                                    <svg
+                                        key="icon"
+                                        width={14}
+                                        height={14}
+                                        viewBox="0 0 16 16"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            d="M13 4.5V2m0 2.5h-2.5M13 4.5A5.5 5.5 0 1 0 13.5 9"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={1.6}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                } }
+                                <span className="max-sm:hidden">
+                                    {(syncNote or "Syncing…")
+                                        if syncing
+                                        else "Sync GitHub"}
+                                </span>
                             </Button>
                         }}
-                        <Button onClick={lambda { openCreate(""); }}>New task</Button>
+                        <Button
+                            aria-label="New task"
+                            onClick={lambda { openCreate(""); }}
+                        >
+                            <svg
+                                width={14}
+                                height={14}
+                                viewBox="0 0 16 16"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="M8 3v10M3 8h10"
+                                    stroke="currentColor"
+                                    strokeWidth={1.8}
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                            New task
+                            <span
+                                aria-hidden="true"
+                                className="ml-0.5 font-mono text-xs opacity-80 max-md:hidden"
+                            >
+                                N
+                            </span>
+                        </Button>
                     </div>
-                } }
+                }}
             </div>
             {if workingTruncated and not loading {
                 <div
                     key="truncated"
-                    className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning"
+                    className="rounded-md border border-warning/50 bg-card px-3 py-2 text-xs text-warning"
                     role="status"
                 >
                     More open work than the board loads at once, so some cards are missing. Narrow the filters, or archive what is finished.
@@ -554,41 +706,31 @@ def:pub BoardPage -> JsxPage {
                 />
             }}
             {if loading {
-                # Mirrors the loaded board: one row of column shells, each
-                # with a header (dot, label bar, count pill) and card blocks,
-                # so data landing swaps content without reflow.
                 <div
                     key="skeletons"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
-                        + (
-                            # The refresh-failed strip takes a row above the lanes.
-                            "[--lane-h:calc(100dvh-15.5rem)]"
-                                if loadFailed
-                                else "[--lane-h:calc(100dvh-12.5rem)]"
-                        )}
-                    style={{"gridTemplateColumns": "repeat(5, minmax(17rem, 1fr))"}}
+                    className="flex min-w-0 flex-col gap-3"
+                    aria-busy="true"
                 >
-                    {for i in [0, 1, 2, 3, 4] {
-                        <div
-                            key={"sk" + str(i)}
-                            className="flex min-h-44 w-full min-w-0 snap-start flex-col gap-2 rounded-xl border bg-muted/30 p-2 md:h-[var(--lane-h)]"
-                        >
-                            <div
-                                className="flex items-center justify-between px-1 py-1"
-                            >
-                                <div className="flex items-center gap-1.5">
-                                    <Skeleton className="size-2 rounded-full"/>
-                                    <Skeleton className="h-4 w-20"/>
-                                </div>
-                                <Skeleton className="h-5 w-6 rounded-full"/>
+                    <div className="hidden items-center gap-4 md:flex">
+                        {for i in [0, 1, 2, 3, 4, 5] {
+                            <Skeleton key={"rs" + str(i)} className="h-7 w-28"/>
+                        }}
+                    </div>
+                    <Skeleton className="h-[46px] w-full"/>
+                    <div
+                        className="grid auto-cols-[100%] grid-flow-col gap-2.5 overflow-hidden md:auto-cols-[252px]"
+                    >
+                        {for i in [0, 1, 2, 3, 4, 5] {
+                            <div key={"sk" + str(i)} className="flex flex-col gap-1.5">
+                                <Skeleton className="mb-1 h-8 w-full"/>
+                                <Skeleton className="h-16 w-full"/>
+                                <Skeleton className="h-16 w-full"/>
+                                {if i % 2 == 0 {
+                                    <Skeleton key="c3" className="h-16 w-full"/>
+                                }}
                             </div>
-                            <Skeleton className="h-20 w-full"/>
-                            <Skeleton className="h-20 w-full"/>
-                            {if i % 2 == 0 {
-                                <Skeleton key="c3" className="h-20 w-full"/>
-                            }}
-                        </div>
-                    }}
+                        }}
+                    </div>
                 </div>
             } elif nothingLoaded {
                 <LoadFailed
@@ -598,128 +740,161 @@ def:pub BoardPage -> JsxPage {
                     retrying={retrying}
                 />
             } elif noFlowLine {
-                <div
-                    key="noflowline"
-                    className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
-                >
-                    <div className="relative z-10 flex flex-col items-center gap-3">
-                        <svg
-                            width={40}
-                            height={40}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-muted-foreground/70"
-                        >
-                            <circle cx={5} cy={12} r={2.5}/>
-                            <circle cx={19} cy={5} r={2.5}/>
-                            <circle cx={19} cy={19} r={2.5}/>
-                            <path d="m7.3 10.8 9.4-4.6"/>
-                            <path d="m7.3 13.2 9.4 4.6"/>
-                        </svg>
-                        <h2 className="font-display text-lg font-semibold">
-                            Your board is the flow line you design
+                <div key="noflowline" className="flex min-w-0 flex-col gap-6 pt-2">
+                    <div className="flex max-w-lg flex-col items-start gap-3">
+                        <h2 className="section-title text-lg">
+                            Your board follows your flow line
                         </h2>
-                        <p
-                            className="max-w-md text-sm text-pretty text-muted-foreground"
-                        >
-                            Name the steps your team actually uses and connect them however work moves. The columns here follow, so the two can never disagree.
+                        <p className="text-sm text-muted-foreground">
+                            Each column here is a step your team moves work through, in the order you draw them. Start from a template, or draw the steps yourself.
                         </p>
-                        <Button
-                            onClick={lambda { window.location.href = "/flowlines"; }}
-                        >
-                            Design your flow line
-                            <svg
-                                width={16}
-                                height={16}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <Button
+                                onClick={lambda { window.location.href = "/flowlines"; }}
                             >
-                                <path d="M5 12h14"/>
-                                <path d="m12 5 7 7-7 7"/>
-                            </svg>
-                        </Button>
+                                Pick a template
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={lambda { window.location.href = "/flowlines"; }}
+                            >
+                                Draw the steps yourself
+                            </Button>
+                        </div>
+                    </div>
+                    <div
+                        aria-hidden="true"
+                        className="grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(4,minmax(0,252px))]"
+                    >
+                        {for i in [0, 1, 2, 3] {
+                            <div
+                                key={"ghost" + str(i)}
+                                className={"flex flex-col gap-1.5"
+                                    + (" max-md:hidden" if i > 1 else "")}
+                            >
+                                <div
+                                    className="flex h-9 items-center border-b-2 border-border px-0.5"
+                                >
+                                    <span className="h-2.5 w-20 rounded-xs bg-muted"/>
+                                </div>
+                                {for j in range(3 - (i % 2)) {
+                                    <div
+                                        key={"g" + str(i) + "-" + str(j)}
+                                        className="flex h-[62px] flex-col justify-center gap-2 rounded-md border border-border bg-card/60 px-2.5"
+                                    >
+                                        <span
+                                            className="h-2.5 w-4/5 rounded-xs bg-muted"
+                                        />
+                                        <span
+                                            className="h-2 w-1/2 rounded-xs bg-muted"
+                                        />
+                                    </div>
+                                }}
+                            </div>
+                        }}
                     </div>
                 </div>
             } else {
-                # ONE row, always: columns divide the width between them, since
-                # a wrapping flow line stops reading as a pipeline. No cap on a
-                # column: a wide screen is more room for cards, not a margin.
-                # Below the 17rem minimum the row scroll-snaps instead.
-                <div
-                    key="columns"
-                    className={"grid snap-x snap-mandatory items-start gap-3 overflow-x-auto px-0.5 pt-1 pb-3 md:items-stretch "
-                        + (
-                            # The refresh-failed strip takes a row above the lanes.
-                            "[--lane-h:calc(100dvh-15.5rem)]"
-                                if loadFailed
-                                else "[--lane-h:calc(100dvh-12.5rem)]"
-                        )}
-                    style={{
-                        "gridTemplateColumns": "repeat("
-                            + str(len(colKeys))
-                            + ", minmax(17rem, 1fr))"
-                    }}
-                >
-                    {for (ci, key) in enumerate(colKeys) {
-                        <KanbanColumn
-                            key={key}
-                            columnKey={key}
-                            label={columnLabel(key)}
-                            kind={columnKind(key)}
-                            color={columnColor(key)}
-                            tasks={(recentDone + olderShown)
-                                if key == doneKey
-                                else [
-                                    t
-                                    for t in visible
-                                    if columnKeyOf(t) == key
-                                ]}
-                            onOpen={openEdit}
-                            onArrowMove={arrowMove}
-                            onDropTask={moveTo}
-                            onDropBeside={moveBeside}
-                            prevKey={colKeys[ci - 1] if ci > 0 else ""}
-                            prevLabel={columnLabel(colKeys[ci - 1]) if ci > 0 else ""}
-                            nextKey={colKeys[ci + 1] if ci < len(colKeys) - 1 else ""}
-                            nextLabel={columnLabel(colKeys[ci + 1])
-                                if ci < len(colKeys) - 1
-                                else ""}
-                            doneKey={doneKey}
-                            extraCount={olderTotal
-                                if key == doneKey and not hideDone
-                                else 0}
-                            showingAll={showAllDone
-                                if key == doneKey and not hideDone
-                                else False}
-                            onToggleOlder={toggleOlder}
-                            moreOlder={olderMore if key == doneKey else False}
-                            loadingOlder={loadingOlder if key == doneKey else False}
-                            olderShown={len(olderShown) if key == doneKey else 0}
-                            onMoreOlder={lambda { loadOlder(
-                                olderPage + 1, fProject, fAssignee, fCategory
-                            ); }}
-                            onAddTask={openCreate}
-                            overdueCount={0
-                                if key == doneKey
-                                else len(
-                                    [
-                                        t
-                                        for t in visible
-                                        if columnKeyOf(t) == key
-                                            and dueTone(t.due_date, t.status, today)
-                                                == "overdue"
-                                    ]
-                                )}
+                <div key="board" className="flex min-w-0 flex-col gap-3">
+                    <div className="hidden md:block">
+                        <RouteStrip
+                            keys={colKeys}
+                            labels={colLabels}
+                            colors={colColors}
+                            counts={laneCounts}
+                            inView={inView}
+                            active={activeLane}
+                            hiddenAfter={hiddenAfter}
+                            onPick={scrollToLane}
+                            onMore={scrollToHidden}
                         />
-                    }}
+                    </div>
+                    <FilterBar
+                        projects={activeProjects}
+                        members={activeMembers}
+                        project={fProject}
+                        assignee={fAssignee}
+                        category={fCategory}
+                        hideDone={hideDone}
+                        onProject={setProjectFilter}
+                        onAssignee={setAssigneeFilter}
+                        onCategory={setCategoryFilter}
+                        onHideDone={lambda { hideDone = not hideDone; }}
+                        categories={allCategories}
+                        tags={allTags}
+                        tag={fTag}
+                        estimate={fEstimate}
+                        onTag={lambda (v: str) { fTag = v; }}
+                        onEstimate={lambda (v: str) { fEstimate = v; }}
+                        iterations={iterations}
+                        iteration={fIteration}
+                        onIteration={lambda (v: str) { fIteration = v; }}
+                        priority={fPriority}
+                        onPriority={lambda (v: str) { fPriority = v; }}
+                        query={boardQuery}
+                        onQuery={lambda (v: str) { boardQuery = v; }}
+                        onClear={clearFilters}
+                        shownCount={shownCount}
+                    />
+                    <div className="md:hidden">
+                        <RouteStrip
+                            tabs={True}
+                            keys={colKeys}
+                            labels={colLabels}
+                            colors={colColors}
+                            counts={laneCounts}
+                            inView={inView}
+                            active={activeLane}
+                            hiddenAfter={0}
+                            onPick={scrollToLane}
+                            onMore={scrollToHidden}
+                        />
+                    </div>
+                    <div
+                        ref={lanesRef}
+                        data-board-lanes="true"
+                        onScroll={lambda { scheduleMeasure(); }}
+                        onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
+                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[252px] md:items-stretch md:gap-2.5"
+                        style={laneStyle}
+                    >
+                        {for (ci, key) in enumerate(colKeys) {
+                            <KanbanColumn
+                                key={key}
+                                columnKey={key}
+                                label={colLabels[ci]}
+                                kind={columnKind(key)}
+                                color={columnColor(key)}
+                                tasks={laneRows[ci]}
+                                onOpen={openEdit}
+                                onArrowMove={arrowMove}
+                                onDropTask={moveTo}
+                                onDropBeside={moveBeside}
+                                doneKey={doneKey}
+                                extraCount={olderTotal
+                                    if key == doneKey and not hideDone
+                                    else 0}
+                                showingAll={showAllDone
+                                    if key == doneKey and not hideDone
+                                    else False}
+                                onToggleOlder={toggleOlder}
+                                moreOlder={olderMore if key == doneKey else False}
+                                loadingOlder={loadingOlder if key == doneKey else False}
+                                olderShown={len(olderShown) if key == doneKey else 0}
+                                onMoreOlder={lambda { loadOlder(
+                                    olderPage + 1, fProject, fAssignee, fCategory
+                                ); }}
+                                onAddTask={openCreate}
+                                overdueCount={laneOverdue[ci]}
+                                keys={colKeys}
+                                labels={colLabels}
+                                colors={colColors}
+                                steps={steps}
+                                selectedId={selectedId}
+                                doneHidden={hideDone and key == doneKey}
+                            />
+                        }}
+                    </div>
                 </div>
             }   }
             <TaskDialog
@@ -735,7 +910,7 @@ def:pub BoardPage -> JsxPage {
                 onDelete={deleteTask}
                 categories={allCategories}
                 columnKeys={colKeys}
-                columnLabels={[columnLabel(k) for k in colKeys]}
+                columnLabels={colLabels}
                 handoffKeys={[
                     k
                     for k in colKeys
@@ -759,6 +934,9 @@ def:pub BoardPage -> JsxPage {
                 taskId={editingId}
                 checklist={editingChecklist}
                 onChecklist={replaceRow}
+                onMove={sheetMove}
+                createdAt={editingCreated}
+                historyKey={editingUpdated}
             />
             <MoveDialog
                 open={bool(moveTaskId)}
@@ -771,6 +949,7 @@ def:pub BoardPage -> JsxPage {
                 onField={setMoveField}
                 onOpenChange={lambda (o: bool) { if not o { moveTaskId = ""; }}}
                 onSave={saveMoveInfo}
+                taskId={moveTaskId}
             />
         </div>;
 }

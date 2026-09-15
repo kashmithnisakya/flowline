@@ -1,103 +1,131 @@
-"""A single kanban card. Draggable via native HTML5 DnD (custom MIME type so
-foreign drags are ignored), with arrow-button click-to-move as the touch
-fallback: the chevron row floats over the bottom corner on hover for fine
-pointers and keeps an in-flow spot at reduced opacity on touch. shrink-0
-matters: the lane's card list is a flex column that scrolls, and without it
-a full lane squashes every card to a sliver instead of scrolling."""
+"""A board card in two lines: the title, then one meta line (a High flag,
+project, due, GitHub number, people). Overdue or blocked adds one red line.
+Native HTML5 drag with a custom MIME type; M opens the move menu, which on
+phones and touch screens also has a visible button. shrink-0 matters: the
+lane's list is a scrolling flex column that would otherwise squash cards."""
 
-import from ...models { TaskView }
-import from ..flowlines.kinds { CARD_BAR, colorKey }
-import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
-import from ...lib.utils { fmtEstimate }
-import from ..common.Avatar { AvatarStack, dotFor }
-import from ..common.Markdown { Markdown }
-import from ..ui.card { Card, CardContent }
-import from ..ui.badge { Badge }
-import from ..ui.button { Button }
-import from .GitHubChip { GitHubChip }
+import from ...models { TaskView, StepView }
+import from ...lib.dates { todayIso, dueTone, daysUntil, prettyDay }
+import from ..common.Avatar { AvatarStack }
+import from ..common.KindGlyph { KindGlyph }
+import from .GitHubChip { GitHubChip, ghNumber, ghHref, suggestsDone }
+import from .MoveMenu { MoveMenu }
 
-# Due chip by urgency; "" is the quiet default for far-off or done work.
-glob DUE_TINT: dict[str, str] = {
-         "overdue": "rounded-md bg-destructive/10 px-1.5 py-0.5 font-semibold text-destructive",
-         "soon": "rounded-md bg-warning/15 px-1.5 py-0.5 font-semibold text-warning",
-         "": "text-muted-foreground"
-     };
+glob WEEKDAY: list[str] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+     # Visible on phones and touch screens; on a desktop pointer it shrinks
+     # to an invisible anchor at the card's lower left for the M menu.
+     MOVE_TRIGGER: str = "absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-sm text-subtle outline-none hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:pointer-fine:pointer-events-none md:pointer-fine:top-auto md:pointer-fine:right-auto md:pointer-fine:bottom-0 md:pointer-fine:left-2.5 md:pointer-fine:size-px md:pointer-fine:opacity-0";
 
-
-# Three bars: all lit for High, one for Low. Medium is the default and gets
-# no ink at all, so the glyph only appears when it says something.
-def PriorityGlyph(level: str) -> JsxElement {
-    high = level == "High";
-    return
-        <svg
-            width={12}
-            height={12}
-            viewBox="0 0 12 12"
-            fill="currentColor"
-            className={"shrink-0 "
-                + ("text-destructive" if high else "text-muted-foreground/70")}
-            role="img"
-            aria-label={level + " priority"}
-        >
-            <rect x={1} y={8} width={2.5} height={4} rx={0.5}/>
-            <rect
-                x={4.75}
-                y={5}
-                width={2.5}
-                height={7}
-                rx={0.5}
-                opacity={1 if high else 0.3}
-            />
-            <rect
-                x={8.5}
-                y={1}
-                width={2.5}
-                height={11}
-                rx={0.5}
-                opacity={1 if high else 0.3}
-            />
-        </svg>;
+# The due date as a person says it: today, tomorrow, a weekday within the
+# week, else a short date. Overdue and Done return "" (the red line and
+# history own those).
+def:pub cardDue(iso: str, status: str, today: str) -> str {
+    if len(iso) < 10 or status == "Done" {
+        return "";
+    }
+    diff = daysUntil(iso, today);
+    if diff < 0 {
+        return "";
+    }
+    if diff == 0 {
+        return "today";
+    }
+    if diff == 1 {
+        return "tomorrow";
+    }
+    if diff < 7 {
+        d = new(Date, iso[:10] + "T00:00:00");
+        return WEEKDAY[int(d.getDay())];
+    }
+    return prettyDay(iso);
 }
 
+# The reason a move recorded ("**2026-09-14:** needs a device"), or the
+# first line of the notes for a blocked card, without the markdown marks.
+def:pub leadNote(notes: str, anyLine: bool) -> str {
+    text = notes.strip() if notes else "";
+    if not text {
+        return "";
+    }
+    first = text.split("\n")[0].strip();
+    stamped = first.startswith("**") and len(first) > 15 and first[12:15] == ":**";
+    if not stamped and not anyLine {
+        return "";
+    }
+    if stamped {
+        first = first[15:].strip();
+    }
+    first = first.replace("**", "").replace("`", "");
+    while len(first) > 0 and first[0] in "#- " {
+        first = first[1:];
+    }
+    return first.strip();
+}
 
 def:pub TaskCard(
     task: TaskView,
     onOpen: Callable[[TaskView], None],
     onArrowMove: Callable[[TaskView, str], None],
-    # Neighbouring columns come from the column rendering this card: the
-    # board's columns are the org's flow line, so a card cannot infer them.
-    # The step's colour, so a whole column reads as one block of work.
     color: str = "",
-    prevKey: str = "",
-    prevLabel: str = "",
-    nextKey: str = "",
-    nextLabel: str = "",
     doneKey: str = "",
     # A drop on the card's upper half inserts before it, lower half after.
-    onDropBeside: Callable[[str, str, bool], None] = None
+    onDropBeside: Callable[[str, str, bool], None] = None,
+    # The board's columns, for the move menu: this card's column and the
+    # parallel key/label/colour lists, plus the steps' transitions.
+    columnKey: str = "",
+    keys: list[str] = [],
+    labels: list[str] = [],
+    colors: list[str] = [],
+    steps: list[StepView] = [],
+    selected: bool = False
 ) -> JsxElement {
-    # While the native drag ghost travels, the source card dims so the board
-    # shows where the card came from. dropHint draws the insertion line.
     has isDragging: bool = False,
-        dropHint: str = "";
+        dropHint: str = "",
+        moveOpen: bool = False;
 
-    # Which half of the card the pointer is in, as "above"/"below".
     def hoverHalf(e: DragEvent) -> str {
         el: any = e.currentTarget;
         r = el.getBoundingClientRect();
         return "above" if (e.clientY - r.top) < r.height / 2.0 else "below";
     }
 
-    # The nudge routes through the arrow path: the page's moveTo, undo
-    # toast included.
     def markDone(taskId: str) {
         if doneKey {
             onArrowMove(task, doneKey);
         }
     }
+
+    # After the menu closes the card may sit in another lane (a new element),
+    # so focus is found by id rather than kept on a ref.
+    def refocus {
+        tid = task.id;
+        window.setTimeout(
+            lambda {
+                el: any = document.querySelector('[data-task-card="' + tid + '"]');
+                if el {
+                    el.focus({"preventScroll": True});
+                }
+            },
+            0
+        );
+    }
+
     today = todayIso();
     tone = dueTone(task.due_date, task.status, today);
-    showPriority = task.priority == "High" or task.priority == "Low";
+    due = cardDue(task.due_date, task.status, today);
+    blocked = task.status == "Blocked";
+    alert = "";
+    if tone == "overdue" {
+        late = 0 - daysUntil(task.due_date, today);
+        alert = str(late) + (" day overdue" if late == 1 else " days overdue");
+        why = leadNote(task.notes, False);
+        if why {
+            alert = alert + " · " + why;
+        }
+    } elif blocked {
+        alert = leadNote(task.notes, True) or "Blocked";
+    }
+    num = ghNumber(task);
     clTotal = len(task.checklist);
     clDone = 0;
     for item in task.checklist {
@@ -105,16 +133,12 @@ def:pub TaskCard(
             clDone = clDone + 1;
         }
     }
-    hasFooter = len(task.assignee_names) > 0
-        or clTotal > 0
-        or bool(task.category)
-        or len(task.tags) > 0
-        or task.estimate > 0.0
-        or showPriority
-        or bool(task.due_date);
 
     return
-        <Card
+        <div
+            data-task-card={task.id}
+            role="button"
+            tabIndex={0}
             draggable={True}
             onDragStart={lambda (e: DragEvent) {
                 dt = e.dataTransfer;
@@ -145,218 +169,236 @@ def:pub TaskCard(
                 }
             }}}
             onClick={lambda { onOpen(task); }}
-            role="button"
-            tabIndex={0}
-            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter"
-                or e.key == " " {
-                e.preventDefault();
-                onOpen(task);
-            }}}
-            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+            onKeyDown={lambda (e: KeyboardEvent) {
+                k = str(e.key);
+                if k == "Enter" or k == " " {
+                    e.preventDefault();
+                    onOpen(task);
+                } elif (k == "m" or k == "M")
+                    and not e.metaKey
+                    and not e.ctrlKey
+                    and not e.altKey
+                    and len(keys) > 0 {
+                    e.preventDefault();
+                    moveOpen = True;
+                }
+            }}
+            className={"group relative flex shrink-0 cursor-pointer flex-col gap-1 rounded-md border bg-card px-2.5 pt-2 pb-2 text-left transition-colors duration-150 select-none hover:border-input "
                 + ("opacity-50 " if isDragging else "")
                 + (
-                    # The COLUMN carries the step's colour; a card only
-                    # wears a bar of it. Tinting both made the board shout,
-                    # and the grouping is already clear from the panel.
-                    ("bg-card " + CARD_BAR[colorKey(color)])
-                        if color
-                        else "border-border/70"
+                    "border-primary ring-1 ring-primary hover:border-primary"
+                        if selected
+                        else ""
                 )}
         >
             {if dropHint == "above" {
                 <div
                     key="hintAbove"
-                    className="pointer-events-none absolute -top-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                    className="pointer-events-none absolute -top-[5px] right-1 left-1 h-0.5 rounded-full bg-primary"
                 />
             }}
             {if dropHint == "below" {
                 <div
                     key="hintBelow"
-                    className="pointer-events-none absolute -bottom-1.5 left-1 right-1 h-1 rounded-full bg-primary"
+                    className="pointer-events-none absolute right-1 -bottom-[5px] left-1 h-0.5 rounded-full bg-primary"
                 />
             }}
-            <CardContent className="space-y-1.5 p-3">
-                {if task.project_name {
-                    <div
-                        key="project"
-                        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+            <div
+                className="line-clamp-3 text-[13.5px] leading-[1.35] font-medium text-foreground max-md:pr-7 pointer-coarse:pr-7"
+            >
+                {task.title}
+            </div>
+            {if alert {
+                <div
+                    key="alert"
+                    className="flex items-start gap-1.5 text-xs leading-[1.35] text-destructive"
+                >
+                    <KindGlyph kind="blocked" size={12} className="mt-px"/>
+                    <span className="line-clamp-2">{alert}</span>
+                </div>
+            }}
+            <div
+                className="flex min-h-6 min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+            >
+                {if task.priority == "High" {
+                    <svg
+                        key="high"
+                        width={12}
+                        height={12}
+                        viewBox="0 0 16 16"
+                        className="shrink-0 text-foreground"
+                        role="img"
+                        aria-label="High priority"
                     >
-                        <span
-                            className={"h-1.5 w-1.5 shrink-0 rounded-full "
-                                + dotFor(task.project_name)}
+                        <path
+                            d="M4 14V2.5M4 3h8l-1.8 3L12 9H4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.6}
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
                         />
-                        <span className="truncate">{task.project_name}</span>
-                    </div>
+                    </svg>
                 }}
-                <div
-                    className="line-clamp-2 text-sm font-medium leading-snug"
-                    title={task.title}
-                >
-                    {task.title}
-                </div>
-                {if hasFooter {
-                    <div
-                        key="footer"
-                        className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5 text-xs text-muted-foreground"
-                    >
-                        {if len(task.assignee_names) > 0 {
-                            <AvatarStack key="who" names={task.assignee_names}/>
-                        }}
-                        {if task.category {
-                            <Badge
-                                key="category"
-                                variant="outline"
-                                className="h-5 max-w-28 truncate rounded-full px-2 text-xs font-medium"
-                            >
-                                {task.category}
-                            </Badge>
-                        }}
-                        {for (ti, tg) in enumerate(task.tags) {
-                            if ti < 3 {
-                                <Badge
-                                    key={tg}
-                                    variant="secondary"
-                                    className="h-5 max-w-24 truncate rounded-full px-2 text-xs font-normal"
-                                >
-                                    {tg}
-                                </Badge>
-                            }
-                        }}
-                        {if len(task.tags) > 3 {
-                            <Badge
-                                key="moretags"
-                                variant="secondary"
-                                className="h-5 rounded-full px-1.5 text-xs font-normal tabular-nums"
-                            >
-                                {"+" + str(len(task.tags) - 3)}
-                            </Badge>
-                        }}
-                        {if showPriority
-                            or task.due_date
-                            or task.estimate > 0.0
-                            or clTotal > 0 {
-                            # Right-aligned; wraps to its own line, still
-                            # right-aligned, when the lane is narrow.
+                <span className="flex min-w-0 items-center gap-1 whitespace-nowrap">
+                    {if task.project_name {
+                        <span key="project" className="min-w-0 truncate">
+                            {task.project_name}
+                        </span>
+                    }}
+                    {if due {
+                        <span key="due" className="flex shrink-0 items-center gap-1">
+                            {if task.project_name {
+                                <span key="sep" aria-hidden="true">·</span>
+                            }}
                             <span
-                                key="when"
-                                className="ml-auto flex shrink-0 items-center gap-1.5"
+                                className={"font-semibold text-foreground"
+                                    if due == "today"
+                                    else ""}
+                                title={"Due " + prettyDay(task.due_date)}
                             >
-                                {if clTotal > 0 {
-                                    <span
-                                        key="checklist"
-                                        className={"rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums "
-                                            + (
-                                                "bg-success/10 text-success"
-                                                    if clDone == clTotal
-                                                    else "bg-muted text-muted-foreground"
-                                            )}
-                                        title={"Checklist: "
-                                            + str(clDone)
-                                            + " of "
-                                            + str(clTotal)
-                                            + " done"}
-                                    >
-                                        {"✓ " + str(clDone) + "/" + str(clTotal)}
-                                    </span>
-                                }}
-                                {if task.estimate > 0.0 {
-                                    <span
-                                        key="est"
-                                        className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
-                                        title="Estimate"
-                                    >
-                                        {fmtEstimate(task.estimate)}
-                                    </span>
-                                }}
-                                {if showPriority {
-                                    <PriorityGlyph
-                                        key="priority"
-                                        level={task.priority}
-                                    />
-                                }}
-                                {if task.due_date {
-                                    <span
-                                        key="due"
-                                        className={"whitespace-nowrap text-xs "
-                                            + DUE_TINT[tone]}
-                                        title={"Due " + prettyDay(task.due_date)}
-                                    >
-                                        {dueLabel(task.due_date, task.status, today)}
-                                    </span>
-                                }}
+                                {due}
                             </span>
-                        }}
-                    </div>
-                }}
-                {if task.status == "Blocked" and task.notes {
-                    <div
-                        key="blocked"
-                        className="line-clamp-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive"
-                    >
-                        <Markdown text={task.notes}/>
-                    </div>
-                }}
-                {if task.gh_issue_number > 0 or task.pr_state {
-                    <GitHubChip key="github" task={task} onMarkDone={markDone}/>
-                }}
-                <div
-                    className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card pointer-fine:p-0.5 pointer-fine:opacity-0"
-                >
-                    <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
-                        disabled={not prevKey}
-                        title={"Move to " + prevLabel if prevKey else ""}
-                        aria-label={"Move to " + prevLabel
-                            if prevKey
-                            else "No earlier step"}
+                        </span>
+                    }}
+                    {if num > 0 {
+                        <span key="gh" className="flex shrink-0 items-center gap-1">
+                            {if task.project_name or due {
+                                <span key="sep" aria-hidden="true">·</span>
+                            }}
+                            <a
+                                href={ghHref(task)}
+                                target="_blank"
+                                rel="noreferrer"
+                                tabIndex={-1}
+                                draggable={False}
+                                title={task.gh_repo + " #" + str(num)
+                                    if task.gh_repo
+                                    else "Open on GitHub"}
+                                className={"font-mono hover:text-foreground hover:underline"
+                                    + (
+                                        " line-through"
+                                            if task.gh_issue_state == "closed"
+                                            else ""
+                                    )}
+                                onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
+                            >
+                                {"#" + str(num)}
+                            </a>
+                        </span>
+                    }}
+                </span>
+                <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {if clTotal > 0 {
+                        <span
+                            key="checklist"
+                            className={"flex items-center gap-1 font-mono "
+                                + ("text-success" if clDone == clTotal else "")}
+                            title={"Checklist: "
+                                + str(clDone)
+                                + " of "
+                                + str(clTotal)
+                                + " done"}
+                        >
+                            <svg
+                                width={12}
+                                height={12}
+                                viewBox="0 0 16 16"
+                                aria-hidden="true"
+                            >
+                                <rect
+                                    x={2}
+                                    y={2}
+                                    width={12}
+                                    height={12}
+                                    rx={2.5}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={1.5}
+                                />
+                                <path
+                                    d="m5 8.2 2 2 4-4.2"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={1.6}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
+                            {str(clDone) + "/" + str(clTotal)}
+                        </span>
+                    }}
+                    {if len(task.assignee_names) > 0 {
+                        <AvatarStack key="who" names={task.assignee_names}/>
+                    } elif task.gh_issue_number > 0 {
+                        <svg
+                            key="ghmark"
+                            width={14}
+                            height={14}
+                            viewBox="0 0 16 16"
+                            className="text-muted-foreground"
+                            role="img"
+                            aria-label="From GitHub"
+                        >
+                            <path
+                                fill="currentColor"
+                                d="M8 .8a7.2 7.2 0 0 0-2.3 14c.4.1.5-.1.5-.3v-1.3c-2 .4-2.4-.9-2.4-.9-.3-.8-.8-1-.8-1-.7-.5 0-.5 0-.5.7.1 1.1.8 1.1.8.6 1.1 1.7.8 2.1.6.1-.5.3-.8.5-1-1.6-.2-3.3-.8-3.3-3.6 0-.8.3-1.4.8-1.9-.1-.2-.3-.9.1-1.9 0 0 .6-.2 2 .7a6.9 6.9 0 0 1 3.6 0c1.4-.9 2-.7 2-.7.4 1 .2 1.7.1 1.9.5.5.8 1.1.8 1.9 0 2.8-1.7 3.4-3.3 3.6.3.2.5.7.5 1.4v2c0 .2.1.4.5.3A7.2 7.2 0 0 0 8 .8"
+                            />
+                        </svg>
+                    } }
+                </span>
+            </div>
+            {if suggestsDone(task) and doneKey {
+                <GitHubChip key="merged" task={task} onMarkDone={markDone}/>
+            }}
+            {if len(keys) > 0 {
+                if moveOpen {
+                    <MoveMenu
+                        key="move"
+                        open={True}
+                        onOpenChange={lambda (o: bool) { moveOpen = o; }}
+                        current={columnKey}
+                        keys={keys}
+                        labels={labels}
+                        colors={colors}
+                        steps={steps}
+                        onPick={lambda (k: str) { onArrowMove(task, k); }}
+                        triggerClass={MOVE_TRIGGER}
+                        onClosed={refocus}
+                    />
+                } else {
+                    <button
+                        key="move"
+                        type="button"
+                        tabIndex={-1}
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                        aria-label="Move to another step"
+                        className={MOVE_TRIGGER}
                         onClick={lambda (e: MouseEvent) {
                             e.stopPropagation();
-                            onArrowMove(task, prevKey);
+                            moveOpen = True;
                         }}
+                        onKeyDown={lambda (e: KeyboardEvent) { e.stopPropagation(); }}
                     >
                         <svg
                             width={14}
                             height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                            viewBox="0 0 16 16"
+                            aria-hidden="true"
+                            className="shrink-0"
                         >
-                            <path d="m15 18-6-6 6-6"/>
+                            <path
+                                d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.6}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
                         </svg>
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground hover:text-foreground pointer-coarse:size-7"
-                        disabled={not nextKey}
-                        title={"Move to " + nextLabel if nextKey else ""}
-                        aria-label={"Move to " + nextLabel
-                            if nextKey
-                            else "No later step"}
-                        onClick={lambda (e: MouseEvent) {
-                            e.stopPropagation();
-                            onArrowMove(task, nextKey);
-                        }}
-                    >
-                        <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="m9 18 6-6-6-6"/>
-                        </svg>
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>;
+                    </button>
+                }
+            }}
+        </div>;
 }
