@@ -45,6 +45,7 @@ def:pub LoginPage -> JsxPage {
 
     async def submit(e: FormEvent) -> None;
     def switchMode(next: str) -> None;
+    def tabKey(e: KeyboardEvent) -> None;
 
     signup = mode == "signup";
     longEnough = len(password) >= MIN_PASSWORD;
@@ -61,6 +62,7 @@ def:pub LoginPage -> JsxPage {
                     role="tablist"
                     aria-label="Sign in or create a workspace"
                     className="inline-flex gap-0.5 rounded-md border bg-card p-0.5"
+                    onKeyDown={tabKey}
                 >
                     <button
                         type="button"
@@ -68,6 +70,7 @@ def:pub LoginPage -> JsxPage {
                         id="tab-login"
                         aria-selected={not signup}
                         aria-controls="auth-panel"
+                        tabIndex={-1 if signup else 0}
                         className={MODE_TAB
                             + (
                                 " bg-muted font-semibold text-foreground"
@@ -84,6 +87,7 @@ def:pub LoginPage -> JsxPage {
                         id="tab-signup"
                         aria-selected={signup}
                         aria-controls="auth-panel"
+                        tabIndex={0 if signup else -1}
                         className={MODE_TAB
                             + (
                                 " bg-muted font-semibold text-foreground"

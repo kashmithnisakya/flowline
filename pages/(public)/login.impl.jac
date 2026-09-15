@@ -13,6 +13,28 @@ impl LoginPage.switchMode(next: str) -> None {
     );
 }
 
+impl LoginPage.tabKey(e: KeyboardEvent) -> None {
+    # Tabs pattern: either arrow flips between the two modes, Home and End pick.
+    next = "";
+    if e.key == "ArrowLeft" or e.key == "ArrowRight" {
+        next = "login" if mode == "signup" else "signup";
+    } elif e.key == "Home" {
+        next = "login";
+    } elif e.key == "End" {
+        next = "signup";
+    }
+    if not next {
+        return;
+    }
+    e.preventDefault();
+    switchMode(next);
+    doc: any = document;
+    target: any = doc.getElementById("tab-" + next);
+    if target {
+        target.focus();
+    }
+}
+
 impl LoginPage.submit(e: FormEvent) -> None {
     e.preventDefault();
     if busy {
