@@ -96,7 +96,7 @@ def:pub AvatarStack(names: list[str], max: int = 3, size: str = "xs") -> JsxElem
     extra = len(names) - len(shown);
     return
         <span
-            className="inline-flex shrink-0 items-center -space-x-0.5"
+            className="inline-flex shrink-0 items-center -space-x-px"
             title={", ".join(names)}
         >
             {for (i, n) in enumerate(shown) {
