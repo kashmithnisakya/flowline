@@ -47,7 +47,7 @@ def:pub SsoCallbackPage -> JsxPage {
             {if failure {
                 <div
                     key="failed"
-                    className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300"
+                    className="w-full max-w-sm rounded-2xl border border-border bg-card p-8"
                 >
                     <div
                         className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"

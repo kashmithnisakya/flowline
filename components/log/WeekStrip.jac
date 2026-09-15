@@ -43,9 +43,9 @@ def:pub WeekStrip(
                 <button
                     key={DAY_NAMES[i]}
                     type="button"
-                    className={"flex min-w-16 flex-col items-center rounded-lg border px-3 py-1.5 transition active:scale-[0.97] "
+                    className={"flex min-w-16 flex-col items-center rounded-lg border px-3 py-1.5 transition-colors "
                         + (
-                            "border-primary bg-primary text-primary-foreground shadow-sm"
+                            "border-primary bg-primary text-primary-foreground"
                                 if dayShift(monday, i) == selectedDate
                                 else (
                                     "border-primary/40 bg-card ring-1 ring-primary/30 hover:bg-accent"
@@ -61,9 +61,7 @@ def:pub WeekStrip(
                         onSelectDate(dayShift(monday, i));
                     }}}
                 >
-                    <span
-                        className="text-xs font-medium uppercase tracking-wide opacity-70"
-                    >
+                    <span className="text-xs font-medium opacity-70">
                         {DAY_NAMES[i]}
                     </span>
                     <span

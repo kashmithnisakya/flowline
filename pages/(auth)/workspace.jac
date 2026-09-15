@@ -166,7 +166,7 @@ def:pub WorkspacePage -> JsxPage {
                             type="button"
                             className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium "
                                 + (
-                                    "bg-background text-foreground shadow-sm"
+                                    "bg-background text-foreground"
                                         if tab == item[0]
                                         else "text-muted-foreground transition-colors hover:text-foreground"
                                 )}

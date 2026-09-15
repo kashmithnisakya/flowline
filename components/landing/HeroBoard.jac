@@ -141,10 +141,10 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
 
     return
         <div
-            className="anim-fade-up anim-d4 mx-auto mt-12 w-full max-w-3xl text-left lg:mx-0 lg:mt-0 lg:max-w-none"
+            className="mx-auto mt-12 w-full max-w-3xl text-left lg:mx-0 lg:mt-0 lg:max-w-none"
         >
             <div
-                className={"flex items-center justify-end gap-1.5 pb-2 text-[11px] font-semibold text-primary transition-opacity duration-300 "
+                className={"flex items-center justify-end gap-1.5 pb-2 text-xs font-semibold text-primary transition-opacity duration-300 "
                     + ("opacity-0" if moves > 0 else "")}
                 aria-hidden="true"
             >
@@ -166,7 +166,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
             <div
                 role="group"
                 aria-label="Try the board: drag a card between columns, or press Enter on a card to move it"
-                className="rounded-2xl bg-background/70 p-3 shadow-xl ring-1 ring-foreground/10 backdrop-blur"
+                className="rounded-2xl bg-card p-3 ring-1 ring-foreground/10"
             >
                 <div className="grid grid-cols-3 gap-2.5">
                     {for (li, lane) in enumerate(LANES) {
@@ -213,7 +213,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                     + lane["color"]}
                             />
                             <div
-                                className="flex items-center justify-between px-1 text-[11px] font-semibold"
+                                className="flex items-center justify-between px-1 text-xs font-semibold"
                             >
                                 <span className="flex items-center gap-1.5">
                                     <span
@@ -269,7 +269,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                                 (curLane(c) + 1) % len(LANES)
                                             );
                                         }}}
-                                        className={"animate-in fade-in slide-in-from-bottom-1 cursor-grab select-none rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 transition-shadow duration-500 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+                                        className={"animate-in fade-in slide-in-from-bottom-1 cursor-grab select-none rounded-lg border-l-[3px] bg-card p-2 ring-1 ring-foreground/10 transition-shadow duration-500 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
                                             + (
                                                 "opacity-50 "
                                                     if dragTitle == c["title"]
@@ -286,7 +286,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                             )}
                                     >
                                         <div
-                                            className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground"
+                                            className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
                                         >
                                             <span
                                                 className={"h-1 w-1 rounded-full "
@@ -295,7 +295,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                             {c["project"]}
                                         </div>
                                         <div
-                                            className={"mt-0.5 text-[11px] font-medium leading-snug "
+                                            className={"mt-0.5 text-xs font-medium leading-snug "
                                                 + (
                                                     "text-muted-foreground line-through decoration-foreground/30"
                                                         if li == 2
@@ -309,14 +309,14 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                         >
                                             <AvatarStack names={c["who"]} max={2}/>
                                             <span
-                                                className="rounded-full border px-1.5 text-[9px] font-medium"
+                                                className="rounded-full border px-1.5 text-xs font-medium"
                                             >
                                                 {c["chip"]}
                                             </span>
                                             {if c["due"] and li != 2 {
                                                 <span
                                                     key="due"
-                                                    className={"ml-auto text-[9px] font-semibold "
+                                                    className={"ml-auto text-xs font-semibold "
                                                         + (
                                                             "rounded bg-warning/15 px-1 text-warning"
                                                                 if c["due"]
@@ -338,11 +338,11 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                     className="mt-2.5 flex items-start gap-3 rounded-xl border bg-card/80 px-3 py-2"
                 >
                     <span
-                        className="mt-0.5 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                        className="mt-0.5 shrink-0 text-xs font-semibold text-muted-foreground"
                     >
                         Log
                     </span>
-                    <div className="min-w-0 flex-1 space-y-0.5 text-[11px]">
+                    <div className="min-w-0 flex-1 space-y-0.5 text-xs">
                         {if len(recent) == 0 {
                             <div key="quiet" className="text-muted-foreground/70">
                                 Written automatically as cards move.

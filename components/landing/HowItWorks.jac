@@ -76,12 +76,12 @@ def StepThumb(n: str) -> JsxElement {
                 </div>
                 <div className="flex gap-1.5">
                     <span
-                        className="rounded-full border px-2 py-0.5 text-[9px] font-medium text-muted-foreground"
+                        className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground"
                     >
                         Launch Site
                     </span>
                     <span
-                        className="rounded-full border px-2 py-0.5 text-[9px] font-medium text-muted-foreground"
+                        className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground"
                     >
                         Platform
                     </span>
@@ -105,11 +105,7 @@ def StepThumb(n: str) -> JsxElement {
                 ></div>
             </div>
             <div className="flex items-center gap-1.5">
-                <span
-                    className="text-[8px] font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                    Log
-                </span>
+                <span className="text-xs font-semibold text-muted-foreground">Log</span>
                 <div className="h-2 w-3/5 rounded bg-muted"></div>
             </div>
         </div>;
@@ -118,11 +114,7 @@ def StepThumb(n: str) -> JsxElement {
 def:pub HowItWorks -> JsxElement {
     return
         <section id="how" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
-            <span
-                className="text-xs font-semibold uppercase tracking-widest text-primary"
-            >
-                How it works
-            </span>
+            <span className="text-xs font-semibold text-primary">How it works</span>
             <h2
                 className="font-display mt-3 max-w-2xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >
@@ -139,7 +131,7 @@ def:pub HowItWorks -> JsxElement {
                             ></div>
                         }}
                         <div
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-xs ring-1 ring-foreground/15"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-background ring-1 ring-foreground/15"
                         >
                             <span
                                 className="font-display text-base font-bold text-primary"

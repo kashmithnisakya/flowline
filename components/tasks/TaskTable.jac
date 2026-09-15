@@ -65,7 +65,7 @@ def:pub TaskTable(
                             {for col in SORT_COLS {
                                 <TableHead
                                     key={col[0]}
-                                    className="cursor-pointer select-none whitespace-nowrap text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                                    className="cursor-pointer select-none whitespace-nowrap text-xs text-muted-foreground hover:text-foreground"
                                     onClick={lambda { onSort(col[0]); }}
                                 >
                                     {(stepHeader if col[0] == "step" else col[1])
@@ -73,14 +73,10 @@ def:pub TaskTable(
                                         + sortCaret(sort == col[0], sortDir)}
                                 </TableHead>
                             }}
-                            <TableHead
-                                className="text-xs uppercase tracking-wider text-muted-foreground"
-                            >
+                            <TableHead className="text-xs text-muted-foreground">
                                 Project
                             </TableHead>
-                            <TableHead
-                                className="text-xs uppercase tracking-wider text-muted-foreground"
-                            >
+                            <TableHead className="text-xs text-muted-foreground">
                                 Assignees
                             </TableHead>
                         </TableRow>

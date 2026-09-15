@@ -122,7 +122,7 @@ def:pub KanbanColumn(
                     {if overdueCount > 0 {
                         <span
                             key="overdue"
-                            className="text-[11px] font-semibold tabular-nums text-destructive"
+                            className="text-xs font-semibold tabular-nums text-destructive"
                             title={str(overdueCount) + " overdue"}
                         >
                             {str(overdueCount) + " over"}

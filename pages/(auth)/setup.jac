@@ -9,7 +9,6 @@ import from ...models { MemberView }
 import from ...services.projects.projects { ListProjects, SaveProject }
 import from ...services.roster.roster { SaveMember }
 import from ...lib.session { fetchProfile, patchProfile }
-import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.ui.card {
     Card,
     CardHeader,
@@ -49,13 +48,6 @@ def:pub SetupPage -> JsxPage {
 
     return
         <div className="relative overflow-hidden">
-            <KineticGrid
-                className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
-            />
-            <div
-                aria-hidden="true"
-                className="bg-glow pointer-events-none absolute inset-0"
-            />
             <div
                 className="relative z-10 mx-auto flex min-h-[80svh] w-full max-w-lg flex-col justify-center gap-6 py-10"
             >
@@ -70,9 +62,7 @@ def:pub SetupPage -> JsxPage {
                     </div>
                 } else {
                     <div key="stepper" className="grid w-full gap-2">
-                        <p
-                            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                        >
+                        <p className="text-xs font-medium text-muted-foreground">
                             {"Step "}
                             <span className="tabular-nums text-foreground">{step}</span>
                             {" of 3"}
@@ -164,7 +154,7 @@ def:pub SetupPage -> JsxPage {
                             {if orgName {
                                 <p
                                     key="eyebrow"
-                                    className="text-xs font-semibold uppercase tracking-wide text-primary"
+                                    className="text-xs font-semibold text-primary"
                                 >
                                     {"Welcome to " + orgName}
                                 </p>

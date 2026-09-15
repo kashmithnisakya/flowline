@@ -261,7 +261,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                         className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                     <kbd
-                        className="hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline"
+                        className="hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline"
                     >
                         esc
                     </kbd>
@@ -280,7 +280,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                     {if len(pageItems) > 0 {
                         <div key="pages">
                             <div
-                                className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                                className="px-3 pt-1 pb-1 text-xs font-semibold text-muted-foreground"
                             >
                                 Pages
                             </div>
@@ -307,7 +307,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                     {if len(actionItems) > 0 {
                         <div key="actions">
                             <div
-                                className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                                className="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground"
                             >
                                 Actions
                             </div>
@@ -335,7 +335,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                     {if len(taskItems) > 0 {
                         <div key="tasks">
                             <div
-                                className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                                className="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground"
                             >
                                 Tasks
                             </div>
@@ -386,7 +386,7 @@ def:pub CommandPalette(open: bool, onOpenChange: Callable[[bool], None]) -> JsxE
                     }}
                 </div>
                 <div
-                    className="flex items-center gap-3 border-t px-3 py-2 text-[11px] text-muted-foreground"
+                    className="flex items-center gap-3 border-t px-3 py-2 text-xs text-muted-foreground"
                 >
                     <span><kbd className="font-mono">↑↓</kbd> to move</span>
                     <span><kbd className="font-mono">↵</kbd> to open</span>

@@ -11,7 +11,7 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
 
     async def start(platform: str) -> None;
 
-    btn = "flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold transition-all duration-150 hover:border-foreground hover:bg-accent/50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60";
+    btn = "flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold transition-colors duration-150 hover:border-foreground hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60";
 
     return
         <div className="grid grid-cols-2 gap-2.5">

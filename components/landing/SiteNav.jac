@@ -29,9 +29,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
     );
 
     return
-        <header
-            className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur"
-        >
+        <header className="sticky top-0 z-20 border-b bg-background">
             <span
                 aria-hidden="true"
                 className="absolute inset-x-0 bottom-[-1px] block h-px bg-primary"
@@ -68,7 +66,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                 >
                     FAQ
                 </a>
-                <div className="anim-fade-in ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2">
                     {if loggedIn {
                         <Button
                             key="app"

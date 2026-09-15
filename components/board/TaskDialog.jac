@@ -531,9 +531,7 @@ def:pub TaskDialog(
                             key="ghissue"
                             className="grid gap-3 rounded-lg border bg-muted/30 p-3"
                         >
-                            <div
-                                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                            >
+                            <div className="text-xs font-medium text-muted-foreground">
                                 GitHub
                             </div>
                             {if len(projectRepos) > 1 {
@@ -581,9 +579,7 @@ def:pub TaskDialog(
                             key="review"
                             className="grid gap-3 rounded-lg border bg-muted/30 p-3"
                         >
-                            <div
-                                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                            >
+                            <div className="text-xs font-medium text-muted-foreground">
                                 Review handoff (optional)
                             </div>
                             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">

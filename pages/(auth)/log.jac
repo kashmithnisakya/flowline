@@ -194,7 +194,7 @@ def:pub DailyLogPage -> JsxPage {
                     >
                         <button
                             type="button"
-                            className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                            className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground"
                                 if viewMode == "day"
                                 else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
                             onClick={lambda { viewMode = "day"; }}
@@ -203,7 +203,7 @@ def:pub DailyLogPage -> JsxPage {
                         </button>
                         <button
                             type="button"
-                            className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground shadow-sm"
+                            className={"rounded-md bg-background px-2.5 py-1 text-sm font-medium text-foreground"
                                 if viewMode == "week"
                                 else "rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
                             onClick={lambda { viewMode = "week"; }}

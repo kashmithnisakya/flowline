@@ -140,9 +140,7 @@ def:pub StepInspector(
         <Card className={"overflow-y-auto " + className}>
             <CardContent className="space-y-4 py-4">
                 <div className="space-y-1.5">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Step name
                     </div>
                     <Input
@@ -159,9 +157,7 @@ def:pub StepInspector(
                     />
                 </div>
                 <div className="space-y-1.5">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         What happens here
                     </div>
                     <Input
@@ -176,14 +172,12 @@ def:pub StepInspector(
                             onNameCommit();
                         }}}
                     />
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                         Shown under the name on the card in the Lane view.
                     </p>
                 </div>
                 <div className="space-y-1.5">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Who holds it here
                     </div>
                     <Select
@@ -203,14 +197,12 @@ def:pub StepInspector(
                             }}
                         </SelectContent>
                     </Select>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                         A role, not a person. The list is managed on the Workspace's Roles tab.
                     </p>
                 </div>
                 <div className="space-y-1.5">
-                    <div
-                        className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Kind
                     </div>
                     <Select
@@ -235,9 +227,7 @@ def:pub StepInspector(
                     </p>
                 </div>
                 <div className="space-y-1.5">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Color
                     </div>
                     <div className="flex gap-2">
@@ -259,9 +249,7 @@ def:pub StepInspector(
                     </div>
                 </div>
                 <div className="space-y-1.5 border-t pt-3">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Goes to
                     </div>
                     {if len(step.next_ids) == 0 {
@@ -284,9 +272,7 @@ def:pub StepInspector(
                     } }
                 </div>
                 <div className="space-y-1.5">
-                    <div
-                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
+                    <div className="text-xs font-medium text-muted-foreground">
                         Comes from
                     </div>
                     {if len(step.prev_ids) == 0 {

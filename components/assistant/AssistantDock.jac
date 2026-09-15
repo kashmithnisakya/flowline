@@ -115,7 +115,7 @@ def:pub AssistantDock -> JsxElement {
     def modeClass(active: bool) -> str {
         base = "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ";
         if active {
-            return base + "bg-background text-foreground shadow-sm";
+            return base + "bg-background text-foreground";
         }
         return base + "text-muted-foreground hover:text-foreground";
     }
@@ -129,7 +129,7 @@ def:pub AssistantDock -> JsxElement {
                 className={(
                     # Card volume, ember only on the glyph: each page already
                     # has one solid primary action and this sits on every page.
-                    "fixed bottom-6 right-6 z-50 flex h-11 items-center gap-2 rounded-full border border-border/70 bg-card px-4 text-sm font-semibold text-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:-translate-y-0.5 hover:bg-accent active:scale-95"
+                    "fixed bottom-6 right-6 z-50 flex h-11 items-center gap-2 rounded-full border border-border/70 bg-card px-4 text-sm font-semibold text-foreground shadow-lg transition-colors hover:bg-accent"
                 )}
             >
                 <svg
@@ -414,11 +414,7 @@ def NoteList(title: str, items: list[str]) -> JsxElement {
     }
     return
         <div>
-            <div
-                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-                {title}
-            </div>
+            <div className="text-xs font-semibold text-muted-foreground">{title}</div>
             <ul className="mt-1 space-y-1">
                 {for it in items {
                     <li key={it} className="flex gap-2 text-sm leading-snug">

@@ -39,7 +39,7 @@ def:pub StepTasksPanel(
 
     return
         <div
-            className={"pointer-events-auto flex max-h-full min-h-0 flex-col rounded-lg border bg-card shadow-lg animate-in fade-in slide-in-from-right-4 duration-300 "
+            className={"pointer-events-auto flex max-h-full min-h-0 flex-col rounded-lg border bg-card animate-in fade-in slide-in-from-right-4 duration-300 "
                 + className}
             onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
         >
@@ -131,7 +131,7 @@ def:pub StepTasksPanel(
                             <button
                                 key={t.id}
                                 type="button"
-                                className={"flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-px hover:border-foreground/20 hover:shadow-md "
+                                className={"flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-colors duration-150 hover:border-foreground/20 "
                                     + CARD_BAR[tone]}
                                 onClick={lambda { if onOpenTask { onOpenTask(t.id); }}}
                             >

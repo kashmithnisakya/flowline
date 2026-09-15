@@ -56,11 +56,7 @@ glob FAQS: list[QA] = [
 def:pub Faq -> JsxElement {
     return
         <section id="faq" className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24">
-            <span
-                className="text-xs font-semibold uppercase tracking-widest text-primary"
-            >
-                FAQ
-            </span>
+            <span className="text-xs font-semibold text-primary">FAQ</span>
             <h2
                 className="font-display mt-3 max-w-2xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >

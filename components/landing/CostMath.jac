@@ -21,16 +21,10 @@ def:pub CostMath -> JsxElement {
                 className="relative overflow-hidden rounded-3xl bg-foreground px-8 py-12 text-background sm:px-12"
             >
                 <div
-                    aria-hidden="true"
-                    className="absolute inset-0 bg-[radial-gradient(42rem_22rem_at_50%_-6rem,color-mix(in_oklab,var(--primary)_25%,transparent),transparent_70%)]"
-                ></div>
-                <div
                     className="relative grid items-center gap-10 lg:grid-cols-[1fr_auto] lg:gap-16"
                 >
                     <div>
-                        <span
-                            className="text-xs font-semibold uppercase tracking-widest text-background/60"
-                        >
+                        <span className="text-xs font-semibold text-background/60">
                             Just arithmetic
                         </span>
                         <h2
@@ -71,7 +65,7 @@ def:pub CostMath -> JsxElement {
                                 {weekHours(size)}
                             </div>
                             <div
-                                className="mt-1.5 text-[10px] font-semibold uppercase tracking-widest text-background/60"
+                                className="mt-1.5 text-xs font-semibold text-background/60"
                             >
                                 hours a week
                             </div>
@@ -83,7 +77,7 @@ def:pub CostMath -> JsxElement {
                                 {size * 60}
                             </div>
                             <div
-                                className="mt-1.5 text-[10px] font-semibold uppercase tracking-widest text-background/60"
+                                className="mt-1.5 text-xs font-semibold text-background/60"
                             >
                                 hours a year
                             </div>

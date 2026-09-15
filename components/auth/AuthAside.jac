@@ -6,20 +6,8 @@ needs both variants, which is why the wordmark is two images."""
 def:pub AuthAside -> JsxElement {
     return
         <div
-            className="anim-fade-up relative hidden min-h-[560px] flex-col justify-between gap-12 overflow-hidden rounded-3xl bg-foreground p-10 text-background lg:flex"
+            className="relative hidden min-h-[560px] flex-col justify-between gap-12 overflow-hidden rounded-3xl bg-foreground p-10 text-background lg:flex"
         >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-primary/10"
-            ></div>
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-primary/20 blur-3xl"
-            ></div>
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -bottom-24 -left-16 size-72 rounded-full bg-background/10 blur-3xl"
-            ></div>
             <img
                 src="/static/brand/logo-full-dark.svg"
                 alt="flowline"

@@ -152,7 +152,7 @@ def:pub TaskCard(
                 e.preventDefault();
                 onOpen(task);
             }}}
-            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+            className={"group relative shrink-0 cursor-grab gap-0 py-0 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
                 + ("opacity-50 " if isDragging else "")
                 + (
                     # The COLUMN carries the step's colour; a card only
@@ -179,7 +179,7 @@ def:pub TaskCard(
                 {if task.project_name {
                     <div
                         key="project"
-                        className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+                        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
                     >
                         <span
                             className={"h-1.5 w-1.5 shrink-0 rounded-full "
@@ -206,7 +206,7 @@ def:pub TaskCard(
                             <Badge
                                 key="category"
                                 variant="outline"
-                                className="h-5 max-w-28 truncate rounded-full px-2 text-[11px] font-medium"
+                                className="h-5 max-w-28 truncate rounded-full px-2 text-xs font-medium"
                             >
                                 {task.category}
                             </Badge>
@@ -216,7 +216,7 @@ def:pub TaskCard(
                                 <Badge
                                     key={tg}
                                     variant="secondary"
-                                    className="h-5 max-w-24 truncate rounded-full px-2 text-[11px] font-normal"
+                                    className="h-5 max-w-24 truncate rounded-full px-2 text-xs font-normal"
                                 >
                                     {tg}
                                 </Badge>
@@ -226,7 +226,7 @@ def:pub TaskCard(
                             <Badge
                                 key="moretags"
                                 variant="secondary"
-                                className="h-5 rounded-full px-1.5 text-[11px] font-normal tabular-nums"
+                                className="h-5 rounded-full px-1.5 text-xs font-normal tabular-nums"
                             >
                                 {"+" + str(len(task.tags) - 3)}
                             </Badge>
@@ -244,7 +244,7 @@ def:pub TaskCard(
                                 {if clTotal > 0 {
                                     <span
                                         key="checklist"
-                                        className={"rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums "
+                                        className={"rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums "
                                             + (
                                                 "bg-success/10 text-success"
                                                     if clDone == clTotal
@@ -262,7 +262,7 @@ def:pub TaskCard(
                                 {if task.estimate > 0.0 {
                                     <span
                                         key="est"
-                                        className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground"
+                                        className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
                                         title="Estimate"
                                     >
                                         {fmtEstimate(task.estimate)}
@@ -277,7 +277,7 @@ def:pub TaskCard(
                                 {if task.due_date {
                                     <span
                                         key="due"
-                                        className={"whitespace-nowrap text-[11px] "
+                                        className={"whitespace-nowrap text-xs "
                                             + DUE_TINT[tone]}
                                         title={"Due " + prettyDay(task.due_date)}
                                     >
@@ -300,7 +300,7 @@ def:pub TaskCard(
                     <GitHubChip key="github" task={task} onMarkDone={markDone}/>
                 }}
                 <div
-                    className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card/95 pointer-fine:p-0.5 pointer-fine:opacity-0 pointer-fine:shadow-sm pointer-fine:backdrop-blur-sm"
+                    className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-fine:pointer-events-none pointer-fine:absolute pointer-fine:right-1.5 pointer-fine:bottom-1.5 pointer-fine:rounded-lg pointer-fine:border pointer-fine:border-border/60 pointer-fine:bg-card pointer-fine:p-0.5 pointer-fine:opacity-0"
                 >
                     <Button
                         variant="ghost"

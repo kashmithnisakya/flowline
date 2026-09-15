@@ -7,11 +7,7 @@ model and the isolation.
 def:pub ProofStrip -> JsxElement {
     return
         <section className="mx-auto max-w-[1180px] px-7 pt-24">
-            <span
-                className="text-xs font-semibold uppercase tracking-widest text-primary"
-            >
-                Proof
-            </span>
+            <span className="text-xs font-semibold text-primary">Proof</span>
             <h2
                 className="font-display mt-3 max-w-2xl text-[clamp(1.5rem,3vw,2rem)] font-bold leading-tight tracking-[-0.035em]"
             >

@@ -113,8 +113,7 @@ def:pub MiniLanes(
                 "cls": CARD_BAR[colorKey(s.color)]
                     + " "
                     + (
-                        "z-10 ring-2 ring-primary/70 shadow-sm "
-                            + CARD_TINT[colorKey(s.color)]
+                        "z-10 ring-2 ring-primary/70 " + CARD_TINT[colorKey(s.color)]
                             if isHere
                             else (
                                 "border-border bg-card"
@@ -309,10 +308,10 @@ def:pub MiniLanes(
                     + ("" if i == 0 else " border-t border-border/60"),
                 "label": str(b["label"]),
                 "sub": str(b["sub"]),
-                "subCls": "truncate text-[9.5px] leading-tight "
+                "subCls": "truncate text-xs leading-tight "
                     + ("text-warning" if b["warn"] else "text-muted-foreground"),
                 "dot": DOT_FILL[colorKey(str(b["color"]))],
-                "labelCls": "truncate text-[11px] font-semibold leading-tight "
+                "labelCls": "truncate text-xs font-semibold leading-tight "
                     + ("text-foreground" if isHereLane else "text-foreground/75")
             }
         );
@@ -388,7 +387,7 @@ def:pub MiniLanes(
             {for c in cards {
                 <div
                     key={c["id"]}
-                    className={"absolute flex items-center rounded-md border pl-1.5 pr-1 text-[10.5px] leading-[11px] "
+                    className={"absolute flex items-center rounded-md border pl-1.5 pr-1 text-xs leading-3 "
                         + c["cls"]}
                     style={{
                         "left": c["left"],

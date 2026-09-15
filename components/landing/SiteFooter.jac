@@ -8,10 +8,6 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
             <div
                 className="relative overflow-hidden rounded-3xl bg-foreground px-8 py-14 text-center text-background"
             >
-                <div
-                    aria-hidden="true"
-                    className="absolute inset-0 bg-[radial-gradient(42rem_22rem_at_50%_-6rem,color-mix(in_oklab,var(--primary)_25%,transparent),transparent_70%)]"
-                ></div>
                 <h2
                     className="font-display relative mx-auto max-w-lg text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.02] tracking-[-0.04em]"
                 >

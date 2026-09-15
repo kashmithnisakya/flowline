@@ -97,7 +97,7 @@ def:pub FlowCanvas(
                 "h": str(ln["h"]) + "px",
                 "label": str(ln["label"]),
                 "sub": str(ln["sub"]),
-                "subCls": "mt-0.5 truncate pl-3.5 text-[10px] "
+                "subCls": "mt-0.5 truncate pl-3.5 text-xs "
                     + ("text-warning" if ln["warn"] else "text-muted-foreground"),
                 "totals": str(ln["totals"]),
                 "manage": "y" if ln["manage"] else "",
@@ -213,8 +213,8 @@ def:pub FlowCanvas(
     # The tag picker's rows. Materialised here: the JSX cannot iterate a
     # literal, and "" is a real choice (untagged), not a missing one.
     carryPicks: list[dict[str, str]] = [
-        {"key": "", "text": "NONE"},
-        {"key": "issue", "text": "ISSUE"},
+        {"key": "", "text": "None"},
+        {"key": "issue", "text": "Issue"},
         {"key": "pr", "text": "PR"}
     ];
 
@@ -295,7 +295,7 @@ def:pub FlowCanvas(
                                         {lr["label"]}
                                     </span>
                                     <span
-                                        className="ml-auto hidden shrink-0 text-[10px] font-normal text-muted-foreground group-hover/lane:inline"
+                                        className="ml-auto hidden shrink-0 text-xs font-normal text-muted-foreground group-hover/lane:inline"
                                     >
                                         ↗
                                     </span>
@@ -324,7 +324,7 @@ def:pub FlowCanvas(
                                 </div>
                             }}
                             <div
-                                className="mt-0.5 truncate pl-3.5 text-[10px] tabular-nums text-muted-foreground/80"
+                                className="mt-0.5 truncate pl-3.5 text-xs tabular-nums text-muted-foreground/80"
                             >
                                 {lr["totals"]}
                             </div>
@@ -400,7 +400,7 @@ def:pub FlowCanvas(
                         {if (l["label"] or l["carries"]) and selectedEdge != l["key"] {
                             <span
                                 key="lab"
-                                className={"pointer-events-none absolute z-10 inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] leading-none shadow-sm transition-opacity duration-150 "
+                                className={"pointer-events-none absolute z-10 inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-none transition-opacity duration-150 "
                                     + (
                                         "-translate-x-full"
                                             if l["side"] == -1
@@ -441,7 +441,7 @@ def:pub FlowCanvas(
                                 {if str(l["carries"]) in CARRY_LABEL {
                                     <span
                                         key="tag"
-                                        className={"rounded-sm border px-1 py-px text-[9px] font-semibold leading-none tracking-wider "
+                                        className={"rounded-sm border px-1 py-px text-xs font-semibold leading-none "
                                             + CARRY_TINT[str(l["carries"])]}
                                     >
                                         {CARRY_LABEL[str(l["carries"])]}
@@ -466,7 +466,7 @@ def:pub FlowCanvas(
                     <button
                         key={s.id}
                         type="button"
-                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left shadow-sm hover:shadow-md "
+                        className={"absolute z-10 rounded-lg border px-3 py-2 text-left "
                             + (
                                 "transition-[left,top,box-shadow,border-color] duration-200 ease-out "
                                     if settled
@@ -474,7 +474,7 @@ def:pub FlowCanvas(
                             )
                             + CARD_TINT[colorKey(s.color)]
                             + (
-                                " border-primary shadow-md ring-2 ring-primary/40"
+                                " border-primary ring-2 ring-primary/40"
                                     if selectedId == s.id
                                     else ""
                             )
@@ -525,7 +525,7 @@ def:pub FlowCanvas(
                         {if s.blurb {
                             <div
                                 key="blurb"
-                                className="mt-0.5 truncate pl-4 text-[11px] text-muted-foreground"
+                                className="mt-0.5 truncate pl-4 text-xs text-muted-foreground"
                                 title={s.blurb}
                             >
                                 {s.blurb}
@@ -534,7 +534,7 @@ def:pub FlowCanvas(
                         {if not (laneMode and s.blurb) {
                             <div
                                 key="kind"
-                                className="mt-0.5 pl-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                                className="mt-0.5 pl-4 text-xs font-medium text-muted-foreground"
                             >
                                 {KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind}
                             </div>
@@ -542,7 +542,7 @@ def:pub FlowCanvas(
                         {if s.owner and not laneMode {
                             <div
                                 key="owner"
-                                className="mt-1 truncate pl-4 text-[11px] text-foreground/70"
+                                className="mt-1 truncate pl-4 text-xs text-foreground/70"
                                 title={"Held by: " + s.owner}
                             >
                                 {s.owner}
@@ -610,7 +610,7 @@ def:pub FlowCanvas(
             {if activeFound {
                 <div
                     key="edgeeditor"
-                    className="absolute z-40 w-64 -translate-x-1/2 rounded-lg border bg-background/95 p-2.5 shadow-lg backdrop-blur animate-in fade-in zoom-in-95 duration-150"
+                    className="absolute z-40 w-64 -translate-x-1/2 rounded-lg border bg-popover p-2.5 shadow-lg animate-in fade-in zoom-in-95 duration-150"
                     style={{
                         "left": str(activeEdge["mx"] * zoom + panX) + "px",
                         "top": str(activeEdge["my"] * zoom + panY + 14.0) + "px"
@@ -619,7 +619,7 @@ def:pub FlowCanvas(
                     onMouseDown={lambda (e: MouseEvent) { e.stopPropagation(); }}
                 >
                     <div
-                        className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                        className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground"
                     >
                         <span className="truncate">{edgeFromName}</span>
                         <span aria-hidden="true">→</span>
@@ -644,16 +644,14 @@ def:pub FlowCanvas(
                         }}}
                     />
                     <div className="mt-2 flex items-center gap-1">
-                        <span
-                            className="mr-1 text-[10px] uppercase tracking-wider text-muted-foreground"
-                        >
+                        <span className="mr-1 text-xs text-muted-foreground">
                             Carries
                         </span>
                         {for pick in carryPicks {
                             <button
                                 key={pick["text"]}
                                 type="button"
-                                className={"rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-wider transition-colors "
+                                className={"rounded-md border px-1.5 py-0.5 text-xs font-semibold transition-colors "
                                     + (
                                         ("border-primary bg-primary/10 text-primary")
                                             if edgeCarry == pick["key"]
@@ -715,7 +713,7 @@ def:pub FlowCanvas(
                 </div>
             }}
             <div
-                className="absolute bottom-4 left-4 z-30 flex items-center gap-1 rounded-full border bg-background/95 px-1 py-1 shadow-sm backdrop-blur"
+                className="absolute bottom-4 left-4 z-30 flex items-center gap-1 rounded-full border bg-card px-1 py-1"
                 onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
             >
                 <button

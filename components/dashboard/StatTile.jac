@@ -48,13 +48,9 @@ def:pub StatTile(
     );
     hasSpark = len(spark) > 1;
     return
-        <Card className="gap-0 py-4 hover:shadow-md hover:ring-foreground/20">
+        <Card className="gap-0 py-4">
             <CardContent className="px-4">
-                <div
-                    className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                >
-                    {label}
-                </div>
+                <div className="text-xs font-medium text-muted-foreground">{label}</div>
                 <div
                     className={cn(
                         "font-display text-3xl font-bold tracking-tight tabular-nums",

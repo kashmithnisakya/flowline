@@ -1,6 +1,6 @@
 """flowline - root layout. App pages get the nav, an account menu (org name,
 settings, theme, log out) and the ⌘K palette; public pages render bare (the
-landing brings its own header). The header is sticky with a blur; below md
+landing brings its own header). The header is sticky on a solid ground; below md
 the six links collapse into a dropdown menu.
 """
 
@@ -105,10 +105,7 @@ def:pub Shell -> JsxLayout {
     return
         <div className="min-h-screen bg-background text-foreground">
             {if chrome {
-                <header
-                    key="nav"
-                    className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
-                >
+                <header key="nav" className="sticky top-0 z-40 border-b bg-background">
                     <nav
                         className="flex h-14 w-full items-center gap-1 px-4 sm:px-6 lg:px-10"
                     >
@@ -163,7 +160,7 @@ def:pub Shell -> JsxLayout {
                                     <path d="m21 21-4.3-4.3"/>
                                 </svg>
                                 <kbd
-                                    className="hidden rounded border border-border bg-muted px-1 font-mono text-[10px] sm:inline"
+                                    className="hidden rounded border border-border bg-muted px-1 font-mono text-xs sm:inline"
                                 >
                                     ⌘K
                                 </kbd>

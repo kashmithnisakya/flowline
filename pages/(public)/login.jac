@@ -6,7 +6,6 @@ tabbed card with Google/GitHub SSO; no "Forgot?" link because there is no flow."
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
 import from ...components.auth.AuthAside { AuthAside }
 import from ...components.auth.SsoButtons { SsoButtons }
-import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }
@@ -58,14 +57,11 @@ def:pub LoginPage -> JsxPage {
     # jumped on every switch. Anchored at the top, the form only grows down.
     return
         <div className="relative overflow-hidden">
-            <KineticGrid
-                className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
-            />
             <div
                 className="relative z-10 mx-auto grid max-w-6xl items-start gap-10 px-6 py-14 lg:grid-cols-[1.05fr_1fr] lg:py-20"
             >
                 <AuthAside/>
-                <div className="anim-fade-up anim-d2 mx-auto w-full max-w-md">
+                <div className="mx-auto w-full max-w-md">
                     <div className="mb-6 flex justify-center lg:hidden">
                         <img
                             src="/static/brand/logo-full.svg"
@@ -88,7 +84,7 @@ def:pub LoginPage -> JsxPage {
                         <span
                             aria-hidden="true"
                             className={cn(
-                                "pointer-events-none absolute inset-y-1 left-1 w-[calc(50%_-_4px)] rounded-lg bg-card shadow-sm transition-transform duration-200",
+                                "pointer-events-none absolute inset-y-1 left-1 w-[calc(50%_-_4px)] rounded-lg bg-card transition-transform duration-200",
                                 "translate-x-full" if signup else "translate-x-0"
                             )}
                         ></span>
@@ -157,9 +153,7 @@ def:pub LoginPage -> JsxPage {
                     </div>
                     <div className="my-5 flex items-center gap-3">
                         <span className="h-px flex-1 bg-border"></span>
-                        <span
-                            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                        >
+                        <span className="text-xs font-medium text-muted-foreground">
                             or with email
                         </span>
                         <span className="h-px flex-1 bg-border"></span>

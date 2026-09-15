@@ -123,7 +123,7 @@ def colorKey(raw: str) -> str {
 # What a transition carries, as a chip on its label: an issue (no code yet)
 # or a PR (code, waiting on a person). Empty carries no chip, which is what
 # every transition drawn before this existed reads as.
-glob CARRY_LABEL: dict[str, str] = {"issue": "ISSUE", "pr": "PR"},
+glob CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"},
      CARRY_TINT: dict[str, str] = {
          "issue": "border-step-sky/50 bg-step-sky/10 text-step-sky-ink",
          "pr": "border-step-amber/50 bg-step-amber/10 text-step-amber-ink"

@@ -8,7 +8,7 @@ import from ..ui.card { Card, CardContent }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.table { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
 
-glob HEAD_CLS: str = "text-xs uppercase tracking-wider text-muted-foreground";
+glob HEAD_CLS: str = "text-xs text-muted-foreground";
 
 # "https://github.com/org/repo/pull/42" -> "#42" (falls back to "link").
 def linkRef(url: str) -> str {

@@ -13,7 +13,7 @@ glob SHOW_MAX: int = 8;
 # A same-day handoff reads "new", not "0d".
 def waitChip(days: int) -> str {
     if days <= 0 {
-        return "new";
+        return "New";
     }
     return str(days) + "d";
 }
@@ -37,7 +37,7 @@ def:pub ReviewQueueCard(rows: list[dict]) -> JsxElement {
                             className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                         >
                             <span
-                                className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide tabular-nums text-warning"
+                                className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-xs font-bold tabular-nums text-warning"
                             >
                                 {waitChip(r["waiting_days"])}
                             </span>
@@ -117,7 +117,7 @@ def:pub GoneQuietCard(rows: list[dict]) -> JsxElement {
                             className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                         >
                             <span
-                                className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide tabular-nums text-warning"
+                                className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-xs font-bold tabular-nums text-warning"
                             >
                                 {str(r["idle_days"]) + "d"}
                             </span>

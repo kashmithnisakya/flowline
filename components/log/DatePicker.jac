@@ -196,7 +196,7 @@ def:pub DatePicker(
                         <button
                             key={"d" + str(d)}
                             type="button"
-                            className={"rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] "
+                            className={"rounded-md py-1 text-sm tabular-nums transition-colors "
                                 + (
                                     "bg-primary font-semibold text-primary-foreground"
                                         if isoOf(year, month, d) == value

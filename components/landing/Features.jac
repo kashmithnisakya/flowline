@@ -41,11 +41,7 @@ def:pub Features -> JsxElement {
             id="product"
             className="mx-auto max-w-[1180px] scroll-mt-24 px-7 pt-24"
         >
-            <span
-                className="text-xs font-semibold uppercase tracking-widest text-primary"
-            >
-                Product
-            </span>
+            <span className="text-xs font-semibold text-primary">Product</span>
             <h2
                 className="font-display mt-3 max-w-xl text-[clamp(1.9rem,4vw,2.65rem)] font-bold leading-tight tracking-[-0.04em]"
             >
@@ -55,7 +51,7 @@ def:pub Features -> JsxElement {
                 Four things replace the ritual, and unlike the meeting, the record is still there next month.
             </p>
             <div className="mt-10 grid gap-6 sm:grid-cols-2">
-                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                <Card className="h-full py-0 hover:ring-foreground/20">
                     <CardContent className="flex h-full flex-col gap-3 p-7">
                         <h3 className="font-display text-xl font-bold tracking-tight">
                             A flow line you design
@@ -73,13 +69,13 @@ def:pub Features -> JsxElement {
                                         {if i > 0 {
                                             <span
                                                 key="arrow"
-                                                className="text-[10px] text-muted-foreground"
+                                                className="text-xs text-muted-foreground"
                                             >
                                                 {"⇄" if i == 3 else "→"}
                                             </span>
                                         }}
                                         <span
-                                            className={"rounded-full px-2.5 py-0.5 text-[10px] font-bold "
+                                            className={"rounded-full px-2.5 py-0.5 text-xs font-bold "
                                                 + pill["cls"]}
                                         >
                                             {pill["name"]}
@@ -98,7 +94,7 @@ def:pub Features -> JsxElement {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                <Card className="h-full py-0 hover:ring-foreground/20">
                     <CardContent className="flex h-full flex-col gap-3 p-7">
                         <h3 className="font-display text-xl font-bold tracking-tight">
                             A written daily log
@@ -110,7 +106,7 @@ def:pub Features -> JsxElement {
                             {for r in LOG_PEEK {
                                 <div
                                     key={r["who"]}
-                                    className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-[11px]"
+                                    className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-xs"
                                 >
                                     <span className="font-bold">{r["who"]}</span>
                                     <span
@@ -119,7 +115,7 @@ def:pub Features -> JsxElement {
                                         {r["what"]}
                                     </span>
                                     <span
-                                        className={"ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold "
+                                        className={"ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-bold "
                                             + r["tint"]}
                                     >
                                         {r["status"]}
@@ -129,7 +125,7 @@ def:pub Features -> JsxElement {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                <Card className="h-full py-0 hover:ring-foreground/20">
                     <CardContent className="flex h-full flex-col gap-3 p-7">
                         <h3 className="font-display text-xl font-bold tracking-tight">
                             Projects and people you control
@@ -157,14 +153,14 @@ def:pub Features -> JsxElement {
                                 }}
                             </div>
                             <span
-                                className="ml-3 text-[11px] font-medium text-muted-foreground"
+                                className="ml-3 text-xs font-medium text-muted-foreground"
                             >
                                 + your team
                             </span>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="card-hover h-full py-0 hover:ring-foreground/20">
+                <Card className="h-full py-0 hover:ring-foreground/20">
                     <CardContent className="flex h-full flex-col gap-3 p-7">
                         <h3 className="font-display text-xl font-bold tracking-tight">
                             A workspace that is yours
@@ -178,9 +174,9 @@ def:pub Features -> JsxElement {
                         >
                             <div className="flex-1 rounded-lg border p-2.5">
                                 <div
-                                    className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground"
+                                    className="text-xs font-semibold text-muted-foreground"
                                 >
-                                    your org
+                                    Your org
                                 </div>
                                 <div
                                     className="mt-1.5 h-1.5 rounded-full bg-primary/25"
@@ -194,9 +190,9 @@ def:pub Features -> JsxElement {
                             </span>
                             <div className="flex-1 rounded-lg border p-2.5 opacity-45">
                                 <div
-                                    className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground"
+                                    className="text-xs font-semibold text-muted-foreground"
                                 >
-                                    anyone else
+                                    Anyone else
                                 </div>
                                 <div
                                     className="mt-1.5 h-1.5 rounded-full bg-muted"

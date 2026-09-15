@@ -30,7 +30,6 @@ import from ...services.tasks.tasks {
 }
 import from ...services.github.github { SyncGithub, CreateIssueFromTask }
 import from ...services.github.events { DrainGithubEvents }
-import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -603,12 +602,7 @@ def:pub BoardPage -> JsxPage {
                     key="noflowline"
                     className="relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed px-6 py-16 text-center"
                 >
-                    <KineticGrid
-                        className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
-                    />
-                    <div
-                        className="anim-fade-up relative z-10 flex flex-col items-center gap-3"
-                    >
+                    <div className="relative z-10 flex flex-col items-center gap-3">
                         <svg
                             width={40}
                             height={40}

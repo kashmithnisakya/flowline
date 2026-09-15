@@ -71,7 +71,7 @@ def tipShift(i: int, n: int) -> str {
 def YAxis(top: int) -> JsxElement {
     return
         <div
-            className={"relative w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground "
+            className={"relative w-7 shrink-0 text-right text-xs tabular-nums text-muted-foreground "
                 + PLOT_H}
             aria-hidden="true"
         >
@@ -99,7 +99,7 @@ def XLabels(labels: list[str], gutter: str) -> JsxElement {
     step = labelStep(n);
     return
         <div
-            className={"mt-2 flex text-[11px] text-muted-foreground " + gutter}
+            className={"mt-2 flex text-xs text-muted-foreground " + gutter}
             aria-hidden="true"
         >
             {for (i, lab) in enumerate(labels) {

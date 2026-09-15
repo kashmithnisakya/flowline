@@ -218,7 +218,7 @@ def:pub TemplatePicker(
                 {for t in FLOW_LINE_TEMPLATES {
                     <Card
                         key={t["key"]}
-                        className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
+                        className={"group flex flex-col hover:ring-foreground/20 transition-opacity"
                             + (
                                 " opacity-60"
                                     if applying != "" and applying != t["key"]
@@ -227,7 +227,7 @@ def:pub TemplatePicker(
                     >
                         <CardContent className="flex flex-1 flex-col gap-3 py-4">
                             <div
-                                className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2 transition-transform duration-200 group-hover:scale-[1.02]"
+                                className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2"
                             >
                                 <svg
                                     viewBox={thumbBox(t)}
@@ -297,12 +297,12 @@ def:pub TemplatePicker(
                 }}
                 <Card
                     key="scratch"
-                    className={"group flex flex-col card-hover hover:ring-foreground/20 transition-opacity"
+                    className={"group flex flex-col hover:ring-foreground/20 transition-opacity"
                         + (" opacity-60" if applying != "" else "")}
                 >
                     <CardContent className="flex flex-1 flex-col gap-3 py-4">
                         <div
-                            className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2 transition-transform duration-200 group-hover:scale-[1.02]"
+                            className="flex items-center justify-center overflow-hidden rounded-lg bg-muted/40 p-2"
                         >
                             <svg
                                 viewBox="0 0 204 66"

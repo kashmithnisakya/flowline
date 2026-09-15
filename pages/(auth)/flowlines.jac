@@ -679,7 +679,7 @@ def:pub FlowLinePage -> JsxPage {
                                     className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3"
                                 >
                                     <div
-                                        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-dashed bg-background/95 px-4 py-2 shadow-md backdrop-blur animate-in fade-in slide-in-from-top-2 duration-200"
+                                        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-dashed bg-background px-4 py-2 shadow-md animate-in fade-in slide-in-from-top-2 duration-200"
                                     >
                                         <p className="text-sm text-pretty">
                                             <span className="font-medium">
@@ -709,10 +709,10 @@ def:pub FlowLinePage -> JsxPage {
                             {if creatingStep {
                                 <div
                                     key="create"
-                                    className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                                    className="flex flex-col gap-3 rounded-lg border bg-card p-4 animate-in fade-in slide-in-from-right-4 duration-300"
                                 >
                                     <div
-                                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                                        className="text-xs font-medium text-muted-foreground"
                                     >
                                         New step
                                     </div>
@@ -751,7 +751,7 @@ def:pub FlowLinePage -> JsxPage {
                                 </div>
                             } elif len(picked) > 0 {
                                 <StepInspector
-                                    className="shadow-lg animate-in fade-in slide-in-from-right-4 duration-300"
+                                    className="animate-in fade-in slide-in-from-right-4 duration-300"
                                     key={picked[0].id}
                                     step={picked[0]}
                                     steps={steps}
@@ -802,7 +802,7 @@ def:pub FlowLinePage -> JsxPage {
                                 type="button"
                                 className={"rounded-md px-2.5 py-1 text-xs font-medium "
                                     + (
-                                        "bg-background text-foreground shadow-sm"
+                                        "bg-background text-foreground"
                                             if not laneMode
                                             else "text-muted-foreground transition-colors hover:text-foreground"
                                     )}
@@ -814,7 +814,7 @@ def:pub FlowLinePage -> JsxPage {
                                 type="button"
                                 className={"rounded-md px-2.5 py-1 text-xs font-medium "
                                     + (
-                                        "bg-background text-foreground shadow-sm"
+                                        "bg-background text-foreground"
                                             if laneMode
                                             else "text-muted-foreground transition-colors hover:text-foreground"
                                     )}
