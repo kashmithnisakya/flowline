@@ -1,9 +1,7 @@
-"""flowline - root layout. App pages get a grouped top bar (daily views, then
-setup pages; the setup group folds into More below 1024px), the ⌘K palette,
-Ask (a docked column at 1280px and up, a sheet below) and, on phones, a light
-header over a bottom tab bar. /setup gets the mark and Sign out only; public
-pages render bare (the landing brings its own header).
-"""
+"""flowline - root layout. App pages get a grouped top bar (the setup group
+folds into More below 1024px), the ⌘K palette, Ask (a docked column at 1280px
+and up, a sheet below) and, on phones, a header over a bottom tab bar. /setup
+gets the mark and Sign out only."""
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from "react" { useEffect }
@@ -339,11 +337,22 @@ def:pub Shell -> JsxLayout {
 
     dockOpen = askOpen and wide and chrome and not setup;
     tabBar = chrome and not setup;
+    # Toasts sit bottom right, left of the docked column. While the Ask sheet is
+    # open they move to the top, off its composer (top left beside a side sheet).
+    sheetOpen = askOpen and not wide and tabBar;
+    toastPosition = ("top-center" if narrow else "top-left")
+        if sheetOpen
+        else "bottom-right";
     toastOffset: dict[str, str] = {
+        "top": "24px",
+        "left": "24px",
         "right": "376px" if dockOpen else "24px",
         "bottom": TAB_CLEAR if narrow and tabBar else "24px"
     };
-    toastMobile: dict[str, str] = {"bottom": TAB_CLEAR if tabBar else "16px"};
+    toastMobile: dict[str, str] = {
+        "top": "calc(12px + env(safe-area-inset-top))",
+        "bottom": TAB_CLEAR if tabBar else "16px"
+    };
     toastIcons: dict[str, any] = {
         "success": <KindGlyph kind="done" size={16} className="text-success"/>,
         "error": <KindGlyph kind="blocked" size={16} className="text-destructive"/>,
@@ -390,12 +399,12 @@ def:pub Shell -> JsxLayout {
                     >
                         <Link
                             to="/board"
-                            className="mr-2 flex min-w-0 shrink-0 items-center gap-2 rounded-md py-1 pr-1 lg:mr-3"
+                            className="mr-2 flex min-w-6 shrink items-center gap-2 rounded-md py-1 pr-1 lg:mr-3"
                             aria-label={(orgName or "flowline") + " home"}
                         >
                             <Mark/>
                             <span
-                                className="hidden max-w-[11rem] truncate text-sm font-bold [font-stretch:108%] lg:inline xl:max-w-[16rem]"
+                                className="hidden min-w-0 max-w-[11rem] truncate text-sm font-bold [font-stretch:108%] lg:inline xl:max-w-[16rem]"
                             >
                                 {orgName or "flowline"}
                             </span>
@@ -498,7 +507,7 @@ def:pub Shell -> JsxLayout {
                             >
                                 <PageIcon name="ask"/>
                                 Ask
-                                <span className="kbd hidden lg:inline-flex">
+                                <span className="kbd hidden xl:inline-flex">
                                     {mod + "/"}
                                 </span>
                             </button>
@@ -736,7 +745,7 @@ def:pub Shell -> JsxLayout {
                 />
             }}
             <Toaster
-                position="bottom-right"
+                position={toastPosition}
                 offset={toastOffset}
                 mobileOffset={toastMobile}
                 icons={toastIcons}

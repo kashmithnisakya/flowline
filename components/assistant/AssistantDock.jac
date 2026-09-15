@@ -1,8 +1,7 @@
 """Ask: the assistant panel, mounted once in the root layout so the transcript
-survives closing it. `docked` (1280px and up) renders a right column that
-pushes the page; below that it is a sheet over a scrim. A turn is a plain dict
-with a `role` and a `kind` (text / error / note / proposal): typing it as an obj
-would create a models <-> walkers import cycle."""
+survives closing it. `docked` (1280px and up) is a right column that pushes the
+page, otherwise a sheet. A turn is a plain dict (`role`, `kind`): an obj would
+create a models <-> walkers import cycle."""
 
 import from "@jac/runtime" { navigate, useLocation }
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
@@ -79,6 +78,41 @@ def noteSection(title: str, items: any) -> list[str] {
 # Sort key for citations: where the title first appears in the answer.
 def citeOrder(d: dict) -> int {
     return d["at"] as int;
+}
+
+
+# Longest title first, so a short title cannot claim part of a longer one.
+def citeLength(t: any) -> int {
+    return 0 - len(str(t.title).strip());
+}
+
+
+# A letter (anything with case) or a digit, for the word-boundary test.
+def isWordChar(ch: str) -> bool {
+    return ch.lower() != ch.upper() or ch in "0123456789";
+}
+
+
+# Where `needle` first appears in `hay` as whole words, outside every span a
+# longer title already claimed, or -1.
+def findTitle(hay: str, needle: str, taken: list[dict]) -> int {
+    at = hay.find(needle);
+    while at >= 0 {
+        end = at + len(needle);
+        before = hay[at - 1] if at > 0 else " ";
+        after = hay[end] if end < len(hay) else " ";
+        free = not isWordChar(before) and not isWordChar(after);
+        for span in taken {
+            if at < (span["to"] as int) and end > (span["from"] as int) {
+                free = False;
+            }
+        }
+        if free {
+            return at;
+        }
+        at = hay.find(needle, at + 1);
+    }
+    return -1;
 }
 
 
@@ -218,8 +252,10 @@ def:pub AssistantDock(
         at = at + 1;
     }
 
+    # On a phone the header and composer controls grow to touch size.
     def modeClass(active: bool) -> str {
-        base = "h-6 rounded-sm px-2 text-xs transition-colors ";
+        base = "rounded-sm transition-colors "
+            + ("h-9 px-3 text-[13px] " if narrow else "h-6 px-2 text-xs ");
         if active {
             return base + "border bg-card font-semibold text-foreground";
         }
@@ -251,7 +287,8 @@ def:pub AssistantDock(
                     key="clear"
                     variant="ghost"
                     size="sm"
-                    className="text-muted-foreground"
+                    className={"text-muted-foreground "
+                        + ("h-10 px-3" if narrow else "")}
                     onClick={lambda { turns = []; }}
                 >
                     Clear
@@ -260,6 +297,7 @@ def:pub AssistantDock(
             <Button
                 variant="ghost"
                 size="icon-sm"
+                className={"size-10" if narrow else ""}
                 aria-label="Close Ask"
                 title="Close (Esc)"
                 onClick={closePanel}

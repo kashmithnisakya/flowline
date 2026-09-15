@@ -473,6 +473,14 @@ def:pub CommandPalette(
             if total > 0 {
                 runItem(cursor);
             }
+        } elif canAsk
+            and (e.metaKey or e.ctrlKey)
+            and (e.key == "/" or e.code == "Slash") {
+            # The ⌘/ hint: ask what is typed (or just open Ask). Stopped here so
+            # the layout's own ⌘/ does not toggle Ask behind the palette.
+            e.preventDefault();
+            e.stopPropagation();
+            askQuestion(query.strip());
         }
     }
 

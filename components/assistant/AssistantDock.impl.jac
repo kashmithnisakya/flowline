@@ -115,19 +115,22 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     busy = False;
 }
 
-# The working tasks whose titles the text names, in the order it names them.
-# The walkers return prose, not ids, so a title match is the honest citation.
+# The working tasks whose titles the text names as whole words, in the order it
+# names them. The walkers return prose, not ids, so a title match is the citation.
 impl AssistantDock.citeTasks(text: str) -> list[dict[str, str]] {
     hay = text.lower();
     found: list[dict] = [];
+    taken: list[dict] = [];
     try {
         run = root spawn ListTasks(scope="working", page_size=500);
         page = run.reports[0] if run.reports else None;
         pool = page.rows if page else [];
-        for t in pool {
+        for t in sorted(pool, key=citeLength) {
             title = t.title.strip();
-            where = hay.find(title.lower()) if len(title) >= MIN_CITE else -1;
+            needle = title.lower();
+            where = findTitle(hay, needle, taken) if len(title) >= MIN_CITE else -1;
             if where >= 0 {
+                taken.append({"from": where, "to": where + len(needle)});
                 found.append({"id": t.id, "title": title, "at": where});
             }
         }
