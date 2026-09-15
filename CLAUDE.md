@@ -263,7 +263,10 @@ File-based routing with route groups:
 - **The flow line page's step panel opens the board's dialog.** Clicking a step
   in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
   and a row opens `components/board/TaskDialog` on the same form dict and the
-  same `UpdateTask` / `DeleteTask` walkers the board drives it with.
+  same `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
+  does the same for its rows, and keeps scope, filters, sort and page in the
+  URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
+  `sort="step"` follow the board's column order and placement rule.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   create dialog; an already mounted board listens for `flowline:open-task` /
   `flowline:new-task` instead (the palette uses both paths).

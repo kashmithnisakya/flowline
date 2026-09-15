@@ -24,6 +24,7 @@ import from models {
     projects_of,
     members_of,
     roles_of,
+    steps_of,
     rehome_task
 }
 import from services.util {
@@ -38,7 +39,7 @@ import from services.util {
 }
 import from services.log.log { record_task_event, sync_task_links }
 import from services.github.util { close_issue_on_done }
-import from constants { STATUSES, KIND_STATUS, ACTIVE_STATUSES }
+import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 
 # The legacy status a step stands for. Every move writes both, so the rest of
@@ -116,13 +117,55 @@ def order_attention(rows: list[Task]) {
 
 glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2};
 
+# A task's board column as a number, by the board's placement rule: its own
+# step, else the status itself (no flow line), else the first column of its
+# status's kind. `rank` and `kind_rank` come from sort_tasks.
+def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int {
+    if t.step_id in rank {
+        return rank[t.step_id];
+    }
+    if t.status in rank {
+        return rank[t.status];
+    }
+    kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+    return kind_rank[kind] if kind in kind_rank else 0;
+}
+
+
 # The table view's user-chosen column sort, over node fields only so it runs
-# on the full match set before paging. Priority sorts by urgency; undated
-# tasks sort last on the due column. The jid pass underneath keeps ties
-# deterministic across pages.
-def sort_tasks(rows: list[Task], field: str, reverse: bool) {
+# on the full match set before paging. Priority sorts by urgency; step sorts
+# in board column order, cards in board order within a column; undated tasks
+# sort last on the due column. The jid pass keeps ties deterministic.
+def sort_tasks(holder: Root, rows: list[Task], field: str, reverse: bool) {
     rows.sort(key=lambda (t: Task) { jid(t); });
-    if field == "title" {
+    if field == "step" {
+        # The board's column order: canvas x, ties by sort_order. Without a
+        # flow line the columns are STATUSES in order.
+        order = steps_of(holder);
+        order.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
+        order.sort(key=lambda (s: WorkflowStep) { s.x; });
+        rank: dict[str, int] = {};
+        kind_rank: dict[str, int] = {};
+        for (i, s) in enumerate(order) {
+            rank[jid(s)] = i;
+            if s.kind not in kind_rank {
+                kind_rank[s.kind] = i;
+            }
+        }
+        if len(order) == 0 {
+            for (i, st) in enumerate(STATUSES) {
+                rank[st] = i;
+                kind = STATUS_KIND[st] if st in STATUS_KIND else "active";
+                if kind not in kind_rank {
+                    kind_rank[kind] = i;
+                }
+            }
+        }
+        rows.sort(key=lambda (t: Task) { t.sort_order; });
+        rows.sort(
+            key=lambda (t: Task) { column_rank(t, rank, kind_rank); }, reverse=reverse
+        );
+    } elif field == "title" {
         rows.sort(key=lambda (t: Task) { t.title.lower(); }, reverse=reverse);
     } elif field == "priority" {
         rows.sort(
@@ -131,8 +174,6 @@ def sort_tasks(rows: list[Task], field: str, reverse: bool) {
                 else 1; },
             reverse=reverse
         );
-    } elif field == "status" {
-        rows.sort(key=lambda (t: Task) { t.status; }, reverse=reverse);
     } elif field == "category" {
         rows.sort(key=lambda (t: Task) { t.category.lower(); }, reverse=reverse);
     } elif field == "estimate" {
@@ -259,7 +300,7 @@ walker ListTasks {
         if self.sort {
             # An explicit column sort wins over the scope default and the
             # search rank: the table user asked for this order.
-            sort_tasks(picked, self.sort, self.sort_dir == "desc");
+            sort_tasks(holder, picked, self.sort, self.sort_dir == "desc");
         } elif needle {
             picked.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
             picked.sort(key=lambda (t: Task) { title_rank(t.title, needle); });
