@@ -1,5 +1,5 @@
-"""The setup wizard as three numbered steps, in the order it asks them. The
-sign-up sentence names only the sign-in providers this server has enabled."""
+"""The setup wizard as three numbered steps, grouped the way it asks them. The
+sign-up sentence names providers only once the sign-in page has seen them."""
 
 import from ..auth.SsoButtons { SignUpMethods }
 
@@ -24,15 +24,16 @@ def:pub HowItWorks -> JsxElement {
                     </h3>
                     <p className="text-[15px] leading-relaxed text-muted-foreground">
                         <SignUpMethods/>
+                        {" Then name your team and its first project."}
                     </p>
                 </li>
                 <li className={STEP_ROW}>
                     <span className="font-mono text-[12.5px] text-subtle">2</span>
                     <h3 className="text-base font-semibold [font-stretch:108%]">
-                        Name a project, add your people
+                        Add your people
                     </h3>
                     <p className="text-[15px] leading-relaxed text-muted-foreground">
-                        Name your first project and add the people who work on it. They are names you assign cards to, not accounts, and you can skip them for now.
+                        Add the people who work on that project. They are names you assign cards to, not accounts, and you can skip this for now.
                     </p>
                 </li>
                 <li className={STEP_ROW}>
@@ -41,7 +42,7 @@ def:pub HowItWorks -> JsxElement {
                         Pick how work moves
                     </h3>
                     <p className="text-[15px] leading-relaxed text-muted-foreground">
-                        Start from the Simple template or draw your own steps. The board opens with a new card ready to type.
+                        Pick a template and the board opens with a new card ready to type. Or draw your own steps on the flow line page.
                     </p>
                 </li>
             </ol>

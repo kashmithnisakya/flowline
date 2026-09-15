@@ -1,7 +1,7 @@
 """Google and GitHub sign-in over jac-scale's /sso/{platform}/{operation}. A
-button renders only for a provider the server holds credentials for: POST
-/sso/{platform}/begin with a malformed challenge answers SSO_NOT_CONFIGURED
-without them and writes nothing either way. One probe serves the page load."""
+button renders only for a provider the server holds credentials for. The probe
+follows /sso/{platform}/callback, which redirects to our callback page with
+?error=SSO_NOT_CONFIGURED when it has none: no 4xx or 5xx, and nothing written."""
 
 import from ..common.glyphs { Spinner }
 
@@ -11,57 +11,77 @@ glob PROVIDERS: list[dict[str, str]] = [
      ],
      # Both mounts of a full page load share the one in-flight probe.
      PROBE: dict[str, any] = {"promise": None},
-     # The last probe's answer, so a return visit draws the buttons at once.
-     SSO_CACHE: str = "flowline-sso";
+     # The last answer ("none" for no providers), so a return visit draws the
+     # buttons at once; the session flag skips re-probing within one tab.
+     SSO_CACHE: str = "flowline-sso",
+     SSO_PROBED: str = "flowline-sso-probed";
 
-def cachedProviders -> list[str] {
+# The last probe's answer, or None when this browser never probed.
+def cachedAnswer -> list[str] | None {
     try {
-        raw = localStorage.getItem(SSO_CACHE);
+        raw: any = localStorage.getItem(SSO_CACHE);
+        if raw == "none" {
+            return [];
+        }
         if raw {
             return str(raw).split(",");
         }
     } except Exception {
-        return [];
+        return None;
     }
-    return [];
+    return None;
+}
+
+def cachedProviders -> list[str] {
+    answer = cachedAnswer();
+    return answer or [];
+}
+
+def probedThisSession -> bool {
+    try {
+        return sessionStorage.getItem(SSO_PROBED) == "1" and cachedAnswer() is not None;
+    } except Exception {
+        return False;
+    }
 }
 
 def rememberProviders(found: list[str]) -> None {
     try {
-        localStorage.setItem(SSO_CACHE, ",".join(found));
+        localStorage.setItem(SSO_CACHE, ",".join(found) if len(found) > 0 else "none");
+        sessionStorage.setItem(SSO_PROBED, "1");
     } except Exception {
         return;
     }
 }
 
+# True when the callback redirect carries any error but "not configured" (a
+# configured provider rejects the missing state instead). No redirect means
+# the answer is unknown, which hides the button.
 async def probeProvider(platform: str) -> bool {
     try {
         res: any = await fetch(
-            window.location.origin + "/sso/" + platform + "/begin",
-            {
-                "method": "POST",
-                "headers": {"Content-Type": "application/json"},
-                "body": JSON.stringify({"challenge": "probe"})
-            }
+            window.location.origin + "/sso/" + platform + "/callback",
+            {"cache": "no-store"}
         );
-        if not res.ok {
-            return False;
-        }
-        body: any = await res.json();
-        return bool(body["ok"]);
+        landed = str(res.url);
+        return bool(res.redirected)
+            and "error=" in landed
+            and "SSO_NOT_CONFIGURED" not in landed;
     } except Exception as e {
         return False;
     }
 }
 
 async def probeAll -> list[str] {
+    started: list[any] = [probeProvider(p["key"]) for p in PROVIDERS];
     found: list[str] = [];
-    for p in PROVIDERS {
-        ok = await probeProvider(p["key"]);
+    for (i, p) in enumerate(PROVIDERS) {
+        ok = await started[i];
         if ok {
             found = found + [p["key"]];
         }
     }
+    rememberProviders(found);
     return found;
 }
 
@@ -87,9 +107,10 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
         found: list[str] = cachedProviders();
 
     async can with entry {
-        fresh: list[str] = await configuredProviders();
-        found = fresh;
-        rememberProviders(fresh);
+        if not probedThisSession() {
+            fresh: list[str] = await configuredProviders();
+            found = fresh;
+        }
     }
 
     async def start(platform: str) -> None;
@@ -160,23 +181,16 @@ def:pub SsoButtons(operation: str, onFailure: Callable[[str], None]) -> JsxEleme
         </div>;
 }
 
-# The sign-up sentence for the landing page, naming only enabled providers.
+# The landing's sign-up sentence. It names providers only from an answer the
+# sign-in page already got, so the landing itself sends no probe.
 def:pub SignUpMethods -> JsxElement {
-    has found: list[str] = [],
-        probed: bool = False;
+    has answer: list[str] | None = cachedAnswer();
 
-    async can with entry {
-        found = await configuredProviders();
-        probed = True;
-    }
-
-    text = "Sign up with email, or with Google or GitHub where they are enabled, and name your team.";
-    if probed and len(found) == 0 {
-        text = "Sign up with email and name your team.";
-    } elif probed {
-        text = "Sign up with email, or with "
-            + providerPhrase(found)
-            + ", and name your team.";
+    text = "Sign up with email, or with Google or GitHub where they are enabled.";
+    if answer is not None and len(answer) == 0 {
+        text = "Sign up with email.";
+    } elif answer is not None {
+        text = "Sign up with email, or with " + providerPhrase(answer) + ".";
     }
     return <span>{text}</span>;
 }
