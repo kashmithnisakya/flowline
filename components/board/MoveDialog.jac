@@ -23,7 +23,8 @@ import from ..ui.select {
     SelectContent,
     SelectItem
 }
-import from ..common.glyphs { Spinner, WarnIcon }
+import from ..common.glyphs { Spinner }
+import from ..common.KindGlyph { KindGlyph }
 
 def:pub MoveDialog(
     open: bool,
@@ -38,44 +39,46 @@ def:pub MoveDialog(
     saving: bool,
     onField: Callable[[str, str], None],
     onOpenChange: Callable[[bool], None],
-    onSave: Callable[[], None]
+    onSave: Callable[[], None],
+    # The moved card, which gets focus back on close: its old element left
+    # the lane it was in, so Radix would drop focus on the page.
+    taskId: str = ""
 ) -> JsxElement {
+    has focusId: str = "";
+
+    can with taskId entry {
+        if taskId {
+            focusId = taskId;
+        }
+    }
+
     isReview = kind == "handoff";
 
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent
+                className="sm:max-w-md"
+                onCloseAutoFocus={lambda (e: Event) {
+                    card: any = document.querySelector(
+                        '[data-task-card="' + focusId + '"]'
+                    );
+                    if focusId and card {
+                        e.preventDefault();
+                        card.focus({"preventScroll": True});
+                    }
+                }}
+            >
                 <DialogHeader>
                     <div className="flex items-start gap-3">
-                        <div
-                            className={"flex size-9 shrink-0 items-center justify-center rounded-lg "
-                                + (
-                                    # A handoff waits on someone; a stop needs
-                                    # attention. Same tokens as the step kinds.
-                                    "bg-warning/15 text-warning"
-                                        if isReview
-                                        else "bg-destructive/15 text-destructive"
-                                )}
+                        <span
+                            className={"mt-0.5 shrink-0 "
+                                + ("text-subtle" if isReview else "text-destructive")}
                         >
-                            {if isReview {
-                                <svg
-                                    key="handoff"
-                                    width={16}
-                                    height={16}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="M5 12h14"/>
-                                    <path d="m12 5 7 7-7 7"/>
-                                </svg>
-                            } else {
-                                <WarnIcon key="stop" size={16}/>
-                            } }
-                        </div>
+                            <KindGlyph
+                                kind={"handoff" if isReview else "blocked"}
+                                size={16}
+                            />
+                        </span>
                         <div className="grid gap-1.5 text-left">
                             <DialogTitle>
                                 {"Review handoff"
@@ -99,7 +102,7 @@ def:pub MoveDialog(
                                         "reviewer", v
                                     ); }}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Who reviews it?"/>
                                     </SelectTrigger>
                                     <SelectContent>
