@@ -16,7 +16,7 @@ def:pub StepName(name: str, color: str = "slate", className: str = "") -> JsxEle
     fill = SWATCH_FILL[color] if color in SWATCH_FILL else SWATCH_FILL["slate"];
     return
         <span
-            className={"inline-flex min-w-0 items-center gap-1.5"
+            className={"inline-flex max-w-full min-w-0 items-center gap-1.5"
                 + ((" " + className) if className else "")}
         >
             <span className={"step-swatch " + fill} aria-hidden="true"/>
