@@ -6,15 +6,24 @@ impl RolesSection.load -> None {
         roles = rResult.reports[0] if rResult.reports else [];
         mResult = root spawn ListMembers();
         members = mResult.reports[0] if mResult.reports else [];
+        # Which steps a role owns; the count is not needed, so skip the walk
+        # over every task.
+        sResult = root spawn GetFlowLine(with_counts=False);
+        steps = sResult.reports[0] if sResult.reports else [];
     } except Exception as e {
-        toast("Could not load roles");
+        toast.error("Could not load roles");
     }
     loading = False;
 }
 
+impl RolesSection.startAdd -> None {
+    editingRole = "";
+    newRole = "";
+    newBlurb = "";
+    adding = True;
+}
+
 impl RolesSection.addRole -> None {
-    # Both drafts read before the walker call: a `has` read after an await is
-    # a stale render-time snapshot.
     draft = newRole.strip();
     said = newBlurb.strip();
     if not draft or saving {
@@ -23,7 +32,7 @@ impl RolesSection.addRole -> None {
     saving = True;
     try {
         # SaveRole is get-or-create by name, so adding a duplicate is a
-        # harmless no-op rather than a second card. touch_blurb only when
+        # harmless no-op rather than a second row. touch_blurb only when
         # something was typed, or re-adding a name would blank its wording.
         if said {
             root spawn SaveRole(name=draft, blurb=said, touch_blurb=True);
@@ -32,26 +41,25 @@ impl RolesSection.addRole -> None {
         }
         newRole = "";
         newBlurb = "";
+        adding = False;
         await load();
         if onChanged {
             onChanged();
         }
     } except Exception as e {
-        toast("Could not add that role");
+        toast.error("Could not add that role");
     }
     saving = False;
 }
 
 impl RolesSection.startEdit(name: str, blurb: str) -> None {
+    adding = False;
     editingRole = name;
     editName = name;
     editBlurb = blurb;
-    confirmDelete = "";
 }
 
 impl RolesSection.saveEdit -> None {
-    # Read the drafts before the walker call; a `has` read after an await
-    # is a stale render-time snapshot.
     was = editingRole;
     wanted = editName.strip();
     said = editBlurb.strip();
@@ -65,7 +73,7 @@ impl RolesSection.saveEdit -> None {
         );
         resp = result.reports[0] if result.reports else None;
         if resp and not resp["ok"] {
-            toast("A role with that name already exists");
+            toast.error("A role with that name already exists");
         } else {
             editingRole = "";
             await load();
@@ -74,25 +82,79 @@ impl RolesSection.saveEdit -> None {
             }
         }
     } except Exception as e {
-        toast("Could not save that role");
+        toast.error("Could not save that role");
     }
     saving = False;
 }
 
-impl RolesSection.deleteRole(name: str) -> None {
-    if saving {
+impl RolesSection.removeRole -> None {
+    name = deleteTarget;
+    if not name or busy {
         return;
     }
-    saving = True;
+    busy = True;
     try {
         root spawn DeleteRole(name=name);
-        confirmDelete = "";
+        deleteTarget = "";
         await load();
         if onChanged {
             onChanged();
         }
+        toast.success("Role deleted");
     } except Exception as e {
-        toast("Could not delete that role");
+        toast.error("Could not delete that role");
     }
-    saving = False;
+    busy = False;
+}
+
+impl RolesSection.setHolders(role: str, wanted: list[str], undoable: bool) -> None {
+    # Only the people whose membership of this role changed are written, and
+    # each one keeps every other role they hold.
+    before: list[str] = [];
+    changes = 0;
+    try {
+        for m in members {
+            if not m.active {
+                continue;
+            }
+            had = role in m.roles;
+            if had {
+                before.append(m.id);
+            }
+            wants = m.id in wanted;
+            if had == wants {
+                continue;
+            }
+            changes = changes + 1;
+            next: list[str] = [
+                r
+                for r in m.roles
+                if r != role
+            ];
+            if wants {
+                next = next + [role];
+            }
+            root spawn SetMemberRoles(member_id=m.id, roles=next);
+        }
+        if changes == 0 {
+            return;
+        }
+        await load();
+        if onChanged {
+            onChanged();
+        }
+        if undoable {
+            toast.success(
+                role + " updated",
+                {
+                    "action": {
+                        "label": "Undo",
+                        "onClick": lambda { setHolders(role, before, False); }
+                    }
+                }
+            );
+        }
+    } except Exception as e {
+        toast.error("Could not change who holds " + role);
+    }
 }

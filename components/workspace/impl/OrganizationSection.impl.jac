@@ -3,31 +3,40 @@
 impl OrganizationSection.load -> None {
     try {
         profile = await fetchProfile();
-        orgName = str(profile["org_name"]) if profile["org_name"] else "";
+        name = str(profile["org_name"]) if profile["org_name"] else "";
+        saved = name;
+        draft = name;
     } except Exception as e {
-        toast("Could not load your organization details");
+        toast.error("Could not load your organization details");
     }
     loading = False;
 }
 
 impl OrganizationSection.save -> None {
-    org = orgName.strip();
-    if not org {
+    org = draft.strip();
+    if not org or org == saved or saving {
         return;
     }
     saving = True;
     try {
         ok = await patchProfile({"org_name": org});
         if ok {
-            # The name in the nav is read once when the shell mounts, so a
-            # rename only shows there after a reload. Say so rather than
-            # letting the header silently disagree with this form.
-            toast("Saved. The name in the header updates on your next reload.");
+            saved = org;
+            # The top bar reads the name once, when the shell mounts. Tell it
+            # instead of asking the person to reload (contract C3).
+            w: any = window;
+            w.dispatchEvent(
+                new(w.CustomEvent, "flowline:org-renamed", {"detail": {"name": org}})
+            );
+            if onRenamed {
+                onRenamed(org);
+            }
+            toast.success("Organization renamed");
         } else {
-            toast("Could not save those changes");
+            toast.error("Could not save that name");
         }
     } except Exception as e {
-        toast("Could not save those changes");
+        toast.error("Could not save that name");
     }
     saving = False;
 }
