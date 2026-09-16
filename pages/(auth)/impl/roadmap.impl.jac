@@ -57,7 +57,7 @@ impl RoadmapPage.reloadIterations -> None {
             fIteration = "";
         }
     } except Exception as e {
-        toast("Could not reload the iterations");
+        toast.error("Could not reload the iterations");
     }
     await loadRoadmap();
 }
@@ -229,7 +229,7 @@ impl RoadmapPage.saveTask -> None {
     }
     project = taskForm["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     taskSaving = True;
@@ -250,7 +250,7 @@ impl RoadmapPage.saveTask -> None {
             }
         }
         if added > 0 {
-            toast("Added " + str(added) + " assignee(s) to the project");
+            toast.success("Added " + str(added) + " assignee(s) to the project");
             mResult = root spawn ListMembers();
             members = mResult.reports[0] if mResult.reports else members;
         }
@@ -283,7 +283,7 @@ impl RoadmapPage.saveTask -> None {
         closeTask(False);
         await loadRoadmap();
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Failed to save task");
     }
     taskSaving = False;
 }
@@ -298,7 +298,7 @@ impl RoadmapPage.deleteTask -> None {
         closeTask(False);
         await loadRoadmap();
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Failed to delete task");
     }
     taskSaving = False;
 }

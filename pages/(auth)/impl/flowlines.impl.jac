@@ -44,7 +44,7 @@ impl FlowLinePage.reload(pid: str) -> None {
         result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
     } except Exception as e {
-        toast("Failed to load your flow line");
+        toast.error("Failed to load your flow line");
     }
     loading = False;
     # Counts moved, so the task titles a close zoom shows are stale too.
@@ -100,7 +100,7 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
         }
         peekTasks = rows;
     } except Exception as e {
-        toast("Could not load the work on that step");
+        toast.error("Could not load the work on that step");
     }
 }
 
@@ -128,7 +128,7 @@ impl FlowLinePage.morePeek -> None {
             peekPage = wanted;
         }
     } except Exception as e {
-        toast("Could not load more of that step");
+        toast.error("Could not load more of that step");
     }
     peekLoadingMore = False;
 }
@@ -309,7 +309,7 @@ impl FlowLinePage.saveTask -> None {
     }
     project = taskForm["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     taskSaving = True;
@@ -334,7 +334,7 @@ impl FlowLinePage.saveTask -> None {
                 }
             }
             if added > 0 {
-                toast("Added " + str(added) + " assignee(s) to the project");
+                toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
         root spawn UpdateTask(
@@ -369,10 +369,10 @@ impl FlowLinePage.saveTask -> None {
         await reload(pid);
         await refreshPeek(fromStep, pid);
         if landing != fromStep and landedName {
-            toast("Saved · moved to " + landedName);
+            toast.success("Saved · moved to " + landedName);
         }
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Failed to save task");
     }
     taskSaving = False;
 }
@@ -390,7 +390,7 @@ impl FlowLinePage.deleteTask -> None {
         await reload(pid);
         await refreshPeek(fromStep, pid);
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Failed to delete task");
     }
     taskSaving = False;
 }
@@ -472,12 +472,12 @@ impl FlowLinePage.pickTemplate(key: str) -> None {
         if len(fresh) > 0 {
             steps = fresh;
             editing = True;
-            toast("Your flow line is in. Drag anything to make it yours.");
+            toast.success("Your flow line is in. Drag anything to make it yours.");
         } else {
-            toast("That template could not be applied");
+            toast.error("That template could not be applied");
         }
     } except Exception as e {
-        toast("Failed to set up the flow line");
+        toast.error("Failed to set up the flow line");
     }
     applying = "";
 }
@@ -505,7 +505,7 @@ impl FlowLinePage.saveRename -> None {
             lineName = payload["name"];
         }
     } except Exception as e {
-        toast("Failed to rename the flow line");
+        toast.error("Failed to rename the flow line");
     }
 }
 
@@ -563,7 +563,7 @@ impl FlowLinePage.commitName -> None {
                 };
             }
         } except Exception as e {
-            toast("Failed to add the step");
+            toast.error("Failed to add the step");
         }
         saving = False;
         busyRef.current = False;
@@ -597,7 +597,7 @@ impl FlowLinePage.commitName -> None {
         );
         await reload(projectId);
     } except Exception as e {
-        toast("Failed to update the step");
+        toast.error("Failed to update the step");
     }
     saving = False;
     busyRef.current = False;
@@ -619,7 +619,7 @@ impl FlowLinePage.commitField(key: str, value: str) -> None {
         }
         await reload(projectId);
     } except Exception as e {
-        toast("Failed to update the step");
+        toast.error("Failed to update the step");
     }
 }
 
@@ -640,7 +640,7 @@ impl FlowLinePage.deleteStep -> None {
         if payload and not payload["ok"] {
             confirmDelete = False;
             saving = False;
-            toast(payload["message"] or "That step cannot be deleted.");
+            toast.error(payload["message"] or "That step cannot be deleted.");
             return;
         }
         selectedId = "";
@@ -650,9 +650,9 @@ impl FlowLinePage.deleteStep -> None {
             connectFrom = "";
         }
         await reload(projectId);
-        toast("Step deleted");
+        toast.success("Step deleted");
     } except Exception as e {
-        toast("Failed to delete the step");
+        toast.error("Failed to delete the step");
     }
     saving = False;
 }
@@ -663,7 +663,7 @@ impl FlowLinePage.deleteFlowLine -> None {
         result = root spawn DeleteFlowLine();
         payload = result.reports[0] if result.reports else None;
         if not payload or not payload["ok"] {
-            toast("The flow line could not be deleted");
+            toast.error("The flow line could not be deleted");
             wiping = False;
             return;
         }
@@ -679,9 +679,9 @@ impl FlowLinePage.deleteFlowLine -> None {
         peekId = "";
         confirmWipe = False;
         await reload(projectId);
-        toast("Flow line deleted. Pick a template or start from scratch.");
+        toast.success("Flow line deleted. Pick a template or start from scratch.");
     } except Exception as e {
-        toast("Failed to delete the flow line");
+        toast.error("Failed to delete the flow line");
     }
     wiping = False;
 }
@@ -693,7 +693,7 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
         if payload and payload["ok"] {
             await reload(projectId);
             if not payload["duplicate"] {
-                toast(
+                toast.success(
                     "Connected",
                     {
                         "action": {
@@ -704,10 +704,10 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
                 );
             }
         } elif payload {
-            toast(payload["message"] or "That transition is not allowed.");
+            toast.error(payload["message"] or "That transition is not allowed.");
         }
     } except Exception as e {
-        toast("Could not connect those steps");
+        toast.error("Could not connect those steps");
     }
 }
 
@@ -734,16 +734,16 @@ impl FlowLinePage.commitEdgeLabel(
             edgeCarry = payload["carries"];
             selectedEdge = "";
             await reload(projectId);
-            toast(
+            toast.success(
                 "Label removed"
                     if not payload["label"] and not payload["carries"]
                     else "Label saved"
             );
         } else {
-            toast("Could not update that label");
+            toast.error("Could not update that label");
         }
     } except Exception as e {
-        toast("Could not update that label");
+        toast.error("Could not update that label");
     }
 }
 
@@ -753,7 +753,7 @@ impl FlowLinePage.deleteEdge(fromId: str, toId: str) -> None {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
         await reload(projectId);
     } except Exception as e {
-        toast("Could not remove that transition");
+        toast.error("Could not remove that transition");
     }
 }
 
@@ -1619,7 +1619,7 @@ impl FlowLinePage.endDrag(e: any) -> None {
         root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
         await reload(projectId);
     } except Exception as err {
-        toast("Failed to save the position");
+        toast.error("Failed to save the position");
     }
     live = {};
 }

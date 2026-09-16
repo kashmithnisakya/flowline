@@ -45,7 +45,7 @@ def:pub ChecklistEditor(
         try {
             absorb(root spawn AddChecklistItem(task_id=taskId, text=text));
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }
@@ -59,7 +59,7 @@ def:pub ChecklistEditor(
                 )
             );
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }
@@ -69,7 +69,7 @@ def:pub ChecklistEditor(
         try {
             absorb(root spawn RemoveChecklistItem(task_id=taskId, item_id=itemId));
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }

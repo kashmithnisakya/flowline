@@ -690,7 +690,7 @@ impl TasksPage.saveTask -> None {
     }
     project = taskForm["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     taskSaving = True;
@@ -711,7 +711,7 @@ impl TasksPage.saveTask -> None {
             }
         }
         if added > 0 {
-            toast("Added " + str(added) + " assignee(s) to the project");
+            toast.success("Added " + str(added) + " assignee(s) to the project");
             mResult = root spawn ListMembers();
             members = mResult.reports[0] if mResult.reports else members;
         }

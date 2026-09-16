@@ -146,7 +146,7 @@ impl DailyLogPage.deleteSelected -> None {
             if jid(e) not in gone
         ];
     } except Exception as e {
-        toast("Failed to delete the selected entries");
+        toast.error("Failed to delete the selected entries");
     }
 }
 
@@ -223,9 +223,9 @@ impl DailyLogPage.saveEntry -> None {
                 entries = [(updatedRow if jid(e) == entryId else e) for e in entries];
             }
             entryOpen = False;
-            toast("Entry updated");
+            toast.success("Entry updated");
         } except Exception as e {
-            toast("Could not save the entry");
+            toast.error("Could not save the entry");
         }
         entrySaving = False;
         return;
@@ -237,7 +237,7 @@ impl DailyLogPage.saveEntry -> None {
     ok = await createEntry(entryForm);
     if ok {
         entryOpen = False;
-        toast("Entry added");
+        toast.success("Entry added");
     }
     entrySaving = False;
 }
@@ -259,7 +259,7 @@ impl DailyLogPage.createEntry(fields: dict[str, str]) -> bool {
         );
         added = result.reports[0] if result.reports else None;
         if not added {
-            toast("Could not save the entry");
+            toast.error("Could not save the entry");
             return False;
         }
         # A row for another day jumps there and the [selectedDate] effect
@@ -275,7 +275,7 @@ impl DailyLogPage.createEntry(fields: dict[str, str]) -> bool {
         }
         return True;
     } except Exception as e {
-        toast("Could not save the entry");
+        toast.error("Could not save the entry");
     }
     return False;
 }

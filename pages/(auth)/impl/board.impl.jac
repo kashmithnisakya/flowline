@@ -52,7 +52,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
             await loadAll();
         }
         if added > 0 {
-            toast(
+            toast.success(
                 str(added)
                     + (
                         " issue added from GitHub"
@@ -303,7 +303,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
             olderTotal = got.total;
         }
     } except Exception as e {
-        toast("Could not load older completed tasks");
+        toast.error("Could not load older completed tasks");
     }
     olderRef.current = False;
     loadingOlder = False;
@@ -352,7 +352,7 @@ impl BoardPage.openById(taskId: str) -> None {
             openEdit(found);
         }
     } except Exception as e {
-        toast("Could not open that task");
+        toast.error("Could not open that task");
     }
 }
 
@@ -546,7 +546,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
     }
     project = form["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     saving = True;
@@ -574,7 +574,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 }
             }
             if added > 0 {
-                toast("Added " + str(added) + " assignee(s) to the project");
+                toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
         if editingId {
@@ -625,7 +625,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Failed to save task");
     }
     saving = False;
 }
@@ -642,7 +642,7 @@ impl BoardPage.deleteTask -> None {
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Failed to delete task");
     }
     saving = False;
 }
@@ -876,7 +876,7 @@ impl BoardPage.moveTo(
         }
     }
     if failed {
-        toast("Move failed. Restoring the board.");
+        toast.error("Move failed. Restoring the board.");
         await loadAll();
         await refreshOlder(fProject, fAssignee, fCategory);
         return;
@@ -920,7 +920,7 @@ impl BoardPage.moveTo(
     # sight and the handoff dialog is skippable. A sheet move does not: its
     # breadcrumb shows the step, and a toast would cover the sheet's Save.
     if askDetails {
-        toast(
+        toast.success(
             "Moved to " + label + (" · " + handedTo if handedTo else ""),
             {
                 "description": title,
@@ -992,7 +992,7 @@ impl BoardPage.saveMoveInfo -> None {
         moveTaskId = "";
         await loadAll();
     } except Exception as e {
-        toast("Failed to save the handoff details");
+        toast.error("Failed to save the handoff details");
     }
     saving = False;
 }
@@ -1050,7 +1050,7 @@ impl BoardPage.syncGithub -> None {
         # picks the synced values up.
         await loadAll();
         if failure {
-            toast(failure);
+            toast.error(failure);
         } else {
             msg: str = "Synced " + str(linked) + " tasks";
             if added > 0 {
@@ -1059,10 +1059,10 @@ impl BoardPage.syncGithub -> None {
             if moved > 0 {
                 msg = msg + " · " + str(moved) + " moved to done";
             }
-            toast(msg);
+            toast.success(msg);
         }
     } except Exception as e {
-        toast("Failed to sync with GitHub");
+        toast.error("Failed to sync with GitHub");
     }
     syncing = False;
     syncNote = "";
@@ -1079,13 +1079,15 @@ impl BoardPage.createIssue(repoId: str) -> None {
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             opened = payload["task"];
-            toast("Opened issue #" + str(opened["gh_issue_number"]));
+            toast.success("Opened issue #" + str(opened["gh_issue_number"]));
             await loadAll();
         } else {
-            toast(str(payload["message"]) if payload else "Could not open the issue");
+            toast.error(
+                str(payload["message"]) if payload else "Could not open the issue"
+            );
         }
     } except Exception as e {
-        toast("Failed to open a GitHub issue");
+        toast.error("Failed to open a GitHub issue");
     }
     saving = False;
 }
