@@ -1,6 +1,6 @@
-"""First-run checklist for a workspace with nothing to count yet. The page
-computes every item from real state (key, title, detail, done, action, to,
-primary); a finished item keeps a quiet link, an open one gets a button."""
+"""First-run checklist: the page body while nothing can be counted, a rail
+panel after that. The page computes every item from real state (key, title,
+detail, done, action, to, primary); a finished item keeps a quiet link."""
 
 import from "@jac/runtime" { Link }
 import from ..common.KindGlyph { KindGlyph }
