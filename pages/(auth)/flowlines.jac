@@ -222,6 +222,13 @@ def:pub FlowLinePage -> JsxPage {
         refitRef: Ref[any] = Ref();
 
     async can with entry {
+        # Setup's "Draw my own" lands here with start=blank: open the empty
+        # designer, not the template picker. Setting it on each mount is safe.
+        w: any = window;
+        params: any = new(w.URLSearchParams, w.location.search);
+        if params.get("start") == "blank" {
+            startScratch();
+        }
         boot();
     }
 
