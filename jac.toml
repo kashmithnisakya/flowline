@@ -3,7 +3,7 @@ name = "flowline"
 # A dotted module name, the only spelling jac 0.37.12+ loads.
 entry-point = "main"
 kind = "web-app"
-jac-version = "==0.37.14"
+jac-version = "==0.37.18"
 
 [jac-shadcn]
 style = "nova"

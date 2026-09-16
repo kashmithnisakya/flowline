@@ -74,7 +74,7 @@ def noteSection(title: str, items: any) -> list[str] {
 
 def:pub AssistantDock -> JsxElement {
     has open: bool = False,
-        turns: list[dict] = [],
+        turns: list[dict[str, any]] = [],
         draft: str = "",
         mode: str = "ask",
         busy: bool = False,
@@ -105,7 +105,7 @@ def:pub AssistantDock -> JsxElement {
     canListen = hasVoice();
 
     # The index travels with the row so the JSX never needs tuple unpacking.
-    rows: list[dict] = [];
+    rows: list[dict[str, any]] = [];
     at = 0;
     for t in turns {
         rows.append({** t, "at": at});

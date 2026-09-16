@@ -47,7 +47,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
                 ctx.clearRect(0.0, 0.0, st["w"], st["h"]);
                 isDark = doc.documentElement.classList.contains("dark");
                 now: float = win.performance.now();
-                keep: list = [];
+                keep: list[dict[str, float]] = [];
                 for r in st["ripples"] {
                     age0: float = now - r["t0"];
                     if age0 < 1100.0 {
@@ -153,7 +153,7 @@ def:pub KineticGrid(props: any) -> JsxElement {
                 wNow: float = st["w"];
                 hNow: float = st["h"];
                 if cx >= 0.0 and cx <= wNow and cy >= 0.0 and cy <= hNow {
-                    grown: list = st["ripples"];
+                    grown: list[dict[str, float]] = st["ripples"];
                     grown = grown + [{"x": cx, "y": cy, "t0": win.performance.now()}];
                     st["ripples"] = grown;
                     st["dirty"] = True;
