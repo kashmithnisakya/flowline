@@ -57,15 +57,13 @@ def:pub SsoCallbackPage -> JsxPage {
     }
 
     return
-        <div className="min-h-svh bg-background text-foreground">
-            <div className="landing-wrap flex h-14 items-center">
+        <div className="min-h-svh bg-background px-4 text-foreground sm:px-6">
+            <div className="mx-auto flex h-14 max-w-[1180px] items-center">
                 <a href="/" aria-label="flowline home" className="rounded-sm">
                     <Wordmark/>
                 </a>
             </div>
-            <main
-                className="mx-auto box-content max-w-[400px] px-4 pt-8 pb-16 sm:px-6 sm:pt-16"
-            >
+            <main className="mx-auto w-full max-w-[400px] pt-8 pb-16 sm:pt-16">
                 {if failure {
                     <div key="failed" role="alert" className="grid gap-3">
                         <h1

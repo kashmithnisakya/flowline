@@ -24,7 +24,7 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                     For teams that would rather write than meet
                 </p>
                 <h1
-                    className="max-w-[21ch] text-[clamp(2.125rem,3.2vw,3.5rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
+                    className="max-w-[21ch] text-[clamp(2.125rem,max(min(4.4vw,2.875rem),3.2vw),3.5rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
                 >
                     Draw how your team works. The board and the daily log follow.
                 </h1>

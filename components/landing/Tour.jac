@@ -1,7 +1,7 @@
 """Product tour: the flow line, the board and the log as three always-visible
 rows, each a short statement beside a rendering in the product's own system.
-The diagram keeps its natural size and scrolls sideways on phones rather than
-shrinking its 12px labels.
+The diagram grows with its column to about 960px, so its labels stay near the
+row heading's size, and scrolls sideways on phones rather than shrinking.
 """
 
 import from ..common.Avatar { Avatar, AvatarStack }
@@ -179,7 +179,7 @@ def TourRow(title: str, body: str, children: any = None) -> JsxElement {
                     {title}
                 </h3>
                 <p
-                    className="max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground"
+                    className="max-w-[54ch] text-[15px] leading-relaxed text-muted-foreground"
                 >
                     {body}
                 </p>
@@ -193,7 +193,7 @@ def FlowDiagram -> JsxElement {
         <div className="overflow-x-auto rounded-xl border bg-background">
             <svg
                 viewBox="0 0 744 236"
-                className="block h-auto w-full min-w-[744px]"
+                className="mx-auto block h-auto w-full max-w-[960px] min-w-[744px]"
                 role="img"
                 aria-label="A flow line: Specify goes to Build, or through Design for big changes; Build goes to Review, Review to Done, and Review can send work back to Build."
             >

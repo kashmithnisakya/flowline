@@ -55,7 +55,7 @@ def:pub Features -> JsxElement {
                     <div
                         key={f.key}
                         id={f.key}
-                        className="grid scroll-mt-20 gap-1 border-t py-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6 xl:odd:pr-8 xl:even:pl-8"
+                        className="grid scroll-mt-20 gap-1 border-t py-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6 xl:grid-cols-[11rem_minmax(0,1fr)] xl:odd:pr-8 xl:even:pl-8"
                     >
                         <dt className="text-[15px] font-semibold">{f.label}</dt>
                         <dd
