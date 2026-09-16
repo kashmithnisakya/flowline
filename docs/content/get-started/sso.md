@@ -84,22 +84,33 @@ host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
 
 [scale.sso.google]
-client_id = "${GOOGLE_CLIENT_ID}"
-client_secret = "${GOOGLE_CLIENT_SECRET}"
+client_id = "${GOOGLE_CLIENT_ID:-}"
+client_secret = "${GOOGLE_CLIENT_SECRET:-}"
 
 [scale.sso.github]
-client_id = "${GITHUB_CLIENT_ID}"
-client_secret = "${GITHUB_CLIENT_SECRET}"
+client_id = "${GITHUB_CLIENT_ID:-}"
+client_secret = "${GITHUB_CLIENT_SECRET:-}"
 ```
 
 ## Notes and troubleshooting
 
 - **Use production mode.** The hot-reload dev server does not proxy `/sso`, so
   test sign-in with `jac run --no-dev main.jac`.
-- **The button says the provider is not configured.** The sign-in button
-  probes the login endpoint first. A `501` (no client id and secret for that
-  provider) or `422` becomes a friendly message instead of raw JSON in the
-  address bar.
+- **Only configured providers get a button.** The `:-` fallbacks above leave
+  an unset pair empty. `components/auth/SsoButtons.jac` finds the configured
+  providers by following `GET /sso/{provider}/callback`: the runtime redirects
+  it to `[scale.sso] client_auth_callback_url`, with
+  `?error=SSO_NOT_CONFIGURED` when that provider has no credentials. Any other
+  error on the redirect means the provider is set up, and only then does its
+  button render. No page load logs a `4xx` or `5xx`, and the browser remembers
+  the answer so a return visit draws the buttons at once.
+- **Both buttons are missing.** A missing `client_auth_callback_url`, or a
+  `HOST` that does not match the origin the app is served from, breaks that
+  redirect, so neither provider looks configured. Fix the configuration, then
+  open the sign-in page in a new tab: a tab keeps the answer it already got.
+- **Credentials removed while the page was open.** Clicking a button checks
+  the login endpoint first; a `501` or `422` shows "sign-in isn't set up on
+  this server" instead of raw JSON in the address bar.
 - **Why the client builds the login URL itself.** The runtime's initiate
   endpoint requires a `client_callback` query parameter, which the stock
   `jacSsoLogin` helper does not send, so `components/auth/SsoButtons.jac`

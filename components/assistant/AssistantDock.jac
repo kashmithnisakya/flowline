@@ -1,8 +1,9 @@
-"""The floating assistant: launcher button plus chat panel, mounted once in the
-root layout with its own state and walker calls. A turn is a plain dict with a
-`role` and a `kind` (text / error / note / proposal, proposals also carry
-`state`): typing it as an obj would create a models <-> walkers import cycle."""
+"""Ask: the assistant panel, mounted once in the root layout so the transcript
+survives closing it. `docked` (1280px and up) is a right column that pushes the
+page, otherwise a sheet. A turn is a plain dict (`role`, `kind`): an obj would
+create a models <-> walkers import cycle."""
 
+import from "@jac/runtime" { navigate, useLocation }
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
 import from ...services.assistant.assistant {
     AskAssistant,
@@ -12,11 +13,11 @@ import from ...services.assistant.assistant {
 import from ...services.tasks.tasks { ListTasks, CreateTask, MoveTask }
 import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { ListProjects }
-import from ..ui.badge { Badge }
 import from ..ui.button { Button }
-import from ..ui.input { Input }
-import from ..ui.separator { Separator }
+import from ..ui.sheet { Sheet, SheetContent, SheetTitle }
 import from ..common.Markdown { Markdown }
+import from ..common.glyphs { Spinner, WarnIcon }
+import from ..common.CommandPalette { PageIcon }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -34,7 +35,9 @@ glob QUICK_ASKS: list[dict[str, str]] = [
              "value": "What is overdue, stale, or has been waiting in review too long?"
          }
      ],
-     SPARKLE: str = "M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9L12 2.5zM18.5 15l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9.9-2.4z";
+     # Titles shorter than this are too likely to match an ordinary word.
+     MIN_CITE: int = 6,
+     MAX_CITES: int = 5;
 
 
 # An ISO day `back` days before today, in the browser's own timezone.
@@ -72,14 +75,63 @@ def noteSection(title: str, items: any) -> list[str] {
 }
 
 
-def:pub AssistantDock -> JsxElement {
-    has open: bool = False,
-        turns: list[dict] = [],
+# Sort key for citations: where the title first appears in the answer.
+def citeOrder(d: dict) -> int {
+    return d["at"] as int;
+}
+
+
+# Longest title first, so a short title cannot claim part of a longer one.
+def citeLength(t: any) -> int {
+    return 0 - len(str(t.title).strip());
+}
+
+
+# A letter (anything with case) or a digit, for the word-boundary test.
+def isWordChar(ch: str) -> bool {
+    return ch.lower() != ch.upper() or ch in "0123456789";
+}
+
+
+# Where `needle` first appears in `hay` as whole words, outside every span a
+# longer title already claimed, or -1.
+def findTitle(hay: str, needle: str, taken: list[dict]) -> int {
+    at = hay.find(needle);
+    while at >= 0 {
+        end = at + len(needle);
+        before = hay[at - 1] if at > 0 else " ";
+        after = hay[end] if end < len(hay) else " ";
+        free = not isWordChar(before) and not isWordChar(after);
+        for span in taken {
+            if at < (span["to"] as int) and end > (span["from"] as int) {
+                free = False;
+            }
+        }
+        if free {
+            return at;
+        }
+        at = hay.find(needle, at + 1);
+    }
+    return -1;
+}
+
+
+def:pub AssistantDock(
+    open: bool = False,
+    onOpenChange: Callable[[bool], None] = None,
+    docked: bool = False,
+    narrow: bool = False
+) -> JsxElement {
+    has turns: list[dict] = [],
         draft: str = "",
         mode: str = "ask",
         busy: bool = False,
         listening: bool = False,
-        logRef: Ref[any] = Ref();
+        logRef: Ref[any] = Ref(),
+        inputRef: Ref[any] = Ref(),
+        panelRef: Ref[any] = Ref();
+
+    location = useLocation();
 
     # Pin the transcript to the newest turn. Without this a long standup note
     # or a proposal lands below the fold and its Apply button is unreachable
@@ -94,12 +146,111 @@ def:pub AssistantDock -> JsxElement {
         [turns, busy, open]
     );
 
+    # Docked, opening focuses the composer and Escape closes only from inside
+    # the column, so an Escape meant for a dialog, menu or the palette leaves it
+    # open. The sheet (below 1280px) is a Radix dialog that does both itself.
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if open and docked {
+                timer = window.setTimeout(lambda { focusComposer(); }, 30);
+            }
+            onKey = lambda (e: any) {
+                doc: any = document;
+                panel: any = panelRef.current;
+                if docked
+                    and open
+                    and e.key == "Escape"
+                    and panel
+                    and panel.contains(doc.activeElement) {
+                    closePanel();
+                }
+            };
+            window.addEventListener("keydown", onKey);
+            return lambda {
+                window.removeEventListener("keydown", onKey);
+                if timer {
+                    window.clearTimeout(timer);
+                }
+            };
+        },
+        [open, docked]
+    );
+
+    # The palette's "Ask" action hands its typed question over as an event. The
+    # composer takes focus even when the panel was already open.
+    useEffect(
+        lambda {
+            onAsk = lambda (e: any) {
+                question = str(e.detail.question or "") if e.detail else "";
+                if question {
+                    mode = "ask";
+                    quick("ask", question);
+                }
+                window.setTimeout(lambda { focusComposer(); }, 30);
+            };
+            window.addEventListener("flowline:ask", onAsk);
+            return lambda { window.removeEventListener("flowline:ask", onAsk); };
+        },
+        []
+    );
+
     async def send -> None;
     async def quick(kind: str, value: str) -> None;
+    async def citeTasks(text: str) -> list[dict[str, str]];
     async def applyProposal(index: int) -> None;
     def setTurnState(index: int, state: str) -> None;
     def copyNote(index: int) -> None;
     def toggleMic -> None;
+
+    def focusComposer {
+        if inputRef.current {
+            inputRef.current.focus();
+        }
+    }
+
+    # A quick ask disables the button that ran it, so focus moves on to the
+    # composer. Not on a phone, where that would raise the keyboard.
+    def runQuick(kind: str, value: str) {
+        quick(kind, value);
+        if not narrow {
+            focusComposer();
+        }
+    }
+
+    # Back to the top bar's Ask button, unless another dialog now holds focus.
+    def returnFocus {
+        doc: any = document;
+        trigger: any = doc.querySelector("[data-ask-trigger]");
+        if doc.querySelector("[role=dialog][data-state=open]") {
+            return;
+        }
+        if trigger and trigger.offsetParent {
+            trigger.focus();
+        }
+    }
+
+    def closePanel {
+        if onOpenChange {
+            onOpenChange(False);
+        }
+        if docked {
+            returnFocus();
+        }
+    }
+
+    def openTask(e: any, id: str) {
+        e.preventDefault();
+        if not docked and onOpenChange {
+            onOpenChange(False);
+        }
+        if location.pathname == "/board" {
+            w: any = window;
+            w.dispatchEvent(new(w.CustomEvent, "flowline:open-task", {"detail": id}));
+            return;
+        }
+        navigate("/board?task=" + id);
+    }
 
     asking = mode == "ask";
     canListen = hasVoice();
@@ -112,296 +263,344 @@ def:pub AssistantDock -> JsxElement {
         at = at + 1;
     }
 
+    # On a phone the header and composer controls grow to touch size.
     def modeClass(active: bool) -> str {
-        base = "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ";
+        base = "rounded-sm transition-colors "
+            + ("h-9 px-3 text-[13px] " if narrow else "h-6 px-2 text-xs ");
         if active {
-            return base + "bg-background text-foreground shadow-sm";
+            return base + "border bg-card font-semibold text-foreground";
         }
-        return base + "text-muted-foreground hover:text-foreground";
+        return base
+            + "border border-transparent font-medium text-muted-foreground hover:text-foreground";
     }
 
-    if not open {
-        return
-            <button
-                type="button"
-                aria-label="Open the assistant"
-                onClick={lambda { open = True; }}
-                className={(
-                    # Card volume, ember only on the glyph: each page already
-                    # has one solid primary action and this sits on every page.
-                    "fixed bottom-6 right-6 z-50 flex h-11 items-center gap-2 rounded-full border border-border/70 bg-card px-4 text-sm font-semibold text-foreground shadow-lg transition-transform animate-in fade-in zoom-in duration-300 hover:-translate-y-0.5 hover:bg-accent active:scale-95"
-                )}
+    if docked and not open {
+        return <span hidden={True}/>;
+    }
+
+    # The sheet names itself through Radix's title; the column through an id.
+    titleClass = "truncate text-[13.5px] font-semibold";
+    title: any = <h2 id="ask-title" className={titleClass}>
+        Ask about this workspace
+    </h2>;
+    if not docked {
+        title = <SheetTitle className={titleClass}>
+            Ask about this workspace
+        </SheetTitle>;
+    }
+
+    head = <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-3.5">
+        <PageIcon name="ask" className="text-muted-foreground"/>
+        {title}
+        <div className="ml-auto flex items-center gap-0.5">
+            {if len(turns) > 0 {
+                <Button
+                    key="clear"
+                    variant="ghost"
+                    size="sm"
+                    className={"text-muted-foreground "
+                        + ("h-10 px-3" if narrow else "")}
+                    onClick={lambda { turns = []; }}
+                >
+                    Clear
+                </Button>
+            }}
+            <Button
+                variant="ghost"
+                size="icon-sm"
+                className={"size-10" if narrow else ""}
+                aria-label="Close Ask"
+                title="Close (Esc)"
+                onClick={closePanel}
             >
-                <svg
-                    width={17}
-                    height={17}
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="text-primary"
-                >
-                    <path fill="currentColor" d={SPARKLE}/>
+                <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                        d="m4 4 8 8M12 4l-8 8"
+                    />
                 </svg>
-                Assistant
-            </button>;
-    }
+            </Button>
+        </div>
+    </div>;
 
-    return
-        <div
-            className="fixed bottom-6 right-6 z-50 flex max-h-[calc(100dvh-3rem)] min-h-72 w-[min(26rem,calc(100vw-3rem))] flex-col rounded-2xl border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200"
-        >
-            <div className="flex items-center gap-2 border-b px-4 py-3">
-                <svg
-                    width={16}
-                    height={16}
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="text-primary"
-                >
-                    <path fill="currentColor" d={SPARKLE}/>
-                </svg>
-                <span className="font-display text-sm font-bold tracking-tight">
-                    Assistant
-                </span>
-                <div className="ml-auto flex items-center gap-1">
-                    {if len(turns) > 0 {
-                        <Button
-                            key="clear"
-                            variant="ghost"
-                            size="sm"
-                            onClick={lambda { turns = []; }}
-                        >
-                            Clear
-                        </Button>
-                    }}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Close the assistant"
-                        onClick={lambda { open = False; }}
-                    >
-                        <svg
-                            width={15}
-                            height={15}
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                        >
-                            <path
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                d="M6 6l12 12M18 6L6 18"
-                            />
-                        </svg>
-                    </Button>
+    log = <div
+        ref={logRef}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3.5 py-3.5 text-[13.5px] leading-relaxed"
+        aria-live="polite"
+        aria-busy={busy}
+    >
+        {if len(rows) == 0 {
+            <div key="empty" className="space-y-3">
+                <div className="space-y-1 text-muted-foreground">
+                    <p>Answers come from your board, projects, people and log.</p>
+                    <p>A change comes back as a proposal you apply.</p>
                 </div>
-            </div>
-            <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-                {if len(rows) == 0 {
-                    <p
-                        key="empty"
-                        className="py-2 text-sm leading-relaxed text-muted-foreground"
-                    >
-                        I read your board, projects, people and log, then answer from that. I never write anything myself: a task change comes back as a suggestion you confirm. Start with one of the buttons below, or just ask.
-                    </p>
-                }}
-                {for r in rows {
-                    <div
-                        key={"turn" + str(r["at"])}
-                        className={"flex animate-in fade-in slide-in-from-bottom-1 duration-200 "
-                            + (
-                                "justify-end"
-                                    if r["role"] == "user"
-                                    else "justify-start"
-                            )}
-                    >
-                        {if r["role"] == "user" {
-                            <div
-                                key="u"
-                                className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground"
-                            >
-                                {r["text"]}
-                            </div>
-                        } elif r["kind"] == "note" {
-                            <div
-                                key="note"
-                                className="w-full rounded-xl border bg-background p-3.5"
-                            >
-                                <div className="flex items-start gap-2">
-                                    <p
-                                        className="flex-1 text-sm font-medium leading-snug"
-                                    >
-                                        {r["note"].headline}
-                                    </p>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={lambda { copyNote(r["at"]); }}
-                                    >
-                                        Copy
-                                    </Button>
-                                </div>
-                                <Separator className="my-3"/>
-                                <div className="space-y-3">
-                                    <NoteList
-                                        title="Shipped"
-                                        items={r["note"].shipped}
-                                    />
-                                    <NoteList
-                                        title="In flight"
-                                        items={r["note"].in_flight}
-                                    />
-                                    <NoteList
-                                        title="Blocked"
-                                        items={r["note"].blocked}
-                                    />
-                                    <NoteList
-                                        title="Needs attention"
-                                        items={r["note"].needs_attention}
-                                    />
-                                </div>
-                            </div>
-                        } elif r["kind"] == "proposal" {
-                            <div key="prop" className="w-full">
-                                <ProposalCard
-                                    proposal={r["proposal"]}
-                                    state={r["state"]}
-                                    busy={busy}
-                                    onApply={lambda { applyProposal(r["at"]); }}
-                                    onDismiss={lambda { setTurnState(
-                                        r["at"], "dismissed"
-                                    ); }}
-                                />
-                            </div>
-                        } else {
-                            <div
-                                key="text"
-                                className={"max-w-[92%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed "
-                                    + (
-                                        "whitespace-pre-wrap bg-destructive/10 text-destructive"
-                                            if r["kind"] == "error"
-                                            else "bg-secondary text-foreground"
-                                    )}
-                            >
-                                {if r["kind"] == "error" {
-                                    <span key="plain">{r["text"]}</span>
-                                } else {
-                                    <Markdown key="md" text={r["text"]}/>
-                                } }
-                            </div>
-                        }   }
-                    </div>
-                }}
-                {if busy {
-                    <div
-                        key="busy"
-                        className="flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-200"
-                    >
-                        <div
-                            className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2.5"
-                        >
-                            <span className="sr-only">Reading your workspace</span>
-                            <span
-                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
-                                style={{"animationDelay": "-0.3s"}}
-                            />
-                            <span
-                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
-                                style={{"animationDelay": "-0.15s"}}
-                            />
-                            <span
-                                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground"
-                            />
-                        </div>
-                    </div>
-                }}
-            </div>
-            <div className="space-y-2.5 border-t px-4 py-3">
-                <div className="flex flex-wrap gap-1.5">
+                <div className="divide-y border-y">
                     {for q in QUICK_ASKS {
                         <button
                             key={q["label"]}
                             type="button"
                             disabled={busy}
-                            onClick={lambda { quick(q["kind"], q["value"]); }}
-                            className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                            onClick={lambda { runQuick(q["kind"], q["value"]); }}
+                            className="flex h-9 w-full items-center justify-between px-1 text-left text-[13.5px] text-foreground transition-colors hover:bg-accent disabled:opacity-50"
                         >
                             {q["label"]}
-                        </button>
-                    }}
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex shrink-0 rounded-lg bg-muted p-0.5">
-                        <button
-                            type="button"
-                            className={modeClass(asking)}
-                            onClick={lambda { mode = "ask"; }}
-                        >
-                            Ask
-                        </button>
-                        <button
-                            type="button"
-                            className={modeClass(not asking)}
-                            onClick={lambda { mode = "do"; }}
-                        >
-                            Do
-                        </button>
-                    </div>
-                    <Input
-                        value={draft}
-                        placeholder={"Ask about your workspace"
-                            if asking
-                            else "Describe the task to add or move"}
-                        disabled={busy}
-                        onChange={lambda (e: any) { draft = e.target.value; }}
-                        onKeyDown={lambda (e: any) { if e.key == "Enter" { send(); }}}
-                    />
-                    {if canListen {
-                        <Button
-                            key="mic"
-                            variant={"default" if listening else "outline"}
-                            size="icon"
-                            aria-label={"Stop dictating" if listening else "Dictate"}
-                            onClick={toggleMic}
-                        >
                             <svg
-                                width={15}
-                                height={15}
-                                viewBox="0 0 24 24"
+                                width={14}
+                                height={14}
+                                viewBox="0 0 16 16"
                                 aria-hidden="true"
+                                className="text-subtle"
                             >
                                 <path
-                                    fill="currentColor"
-                                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={1.6}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
                                 />
                             </svg>
-                        </Button>
+                        </button>
                     }}
-                    <Button
-                        size="icon"
-                        aria-label="Send"
-                        disabled={busy}
-                        onClick={send}
-                    >
-                        <svg
-                            width={15}
-                            height={15}
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                        >
-                            <path
-                                fill="currentColor"
-                                d="M3 20.5l18-8.5L3 3.5V10l12 2-12 2v6.5z"
-                            />
-                        </svg>
-                    </Button>
                 </div>
-                <p className="text-xs leading-tight text-muted-foreground">
-                    {"Answers come from your workspace only."
-                        if asking
-                        else "Suggestions only. Nothing changes until you press Apply."}
-                </p>
             </div>
+        }}
+        {for r in rows {
+            <div key={"turn" + str(r["at"])}>
+                {if r["role"] == "user" {
+                    <div
+                        key="u"
+                        className="ml-auto w-fit max-w-[90%] rounded-xl bg-muted px-2.5 py-1.5"
+                    >
+                        {r["text"]}
+                    </div>
+                } elif r["kind"] == "note" {
+                    <div key="note" className="rounded-md border bg-background p-3">
+                        <div className="flex items-start gap-2">
+                            <p className="flex-1 font-medium leading-snug">
+                                {r["note"].headline}
+                            </p>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={lambda { copyNote(r["at"]); }}
+                            >
+                                Copy
+                            </Button>
+                        </div>
+                        <div className="mt-3 space-y-3 border-t pt-3">
+                            <NoteList title="Shipped" items={r["note"].shipped}/>
+                            <NoteList title="In flight" items={r["note"].in_flight}/>
+                            <NoteList title="Blocked" items={r["note"].blocked}/>
+                            <NoteList
+                                title="Needs attention"
+                                items={r["note"].needs_attention}
+                            />
+                        </div>
+                        <Citations cites={r["cites"] or []} onOpen={openTask}/>
+                    </div>
+                } elif r["kind"] == "proposal" {
+                    <ProposalCard
+                        key="prop"
+                        proposal={r["proposal"]}
+                        state={r["state"]}
+                        busy={busy}
+                        onApply={lambda { applyProposal(r["at"]); }}
+                        onDismiss={lambda { setTurnState(r["at"], "dismissed"); }}
+                    />
+                } elif r["kind"] == "error" {
+                    <p
+                        key="err"
+                        className="flex items-start gap-2 text-muted-foreground"
+                    >
+                        <WarnIcon className="mt-1 shrink-0 text-warning"/>
+                        <span>{r["text"]}</span>
+                    </p>
+                } else {
+                    <div key="text">
+                        <Markdown text={r["text"]}/>
+                        <Citations cites={r["cites"] or []} onOpen={openTask}/>
+                    </div>
+                }    }
+            </div>
+        }}
+        {if busy {
+            <p key="busy" className="flex items-center gap-2 text-muted-foreground">
+                <Spinner/>
+                Reading your workspace
+            </p>
+        }}
+    </div>;
+
+    foot = <div
+        className="shrink-0 space-y-2 border-t px-3.5 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+    >
+        {if len(rows) > 0 {
+            <div
+                key="again"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+            >
+                {for q in QUICK_ASKS {
+                    <button
+                        key={q["label"]}
+                        type="button"
+                        disabled={busy}
+                        onClick={lambda { runQuick(q["kind"], q["value"]); }}
+                        className="rounded-sm hover:text-foreground hover:underline disabled:opacity-50"
+                    >
+                        {q["label"]}
+                    </button>
+                }}
+            </div>
+        }}
+        <div className="flex items-center gap-2">
+            <div
+                className="inline-flex rounded-md bg-muted p-0.5"
+                role="group"
+                aria-label="Mode"
+            >
+                <button
+                    type="button"
+                    aria-pressed={asking}
+                    className={modeClass(asking)}
+                    onClick={lambda { mode = "ask"; }}
+                >
+                    Ask
+                </button>
+                <button
+                    type="button"
+                    aria-pressed={not asking}
+                    className={modeClass(not asking)}
+                    onClick={lambda { mode = "do"; }}
+                >
+                    Propose a change
+                </button>
+            </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+            <input
+                ref={inputRef}
+                value={draft}
+                placeholder={"Ask a question"
+                    if asking
+                    else "Describe the task to add or move"}
+                aria-label={"Ask a question"
+                    if asking
+                    else "Describe the task to add or move"}
+                readOnly={busy}
+                onChange={lambda (e: any) { draft = e.target.value; }}
+                onKeyDown={lambda (e: any) { if e.key == "Enter" { send(); }}}
+                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-2.5 text-[13.5px] placeholder:text-subtle focus-visible:outline-offset-[-1px] read-only:opacity-60"
+            />
+            {if canListen {
+                <Button
+                    key="mic"
+                    variant={"secondary" if listening else "outline"}
+                    size="icon"
+                    className="size-9"
+                    aria-label={"Stop dictating" if listening else "Dictate"}
+                    aria-pressed={listening}
+                    onClick={toggleMic}
+                >
+                    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true">
+                        <path
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            d="M8 10.5a2.5 2.5 0 0 0 2.5-2.5V4a2.5 2.5 0 0 0-5 0v4A2.5 2.5 0 0 0 8 10.5zM12.5 7.5a4.5 4.5 0 0 1-9 0M8 12v2"
+                        />
+                    </svg>
+                </Button>
+            }}
+            <Button
+                variant="outline"
+                size="icon"
+                className="size-9"
+                aria-label="Send"
+                disabled={busy or not draft.strip()}
+                onClick={send}
+            >
+                <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
+                    />
+                </svg>
+            </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+            {"Answers come from your workspace only."
+                if asking
+                else "Nothing changes until you press Apply."}
+        </p>
+    </div>;
+
+    if docked {
+        return
+            <aside
+                ref={panelRef}
+                data-ask-panel="docked"
+                aria-labelledby="ask-title"
+                className="sticky top-12 z-30 flex h-[calc(100dvh-3rem)] w-[360px] shrink-0 flex-col self-start border-l bg-card"
+            >
+                {head}{log}{foot}
+            </aside>;
+    }
+
+    return
+        <Sheet
+            open={open}
+            onOpenChange={lambda (o: bool) { if onOpenChange { onOpenChange(o); }}}
+        >
+            <SheetContent
+                data-ask-panel="sheet"
+                side={"bottom" if narrow else "right"}
+                aria-describedby={None}
+                onOpenAutoFocus={lambda (e: any) {
+                    e.preventDefault();
+                    focusComposer();
+                }}
+                onCloseAutoFocus={lambda (e: any) {
+                    e.preventDefault();
+                    returnFocus();
+                }}
+                className="gap-0 p-0 [&>[data-slot=sheet-close]]:hidden data-[side=bottom]:h-[88dvh] data-[side=bottom]:rounded-t-xl data-[side=right]:w-[400px] data-[side=right]:sm:max-w-[400px]"
+            >
+                {head}{log}{foot}
+            </SheetContent>
+        </Sheet>;
+}
+
+
+# The tasks an answer names, as links that open the card on the board.
+def Citations(
+    cites: list[dict[str, str]], onOpen: Callable[[any, str], None]
+) -> JsxElement {
+    if len(cites) == 0 {
+        return <span hidden={True}/>;
+    }
+    return
+        <div className="mt-2.5 grid gap-1 border-t pt-2 text-[12.5px]">
+            <span className="text-muted-foreground">Tasks in this answer</span>
+            {for c in cites {
+                <a
+                    key={c["id"]}
+                    href={"/board?task=" + c["id"]}
+                    onClick={lambda (e: any) { onOpen(e, c["id"]); }}
+                    className="w-fit max-w-full truncate text-foreground underline decoration-input underline-offset-2 hover:decoration-foreground"
+                >
+                    {c["title"]}
+                </a>
+            }}
         </div>;
 }
 
@@ -410,20 +609,16 @@ def:pub AssistantDock -> JsxElement {
 # empty, so a quiet day produces a short note rather than four bare headings.
 def NoteList(title: str, items: list[str]) -> JsxElement {
     if not items or len(items) == 0 {
-        return <span/>;
+        return <span hidden={True}/>;
     }
     return
         <div>
-            <div
-                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-                {title}
-            </div>
+            <div className="text-xs font-medium text-muted-foreground">{title}</div>
             <ul className="mt-1 space-y-1">
                 {for it in items {
-                    <li key={it} className="flex gap-2 text-sm leading-snug">
+                    <li key={it} className="flex gap-2 leading-snug">
                         <span
-                            className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground"
+                            className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground"
                         />
                         <span>{it}</span>
                     </li>
@@ -466,21 +661,19 @@ def ProposalCard(
     }
 
     return
-        <div
-            className="rounded-xl border border-l-2 border-l-primary bg-background p-3.5"
-        >
-            <div className="flex items-center gap-2">
-                <Badge variant="secondary">
-                    {"Move task" if moving else "New task"}
-                </Badge>
+        <div className="rounded-md border bg-background p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                    {"Proposed move" if moving else "Proposed task"}
+                </span>
                 {if proposal.confidence and proposal.confidence != "high" {
-                    <span key="conf" className="text-xs text-muted-foreground">
-                        {proposal.confidence} confidence
+                    <span key="conf">
+                        {" · " + proposal.confidence + " confidence"}
                     </span>
                 }}
             </div>
             {if usable {
-                <p key="title" className="mt-2 text-sm font-medium leading-snug">
+                <p key="title" className="mt-1.5 font-medium leading-snug">
                     {proposal.title}
                 </p>
             }}
@@ -506,26 +699,26 @@ def ProposalCard(
                 </p>
             }}
             {if not usable {
-                <p key="nope" className="mt-2 text-sm text-muted-foreground">
-                    That does not look like a board change. Switch to Ask and I will answer it instead.
+                <p key="nope" className="mt-2 text-muted-foreground">
+                    That does not look like a board change. Switch to Ask to get an answer instead.
                 </p>
             } elif state == "applied" {
                 <p
                     key="done"
-                    className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-success animate-in fade-in"
+                    className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-success"
                 >
                     <svg
                         width={14}
                         height={14}
-                        viewBox="0 0 24 24"
+                        viewBox="0 0 16 16"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth={2}
+                        strokeWidth={1.8}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         aria-hidden="true"
                     >
-                        <path d="M20 6 9 17l-5-5"/>
+                        <path d="m3.5 8.5 3 3 6-7"/>
                     </svg>
                     Applied to the board.
                 </p>

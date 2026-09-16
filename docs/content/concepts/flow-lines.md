@@ -84,9 +84,42 @@ order, one entry per target:
 
 ## Templates
 
-The picker offers one template or a blank canvas. `ApplyTemplate` only seeds an
-**empty** flow line; if any step exists it reports the existing steps and
-writes nothing.
+Two templates ship in `FLOW_LINE_TEMPLATES`. Setup's last step offers both plus
+Draw my own, and the flow line page offers both plus a blank canvas whenever
+there are no steps. `ApplyTemplate` only seeds an **empty** flow line;
+if any step exists it reports the existing steps and writes nothing. The
+template's key is stored as the box's `template_key`, so a template can be
+renamed but never re-keyed.
+
+### Simple (`simple`)
+
+The recommended start: four steps, and Review can send work back to Doing. It
+seeds no roles and no step owners.
+
+```mermaid
+flowchart LR
+    T["To do<br/><small>start</small>"]
+    G["Doing<br/><small>active</small>"]
+    R["Review<br/><small>handoff</small>"]
+    D["Done<br/><small>done</small>"]
+
+    T --> G --> R --> D
+    R -- "Changes requested" --> G
+
+    classDef sky stroke:#2e6c97,stroke-width:2px
+    classDef indigo stroke:#5550ac,stroke-width:2px
+    classDef rose stroke:#a34b83,stroke-width:2px
+    classDef emerald stroke:#387a51,stroke-width:2px
+    class T sky
+    class G indigo
+    class R rose
+    class D emerald
+```
+
+### Software team (`jaseci`)
+
+Seven steps from writing the issue to done, with an architecture step for big
+changes and loops back from review.
 
 ```mermaid
 flowchart TB
@@ -108,12 +141,12 @@ flowchart TB
     R -- "merged" --> F
     F -- "decides #amp; marks done" --> D
 
-    classDef sky stroke:#3d7ea6,stroke-width:2px
-    classDef indigo stroke:#6f63b8,stroke-width:2px
-    classDef slate stroke:#7c7568,stroke-width:2px
-    classDef amber stroke:#c4891f,stroke-width:2px
-    classDef rose stroke:#c6544d,stroke-width:2px
-    classDef emerald stroke:#4e8c5e,stroke-width:2px
+    classDef sky stroke:#2e6c97,stroke-width:2px
+    classDef indigo stroke:#5550ac,stroke-width:2px
+    classDef slate stroke:#6a726e,stroke-width:2px
+    classDef amber stroke:#a1711a,stroke-width:2px
+    classDef rose stroke:#a34b83,stroke-width:2px
+    classDef emerald stroke:#387a51,stroke-width:2px
     class S sky
     class T,R indigo
     class A slate
@@ -122,12 +155,12 @@ flowchart TB
     class D emerald
 ```
 
-The Jaseci flow also seeds four roles (Product Engineer, Builder, Architect,
+Software team also seeds four roles (Product Engineer, Builder, Architect,
 De-slop) as ordinary `Role` nodes that the team can edit afterwards. Existing
 roles with the same name are left alone, and the box records
-`template_key = "jaseci"`.
+`template_key = "jaseci"` (the template's key from before it was renamed).
 
-??? example "The template as declared in `constants.jac`"
+??? example "The templates as declared in `constants.jac`"
 
     ::: glob FLOW_LINE_TEMPLATES
 

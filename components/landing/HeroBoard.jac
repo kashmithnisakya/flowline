@@ -1,181 +1,287 @@
-"""The landing hero's product mock, now playable: drag a card between lanes
-(or tap it) and the log beneath writes the move, which is the whole pitch.
-Until the visitor touches it the scripted loop plays; the first real move
-freezes the script and the visitor's own moves take over.
+"""The hero demo at product scale: a four-step route strip, the board whose
+columns are those steps, and the log ledger under it. It opens mid-story with
+the ledger already written; dragging a card, clicking it or pressing Enter on
+it moves it along and writes a new ledger line. Sample data, no autoplay.
 """
 
-import from "react" { useEffect }
 import from ..common.Avatar { AvatarStack }
+import from ..common.KindGlyph { KindGlyph }
 
-# Where each card sits at each stage: index into LANES. Four stages loop.
-glob LANES: list[dict[str, str]] = [
-         {"name": "Up next", "color": "bg-step-sky"},
-         {"name": "In progress", "color": "bg-step-amber"},
-         {"name": "Done", "color": "bg-step-emerald"}
+glob ROUTE: list[dict[str, str]] = [
+         {"name": "Specify", "kind": "start", "color": "sky"},
+         {"name": "Build", "kind": "active", "color": "indigo"},
+         {"name": "Review", "kind": "handoff", "color": "rose"},
+         {"name": "Done", "kind": "done", "color": "emerald"}
      ],
+     GLYPH_TEXT: dict[str, str] = {
+         "sky": "text-step-sky",
+         "indigo": "text-step-indigo",
+         "rose": "text-step-rose",
+         "emerald": "text-step-emerald"
+     },
+     SWATCH: dict[str, str] = {
+         "sky": "bg-step-sky",
+         "indigo": "bg-step-indigo",
+         "rose": "bg-step-rose",
+         "emerald": "bg-step-emerald"
+     },
      CARDS: list[dict[str, any]] = [
          {
-             "title": "Ship the new landing page",
-             "project": "Launch Site",
-             "dot": "bg-chart-1",
-             "who": ["Amara Perera", "Kasun Silva"],
-             "chip": "Design",
-             "due": "Tomorrow",
-             "lanes": [1, 2, 2, 2]
-         },
-         {
-             "title": "Roll out the auth change",
-             "project": "Platform",
-             "dot": "bg-chart-3",
-             "who": ["Priya Raman"],
-             "chip": "Backend",
-             "due": "",
-             "lanes": [1, 1, 1, 2]
-         },
-         {
-             "title": "Pick the CDN region",
-             "project": "Launch Site",
-             "dot": "bg-chart-1",
+             "title": "Offline mode for the task list",
+             "meta": "Mobile app",
+             "issue": "",
+             "overdue": False,
              "who": ["Amara Perera"],
-             "chip": "Infra",
-             "due": "Aug 20",
-             "lanes": [0, 0, 1, 1]
+             "lane": 0
          },
          {
-             "title": "Write the migration runbook",
-             "project": "Platform",
-             "dot": "bg-chart-3",
-             "who": ["Dev Fernando"],
-             "chip": "Docs",
-             "due": "",
-             "lanes": [0, 0, 0, 0]
+             "title": "Tax ID field for EU customers",
+             "meta": "Billing",
+             "issue": "",
+             "overdue": False,
+             "who": ["Ravi Kumar"],
+             "lane": 0
+         },
+         {
+             "title": "Invoice PDF redesign",
+             "meta": "Billing · due Thu",
+             "issue": "",
+             "overdue": False,
+             "who": ["Priya Raman"],
+             "lane": 1
+         },
+         {
+             "title": "Lighthouse score to 95",
+             "meta": "Marketing site",
+             "issue": "",
+             "overdue": True,
+             "who": ["Leo Martins"],
+             "lane": 1
+         },
+         {
+             "title": "Signup form A/B test",
+             "meta": "Marketing site",
+             "issue": "",
+             "overdue": False,
+             "who": ["Sofia Chen", "Ravi Kumar"],
+             "lane": 1
+         },
+         {
+             "title": "Webhook for cancelled subscriptions",
+             "meta": "Billing",
+             "issue": "#412",
+             "overdue": False,
+             "who": ["Priya Raman"],
+             "lane": 2
+         },
+         {
+             "title": "Stripe SDK upgrade",
+             "meta": "Billing",
+             "issue": "",
+             "overdue": False,
+             "who": ["Priya Raman"],
+             "lane": 3
+         },
+         {
+             "title": "Receipt emails missing VAT number",
+             "meta": "Billing",
+             "issue": "#398",
+             "overdue": False,
+             "who": [],
+             "lane": 3
          }
      ],
-     # The log line each stage writes (stage 0 is the resting state).
-     LOG_LINES: list[str] = [
-         "",
-         "Amara Perera moved Ship the new landing page to Done",
-         "Amara Perera moved Pick the CDN region to In progress",
-         "Priya Raman moved Roll out the auth change to Done"
+     # Newest first, as the log reads. The second line is the repo's opt-in
+     # auto Done at work, which is why it names the closed issue.
+     OPENING_LOG: list[dict[str, str]] = [
+         {
+             "at": "09:42",
+             "before": "Priya moved ",
+             "issue": "",
+             "middle": "",
+             "title": "Invoice PDF redesign",
+             "after": " to Build."
+         },
+         {
+             "at": "09:15",
+             "before": "Issue ",
+             "issue": "#398",
+             "middle": " closed on GitHub, so ",
+             "title": "Receipt emails missing VAT number",
+             "after": " moved to Done."
+         }
      ],
-     STAGES: int = 4,
-     TICK_MS: int = 3800;
+     DRAG_TYPE: str = "text/x-flowline-demo";
 
-def laneOf(card: dict[str, any], stage: int) -> int {
-    lanes: list[int] = card["lanes"];
-    return lanes[stage];
+def twoDigits(n: int) -> str {
+    return ("0" + str(n)) if n < 10 else str(n);
 }
 
 def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
-    has stage: int = 0,
-        still: bool = False,
-        # Set by the visitor's first move; stops the scripted loop for good.
-        live: bool = False,
-        userLanes: dict[str, int] = {},
-        userLog: list[str] = [],
+    has placed: dict[str, int] = {},
+        touched: bool = False,
+        written: list[dict[str, str]] = [],
+        lastMoved: str = "Invoice PDF redesign",
         moves: int = 0,
         dragTitle: str = "",
-        overLane: int = -1;
+        overLane: int = -1,
+        hotLane: int = -1;
 
-    can with entry {
-        w: any = window;
-        media: any = w.matchMedia("(prefers-reduced-motion: reduce)");
-        if bool(media.matches) {
-            still = True;
-            stage = STAGES - 1;
+    def laneOf(card: dict[str, any]) -> int {
+        if touched {
+            return placed[card["title"]];
         }
-    }
-
-    # Re-armed each stage so the callback always sees the current value (a
-    # setInterval closure would be stuck on the first render's stage).
-    useEffect(
-        lambda {
-            # The early exit returns a no-op cleanup rather than None: React
-            # calls back anything that is not `undefined`, so returning null
-            # crashes the page on the next run of this effect.
-            timer: any = 0;
-            if not still and not live {
-                timer = window.setTimeout(
-                    lambda { stage = (stage + 1) % STAGES; }, TICK_MS
-                );
-            }
-            return lambda { if timer { window.clearTimeout(timer); }};
-        },
-        [stage, still, live]
-    );
-
-    def curLane(card: dict[str, any]) -> int {
-        if live {
-            return userLanes[card["title"]];
-        }
-        return laneOf(card, stage);
+        return card["lane"];
     }
 
     def moveTo(title: str, target: int) {
-        # First move freezes EVERY card where the script left it, so
-        # stopping the loop shifts nothing else on the board.
-        updated: dict[str, int] = {** userLanes};
-        if not live {
+        # The first move copies every card's lane, so later moves only ever
+        # change the one card they name.
+        updated: dict[str, int] = {** placed};
+        if not touched {
             for c in CARDS {
-                updated[c["title"]] = laneOf(c, stage);
+                updated[c["title"]] = c["lane"];
             }
         }
         if updated[title] == target {
             return;
         }
         updated[title] = target;
-        userLanes = updated;
-        userLog = userLog + ["You moved " + title + " to " + LANES[target]["name"]];
-        live = True;
+        placed = updated;
+        touched = True;
+        d: any = new(Date);
+        stamp = twoDigits(int(d.getHours())) + ":" + twoDigits(int(d.getMinutes()));
+        line: dict[str, str] = {
+            "at": stamp,
+            "before": "You moved ",
+            "issue": "",
+            "middle": "",
+            "title": title,
+            "after": " to " + ROUTE[target]["name"] + "."
+        };
+        written = [line] + written;
+        lastMoved = title;
         moves = moves + 1;
+        showColumn(target);
     }
 
-    # The log shows the last three lines: whatever the script wrote before
-    # the visitor took over, then the visitor's own moves.
-    allLines = [LOG_LINES[i] for i in range(1, stage + 1)] + userLog;
-    start = len(allLines) - 3;
-    if start < 0 {
-        start = 0;
+    # A moved card remounts in its new column, so a keyboard move puts focus
+    # back on it and Enter keeps moving the same card.
+    def advance(card: dict[str, any], index: int, keyboard: bool) {
+        moveTo(card["title"], (laneOf(card) + 1) % len(ROUTE));
+        if keyboard {
+            window.requestAnimationFrame(
+                lambda {
+                    doc: any = document;
+                    el: any = doc.getElementById("demo-card-" + str(index));
+                    if el {
+                        el.focus({"preventScroll": True});
+                    }
+                }
+            );
+        }
     }
-    recent = [allLines[i] for i in range(start, len(allLines))];
+
+    # Phones scroll the columns sideways; bring one into view without moving
+    # the page. On a wide screen nothing overflows and this does nothing.
+    def showColumn(index: int) {
+        doc: any = document;
+        col: any = doc.getElementById("demo-col-" + str(index));
+        if not col {
+            return;
+        }
+        rail: any = col.parentElement;
+        if rail and rail.scrollWidth > rail.clientWidth {
+            w: any = window;
+            still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
+            rail.scrollTo(
+                {"left": col.offsetLeft, "behavior": "auto" if still else "smooth"}
+            );
+        }
+    }
+
+    ledger = written + OPENING_LOG;
+    if len(ledger) > 4 {
+        ledger = ledger[0:4];
+    }
+    counts: list[int] = [0, 0, 0, 0];
+    for c in CARDS {
+        lane = laneOf(c);
+        counts[lane] = counts[lane] + 1;
+    }
 
     return
-        <div
-            className="anim-fade-up anim-d4 mx-auto mt-12 w-full max-w-3xl text-left lg:mx-0 lg:mt-0 lg:max-w-none"
-        >
-            <div
-                className={"flex items-center justify-end gap-1.5 pb-2 text-[11px] font-semibold text-primary transition-opacity duration-300 "
-                    + ("opacity-0" if moves > 0 else "")}
-                aria-hidden="true"
-            >
-                Drag a card, or tap one
-                <svg
-                    width={12}
-                    height={12}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <path d="M12 5v14"/>
-                    <path d="m19 12-7 7-7-7"/>
-                </svg>
-            </div>
+        <div className="mt-5 mb-2">
             <div
                 role="group"
-                aria-label="Try the board: drag a card between columns, or press Enter on a card to move it"
-                className="rounded-2xl bg-background/70 p-3 shadow-xl ring-1 ring-foreground/10 backdrop-blur"
+                aria-label="Sample board you can try"
+                className="overflow-hidden rounded-xl border bg-card"
             >
-                <div className="grid grid-cols-3 gap-2.5">
-                    {for (li, lane) in enumerate(LANES) {
+                <div className="flex items-center overflow-x-auto border-b px-4 py-3">
+                    {for (i, step) in enumerate(ROUTE) {
+                        <span key={step["name"]} className="flex shrink-0 items-center">
+                            {if i > 0 {
+                                <svg
+                                    key="wire"
+                                    width={34}
+                                    height={10}
+                                    viewBox="0 0 34 10"
+                                    className="shrink-0 text-wire"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M0 5h27"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                    />
+                                    <path d="M26 1l7 4-7 4z" fill="currentColor"/>
+                                </svg>
+                            }}
+                            <button
+                                type="button"
+                                aria-label={"Show the " + step["name"] + " column"}
+                                onMouseEnter={lambda { hotLane = i; }}
+                                onMouseLeave={lambda { hotLane = -1; }}
+                                onFocus={lambda { hotLane = i; }}
+                                onBlur={lambda { hotLane = -1; }}
+                                onClick={lambda { showColumn(i); }}
+                                className={"inline-flex items-center gap-[7px] rounded-md border bg-card px-2.5 py-[5px] text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 hover:border-input "
+                                    + ("border-input" if hotLane == i else "")}
+                            >
+                                <KindGlyph
+                                    kind={step["kind"]}
+                                    className={GLYPH_TEXT[step["color"]]}
+                                />
+                                {step["name"]}
+                                <span
+                                    className="font-mono text-xs font-medium text-subtle tabular-nums"
+                                >
+                                    {counts[i]}
+                                </span>
+                            </button>
+                        </span>
+                    }}
+                    <span
+                        className="ml-3.5 inline-flex shrink-0 items-center gap-1.5 font-mono text-xs whitespace-nowrap text-subtle"
+                    >
+                        <i
+                            aria-hidden="true"
+                            className="inline-block w-[22px] border-t-2 border-dashed border-wire"
+                        ></i>
+                        Review sends back to Build
+                    </span>
+                </div>
+                <div
+                    className="relative grid snap-x snap-mandatory auto-cols-[78%] grid-flow-col overflow-x-auto sm:snap-none sm:grid-flow-row sm:grid-cols-[repeat(4,minmax(180px,1fr))]"
+                >
+                    {for (li, lane) in enumerate(ROUTE) {
                         <div
                             key={lane["name"]}
-                            className={"relative flex min-h-40 flex-col gap-2 rounded-xl border bg-muted/40 p-2 pt-2.5 transition-[box-shadow,background-color] duration-150 "
+                            id={"demo-col-" + str(li)}
+                            className={"flex min-h-[248px] min-w-0 snap-start flex-col gap-2 border-r p-3 transition-colors duration-150 last:border-r-0 "
                                 + (
-                                    "bg-primary/5 ring-2 ring-primary/40"
-                                        if overLane == li
+                                    "bg-accent"
+                                        if overLane == li or hotLane == li
                                         else ""
                                 )}
                             onDragOver={lambda (e: DragEvent) {
@@ -187,9 +293,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                 overLane = li;
                             }}
                             onDragLeave={lambda (e: DragEvent) {
-                                e.preventDefault();
-                                # dragleave fires entering a child card too;
-                                # only clear when the pointer really left.
+                                # Entering a child card fires dragleave too.
                                 ct: any = e.currentTarget;
                                 rt: any = e.relatedTarget;
                                 if not (ct and rt and ct.contains(rt)) {
@@ -199,56 +303,45 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                             onDrop={lambda (e: DragEvent) {
                                 e.preventDefault();
                                 dt = e.dataTransfer;
-                                title = dt.getData("text/x-flowline-demo")
-                                    if dt
-                                    else "";
+                                title = dt.getData(DRAG_TYPE) if dt else "";
                                 overLane = -1;
                                 if title {
                                     moveTo(title, li);
                                 }
                             }}
                         >
-                            <span
-                                className={"absolute inset-x-3 top-0 h-[3px] rounded-b-full "
-                                    + lane["color"]}
-                            />
                             <div
-                                className="flex items-center justify-between px-1 text-[11px] font-semibold"
+                                className="flex items-center gap-1.5 text-[13px] font-semibold"
                             >
-                                <span className="flex items-center gap-1.5">
-                                    <span
-                                        className={"h-1.5 w-1.5 rounded-full "
-                                            + lane["color"]}
-                                    />
-                                    {lane["name"]}
-                                </span>
                                 <span
-                                    className="rounded-full bg-muted px-1.5 tabular-nums text-muted-foreground"
+                                    className={"step-swatch " + SWATCH[lane["color"]]}
+                                    aria-hidden="true"
+                                ></span>
+                                {lane["name"]}
+                                <span
+                                    className="ml-auto font-mono text-xs font-medium text-subtle tabular-nums"
                                 >
-                                    {len(
-                                        [
-                                            c
-                                            for c in CARDS
-                                            if curLane(c) == li
-                                        ]
-                                    )}
+                                    {counts[li]}
                                 </span>
                             </div>
-                            {for c in CARDS {
-                                if curLane(c) == li {
+                            {for (ci, c) in enumerate(CARDS) {
+                                if laneOf(c) == li {
                                     <div
                                         key={c["title"]}
-                                        draggable={True}
+                                        id={"demo-card-" + str(ci)}
                                         role="button"
                                         tabIndex={0}
+                                        draggable={True}
                                         aria-label={str(c["title"])
-                                            + ". Drag to another column, or press Enter to move it along."}
+                                            + ", in "
+                                            + lane["name"]
+                                            + ". Press Enter to move it to "
+                                            + ROUTE[(li + 1) % len(ROUTE)]["name"]
+                                            + "."}
                                         onDragStart={lambda (e: DragEvent) {
                                             dt = e.dataTransfer;
                                             if dt {
-                                                dt.setData(
-                                                    "text/x-flowline-demo", c["title"]
-                                                );
+                                                dt.setData(DRAG_TYPE, c["title"]);
                                                 dt.effectAllowed = "move";
                                             }
                                             dragTitle = c["title"];
@@ -257,147 +350,140 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
                                             dragTitle = "";
                                             overLane = -1;
                                         }}
-                                        onClick={lambda { moveTo(
-                                            c["title"], (curLane(c) + 1) % len(LANES)
-                                        ); }}
+                                        onClick={lambda { advance(c, ci, False); }}
                                         onKeyDown={lambda (e: KeyboardEvent) { if e.key
                                             == "Enter"
                                             or e.key == " " {
                                             e.preventDefault();
-                                            moveTo(
-                                                c["title"],
-                                                (curLane(c) + 1) % len(LANES)
-                                            );
+                                            advance(c, ci, True);
                                         }}}
-                                        className={"animate-in fade-in slide-in-from-bottom-1 cursor-grab select-none rounded-lg border-l-[3px] bg-card p-2 shadow-xs ring-1 ring-foreground/10 transition-shadow duration-500 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing "
+                                        className={"grid cursor-grab gap-1.5 rounded-md border bg-card px-2.5 py-2 text-left transition-[border-color,box-shadow,opacity] duration-150 select-none active:cursor-grabbing "
                                             + (
-                                                "opacity-50 "
-                                                    if dragTitle == c["title"]
-                                                    else ""
+                                                "border-primary ring-1 ring-primary "
+                                                    if lastMoved == c["title"]
+                                                    else "hover:border-input "
                                             )
                                             + (
-                                                "border-l-step-emerald"
-                                                    if li == 2
-                                                    else (
-                                                        "border-l-step-amber"
-                                                            if li == 1
-                                                            else "border-l-step-sky"
-                                                    )
+                                                "opacity-50"
+                                                    if dragTitle == c["title"]
+                                                    else ""
                                             )}
                                     >
-                                        <div
-                                            className="flex items-center gap-1 text-[9px] font-medium text-muted-foreground"
-                                        >
-                                            <span
-                                                className={"h-1 w-1 rounded-full "
-                                                    + c["dot"]}
-                                            />
-                                            {c["project"]}
-                                        </div>
-                                        <div
-                                            className={"mt-0.5 text-[11px] font-medium leading-snug "
-                                                + (
-                                                    "text-muted-foreground line-through decoration-foreground/30"
-                                                        if li == 2
-                                                        else ""
-                                                )}
+                                        <span
+                                            className="text-[13.5px] leading-[1.35] font-medium"
                                         >
                                             {c["title"]}
-                                        </div>
-                                        <div
-                                            className="mt-1.5 flex items-center gap-1.5"
+                                        </span>
+                                        <span
+                                            className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                                         >
-                                            <AvatarStack names={c["who"]} max={2}/>
-                                            <span
-                                                className="rounded-full border px-1.5 text-[9px] font-medium"
-                                            >
-                                                {c["chip"]}
-                                            </span>
-                                            {if c["due"] and li != 2 {
+                                            {if c["overdue"] and li != 3 {
                                                 <span
-                                                    key="due"
-                                                    className={"ml-auto text-[9px] font-semibold "
-                                                        + (
-                                                            "rounded bg-warning/15 px-1 text-warning"
-                                                                if c["due"]
-                                                                    == "Tomorrow"
-                                                                else "text-muted-foreground"
-                                                        )}
+                                                    key="late"
+                                                    className="inline-flex items-center gap-1 font-semibold text-destructive"
                                                 >
-                                                    {c["due"]}
+                                                    <KindGlyph
+                                                        kind="blocked"
+                                                        size={12}
+                                                    />
+                                                    1 day overdue
                                                 </span>
-                                            }}
-                                        </div>
+                                            } else {
+                                                <span key="meta" className="truncate">
+                                                    {c["meta"]}
+                                                    {if c["issue"] {
+                                                        <span key="issue">
+                                                            {" · "}
+                                                            <span className="font-mono">
+                                                                {c["issue"]}
+                                                            </span>
+                                                        </span>
+                                                    }}
+                                                </span>
+                                            } }
+                                            <span
+                                                className="ml-auto inline-flex shrink-0 items-center"
+                                            >
+                                                {if len(c["who"]) > 0 {
+                                                    <AvatarStack
+                                                        key="who"
+                                                        names={c["who"]}
+                                                        max={2}
+                                                    />
+                                                } else {
+                                                    <svg
+                                                        key="gh"
+                                                        width={14}
+                                                        height={14}
+                                                        viewBox="0 0 16 16"
+                                                        className="text-muted-foreground"
+                                                        role="img"
+                                                        aria-label="From GitHub"
+                                                    >
+                                                        <path
+                                                            fill="currentColor"
+                                                            d="M8 .8a7.2 7.2 0 0 0-2.3 14c.4.1.5-.1.5-.3v-1.3c-2 .4-2.4-.9-2.4-.9-.3-.8-.8-1-.8-1-.7-.5 0-.5 0-.5.7.1 1.1.8 1.1.8.6 1.1 1.7.8 2.1.6.1-.5.3-.8.5-1-1.6-.2-3.3-.8-3.3-3.6 0-.8.3-1.4.8-1.9-.1-.2-.3-.9.1-1.9 0 0 .6-.2 2 .7a6.9 6.9 0 0 1 3.6 0c1.4-.9 2-.7 2-.7.4 1 .2 1.7.1 1.9.5.5.8 1.1.8 1.9 0 2.8-1.7 3.4-3.3 3.6.3.2.5.7.5 1.4v2c0 .2.1.4.5.3A7.2 7.2 0 0 0 8 .8"
+                                                        />
+                                                    </svg>
+                                                } }
+                                            </span>
+                                        </span>
                                     </div>
                                 }
                             }}
                         </div>
                     }}
                 </div>
-                <div
-                    className="mt-2.5 flex items-start gap-3 rounded-xl border bg-card/80 px-3 py-2"
+                <ol
+                    aria-label="Log"
+                    aria-live="polite"
+                    className="grid gap-1 border-t bg-muted px-4 py-2.5 text-[13px]"
                 >
-                    <span
-                        className="mt-0.5 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                    >
-                        Log
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-0.5 text-[11px]">
-                        {if len(recent) == 0 {
-                            <div key="quiet" className="text-muted-foreground/70">
-                                Written automatically as cards move.
-                            </div>
-                        }}
-                        {for (i, line) in enumerate(recent) {
-                            <div
-                                key={str(i)}
-                                className={"animate-in fade-in slide-in-from-left-1 truncate duration-500 "
-                                    + (
-                                        "text-foreground"
-                                            if i == len(recent) - 1
-                                            else "text-muted-foreground"
-                                    )}
+                    {for (i, line) in enumerate(ledger) {
+                        <li
+                            key={line["at"] + line["title"] + str(len(ledger) - i)}
+                            className="grid grid-cols-[48px_minmax(0,1fr)] gap-2.5"
+                        >
+                            <time
+                                className="font-mono text-[12.5px] text-subtle tabular-nums"
                             >
-                                {line}
-                                {if i == len(recent) - 1 {
-                                    <span
-                                        key="now"
-                                        className="ml-1.5 text-muted-foreground/70"
-                                    >
-                                        just now
+                                {line["at"]}
+                            </time>
+                            <span>
+                                {line["before"]}
+                                {if line["issue"] {
+                                    <span key="issue" className="font-mono">
+                                        {line["issue"]}
                                     </span>
                                 }}
-                            </div>
-                        }}
-                    </div>
-                </div>
-                {if moves > 0 {
-                    <div
-                        key="cta"
-                        className="animate-in fade-in slide-in-from-bottom-1 mt-2.5 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-[12px] duration-300"
-                    >
-                        <span className="font-semibold text-primary">
-                            That line is the daily log writing itself.
-                        </span>{" "}
-                        {if loggedIn {
-                            <a
-                                key="board"
-                                href="/board"
-                                className="font-semibold underline underline-offset-2 hover:text-primary"
-                            >
-                                Open your board
-                            </a>
-                        } else {
-                            <a
-                                key="signup"
-                                href="/login?mode=signup"
-                                className="font-semibold underline underline-offset-2 hover:text-primary"
-                            >
-                                Create your workspace
-                            </a>
-                        } }
-                    </div>
-                }}
+                                {line["middle"]}
+                                <b className="font-semibold">{line["title"]}</b>
+                                {line["after"]}
+                            </span>
+                        </li>
+                    }}
+                </ol>
             </div>
+            <p className="mt-2.5 text-xs text-subtle">
+                {if moves > 0 {
+                    <span key="after">
+                        {"That line wrote itself when the card moved. "}
+                        <a
+                            href={"/board" if loggedIn else "/login?mode=signup"}
+                            className="font-semibold text-foreground underline underline-offset-2"
+                        >
+                            {"Open your board" if loggedIn else "Create your workspace"}
+                        </a>
+                    </span>
+                } else {
+                    <span key="hint">
+                        {"Sample data. "}
+                        <span className="sm:hidden">Tap a card to move it.</span>
+                        <span className="hidden sm:inline">
+                            Drag a card to another column, or click it to move it along.
+                        </span>
+                    </span>
+                } }
+            </p>
         </div>;
 }

@@ -1,84 +1,65 @@
-"""Closing call to action plus the site footer."""
+"""A plain closing call to action, then the site footer."""
 
 import from ..ui.button { Button }
+import from .Wordmark { Wordmark }
+
+glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
+     FOOT_LINK: str = "text-muted-foreground transition-colors hover:text-foreground";
 
 def:pub SiteFooter(loggedIn: bool) -> JsxElement {
     return
-        <footer className="mx-auto max-w-[1180px] px-7 pt-24 pb-14">
-            <div
-                className="relative overflow-hidden rounded-3xl bg-foreground px-8 py-14 text-center text-background"
-            >
-                <div
-                    aria-hidden="true"
-                    className="absolute inset-0 bg-[radial-gradient(42rem_22rem_at_50%_-6rem,color-mix(in_oklab,var(--primary)_25%,transparent),transparent_70%)]"
-                ></div>
+        <footer className="mx-auto max-w-[1180px] px-4 pt-16 pb-10 sm:px-6 sm:pt-24">
+            <div className="grid gap-5">
                 <h2
-                    className="font-display relative mx-auto max-w-lg text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.02] tracking-[-0.04em]"
+                    className="max-w-[24ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
                 >
-                    Tomorrow at 9:45,
-                    <br/>
-                    do something else.
+                    Draw your flow line this afternoon.
                 </h2>
                 <div
-                    className="relative mt-8 flex flex-wrap items-center justify-center gap-3"
+                    className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
                 >
-                    {if loggedIn {
-                        <Button
-                            key="app"
-                            className="h-12 px-7 text-base"
-                            onClick={lambda { window.location.href = "/board"; }}
-                        >
-                            Go to your board
-                        </Button>
-                    } else {
-                        <Button
-                            key="start"
-                            className="h-12 px-7 text-base"
-                            onClick={lambda { window.location.href = "/login?mode=signup"; }}
-                        >
-                            Create your workspace
-                        </Button>
-                    } }
+                    <Button
+                        asChild={True}
+                        className="h-11 w-full px-5 text-[15px] font-semibold sm:w-auto"
+                    >
+                        <a href={"/board" if loggedIn else "/login?mode=signup"}>
+                            {"Go to your board"
+                                if loggedIn
+                                else "Create your workspace"}
+                        </a>
+                    </Button>
+                    <a
+                        href={REPO_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold underline-offset-4 hover:underline"
+                    >
+                        Read the source
+                    </a>
                 </div>
             </div>
             <div
-                className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-8 text-xs text-muted-foreground"
+                className="mt-14 flex flex-col gap-4 border-t pt-6 text-[13px] sm:flex-row sm:items-center sm:justify-between"
             >
-                <div className="flex items-center gap-2">
-                    <img
-                        src="/static/brand/logo-mark.svg"
-                        alt=""
-                        width={20}
-                        height={20}
-                    />
-                    <span>
-                        flowline
-                        <span className="text-primary ml-0.5">.</span>{" "}
-                        · built with Jac · © 2026
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Wordmark/>
+                    <span className="text-muted-foreground">
+                        Built with Jac · MIT licensed
                     </span>
                 </div>
-                <div className="flex gap-5">
+                <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
+                    <a href="#tour" className={FOOT_LINK}>Tour</a>
+                    <a href="#how" className={FOOT_LINK}>Setup</a>
+                    <a href="#faq" className={FOOT_LINK}>FAQ</a>
                     <a
-                        href="#product"
-                        className="transition-colors hover:text-foreground"
-                    >
-                        Product
-                    </a>
-                    <a href="#how" className="transition-colors hover:text-foreground">
-                        How it works
-                    </a>
-                    <a href="#faq" className="transition-colors hover:text-foreground">
-                        FAQ
-                    </a>
-                    <a
-                        href="https://github.com/kashmithnisakya/flowline"
+                        href={REPO_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="transition-colors hover:text-foreground"
+                        className={FOOT_LINK}
                     >
                         Source
                     </a>
-                </div>
+                </nav>
             </div>
         </footer>;
 }
