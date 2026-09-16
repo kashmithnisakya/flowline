@@ -57,6 +57,8 @@ impl TasksPage.loadWorkspace -> None {
         members = [];
     }
     workspaceReady = True;
+    # The app bar may have mounted after the first measure (a full load).
+    measureHeader();
 }
 
 impl TasksPage.loadTasks -> None {
@@ -488,14 +490,27 @@ impl TasksPage.moveCursor(delta: int) -> None {
         next = n - 1;
     }
     cursor = next;
-    targets: any = document.querySelectorAll("[data-task-row='" + str(next) + "']");
-    for i in range(int(targets.length)) {
-        el: any = targets[i];
+    focusRow(next, True);
+}
+
+# Focus row `i` in whichever of the table and the list is showing.
+impl TasksPage.focusRow(i: int, scroll: bool) -> None {
+    targets: any = document.querySelectorAll("[data-task-row='" + str(i) + "']");
+    for k in range(int(targets.length)) {
+        el: any = targets[k];
         if el.offsetParent {
             el.focus({"preventScroll": True});
-            el.scrollIntoView({"block": "nearest"});
+            if scroll {
+                el.scrollIntoView({"block": "nearest"});
+            }
         }
     }
+}
+
+# The task dialog has no trigger to hand focus back to, so the cursor row
+# takes it once the dialog's focus trap has let go.
+impl TasksPage.refocusRow -> None {
+    window.setTimeout(lambda { focusRow(cursor, False); }, 60);
 }
 
 impl TasksPage.pointAt(i: int) -> None {
@@ -636,6 +651,13 @@ impl TasksPage.openCreate -> None {
     taskOpen = True;
 }
 
+impl TasksPage.dialogOpenChange(o: bool) -> None {
+    taskOpen = o;
+    if not o {
+        refocusRow();
+    }
+}
+
 # A checklist write reports the task's fresh view; the table row takes it.
 impl TasksPage.replaceRow(view: TaskView) -> None {
     rows = [view if t.id == view.id else t for t in rows];
@@ -732,6 +754,7 @@ impl TasksPage.saveTask -> None {
                     cursor = i;
                 }
             }
+            refocusRow();
             toast.success("Task created");
             taskSaving = False;
             return;
@@ -767,6 +790,7 @@ impl TasksPage.saveTask -> None {
                 cursor = i;
             }
         }
+        refocusRow();
     } except Exception as e {
         toast.error("Could not save the task");
     }
@@ -787,6 +811,7 @@ impl TasksPage.deleteTask -> None {
             page = page - 1;
         } else {
             await loadTasks();
+            refocusRow();
         }
     } except Exception as e {
         toast.error("Could not delete the task");

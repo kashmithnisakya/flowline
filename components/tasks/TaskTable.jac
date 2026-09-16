@@ -199,8 +199,8 @@ def leadFirst(names: list[str], lead: str) -> list[str] {
         ];
 }
 
-# Faces, at most two plus a count; a sole assignee is also named once the
-# table is wide enough. Every name is in the title and the avatars' labels.
+# Faces, at most two plus a count, and once the table is wide enough the
+# first person's name ("Priya +1"). Every name is in the title.
 def People(names: list[str]) -> JsxElement {
     if len(names) == 0 {
         return <span className="text-muted-foreground">Unassigned</span>;
@@ -211,11 +211,14 @@ def People(names: list[str]) -> JsxElement {
             title={", ".join(names)}
         >
             <AvatarStack names={names} max={2} size="sm"/>
-            {if len(names) == 1 {
-                <span key="name" className="hidden min-w-0 truncate @6xl:inline">
-                    {firstName(names[0])}
-                </span>
-            }}
+            <span className="hidden min-w-0 truncate @6xl:inline">
+                {firstName(names[0])}
+                {if len(names) > 1 {
+                    <span key="more" className="num ml-1 text-muted-foreground">
+                        {"+" + str(len(names) - 1)}
+                    </span>
+                }}
+            </span>
         </span>;
 }
 
@@ -384,7 +387,7 @@ def:pub TaskTable(
                                 <button
                                     type="button"
                                     data-task-row={str(i)}
-                                    className="max-w-full scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+                                    className="max-w-full scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring focus-visible:outline-solid"
                                     onFocus={lambda { pointAt(i); }}
                                 >
                                     {t.title}
@@ -496,7 +499,7 @@ def:pub TaskTable(
                                 {t.title}
                             </span>
                             <span
-                                className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                                className="flex min-h-6 w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                             >
                                 <StepLabel
                                     name={stepNames[t.id]

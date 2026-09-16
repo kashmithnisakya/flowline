@@ -182,11 +182,13 @@ def FilterMenu(
     return
         <DropdownMenu>
             <span
-                className={"toolbar-filter gap-0! pr-0.5!" if active else "inline-flex"}
+                className={"toolbar-filter gap-0! pr-0.5! outline-offset-1 has-[[data-slot=dropdown-menu-trigger]:focus-visible]:outline-2 has-[[data-slot=dropdown-menu-trigger]:focus-visible]:outline-ring has-[[data-slot=dropdown-menu-trigger]:focus-visible]:outline-solid"
+                    if active
+                    else "inline-flex"}
                 data-active={"true" if active else "false"}
             >
                 <DropdownMenuTrigger
-                    className={"inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-solid"
+                    className={"inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none"
                         if active
                         else "toolbar-filter"}
                 >
@@ -206,7 +208,7 @@ def FilterMenu(
                         key="clear"
                         type="button"
                         aria-label={"Clear the " + label.lower() + " filter"}
-                        className="ml-0.5 inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        className="ml-0.5 inline-flex size-6 items-center justify-center rounded-sm text-subtle hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                         onClick={clear}
                     >
                         <Cross/>
