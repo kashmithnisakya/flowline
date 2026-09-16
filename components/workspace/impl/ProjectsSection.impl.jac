@@ -1,4 +1,4 @@
-"""Implementations for the Projects page."""
+"""Implementations for the Projects section."""
 
 impl ProjectsSection.loadProjects -> None {
     try {
@@ -7,9 +7,29 @@ impl ProjectsSection.loadProjects -> None {
         projects = result.reports[0] if result.reports else [];
         repos = rResult.reports[0] if rResult.reports else [];
     } except Exception as e {
-        toast("Failed to load projects");
+        toast.error("Could not load projects");
     }
     loading = False;
+    await loadCounts();
+}
+
+impl ProjectsSection.loadCounts -> None {
+    # Open work per project, counted server-side over the whole history: the
+    # rows need a number, not the tasks.
+    try {
+        result = root spawn TaskCounts();
+        totals: TaskTotals | None = result.reports[0] if result.reports else None;
+        if totals {
+            tallies: dict[str, int] = {};
+            for t in totals.projects {
+                tallies[t.project_id] = t.total - t.done;
+            }
+            openCounts = tallies;
+            countsReady = True;
+        }
+    } except Exception as e {
+        countsReady = False;
+    }
 }
 
 impl ProjectsSection.openCreate -> None {
@@ -28,6 +48,11 @@ impl ProjectsSection.openEdit(p: Project) -> None {
     dialogOpen = True;
 }
 
+impl ProjectsSection.askArchive(p: Project) -> None {
+    archiveId = jid(p);
+    archiveName = p.name;
+}
+
 impl ProjectsSection.saveProject -> None {
     if not fName.strip() {
         return;
@@ -43,25 +68,39 @@ impl ProjectsSection.saveProject -> None {
             if draft {
                 root spawn AddRepo(full_name=draft, project_id=jid(saved));
             } else {
-                toast("Saved, but the repo link did not look like a GitHub repo.");
+                toast.error("That did not look like a GitHub repository");
             }
         }
         fRepoDraft = "";
         dialogOpen = False;
         await loadProjects();
+        if onChanged {
+            onChanged();
+        }
     } except Exception as e {
-        toast("Failed to save project");
+        toast.error("Could not save that project");
     }
     saving = False;
 }
 
-impl ProjectsSection.archiveProject(projectId: str) -> None {
-    try {
-        root spawn ArchiveProject(project_id=projectId);
-        await loadProjects();
-    } except Exception as e {
-        toast("Failed to archive project");
+impl ProjectsSection.archiveProject -> None {
+    target = archiveId;
+    if not target or busy {
+        return;
     }
+    busy = True;
+    try {
+        root spawn ArchiveProject(project_id=target);
+        archiveId = "";
+        await loadProjects();
+        if onChanged {
+            onChanged();
+        }
+        toast.success("Project archived");
+    } except Exception as e {
+        toast.error("Could not archive that project");
+    }
+    busy = False;
 }
 
 
@@ -70,6 +109,6 @@ impl ProjectsSection.removeRepo(repoId: str) -> None {
         root spawn RemoveRepo(repo_id=repoId);
         await loadProjects();
     } except Exception as e {
-        toast("Failed to remove repo");
+        toast.error("Could not remove that repository");
     }
 }

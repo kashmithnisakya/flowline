@@ -1,129 +1,99 @@
-"""The disconnected state: what connecting buys, and the button that starts it.
-No token field anywhere: Flowline connects through a GitHub App installation,
-so the credential is minted per request server-side and never typed or stored.
+"""The disconnected state: what connecting buys, what the App may touch, and
+the one button that starts it. No token field anywhere: Flowline connects
+through a GitHub App installation, so the credential is minted per request
+server-side and never typed or stored.
 """
 
 import from ..ui.button { Button }
-import from ..ui.card {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
-    CardFooter
-}
 import from ..common.glyphs { Spinner }
+import from ..workspace.icons { IconGithub, IconCheck, IconLock }
+
+# What the App asks for, in the words of the repository's own setup guide.
+glob PERMISSIONS: list[list[str]] = [
+         ["read", "Read issues and pull requests in the repositories you pick"],
+         ["read", "Receive events when they change, so cards stay current"],
+         [
+             "write",
+             "Write to an issue only when you create, close or reopen one from a task"
+         ]
+     ];
 
 def:pub ConnectCard(
     starting: bool, missing: list[str], onInstall: Callable[[], None]
 ) -> JsxElement {
+    blocked = len(missing) > 0;
     return
-        <Card
-            className="max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300"
+        <div
+            className="surface grid gap-8 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-0 md:p-0"
         >
-            <CardHeader>
-                <div
-                    className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
+            <div className="flex flex-col items-start gap-4 md:p-7">
+                <IconGithub size={28} className="text-foreground"/>
+                <h2
+                    className="font-display text-[22px] leading-snug font-bold [font-stretch:115%]"
                 >
-                    <svg
-                        width={20}
-                        height={20}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    >
-                        <path
-                            d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
-                        />
-                        <path d="M9 18c-4.51 2-5-2-7-2"/>
-                    </svg>
-                </div>
-                <CardTitle className="font-display">Connect GitHub</CardTitle>
-                <CardDescription>
-                    Install the Flowline GitHub App and pick the repositories it may see.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <ul className="space-y-2">
-                    <li className="flex items-start gap-2">
-                        <svg
-                            className="mt-0.5 shrink-0 text-primary"
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M20 6 9 17l-5-5"/>
-                        </svg>
-                        <span>
-                            Browse issues and pull requests for the repos on this workspace.
-                        </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                        <svg
-                            className="mt-0.5 shrink-0 text-primary"
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M20 6 9 17l-5-5"/>
-                        </svg>
-                        <span>Import issues onto the board, once each.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                        <svg
-                            className="mt-0.5 shrink-0 text-primary"
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M20 6 9 17l-5-5"/>
-                        </svg>
-                        <span>
-                            Open a GitHub issue from a task, when you ask for one.
-                        </span>
+                    Keep the board in step with GitHub
+                </h2>
+                <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
+                    <li>Import a repository's issues as tasks in a project.</li>
+                    <li>Link a card to its issue or pull request.</li>
+                    <li>
+                        Let a merged pull request move its card to Done, if you want it.
                     </li>
                 </ul>
-                <p>
-                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, and it writes to GitHub only when asked: an issue opened from a task, or, per repo and off by default, the issue closed when its card reaches done.
-                </p>
-                {if len(missing) > 0 {
-                    <p
-                        key="gap"
-                        className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive"
-                    >
-                        {"This server is missing "
-                            + ", ".join(missing)
-                            + ". Set them "
-                            "in the environment (the GitHub section of the README lists each one) "
-                            "and restart, then try again."}
+                {if blocked {
+                    <p key="gap" className="text-[13px] text-muted-foreground">
+                        GitHub is not set up on this server yet. Ask whoever runs your Flowline instance to finish the GitHub App setup.
                     </p>
                 }}
-            </CardContent>
-            <CardFooter>
-                <Button onClick={onInstall} disabled={starting}>
-                    {if starting {
-                        <Spinner key="sp"/>
+                <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                        onClick={onInstall}
+                        disabled={starting or blocked}
+                        size="lg"
+                    >
+                        {if starting {
+                            <Spinner key="sp"/>
+                        } else {
+                            <IconGithub key="mark" size={16}/>
+                        } }
+                        {"Opening GitHub…" if starting else "Connect GitHub"}
+                    </Button>
+                    <span className="text-xs text-subtle">
+                        You choose which repositories on GitHub.
+                    </span>
+                </div>
+            </div>
+            <div className="border-t pt-6 md:border-t-0 md:border-l md:p-7">
+                <h3 className="text-[13px] font-semibold">
+                    What Flowline will be able to do
+                </h3>
+                <ul className="mt-2 flex flex-col">
+                    {for row in PERMISSIONS {
+                        <li
+                            key={row[1]}
+                            className="flex items-start gap-2.5 border-b py-2.5 text-[13px] last:border-b-0"
+                        >
+                            {if row[0] == "write" {
+                                <IconLock
+                                    key="lock"
+                                    className="mt-0.5 shrink-0 text-subtle"
+                                />
+                            } else {
+                                <IconCheck
+                                    key="check"
+                                    className="mt-0.5 shrink-0 text-subtle"
+                                />
+                            } }
+                            <span>{row[1]}</span>
+                        </li>
                     }}
-                    {"Opening GitHub…" if starting else "Install GitHub App"}
-                </Button>
-            </CardFooter>
-        </Card>;
+                </ul>
+                <p className="num mt-3 text-xs text-subtle">
+                    Issues: read and write · Pull requests: read · Metadata: read
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                    Flowline stores the installation id, never a token.
+                </p>
+            </div>
+        </div>;
 }

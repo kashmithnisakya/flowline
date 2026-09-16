@@ -1,13 +1,11 @@
-"""The Overview's charts over time: a burn-up (scope and done, running totals)
-and weekly throughput. Marks are SVG in a 0-100 box stretched to the plot;
-every label, dot and tooltip is HTML over it, so text never scales. Hover or
-focus a week to read it; `labels` are the page's week labels, oldest first."""
-
-import from ..ui.card { Card, CardHeader, CardTitle, CardDescription, CardContent }
+"""The Overview's charts: a burn-up (scope and done, running totals), weekly
+throughput, and this week's moves to Done per day. Marks are SVG or plain
+boxes stretched to the plot; every label is HTML over it, so text never
+scales. Colours are the series tokens, and each legend key is the drawn mark."""
 
 glob PLOT_H: str = "h-44",
-     SCOPE_COLOR: str = "var(--chart-4)",
-     DONE_COLOR: str = "var(--success)";
+     SCOPE_COLOR: str = "var(--foreground)",
+     DONE_COLOR: str = "var(--series-done)";
 
 # A clean axis top at or above the peak: 1.2, 1.5, 2, 2.5 ... 10 times a power
 # of ten (multipliers in tenths, integer math), whole and even so the midline
@@ -68,11 +66,11 @@ def tipShift(i: int, n: int) -> str {
     return "translateX(14px)" if i * 2 < n else "translateX(calc(-100% - 14px))";
 }
 
-def YAxis(top: int) -> JsxElement {
+def YAxis(top: int, plotH: str = PLOT_H) -> JsxElement {
     return
         <div
-            className={"relative w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground "
-                + PLOT_H}
+            className={"relative w-7 shrink-0 text-right font-mono text-xs tabular-nums text-subtle "
+                + plotH}
             aria-hidden="true"
         >
             <span className="absolute right-0 top-0 -translate-y-1/2">{str(top)}</span>
@@ -99,7 +97,7 @@ def XLabels(labels: list[str], gutter: str) -> JsxElement {
     step = labelStep(n);
     return
         <div
-            className={"mt-2 flex text-[11px] text-muted-foreground " + gutter}
+            className={"mt-2 flex font-mono text-xs text-subtle " + gutter}
             aria-hidden="true"
         >
             {for (i, lab) in enumerate(labels) {
@@ -118,11 +116,23 @@ def XLabels(labels: list[str], gutter: str) -> JsxElement {
         </div>;
 }
 
+# The legend key for a line series: the same 2px stroke the plot draws.
 def LineKey(color: str) -> JsxElement {
     return
         <span
-            className="inline-block h-0.5 w-3 shrink-0 rounded-full"
+            className="inline-block h-0.5 w-3.5 shrink-0 rounded-full"
             style={{"background": color}}
+            aria-hidden="true"
+        />;
+}
+
+# The legend key for a bar series: a short bar with the plot's square foot.
+def BarKey(color: str) -> JsxElement {
+    return
+        <span
+            className="inline-block h-2.5 w-2 shrink-0 rounded-t-[2px]"
+            style={{"background": color}}
+            aria-hidden="true"
         />;
 }
 
@@ -140,27 +150,28 @@ def:pub BurnUpChart(
     # each other on the 176px plot; then the legend and tooltip carry them.
     apart = (scopeEnd - doneEnd) * 176 >= top * 16;
     return
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-base">Burn-up</CardTitle>
-                <CardDescription className="flex flex-wrap items-center gap-3">
+        <section className="surface min-w-0" aria-label="Burn-up">
+            <div
+                className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3.5 pt-3 pb-2"
+            >
+                <h3 className="section-title text-[15px]">Burn-up</h3>
+                <div
+                    className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-muted-foreground"
+                >
                     <span className="inline-flex items-center gap-1.5">
-                        <LineKey color={SCOPE_COLOR}/>{" "}
+                        <LineKey color={SCOPE_COLOR}/>
                         Scope
                     </span>
                     <span className="inline-flex items-center gap-1.5">
-                        <LineKey color={DONE_COLOR}/>{" "}
+                        <LineKey color={DONE_COLOR}/>
                         Done
                     </span>
-                    <span className="text-muted-foreground/80">
-                        Running totals at the end of each week.
-                    </span>
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
+                </div>
+            </div>
+            <div className="px-3.5 pt-2 pb-3.5">
                 <div className="flex gap-2">
                     <YAxis top={top}/>
-                    <div className={"relative mr-14 flex-1 " + PLOT_H}>
+                    <div className={"relative mr-10 flex-1 " + PLOT_H}>
                         <Gridlines/>
                         <svg
                             className="absolute inset-0 h-full w-full overflow-visible"
@@ -225,13 +236,13 @@ def:pub BurnUpChart(
                         {if n > 0 and apart {
                             <div key="ends" className="pointer-events-none">
                                 <span
-                                    className="absolute left-full ml-3 -translate-y-1/2 whitespace-nowrap text-xs font-medium tabular-nums text-foreground"
+                                    className="absolute left-full ml-2.5 -translate-y-1/2 whitespace-nowrap font-mono text-xs font-medium tabular-nums text-foreground"
                                     style={{"top": str(valY(scopeEnd, top)) + "%"}}
                                 >
                                     {str(scopeEnd)}
                                 </span>
                                 <span
-                                    className="absolute left-full ml-3 -translate-y-1/2 whitespace-nowrap text-xs font-medium tabular-nums text-foreground"
+                                    className="absolute left-full ml-2.5 -translate-y-1/2 whitespace-nowrap font-mono text-xs font-medium tabular-nums text-foreground"
                                     style={{"top": str(valY(doneEnd, top)) + "%"}}
                                 >
                                     {str(doneEnd)}
@@ -246,7 +257,7 @@ def:pub BurnUpChart(
                                 <div
                                     key={str(i)}
                                     tabIndex={0}
-                                    className="h-full flex-1 outline-none focus-visible:bg-muted/40"
+                                    className="h-full flex-1 focus-visible:bg-muted/60 focus-visible:-outline-offset-2"
                                     aria-label={"Week of "
                                         + lab
                                         + ": scope "
@@ -262,7 +273,7 @@ def:pub BurnUpChart(
                         {if hover >= 0 and hover < n {
                             <div
                                 key="tip"
-                                className="pointer-events-none absolute top-1 z-10 min-w-32 rounded-md border bg-popover px-2.5 py-2 text-xs shadow-md"
+                                className="pointer-events-none absolute top-1 z-10 min-w-32 rounded-md border bg-popover px-2.5 py-2 text-xs whitespace-nowrap shadow-md"
                                 style={{
                                     "left": str(colX(hover, n)) + "%",
                                     "transform": tipShift(hover, n)
@@ -273,14 +284,14 @@ def:pub BurnUpChart(
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <LineKey color={SCOPE_COLOR}/>
-                                    <span className="font-semibold tabular-nums">
+                                    <span className="num font-semibold">
                                         {str(scope[hover])}
                                     </span>
                                     <span className="text-muted-foreground">Scope</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <LineKey color={DONE_COLOR}/>
-                                    <span className="font-semibold tabular-nums">
+                                    <span className="num font-semibold">
                                         {str(done[hover])}
                                     </span>
                                     <span className="text-muted-foreground">Done</span>
@@ -289,9 +300,9 @@ def:pub BurnUpChart(
                         }}
                     </div>
                 </div>
-                <XLabels labels={labels} gutter="ml-9 mr-14"/>
-            </CardContent>
-        </Card>;
+                <XLabels labels={labels} gutter="ml-9 mr-10"/>
+            </div>
+        </section>;
 }
 
 def:pub ThroughputChart(
@@ -303,12 +314,21 @@ def:pub ThroughputChart(
     top = niceTop(finished);
     last = n - 1;
     return
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-base">Throughput</CardTitle>
-                <CardDescription>Tasks moved to Done each week.</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <section className="surface min-w-0" aria-label="Throughput">
+            <div
+                className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3.5 pt-3 pb-2"
+            >
+                <h3 className="section-title text-[15px]">Throughput</h3>
+                <div
+                    className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-muted-foreground"
+                >
+                    <span className="inline-flex items-center gap-1.5">
+                        <BarKey color={DONE_COLOR}/>
+                        Moved to Done
+                    </span>
+                </div>
+            </div>
+            <div className="px-3.5 pt-2 pb-3.5">
                 <div className="flex gap-2">
                     <YAxis top={top}/>
                     <div className={"relative flex-1 " + PLOT_H}>
@@ -321,8 +341,8 @@ def:pub ThroughputChart(
                                 <div
                                     key={str(i)}
                                     tabIndex={0}
-                                    className={"relative flex h-full flex-1 items-end justify-center outline-none "
-                                        + ("bg-muted/50" if i == hover else "")}
+                                    className={"relative flex h-full flex-1 items-end justify-center focus-visible:-outline-offset-2 "
+                                        + ("bg-muted/60" if i == hover else "")}
                                     aria-label={"Week of "
                                         + labels[i]
                                         + ": "
@@ -337,7 +357,7 @@ def:pub ThroughputChart(
                                     {if i == last and v > 0 {
                                         <span
                                             key="cap"
-                                            className="pointer-events-none absolute -translate-y-1 text-xs font-medium tabular-nums text-foreground"
+                                            className="pointer-events-none absolute -translate-y-1 font-mono text-xs font-medium tabular-nums text-foreground"
                                             style={{
                                                 "bottom": str(v * 100.0 / top) + "%"
                                             }}
@@ -346,7 +366,7 @@ def:pub ThroughputChart(
                                         </span>
                                     }}
                                     <div
-                                        className="w-3/5 max-w-6 rounded-t-[4px]"
+                                        className="w-3/5 max-w-6 rounded-t-[2px]"
                                         style={{
                                             "height": str(v * 100.0 / top) + "%",
                                             "background": DONE_COLOR,
@@ -361,7 +381,7 @@ def:pub ThroughputChart(
                         {if hover >= 0 and hover < n {
                             <div
                                 key="tip"
-                                className="pointer-events-none absolute top-1 z-10 min-w-32 rounded-md border bg-popover px-2.5 py-2 text-xs shadow-md"
+                                className="pointer-events-none absolute top-1 z-10 min-w-32 rounded-md border bg-popover px-2.5 py-2 text-xs whitespace-nowrap shadow-md"
                                 style={{
                                     "left": str(colX(hover, n)) + "%",
                                     "transform": tipShift(hover, n)
@@ -371,13 +391,16 @@ def:pub ThroughputChart(
                                     {"Week of " + labels[hover]}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-semibold tabular-nums">
+                                    <BarKey color={DONE_COLOR}/>
+                                    <span className="num font-semibold">
                                         {str(finished[hover])}
                                     </span>
-                                    <span className="text-muted-foreground">done</span>
+                                    <span className="text-muted-foreground">
+                                        moved to Done
+                                    </span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold tabular-nums">
+                                <div className="flex items-center gap-2 pl-3.5">
+                                    <span className="num font-semibold">
                                         {str(added[hover])}
                                     </span>
                                     <span className="text-muted-foreground">added</span>
@@ -387,6 +410,92 @@ def:pub ThroughputChart(
                     </div>
                 </div>
                 <XLabels labels={labels} gutter="ml-9"/>
-            </CardContent>
-        </Card>;
+            </div>
+        </section>;
+}
+
+# This week's moves to Done, one column per day. `days` rows are dicts:
+# label, value, future (outlined, never drawn as zero) and today (the label
+# turns primary and reads "Today").
+def:pub DayChart(days: list[dict]) -> JsxElement {
+    values: list[int] = [];
+    spoken: list[str] = [];
+    for d in days {
+        if not d["future"] {
+            values.append(d["value"]);
+            spoken.append(d["name"] + " " + str(d["value"]));
+        }
+    }
+    top = niceTop(values);
+    return
+        <div
+            role="img"
+            aria-label={"Tasks moved to Done: " + ", ".join(spoken) + " so far"}
+        >
+            <div className="flex gap-2 pt-4">
+                <YAxis top={top} plotH="h-24"/>
+                <div className="relative h-24 flex-1">
+                    <Gridlines/>
+                    <div
+                        className="absolute inset-0 flex gap-2 px-1"
+                        aria-hidden="true"
+                    >
+                        {for d in days {
+                            <div
+                                key={d["name"]}
+                                className="relative flex h-full flex-1 items-end justify-center"
+                            >
+                                {if d["future"] {
+                                    <div
+                                        key="ahead"
+                                        className="h-[15px] w-full max-w-9 rounded-[2px] border border-dashed border-input"
+                                    />
+                                } else {
+                                    <div
+                                        key="bar"
+                                        className="w-full max-w-9 rounded-t-[2px] bg-series-done"
+                                        style={{
+                                            "height": str(d["value"] * 100.0 / top)
+                                                + "%"
+                                        }}
+                                    />
+                                } }
+                                {if not d["future"] {
+                                    <span
+                                        key="val"
+                                        className={"absolute mb-0.5 font-mono text-xs tabular-nums "
+                                            + (
+                                                "text-foreground"
+                                                    if d["value"] > 0
+                                                    else "text-subtle"
+                                            )}
+                                        style={{
+                                            "bottom": str(d["value"] * 100.0 / top)
+                                                + "%"
+                                        }}
+                                    >
+                                        {str(d["value"])}
+                                    </span>
+                                }}
+                            </div>
+                        }}
+                    </div>
+                </div>
+            </div>
+            <div className="mt-1.5 ml-9 flex gap-2 px-1 text-xs" aria-hidden="true">
+                {for d in days {
+                    <span
+                        key={d["name"]}
+                        className={"flex-1 text-center whitespace-nowrap "
+                            + (
+                                "font-semibold text-primary"
+                                    if d["today"]
+                                    else "font-mono text-subtle"
+                            )}
+                    >
+                        {"Today" if d["today"] else d["label"]}
+                    </span>
+                }}
+            </div>
+        </div>;
 }

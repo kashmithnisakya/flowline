@@ -40,7 +40,7 @@ sequenceDiagram
     A->>A: Store a one-shot nonce on GithubConnection
     A-->>B: {ok, url} to the App's install page, state=nonce
     B->>G: Install on chosen repos, authorize
-    G-->>B: Redirect to /workspace?tab=github&installation_id&code&state
+    G-->>B: Redirect to /github?installation_id&code&state
     B->>A: CompleteGithubInstall {code, installation_id, state}
     A->>A: Burn the nonce, check it matches and is under 15 minutes old
     A->>G: POST /login/oauth/access_token (code)
@@ -101,13 +101,13 @@ event's own time.
 
 | Event | Effect on the board |
 | --- | --- |
-| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an **auto-sync** repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees and the sub-issue counts. A close on an **auto-done** repo moves the card to the done step. |
+| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an `auto_sync` repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees and the sub-issue counts. A close on an `auto_done` repo moves the card to the done step. |
 | `issues` deleted or transferred | The task is unlinked from the issue (`gh_issue_number = 0`). |
-| `pull_request` | The linked task's PR state (`open`, `draft`, `closed`, `merged`). A merge on an auto-done repo moves a card that is In Progress or in Review to done. `review_requested` marks the review as requested. |
+| `pull_request` | The linked task's PR state (`open`, `draft`, `closed`, `merged`). A merge on an `auto_done` repo moves a card that is In Progress or in Review to done. `review_requested` marks the review as requested. |
 | `pull_request_review` | `approved` or `changes_requested` becomes the task's review state. Comments and dismissals are ignored. |
 | `sub_issues` | Links or unlinks a child task's parent and refreshes the parent's done/total counts. |
 | `installation` deleted, suspended, unsuspended | Marks the connection invalid (and unbinds it on delete) or valid again. |
-| `installation_repositories` removed | Turns off auto-sync, auto-done and close-on-done for those repos. Tasks and links stay. |
+| `installation_repositories` removed | Turns off `auto_sync`, `auto_done` and `auto_close` for those repos. Tasks and links stay. |
 
 !!! note "What does not sync"
 
@@ -128,8 +128,8 @@ before the webhook existed and anything delivered while the app was down.
 2. Mint an installation token.
 3. For each tracked repo, read `GET /repos/{repo}/issues?state=all&sort=updated&direction=asc`
    from the repo's `issue_cursor` (the newest `updated_at` already seen).
-    - An **auto-sync** repo with no cursor back-fills from the beginning.
-    - A repo without auto-sync is polled only from the earliest sync of a
+    - An `auto_sync` repo with no cursor back-fills from the beginning.
+    - A repo without `auto_sync` is polled only from the earliest sync of a
       task already linked to it, and skipped if it has none.
 4. Apply every item through the same helpers the drain uses, and advance the
    cursor after each fully applied page.
@@ -141,11 +141,13 @@ request in a tracked repo gets its `pr_number` filled in.
 
 ## Per-repo policy
 
-| Flag | Default | Effect |
-| --- | --- | --- |
-| `auto_sync` | off | File new issues as tasks. Turning it on clears the cursor, so the next sync back-fills the repo's history. |
-| `auto_done` | off | A closed issue, or a merged PR on a card In Progress or in Review, moves the card to the done step. |
-| `auto_close` | off | A card landing on Done closes its GitHub issue; a card leaving Done reopens it. |
+Each flag is a switch in the repository's automation panel on `/github`.
+
+| Flag | Switch | Default | Effect |
+| --- | --- | --- | --- |
+| `auto_sync` | Import issues into *project* | off | File new issues as tasks. Turning it on clears the cursor, so the next sync back-fills the repo's history. |
+| `auto_done` | Move a card to Done when its issue closes or its pull request merges | off | A closed issue, or a merged PR on a card In Progress or in Review, moves the card to the done step. |
+| `auto_close` | Close the issue when its card moves to Done | off | A card landing on Done closes its GitHub issue; a card leaving Done reopens it. |
 
 ## Writing back to GitHub
 
@@ -168,6 +170,6 @@ workspace nobody opens stays as it was.
 ## When a connection goes invalid
 
 A GitHub call that returns `401` or `404` marks the connection
-`status = "invalid"`: the board shows a reconnect banner and close-on-done
-stops. Reconnecting from the GitHub tab, or an `installation.unsuspend`
+`status = "invalid"`: the GitHub page shows a reconnect banner and
+close-on-done stops. Reconnecting from that banner, or an `installation.unsuspend`
 delivery, sets it back to `ok`.

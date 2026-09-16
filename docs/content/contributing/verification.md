@@ -57,9 +57,11 @@ and `dev`.
        stay isolated.
     7. Checks the log for two supervised workers.
     8. **Browser gate** (`tests/smoke/browser_gate.py`, Playwright): sign up,
-       create a task from the board and see the card, then land on GitHub's
-       install redirect against the stub and check the page completes it with
-       exactly one `CompleteGithubInstall` request.
+       finish the three-step setup on the Simple template, land on the board
+       with the task sheet open on a new task and the template's steps applied,
+       create a task from the board and see the card survive a reload, then
+       land on GitHub's install redirect against the stub and check the page
+       completes it with exactly one `CompleteGithubInstall` request.
 
 === "docs: build"
 

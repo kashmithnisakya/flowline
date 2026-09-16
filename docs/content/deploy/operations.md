@@ -67,7 +67,7 @@ them through its own class registry. Treat a pin bump as a data migration:
 
 | Symptom | Look at |
 | --- | --- |
-| Board shows a reconnect banner | A GitHub call returned 401 or 404 and marked the connection invalid. Reconnect on the GitHub tab. |
+| The GitHub page shows a reconnect banner | A GitHub call returned 401 or 404 and marked the connection invalid. Reconnect from that banner. |
 | GitHub changes stopped arriving | The delivery log: `401` (secret mismatch), `415` (content type), `unknown_installation` (reconnect the workspace), or no deliveries at all (webhook URL). |
 | The assistant is "not available" | `flowline.assistant` in the logs. |
 | `500` from a walker with a traceback in the response | An uncaught exception; usually a name missing from an import. `jac check` does not catch those, so reproduce with the API gate locally. |

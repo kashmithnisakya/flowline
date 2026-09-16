@@ -1,168 +1,131 @@
-"""Public site header; shows the app link when a session exists. Below sm the
-anchor links sit behind a disclosure toggle so phones can still reach them.
-A hairline under the border tracks scroll progress so the page reads alive.
+"""Public site header. A session swaps the calls to action for the board link.
+Below md the anchors and Sign in move into a disclosure menu, leaving the
+mark, one compact primary action and the menu button on a phone's row.
 """
 
-import from "react" { useEffect }
-import from "@jac/runtime" { Link }
 import from ..ui.button { Button }
+import from .Wordmark { Wordmark }
+
+glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
+     NAV_LINK: str = "text-[13.5px] text-muted-foreground transition-colors hover:text-foreground",
+     MENU_LINK: str = "flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground";
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
-    has menuOpen: bool = False,
-        progress: float = 0.0;
-
-    useEffect(
-        lambda {
-            doc: any = document;
-            onScroll = lambda {
-                el: any = doc.documentElement;
-                max: any = el.scrollHeight - el.clientHeight;
-                progress = (float(el.scrollTop) * 100.0 / float(max))
-                    if max > 0
-                    else 0.0;
-            };
-            window.addEventListener("scroll", onScroll, {"passive": True});
-            onScroll();
-            return lambda { window.removeEventListener("scroll", onScroll); };
-        },
-        []
-    );
+    has menuOpen: bool = False;
 
     return
-        <header
-            className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur"
-        >
-            <span
-                aria-hidden="true"
-                className="absolute inset-x-0 bottom-[-1px] block h-px bg-primary"
-                style={{"width": str(progress) + "%"}}
-            />
-            <nav className="mx-auto flex max-w-[1180px] items-center gap-8 px-7 py-4">
-                <Link to="/" className="flex items-center gap-2">
-                    <img
-                        src="/static/brand/logo-mark.svg"
-                        alt=""
-                        width={28}
-                        height={28}
-                    />
-                    <span className="font-display text-lg font-bold tracking-tight">
-                        flowline
-                        <span className="text-primary ml-0.5">.</span>
-                    </span>
-                </Link>
-                <a
-                    href="#product"
-                    className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                >
-                    Product
+        <header className="sticky top-0 z-30 border-b bg-background">
+            <nav
+                aria-label="Site"
+                className="mx-auto flex h-14 max-w-[1180px] items-center gap-6 px-4 sm:px-6"
+            >
+                <a href="/" aria-label="flowline home" className="shrink-0 rounded-sm">
+                    <Wordmark/>
                 </a>
-                <a
-                    href="#how"
-                    className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                >
-                    How it works
-                </a>
-                <a
-                    href="#faq"
-                    className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                >
-                    FAQ
-                </a>
-                <div className="anim-fade-in ml-auto flex items-center gap-2">
+                <div className="hidden items-center gap-5 md:flex">
+                    <a href="#tour" className={NAV_LINK}>Tour</a>
+                    <a href="#github" className={NAV_LINK}>GitHub</a>
+                    <a href="#faq" className={NAV_LINK}>FAQ</a>
+                    <a
+                        href={REPO_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={NAV_LINK}
+                    >
+                        Source
+                    </a>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
                     {if loggedIn {
-                        <Button
-                            key="app"
-                            size="lg"
-                            onClick={lambda { window.location.href = "/board"; }}
-                        >
-                            Go to your board
+                        <Button key="app" asChild={True} size="sm">
+                            <a href="/board">Go to your board</a>
                         </Button>
                     } else {
                         <div key="auth" className="flex items-center gap-2">
                             <Button
+                                asChild={True}
                                 variant="ghost"
-                                size="lg"
-                                onClick={lambda { window.location.href = "/login"; }}
+                                size="sm"
+                                className="hidden text-muted-foreground md:inline-flex"
                             >
-                                Sign in
+                                <a href="/login">Sign in</a>
                             </Button>
-                            <Button
-                                size="lg"
-                                onClick={lambda { window.location.href = "/login?mode=signup"; }}
-                            >
-                                Create workspace
+                            <Button asChild={True} size="sm">
+                                <a href="/login?mode=signup">
+                                    <span className="sm:hidden">Create workspace</span>
+                                    <span className="hidden sm:inline">
+                                        Create your workspace
+                                    </span>
+                                </a>
                             </Button>
                         </div>
                     } }
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="sm:hidden"
-                        aria-label="Toggle menu"
+                        className="md:hidden"
+                        aria-label="Menu"
                         aria-expanded={menuOpen}
+                        aria-controls="site-menu"
                         onClick={lambda { menuOpen = not menuOpen; }}
                     >
-                        {if menuOpen {
-                            <svg
-                                key="close"
-                                width={16}
-                                height={16}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M18 6 6 18"/>
-                                <path d="m6 6 12 12"/>
-                            </svg>
-                        } else {
-                            <svg
-                                key="open"
-                                width={16}
-                                height={16}
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M4 6h16"/>
-                                <path d="M4 12h16"/>
-                                <path d="M4 18h16"/>
-                            </svg>
-                        } }
+                        <svg
+                            width={16}
+                            height={16}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d={"M18 6 6 18M6 6l12 12"
+                                    if menuOpen
+                                    else "M4 7h16M4 12h16M4 17h16"}
+                            />
+                        </svg>
                     </Button>
                 </div>
             </nav>
             {if menuOpen {
                 <div
                     key="menu"
-                    className="border-t border-border/70 px-4 py-3 animate-in fade-in slide-in-from-top-2 duration-200 sm:hidden"
+                    id="site-menu"
+                    className="grid gap-0.5 border-t px-2 py-2 md:hidden"
                 >
                     <a
-                        href="#product"
-                        className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        href="#tour"
+                        className={MENU_LINK}
                         onClick={lambda { menuOpen = False; }}
                     >
-                        Product
+                        Tour
                     </a>
                     <a
-                        href="#how"
-                        className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        href="#github"
+                        className={MENU_LINK}
                         onClick={lambda { menuOpen = False; }}
                     >
-                        How it works
+                        GitHub
                     </a>
                     <a
                         href="#faq"
-                        className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className={MENU_LINK}
                         onClick={lambda { menuOpen = False; }}
                     >
                         FAQ
                     </a>
+                    <a
+                        href={REPO_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={MENU_LINK}
+                    >
+                        Source on GitHub
+                    </a>
+                    {if not loggedIn {
+                        <a key="signin" href="/login" className={MENU_LINK}>Sign in</a>
+                    }}
                 </div>
             }}
         </header>;

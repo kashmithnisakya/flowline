@@ -1,8 +1,7 @@
 """Step-kind and colour metadata shared by every flow line surface. The step
 stores a colour KEY; class strings stay literal here or Tailwind drops them.
+A step colour shows only as a swatch or a 2px rule; kind is a glyph, never a tint.
 """
-
-import from ...constants { STATUS_KIND, KIND_COLORS }
 
 glob KIND_LABEL: dict[str, str] = {
          "start": "Start",
@@ -13,15 +12,23 @@ glob KIND_LABEL: dict[str, str] = {
      },
      KIND_HINT: dict[str, str] = {
          "start": "where new work lands",
-         "active": "being worked on",
-         "handoff": "waiting on someone",
-         "blocked": "needs attention",
-         "done": "finished - terminal"
+         "active": "someone is working on it",
+         "handoff": "waiting on someone else",
+         "blocked": "stuck, needs attention",
+         "done": "finished, work stops here"
+     },
+     # The glyph's ink. Only blocked earns andon red; the rest stay quiet so
+     # the step colour next to the name is the one colour on a node.
+     KIND_TONE: dict[str, str] = {
+         "start": "text-subtle",
+         "active": "text-subtle",
+         "handoff": "text-subtle",
+         "blocked": "text-destructive",
+         "done": "text-subtle"
      },
      COLOR_KEYS: list[str] = ["sky", "indigo", "amber", "rose", "emerald", "slate"],
      # Every table keys the same six tokens (--step-X, -ink, -wash in
-     # styles/global.css), so light and dark are the token's business and
-     # no table needs a dark: variant.
+     # styles/global.css), so light and dark are the token's business.
      DOT_FILL: dict[str, str] = {
          "sky": "bg-step-sky",
          "indigo": "bg-step-indigo",
@@ -38,18 +45,18 @@ glob KIND_LABEL: dict[str, str] = {
          "emerald": "text-step-emerald-ink",
          "slate": "text-step-slate-ink"
      },
-     # The step's own colour as a canvas card: coloured border plus an opaque
-     # pale fill (a translucent wash would let the canvas dot grid through).
+     # Kept for callers from before the redesign: a card is a plain surface
+     # now, whatever its step colour.
      CARD_TINT: dict[str, str] = {
-         "sky": "border-step-sky/60 bg-step-sky-wash",
-         "indigo": "border-step-indigo/60 bg-step-indigo-wash",
-         "amber": "border-step-amber/60 bg-step-amber-wash",
-         "rose": "border-step-rose/60 bg-step-rose-wash",
-         "emerald": "border-step-emerald/60 bg-step-emerald-wash",
-         "slate": "border-step-slate/60 bg-step-slate-wash"
+         "sky": "border-border bg-card",
+         "indigo": "border-border bg-card",
+         "amber": "border-border bg-card",
+         "rose": "border-border bg-card",
+         "emerald": "border-border bg-card",
+         "slate": "border-border bg-card"
      };
 
-# The same colour as a raw CSS value, for the board column dots.
+# The same colour as a raw CSS value, for inline styles.
 glob DOT_VAR: dict[str, str] = {
          "sky": "var(--step-sky)",
          "indigo": "var(--step-indigo)",
@@ -59,18 +66,17 @@ glob DOT_VAR: dict[str, str] = {
          "slate": "var(--step-slate)"
      };
 
+# No coloured left bars any more; the key set stays so old lookups resolve.
 glob CARD_BAR: dict[str, str] = {
-         "sky": "border-l-4 border-l-step-sky",
-         "indigo": "border-l-4 border-l-step-indigo",
-         "amber": "border-l-4 border-l-step-amber",
-         "rose": "border-l-4 border-l-step-rose",
-         "emerald": "border-l-4 border-l-step-emerald",
-         "slate": "border-l-4 border-l-step-slate"
+         "sky": "",
+         "indigo": "",
+         "amber": "",
+         "rose": "",
+         "emerald": "",
+         "slate": ""
      };
 
-# The step's colour on a board lane: a solid rule at the top of the panel
-# (and the header dot and count). The lane ground itself stays neutral so the
-# cards, not the panel, are the brightest thing in it.
+# The step's colour as a 2px rule (a board lane header, a roadmap row).
 glob LANE_BAR: dict[str, str] = {
          "sky": "bg-step-sky",
          "indigo": "bg-step-indigo",
@@ -80,34 +86,31 @@ glob LANE_BAR: dict[str, str] = {
          "slate": "bg-step-slate"
      };
 
-# Drag-over highlight in the column's own voice: the full tint comes back
-# only while a card can be dropped here.
+# Drag-over highlight: an outline in the column's colour, no tinted fill.
 glob RING_TINT: dict[str, str] = {
-         "sky": "ring-2 ring-step-sky/60 bg-step-sky/10",
-         "indigo": "ring-2 ring-step-indigo/60 bg-step-indigo/10",
-         "amber": "ring-2 ring-step-amber/60 bg-step-amber/10",
-         "rose": "ring-2 ring-step-rose/60 bg-step-rose/10",
-         "emerald": "ring-2 ring-step-emerald/60 bg-step-emerald/10",
-         "slate": "ring-2 ring-step-slate/60 bg-step-slate/10"
+         "sky": "ring-2 ring-step-sky/60",
+         "indigo": "ring-2 ring-step-indigo/60",
+         "amber": "ring-2 ring-step-amber/60",
+         "rose": "ring-2 ring-step-rose/60",
+         "emerald": "ring-2 ring-step-emerald/60",
+         "slate": "ring-2 ring-step-slate/60"
      };
 
-# Count-badge tint for column headers: the step colour at chip volume.
+# One neutral count badge; the step colour no longer tints counts.
 glob COUNT_TINT: dict[str, str] = {
-         "sky": "border-transparent bg-step-sky/15 text-step-sky-ink",
-         "indigo": "border-transparent bg-step-indigo/15 text-step-indigo-ink",
-         "amber": "border-transparent bg-step-amber/15 text-step-amber-ink",
-         "rose": "border-transparent bg-step-rose/15 text-step-rose-ink",
-         "emerald": "border-transparent bg-step-emerald/15 text-step-emerald-ink",
-         "slate": "border-transparent bg-step-slate/15 text-step-slate-ink"
+         "sky": "border-transparent bg-muted text-muted-foreground",
+         "indigo": "border-transparent bg-muted text-muted-foreground",
+         "amber": "border-transparent bg-muted text-muted-foreground",
+         "rose": "border-transparent bg-muted text-muted-foreground",
+         "emerald": "border-transparent bg-muted text-muted-foreground",
+         "slate": "border-transparent bg-muted text-muted-foreground"
      };
 
 
-# A legacy status in the board's colour voice: status -> kind -> colour key
-# -> chip classes. Shared by the log and tasks tables.
+# A legacy status as badge classes, for tables that still show one. Neutral:
+# the kind glyph (STATUS_KIND) carries the meaning.
 def:pub statusChip(status: str) -> str {
-    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
-    color = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
-    return COUNT_TINT[color] if color in COUNT_TINT else COUNT_TINT["slate"];
+    return COUNT_TINT["slate"];
 }
 
 
@@ -115,27 +118,10 @@ def colorKey(raw: str) -> str {
     if raw in DOT_FILL {
         return raw;
     }
-    # Default to slate
     return "slate";
 }
 
 
-# What a transition carries, as a chip on its label: an issue (no code yet)
-# or a PR (code, waiting on a person). Empty carries no chip, which is what
-# every transition drawn before this existed reads as.
-glob CARRY_LABEL: dict[str, str] = {"issue": "ISSUE", "pr": "PR"},
-     CARRY_TINT: dict[str, str] = {
-         "issue": "border-step-sky/50 bg-step-sky/10 text-step-sky-ink",
-         "pr": "border-step-amber/50 bg-step-amber/10 text-step-amber-ink"
-     };
-
-# Lane-view wire colour: a transition wears the colour of the step it leaves,
-# so the lane that owns a hand-off is readable without following the arrow.
-glob WIRE_TINT: dict[str, str] = {
-         "sky": "text-step-sky/75",
-         "indigo": "text-step-indigo/75",
-         "amber": "text-step-amber/75",
-         "rose": "text-step-rose/75",
-         "emerald": "text-step-emerald/75",
-         "slate": "text-step-slate/75"
-     };
+# What a transition carries: an issue (no code yet) or a PR (code, waiting on
+# a person). Shown as a quiet word before the label, never as a tinted chip.
+glob CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"};

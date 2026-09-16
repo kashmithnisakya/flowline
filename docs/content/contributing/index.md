@@ -24,9 +24,9 @@ flowline/
 │       └── impl/            # page handler bodies
 ├── components/              # presentational components by area
 │   └── ui/                  # jac-shadcn registry copies: never edit
-├── lib/                     # session, dates, theme, utils
+├── lib/                     # session, dates, theme, voice, utils
 ├── styles/global.css        # brand and step colour tokens, both palettes
-├── brand/logo.jac           # generates every logo into assets/brand/
+├── brand/                   # logo.jac and social.jac draw assets/brand/
 ├── tests/smoke/             # CI gates: deploy, API, webhook, browser
 └── docs/                    # this site
 ```
@@ -90,12 +90,18 @@ fixed copy under a name the installer cannot write to (the toaster lives in
 
 ## Brand assets
 
-`brand/logo.jac` generates every logo variant into `assets/brand/`. Edit the
-generator, then run it:
+`brand/logo.jac` generates every logo variant into `assets/brand/`, and
+`brand/social.jac` draws the link preview card, `assets/brand/og-image.png`
+(it reads the fonts from the client's `node_modules`, so run `jac install`
+first). Edit a generator, then run it as a standalone file:
 
 ```bash
-jac run brand/logo.jac
+jac run --no-takeover brand/logo.jac
+jac run --no-takeover brand/social.jac
 ```
+
+`--no-takeover` runs the file standalone and leaves the project untouched; the
+plain `jac run brand/logo.jac` fails on Jac 0.37.14.
 
 Reference brand assets as `/static/...`, never `/assets/...` (Vite owns
 `/assets/*` at build time). This docs site publishes the same files.
