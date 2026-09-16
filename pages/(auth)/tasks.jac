@@ -256,6 +256,8 @@ def:pub TasksPage -> JsxPage {
     def writeUrl -> None;
     def handleKey(e: any) -> None;
     def moveCursor(delta: int) -> None;
+    def focusRow(i: int, scroll: bool) -> None;
+    def refocusRow -> None;
     def pointAt(i: int) -> None;
     def measureHeader -> None;
     def columnKeys -> list[str];
@@ -264,6 +266,7 @@ def:pub TasksPage -> JsxPage {
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
     def openCreate -> None;
+    def dialogOpenChange(o: bool) -> None;
     def replaceRow(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
@@ -503,7 +506,7 @@ def:pub TasksPage -> JsxPage {
                 members={activeMembers}
                 saving={taskSaving}
                 onField={setTaskField}
-                onOpenChange={lambda (o: bool) { taskOpen = o; }}
+                onOpenChange={dialogOpenChange}
                 onSave={saveTask}
                 onDelete={deleteTask}
                 categories={categories}
