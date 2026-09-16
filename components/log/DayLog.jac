@@ -294,16 +294,27 @@ def phrase(e: LogEntry, who: str, roster: list[str], prose: bool) -> dict[str, s
             "tail": count + stop
         };
     }
+    # The timeline links the issue number itself, so its sentence drops it.
     if act.startswith(IMPORT_PREFIX) {
+        source = act[len(IMPORT_PREFIX):];
         return {
             "lead": (who + " imported " if who else "Imported "),
             "title": title,
-            "tail": " from " + act[len(IMPORT_PREFIX):] + stop
+            "tail": " from "
+                + (source.split(" #")[0] if e.issue_link and not prose else source)
+                + stop
         };
     }
     if act.startswith("Opened GitHub issue ") {
+        source = act[20:];
         return {
-            "lead": (who + " opened " if who else "Opened ") + act[20:] + " for ",
+            "lead": (who + " opened " if who else "Opened ")
+                + (
+                    "an issue in " + source.split(" #")[0]
+                        if e.issue_link and not prose
+                        else source
+                )
+                + " for ",
             "title": title,
             "tail": stop
         };
@@ -697,12 +708,14 @@ def refNumber(url: str) -> str {
 }
 
 # Timeline rows newest first; rows without a stamp go last in their day.
-# Imports fold per repo per day unless rows are being picked.
+# Imports fold per repo per day unless rows are being picked. `sorted` with
+# reverse flips ties, so the input is flipped first to keep wire order.
 def timelineRows(
     entries: list[LogEntry], fold: bool, roster: list[str]
 ) -> list[dict[str, any]] {
+    flipped = [entries[len(entries) - 1 - i] for i in range(len(entries))];
     ordered = sorted(
-        entries, key=lambda (e: LogEntry) { e.date + "|" + e.at; }, reverse=True
+        flipped, key=lambda (e: LogEntry) { e.date + "|" + e.at; }, reverse=True
     );
     rows: list[dict[str, any]] = [];
     folded: dict[str, dict[str, any]] = {};
@@ -720,6 +733,7 @@ def timelineRows(
                 grown["title"] = "";
                 grown["tail"] = "";
                 grown["task"] = "";
+                grown["issue"] = "";
                 grown["entry"] = None;
                 continue;
             }
@@ -735,7 +749,7 @@ def timelineRows(
                 "task": e.task_id,
                 "who": "GitHub",
                 "notes": "",
-                "issue": "",
+                "issue": refNumber(e.issue_link) if e.issue_link else "",
                 "pr": "",
                 "count": 1,
                 "entry": e
@@ -824,7 +838,9 @@ def:pub LogTimeline(
                             />
                         </span>
                     }}
-                    <span className="num pt-px text-[12.5px] leading-5 text-subtle">
+                    <span
+                        className="num pt-px text-[12.5px] leading-5 text-subtle group-data-[state=selected]:text-muted-foreground"
+                    >
                         {if showDate {
                             <span key="d" className="block">
                                 {shortDate(r["date"])[:6]}
@@ -889,7 +905,7 @@ def:pub LogTimeline(
                         {if r["who"] {
                             <span
                                 key="who"
-                                className="text-xs whitespace-nowrap text-subtle"
+                                className="text-xs whitespace-nowrap text-subtle group-data-[state=selected]:text-muted-foreground"
                             >
                                 {r["who"]}
                             </span>
@@ -920,7 +936,13 @@ def:pub LogTimeline(
                                     <path d="m15 5 4 4"/>
                                 </svg>
                             </button>
-                        }}
+                        } elif not selecting and onEdit {
+                            <span
+                                key="edit"
+                                className="-my-1 hidden size-7 shrink-0 md:block"
+                                aria-hidden="true"
+                            />
+                        } }
                     </div>
                 </li>
             }}
