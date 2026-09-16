@@ -11,7 +11,7 @@ import from .SettingRow { SettingRow }
 glob THEME_CHOICES: list[list[str]] = [
          ["light", "Light"],
          ["dark", "Dark"],
-         ["system", "Match system"]
+         ["system", "System"]
      ];
 
 # A 28x18 sample of the palette a choice paints: the ground, with the accent
@@ -78,7 +78,10 @@ def:pub PreferencesSection -> JsxElement {
         <div className="flex flex-col gap-4">
             <SectionHeader title="Preferences"/>
             <div className="surface">
-                <SettingRow label="Theme" hint="Saved in this browser only.">
+                <SettingRow
+                    label="Theme"
+                    hint="System follows your device. Saved in this browser only."
+                >
                     <div
                         role="group"
                         aria-label="Theme"

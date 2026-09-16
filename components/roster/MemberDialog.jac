@@ -5,7 +5,6 @@ stay removable), empty falls back to type-and-enter free text."""
 
 import from ...models { Project }
 import from ..ui.button { Button }
-import from ..ui.badge { Badge }
 import from ..ui.dialog {
     Dialog,
     DialogContent,
@@ -19,7 +18,40 @@ import from ..ui.label { Label }
 import from ..common.glyphs { Spinner }
 import from ..common.Avatar { Avatar }
 import from ..flowlines.kinds { COLOR_KEYS, DOT_FILL }
-import from ..workspace.icons { IconX }
+import from ..workspace.icons { IconCheck, IconX }
+
+# A toggle chip, sentence case and square like every other control: picked
+# shows a tick in foreground weight; a removable one ends in a cross.
+def Chip(
+    label: str,
+    on: bool,
+    onClick: Callable[[], None],
+    removable: bool = False,
+    hint: str = ""
+) -> JsxElement {
+    return
+        <button
+            type="button"
+            aria-pressed={None if removable else on}
+            aria-label={("Remove " + label) if removable else None}
+            title={hint}
+            className={"inline-flex h-7 items-center gap-1.5 rounded-sm border px-2 text-[13px] transition-colors duration-150 "
+                + (
+                    "border-foreground bg-card font-semibold text-foreground"
+                        if on
+                        else "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+            onClick={lambda { onClick(); }}
+        >
+            {if on and not removable {
+                <IconCheck key="tick" size={12}/>
+            }}
+            <span>{label}</span>
+            {if removable {
+                <IconX key="x" size={12} className="text-subtle"/>
+            }}
+        </button>;
+}
 
 def:pub MemberDialog(
     open: bool,
@@ -117,11 +149,11 @@ def:pub MemberDialog(
                                 key="auto"
                                 type="button"
                                 title="Auto (from the name)"
-                                className={"h-6 rounded-full border border-dashed px-2 text-xs text-muted-foreground "
+                                className={"h-6 rounded-sm border px-2 text-xs "
                                     + (
-                                        "border-ring text-foreground"
+                                        "border-foreground font-semibold text-foreground"
                                             if not form["color"]
-                                            else "border-border"
+                                            else "border-dashed border-border text-muted-foreground hover:text-foreground"
                                     )}
                                 onClick={lambda { onField("color", ""); }}
                             >
@@ -137,37 +169,26 @@ def:pub MemberDialog(
                                 className="flex flex-wrap items-center gap-1.5"
                             >
                                 {for opt in roleOptions {
-                                    <Badge
+                                    <Chip
                                         key={opt}
-                                        variant={"default"
-                                            if opt in roles
-                                            else "outline"}
-                                        className={"cursor-pointer "
-                                            + (
-                                                ""
-                                                    if opt in roles
-                                                    else "hover:bg-accent hover:text-accent-foreground"
-                                            )}
+                                        label={opt}
+                                        on={opt in roles}
                                         onClick={lambda { if onToggleRole {
                                             onToggleRole(opt);
                                         }}}
-                                    >
-                                        {opt}
-                                    </Badge>
+                                    />
                                 }}
                                 {for extra in extraRoles {
-                                    <Badge
+                                    <Chip
                                         key={"x-" + extra}
-                                        variant="secondary"
-                                        className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
-                                        title="Not one of this flow line's roles. Click to remove"
+                                        label={extra}
+                                        on={True}
+                                        removable={True}
+                                        hint="Not one of this workspace's roles"
                                         onClick={lambda { if onToggleRole {
                                             onToggleRole(extra);
                                         }}}
-                                    >
-                                        {extra}
-                                        <IconX size={12} className="text-subtle"/>
-                                    </Badge>
+                                    />
                                 }}
                             </div>
                         } else {
@@ -176,16 +197,13 @@ def:pub MemberDialog(
                                 className="flex flex-wrap items-center gap-1.5"
                             >
                                 {for r in roles {
-                                    <Badge
+                                    <Chip
                                         key={r}
-                                        variant="secondary"
-                                        className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
-                                        title="Click to remove"
+                                        label={r}
+                                        on={True}
+                                        removable={True}
                                         onClick={lambda { onRemoveRole(r); }}
-                                    >
-                                        {r}
-                                        <IconX size={12} className="text-subtle"/>
-                                    </Badge>
+                                    />
                                 }}
                                 <Input
                                     placeholder={"Type a role and press Enter"
@@ -209,30 +227,20 @@ def:pub MemberDialog(
                         <Label>Tags</Label>
                         <div className="flex flex-wrap items-center gap-1.5">
                             {for t in memberTags {
-                                <Badge
+                                <Chip
                                     key={t}
-                                    variant="default"
-                                    className="cursor-pointer gap-1 hover:bg-destructive/15 hover:text-destructive"
-                                    title="Click to remove"
+                                    label={t}
+                                    on={True}
                                     onClick={lambda { onToggleTag(t); }}
-                                >
-                                    {t}
-                                    <IconX
-                                        size={12}
-                                        className="text-primary-foreground/70"
-                                    />
-                                </Badge>
+                                />
                             }}
                             {for t in unselectedTags {
-                                <Badge
+                                <Chip
                                     key={"s-" + t}
-                                    variant="outline"
-                                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                                    title="Click to add"
+                                    label={t}
+                                    on={False}
                                     onClick={lambda { onToggleTag(t); }}
-                                >
-                                    {t}
-                                </Badge>
+                                />
                             }}
                             <Input
                                 placeholder={"Type a tag and press Enter"
@@ -256,21 +264,12 @@ def:pub MemberDialog(
                         {if len(projects) > 0 {
                             <div key="projects" className="flex flex-wrap gap-1.5">
                                 {for p in projects {
-                                    <Badge
+                                    <Chip
                                         key={jid(p)}
-                                        variant={"default"
-                                            if jid(p) in selectedProjectIds
-                                            else "outline"}
-                                        className={"cursor-pointer "
-                                            + (
-                                                ""
-                                                    if jid(p) in selectedProjectIds
-                                                    else "hover:bg-accent hover:text-accent-foreground"
-                                            )}
+                                        label={p.name}
+                                        on={jid(p) in selectedProjectIds}
                                         onClick={lambda { onToggleProject(jid(p)); }}
-                                    >
-                                        {p.name}
-                                    </Badge>
+                                    />
                                 }}
                             </div>
                         } else {

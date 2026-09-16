@@ -87,7 +87,7 @@ def:pub AssignMenu(
                 <button
                     type="button"
                     aria-label={label}
-                    className={"-ml-1.5 inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-left text-[13.5px] transition-colors duration-150 hover:border-input hover:bg-card aria-expanded:border-input aria-expanded:bg-card "
+                    className={"relative -left-1.5 inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-left text-[13.5px] transition-colors duration-150 hover:border-input hover:bg-card aria-expanded:border-input aria-expanded:bg-card "
                         + className}
                 >
                     <span

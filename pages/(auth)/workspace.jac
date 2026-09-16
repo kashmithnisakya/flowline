@@ -145,7 +145,7 @@ def:pub WorkspacePage -> JsxPage {
         if p.active
     ];
     allTags: list[str] = [];
-    for m in members {
+    for m in active {
         for tag in m.tags {
             if tag not in allTags {
                 allTags.append(tag);

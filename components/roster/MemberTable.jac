@@ -5,9 +5,7 @@ use the same menus and the same row menu (Edit, Archive).
 
 import from ...models { Project, MemberView }
 import from ..common.Avatar { Avatar }
-import from ..ui.button { Button }
 import from ..workspace.RowActions { RowActions }
-import from ..workspace.icons { IconPlus }
 import from .AssignMenu { AssignMenu }
 
 def:pub MemberTable(
@@ -44,17 +42,6 @@ def:pub MemberTable(
                         if query
                         else "People do not need an account. Add them to assign work and sign log entries."}
                 </p>
-                {if onCreate and not query {
-                    <Button
-                        key="cta"
-                        size="sm"
-                        className="mt-2"
-                        onClick={lambda { onCreate(); }}
-                    >
-                        <IconPlus/>
-                        Add person
-                    </Button>
-                }}
             </div>;
     }
 
@@ -153,7 +140,9 @@ def:pub MemberTable(
                         <Avatar name={m.name} size="md" color={m.color}/>
                         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <div className="truncate text-sm font-medium">{m.name}</div>
-                            <div className="flex min-w-0 items-center gap-x-1.5">
+                            <div
+                                className="flex min-w-0 flex-wrap items-center gap-x-3"
+                            >
                                 <AssignMenu
                                     label={"Roles for " + m.name}
                                     values={roleOptions}
@@ -167,12 +156,6 @@ def:pub MemberTable(
                                         m.id, next
                                     ); }}
                                 />
-                                <span
-                                    className="shrink-0 text-subtle"
-                                    aria-hidden="true"
-                                >
-                                    ·
-                                </span>
                                 <AssignMenu
                                     label={"Projects for " + m.name}
                                     values={projectIds}

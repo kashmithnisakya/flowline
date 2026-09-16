@@ -124,7 +124,8 @@ def:pub RolesSection(
             } else {
                 <div key="rows" className="surface">
                     <div
-                        className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground md:grid"
+                        className={"hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground "
+                            + ("md:grid" if len(cards) > 0 else "")}
                     >
                         <span>Role</span>
                         <span>Held by</span>

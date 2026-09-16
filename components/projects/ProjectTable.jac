@@ -5,9 +5,7 @@ columns fold into a meta line on a phone.
 
 import from ...models { Project, RepoView, MemberView }
 import from ..common.Avatar { AvatarStack }
-import from ..ui.button { Button }
 import from ..workspace.RowActions { RowActions }
-import from ..workspace.icons { IconPlus }
 
 def:pub ProjectTable(
     projects: list[Project],
@@ -28,17 +26,6 @@ def:pub ProjectTable(
                 <p className="max-w-sm text-sm text-muted-foreground">
                     Tasks, log entries and repositories all belong to a project.
                 </p>
-                {if onCreate {
-                    <Button
-                        key="cta"
-                        size="sm"
-                        className="mt-2"
-                        onClick={lambda { onCreate(); }}
-                    >
-                        <IconPlus/>
-                        New project
-                    </Button>
-                }}
             </div>;
     }
 
