@@ -82,6 +82,28 @@ def:pub Composer(
             </p>;
     }
 
+    # Radix clears a Select inside a form to "" while its items are still
+    # unloaded; taking that as a pick would wipe the remembered choice.
+    def pickWho(v: str) {
+        if v {
+            who = v;
+            remember(MEMBER_KEY, v);
+        }
+    }
+
+    def pickProject(v: str) {
+        if v {
+            project = v;
+            remember(PROJECT_KEY, v);
+        }
+    }
+
+    def pickStatus(v: str) {
+        if v {
+            status = v;
+        }
+    }
+
     async def submit -> None {
         if saving {
             return;
@@ -121,13 +143,7 @@ def:pub Composer(
                 value={draft}
                 onChange={lambda (e: ChangeEvent) { draft = e.target.value; }}
             />
-            <Select
-                value={whoValue}
-                onValueChange={lambda (v: str) {
-                    who = v;
-                    remember(MEMBER_KEY, v);
-                }}
-            >
+            <Select value={whoValue} onValueChange={pickWho}>
                 <SelectTrigger className={PICK} aria-label="Who">
                     <SelectValue placeholder="Who"/>
                 </SelectTrigger>
@@ -137,13 +153,7 @@ def:pub Composer(
                     }}
                 </SelectContent>
             </Select>
-            <Select
-                value={projectValue}
-                onValueChange={lambda (v: str) {
-                    project = v;
-                    remember(PROJECT_KEY, v);
-                }}
-            >
+            <Select value={projectValue} onValueChange={pickProject}>
                 <SelectTrigger className={PICK} aria-label="Project">
                     <SelectValue placeholder="Project"/>
                 </SelectTrigger>
@@ -154,7 +164,7 @@ def:pub Composer(
                     }}
                 </SelectContent>
             </Select>
-            <Select value={status} onValueChange={lambda (v: str) { status = v; }}>
+            <Select value={status} onValueChange={pickStatus}>
                 <SelectTrigger className={PICK} aria-label="Status">
                     <SelectValue placeholder="Status"/>
                 </SelectTrigger>

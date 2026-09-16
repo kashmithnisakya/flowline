@@ -211,6 +211,34 @@ def overdueText(days: int) -> str {
     return ("1 day" if days == 1 else str(days) + " days") + " overdue.";
 }
 
+# "Imported 3 issues from org/repo" ("closed issues" when they came in Done).
+def importedLine(n: int, repo: str, kind: str) -> str {
+    return "Imported "
+        + str(n)
+        + (" closed issues" if kind == "done" else " issues")
+        + " from "
+        + repo;
+}
+
+# A roster note in the voice of its section, for notes that do not open with
+# a past-tense verb ("Design review for opt-in", "Waiting on keys").
+def noteLine(who: str, text: str, kind: str) -> str {
+    body = lowerFirst(text);
+    if kind == "blocked" {
+        return who + " is stuck: " + body;
+    }
+    if kind == "done" {
+        return who + " finished " + body;
+    }
+    if kind == "handoff" {
+        return who + " handed off " + body;
+    }
+    if kind == "start" {
+        return "Up next for " + who + ": " + body;
+    }
+    return who + " worked on " + body;
+}
+
 # One entry as words around its task title: {lead, title, tail}. `who` is the
 # subject ("" writes the timeline's verb-first form); `prose` adds the stop.
 # A hand-off names the new owner, since member_name is already theirs.
@@ -223,17 +251,23 @@ def phrase(e: LogEntry, who: str, roster: list[str], prose: bool) -> dict[str, s
         if not who {
             return {"lead": text, "title": "", "tail": ""};
         }
-        if pastTense(act.split(" ")[0]) {
+        kind = kindOf(e.status);
+        if kind != "blocked" and pastTense(act.split(" ")[0]) {
             return {"lead": who + " " + lowerFirst(text), "title": "", "tail": ""};
         }
-        return {"lead": who + ": " + text, "title": "", "tail": ""};
+        return {"lead": noteLine(who, text, kind), "title": "", "tail": ""};
     }
+    # Task events do not record who acted, so creation names the assignees
+    # as the owners rather than as the people who added it.
     if act.startswith("Added to ") {
-        return {
-            "lead": (who + " added " if who else "Added "),
-            "title": title,
-            "tail": " to " + act[9:] + stop
-        };
+        if prose {
+            return {
+                "lead": "",
+                "title": title,
+                "tail": " added to " + act[9:] + (" for " + who if who else "") + "."
+            };
+        }
+        return {"lead": "Added ", "title": title, "tail": " to " + act[9:] + stop};
     }
     if act.startswith("Moved to ") {
         bits = act[9:].split(" · ");
@@ -298,7 +332,7 @@ def phrase(e: LogEntry, who: str, roster: list[str], prose: bool) -> dict[str, s
     if act.startswith(IMPORT_PREFIX) {
         source = act[len(IMPORT_PREFIX):];
         return {
-            "lead": (who + " imported " if who else "Imported "),
+            "lead": "Imported ",
             "title": title,
             "tail": " from "
                 + (source.split(" #")[0] if e.issue_link and not prose else source)
@@ -308,7 +342,7 @@ def phrase(e: LogEntry, who: str, roster: list[str], prose: bool) -> dict[str, s
     if act.startswith("Opened GitHub issue ") {
         source = act[20:];
         return {
-            "lead": (who + " opened " if who else "Opened ")
+            "lead": ("Opened GitHub issue " if prose else "Opened ")
                 + (
                     "an issue in " + source.split(" #")[0]
                         if e.issue_link and not prose
@@ -397,67 +431,52 @@ def buildSections(
         if e.task_id and (kind == "blocked" or e.task_id in liveIds) {
             continue;
         }
+        # Imports fold per repo and per kind, so a closed issue reads as Finished.
         if e.task_id and e.activity.startswith(IMPORT_PREFIX) {
-            repo = e.activity[len(IMPORT_PREFIX):].split(" #")[0];
-            if repo not in importCount {
-                importRepos.append(repo);
-                importCount[repo] = 0;
-                importFirst[repo] = e;
-                importAt[repo] = "";
+            ikey = kind + "|" + e.activity[len(IMPORT_PREFIX):].split(" #")[0];
+            if ikey not in importCount {
+                importRepos.append(ikey);
+                importCount[ikey] = 0;
+                importFirst[ikey] = e;
+                importAt[ikey] = "";
             }
-            importCount[repo] = importCount[repo] + 1;
-            if (e.date + e.at) > importAt[repo] {
-                importAt[repo] = e.date + e.at;
+            importCount[ikey] = importCount[ikey] + 1;
+            if (e.date + e.at) > importAt[ikey] {
+                importAt[ikey] = e.date + e.at;
             }
             continue;
         }
         who = namesOf(people(e), roster);
-        if kind == "blocked" {
-            out["blocked"].append(
-                lineOf(
-                    {"lead": endStop(e.activity), "title": "", "tail": ""},
-                    "",
-                    " · ".join(
-                        [
-                            x
-                            for x in [e.project_name, who]
-                            if x
-                        ]
-                    ),
-                    e.date + e.at
-                )
-            );
-            continue;
-        }
         out[kind].append(
             lineOf(
                 phrase(e, who, roster, True), e.task_id, e.project_name, e.date + e.at
             )
         );
     }
-    for repo in importRepos {
-        n = importCount[repo];
-        first = importFirst[repo];
+    for ikey in importRepos {
+        n = importCount[ikey];
+        first = importFirst[ikey];
+        ikind = kindOf(first.status);
         if n == 1 {
-            out["start"].append(
+            out[ikind].append(
                 lineOf(
-                    phrase(first, namesOf(people(first), roster), roster, True),
+                    phrase(first, "", roster, True),
                     first.task_id,
                     first.project_name,
-                    importAt[repo]
+                    importAt[ikey]
                 )
             );
         } else {
-            out["start"].append(
+            out[ikind].append(
                 lineOf(
                     {
-                        "lead": "Imported " + str(n) + " issues from " + repo + ".",
+                        "lead": importedLine(n, ikey[len(ikind) + 1:], ikind) + ".",
                         "title": "",
                         "tail": ""
                     },
                     "",
                     first.project_name,
-                    importAt[repo]
+                    importAt[ikey]
                 )
             );
         }
@@ -688,23 +707,62 @@ def:pub Standup(
         </section>;
 }
 
-# "https://github.com/org/repo/pull/42" -> "42" ("" when it is not a number).
-def refNumber(url: str) -> str {
-    parts = [
-        p
-        for p in url.split("/")
-        if p
-    ];
-    if len(parts) == 0 {
-        return "";
+def isDigits(s: str) -> bool {
+    if len(s) == 0 {
+        return False;
     }
-    tail = parts[len(parts) - 1];
-    for ch in tail {
+    for ch in s {
         if ch not in "0123456789" {
-            return "";
+            return False;
         }
     }
-    return tail;
+    return True;
+}
+
+# A tracker key such as "MKT-12" (Linear, Jira).
+def isTrackerKey(s: str) -> bool {
+    bits = s.split("-");
+    if len(bits) != 2 or len(bits[0]) == 0 or not isDigits(bits[1]) {
+        return False;
+    }
+    return bits[0] == bits[0].upper() and bits[0][0] not in "0123456789";
+}
+
+# A link's short name: "#42" for a numbered issue, pull or merge request
+# (anchors and /files ignored), "MKT-12" for a tracker key, else "".
+def refLabel(url: str) -> str {
+    parts = [
+        p
+        for p in url.split("#")[0].split("?")[0].split("/")
+        if p
+    ];
+    for (i, p) in enumerate(parts) {
+        if p in ["issues", "issue", "pull", "pulls", "merge_requests"]
+            and i + 1 < len(parts)
+            and isDigits(parts[i + 1]) {
+            return "#" + parts[i + 1];
+        }
+    }
+    for p in parts[1:] {
+        if isTrackerKey(p) {
+            return p;
+        }
+    }
+    if len(parts) > 1 and isDigits(parts[len(parts) - 1]) {
+        return "#" + parts[len(parts) - 1];
+    }
+    return "";
+}
+
+# Every link shows: numbered when the URL says so, else by what it is.
+def issueLabel(url: str) -> str {
+    ref = refLabel(url);
+    return ref or "Issue";
+}
+
+def prLabel(url: str) -> str {
+    ref = refLabel(url);
+    return "PR " + ref if ref else "PR";
 }
 
 # Timeline rows newest first; rows without a stamp go last in their day.
@@ -722,14 +780,12 @@ def timelineRows(
     for e in ordered {
         if fold and e.task_id and e.activity.startswith(IMPORT_PREFIX) {
             repo = e.activity[len(IMPORT_PREFIX):].split(" #")[0];
-            fkey = e.date + "|" + repo;
+            kind = kindOf(e.status);
+            fkey = e.date + "|" + repo + "|" + kind;
             if fkey in folded {
                 grown = folded[fkey];
                 grown["count"] = grown["count"] + 1;
-                grown["lead"] = "Imported "
-                    + str(grown["count"])
-                    + " issues from "
-                    + repo;
+                grown["lead"] = importedLine(grown["count"], repo, kind);
                 grown["title"] = "";
                 grown["tail"] = "";
                 grown["task"] = "";
@@ -742,14 +798,14 @@ def timelineRows(
                 "id": jid(e),
                 "date": e.date,
                 "time": clock(e.at),
-                "kind": "start",
+                "kind": kind,
                 "lead": parts["lead"],
                 "title": parts["title"],
                 "tail": parts["tail"],
                 "task": e.task_id,
                 "who": "GitHub",
                 "notes": "",
-                "issue": refNumber(e.issue_link) if e.issue_link else "",
+                "issue": issueLabel(e.issue_link) if e.issue_link else "",
                 "pr": "",
                 "count": 1,
                 "entry": e
@@ -771,8 +827,8 @@ def timelineRows(
                 "task": e.task_id,
                 "who": ", ".join([shortName(n, roster) for n in people(e)]),
                 "notes": e.notes,
-                "issue": refNumber(e.issue_link) if e.issue_link else "",
-                "pr": refNumber(e.pr_link) if e.pr_link else "",
+                "issue": issueLabel(e.issue_link) if e.issue_link else "",
+                "pr": prLabel(e.pr_link) if e.pr_link else "",
                 "count": 1,
                 "entry": e
             }
@@ -871,10 +927,10 @@ def:pub LogTimeline(
                                 href={entryOf(r).issue_link}
                                 target="_blank"
                                 rel="noopener"
-                                title="Issue"
+                                title={entryOf(r).issue_link}
                                 className="num ml-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
                             >
-                                {"#" + r["issue"]}
+                                {r["issue"]}
                             </a>
                         }}
                         {if r["pr"] {
@@ -883,10 +939,10 @@ def:pub LogTimeline(
                                 href={entryOf(r).pr_link}
                                 target="_blank"
                                 rel="noopener"
-                                title="Pull request"
+                                title={entryOf(r).pr_link}
                                 className="num ml-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
                             >
-                                {"PR #" + r["pr"]}
+                                {r["pr"]}
                             </a>
                         }}
                         {if r["notes"] {
