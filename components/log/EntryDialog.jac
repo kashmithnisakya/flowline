@@ -3,16 +3,6 @@ page. Create picks a member and a date (LogActivity needs both); edit shows
 them as context because UpdateLogEntry cannot move a row between people or
 days. Edit prefills every field: the walker overwrites, it does not merge."""
 
-# constants.jac is server-only (imported by walkers); define the vocabulary locally.
-glob STATUSES: list[str] = [
-         "Backlog",
-         "In Progress",
-         "Review",
-         "Changes Requested",
-         "Done",
-         "Blocked"
-     ];
-
 import from ...models { Project, MemberView }
 import from .DatePicker { DatePicker }
 import from ..ui.button { Button }
@@ -35,9 +25,18 @@ import from ..ui.select {
     SelectItem
 }
 import from ..common.glyphs { Spinner }
+import from ..common.KindGlyph { KindGlyph }
 
 glob FIELD: str = "w-full",
-     WIDE: str = "grid gap-2 sm:col-span-2";
+     WIDE: str = "grid gap-2 sm:col-span-2",
+     # Status in the words of the standup section the entry lands in.
+     STATUS_CHOICES: list[dict[str, str]] = [
+         {"value": "In Progress", "kind": "active", "label": "In progress"},
+         {"value": "Done", "kind": "done", "label": "Finished"},
+         {"value": "Review", "kind": "handoff", "label": "Handed off"},
+         {"value": "Blocked", "kind": "blocked", "label": "Stuck"},
+         {"value": "Backlog", "kind": "start", "label": "To do"}
+     ];
 
 def:pub EntryDialog(
     open: bool,
@@ -57,7 +56,7 @@ def:pub EntryDialog(
     );
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="p-6 sm:max-w-lg">
+            <DialogContent className="bg-card p-6 sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
                         {"Edit log entry" if editing else "Add log entry"}
@@ -145,8 +144,23 @@ def:pub EntryDialog(
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">No status</SelectItem>
-                                {for s in STATUSES {
-                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                {for c in STATUS_CHOICES {
+                                    <SelectItem key={c["value"]} value={c["value"]}>
+                                        <KindGlyph
+                                            kind={c["kind"]}
+                                            className="text-muted-foreground [--kind-knockout:var(--popover)]"
+                                        />
+                                        {c["label"]}
+                                    </SelectItem>
+                                }}
+                                {if form["status"] == "Changes Requested" {
+                                    <SelectItem key="cr" value="Changes Requested">
+                                        <KindGlyph
+                                            kind="active"
+                                            className="text-muted-foreground [--kind-knockout:var(--popover)]"
+                                        />
+                                        Changes requested
+                                    </SelectItem>
                                 }}
                             </SelectContent>
                         </Select>
