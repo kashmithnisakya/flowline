@@ -177,7 +177,8 @@ def:pub AssistantDock(
         [open, docked]
     );
 
-    # The palette's "Ask" action hands its typed question over as an event.
+    # The palette's "Ask" action hands its typed question over as an event. The
+    # composer takes focus even when the panel was already open.
     useEffect(
         lambda {
             onAsk = lambda (e: any) {
@@ -186,6 +187,7 @@ def:pub AssistantDock(
                     mode = "ask";
                     quick("ask", question);
                 }
+                window.setTimeout(lambda { focusComposer(); }, 30);
             };
             window.addEventListener("flowline:ask", onAsk);
             return lambda { window.removeEventListener("flowline:ask", onAsk); };
@@ -204,6 +206,15 @@ def:pub AssistantDock(
     def focusComposer {
         if inputRef.current {
             inputRef.current.focus();
+        }
+    }
+
+    # A quick ask disables the button that ran it, so focus moves on to the
+    # composer. Not on a phone, where that would raise the keyboard.
+    def runQuick(kind: str, value: str) {
+        quick(kind, value);
+        if not narrow {
+            focusComposer();
         }
     }
 
@@ -319,6 +330,7 @@ def:pub AssistantDock(
         ref={logRef}
         className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3.5 py-3.5 text-[13.5px] leading-relaxed"
         aria-live="polite"
+        aria-busy={busy}
     >
         {if len(rows) == 0 {
             <div key="empty" className="space-y-3">
@@ -332,7 +344,7 @@ def:pub AssistantDock(
                             key={q["label"]}
                             type="button"
                             disabled={busy}
-                            onClick={lambda { quick(q["kind"], q["value"]); }}
+                            onClick={lambda { runQuick(q["kind"], q["value"]); }}
                             className="flex h-9 w-full items-center justify-between px-1 text-left text-[13.5px] text-foreground transition-colors hover:bg-accent disabled:opacity-50"
                         >
                             {q["label"]}
@@ -437,7 +449,7 @@ def:pub AssistantDock(
                         key={q["label"]}
                         type="button"
                         disabled={busy}
-                        onClick={lambda { quick(q["kind"], q["value"]); }}
+                        onClick={lambda { runQuick(q["kind"], q["value"]); }}
                         className="rounded-sm hover:text-foreground hover:underline disabled:opacity-50"
                     >
                         {q["label"]}
@@ -479,10 +491,10 @@ def:pub AssistantDock(
                 aria-label={"Ask a question"
                     if asking
                     else "Describe the task to add or move"}
-                disabled={busy}
+                readOnly={busy}
                 onChange={lambda (e: any) { draft = e.target.value; }}
                 onKeyDown={lambda (e: any) { if e.key == "Enter" { send(); }}}
-                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-2.5 text-[13.5px] placeholder:text-subtle focus-visible:outline-offset-[-1px] disabled:opacity-60"
+                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-card px-2.5 text-[13.5px] placeholder:text-subtle focus-visible:outline-offset-[-1px] read-only:opacity-60"
             />
             {if canListen {
                 <Button

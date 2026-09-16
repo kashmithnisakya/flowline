@@ -507,7 +507,7 @@ def:pub Shell -> JsxLayout {
                             >
                                 <PageIcon name="ask"/>
                                 Ask
-                                <span className="kbd hidden xl:inline-flex">
+                                <span className="kbd hidden md:inline-flex">
                                     {mod + "/"}
                                 </span>
                             </button>

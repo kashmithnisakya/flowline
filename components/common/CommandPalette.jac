@@ -96,6 +96,8 @@ glob PREFERENCES_PAGE: dict[str, str] = {
          {"key": "signout", "label": "Sign out", "keywords": "log out logout"}
      ],
      RECENT_KEY: str = "flowline-recent-tasks",
+     # `active` for the Ask row, which moves down as task results land.
+     ASK_PICKED: int = -2,
      MAX_TASKS: int = 8,
      MAX_RECENT: int = 5;
 
@@ -244,7 +246,7 @@ def:pub CommandPalette(
     open: bool, onOpenChange: Callable[[bool], None], canAsk: bool = True
 ) -> JsxElement {
     has query: str = "",
-        active: int = 0,
+        active: int = -1,
         tasks: list[TaskView] = [],
         recent: list[dict[str, str]] = [],
         steps: list[StepView] = [],
@@ -253,6 +255,8 @@ def:pub CommandPalette(
         # while it lags the box. A ref carries the latest query into the
         # timer so a slow answer to an old query cannot overwrite a newer one.
         searched: str = "",
+        # A query whose Enter came before its task search answered.
+        pendingEnter: str = "",
         latestRef: Ref[any] = Ref();
 
     location = useLocation();
@@ -265,6 +269,7 @@ def:pub CommandPalette(
             active = -1;
             tasks = [];
             searched = "";
+            pendingEnter = "";
             recent = readRecent();
         }},
         [open]
@@ -382,17 +387,24 @@ def:pub CommandPalette(
     nTasks = len(taskItems);
     total = nPages + nActions + nRecent + nTasks + (1 if askTail else 0);
 
+    askRow = total - 1 if askTail else -1;
     # Until the user moves, the cursor rests on the first row that is not the
-    # page they are already on.
+    # page they are already on, and never on Ask: an Enter typed before the
+    # task search answers must not spend a question.
     firstFree = 0;
     for (i, p) in enumerate(pageItems) {
         if firstFree == i and isCurrent(p["to"]) {
             firstFree = i + 1;
         }
     }
-    cursor = active
-        if active >= 0 and active < total
-        else (firstFree if firstFree < total else 0);
+    cursor = -1;
+    if active == ASK_PICKED and askTail {
+        cursor = askRow;
+    } elif active >= 0 and active < total and active != askRow {
+        cursor = active;
+    } elif firstFree < total - (1 if askTail else 0) {
+        cursor = firstFree;
+    }
 
     def close {
         onOpenChange(False);
@@ -461,17 +473,38 @@ def:pub CommandPalette(
         }
     }
 
+    def pick(index: int) {
+        active = ASK_PICKED if index == askRow else index;
+    }
+
+    # An Enter that beat the task search runs once the rows it was for land.
+    useEffect(
+        lambda { if pendingEnter and pendingEnter == searched and searched == q {
+            pendingEnter = "";
+            if cursor >= 0 {
+                runItem(cursor);
+            }
+        }},
+        [searched, pendingEnter]
+    );
+
     def onKey(e: KeyboardEvent) {
         if e.key == "ArrowDown" {
             e.preventDefault();
-            active = (cursor + 1) % total if total > 0 else 0;
+            if total > 0 {
+                pick(0 if cursor < 0 else (cursor + 1) % total);
+            }
         } elif e.key == "ArrowUp" {
             e.preventDefault();
-            active = (cursor - 1 + total) % total if total > 0 else 0;
+            if total > 0 {
+                pick(total - 1 if cursor < 0 else (cursor - 1 + total) % total);
+            }
         } elif e.key == "Enter" {
             e.preventDefault();
-            if total > 0 {
+            if cursor >= 0 {
                 runItem(cursor);
+            } elif len(q) >= 2 and searched != q {
+                pendingEnter = q;
             }
         } elif canAsk
             and (e.metaKey or e.ctrlKey)
@@ -507,6 +540,7 @@ def:pub CommandPalette(
                         onChange={lambda (e: any) {
                             query = e.target.value;
                             active = -1;
+                            pendingEnter = "";
                         }}
                         onKeyDown={onKey}
                         placeholder="Jump to a page, run an action, or find a task"
@@ -579,7 +613,10 @@ def:pub CommandPalette(
                                     />
                                     <span className="truncate">{a["label"]}</span>
                                     {if a["key"] == "ask" {
-                                        <span key="k" className="kbd ml-auto">
+                                        <span
+                                            key="k"
+                                            className="kbd ml-auto hidden sm:inline-flex"
+                                        >
                                             {mod + "/"}
                                         </span>
                                     }}
@@ -671,30 +708,40 @@ def:pub CommandPalette(
                             }}
                         </div>
                     }}
+                    {if len(q) >= 2 and total > 0 and nTasks == 0 {
+                        <div
+                            key="task-state"
+                            className="px-2.5 pt-2.5 pb-1 text-xs text-muted-foreground"
+                        >
+                            {"Searching tasks…" if searched != q else "No tasks match"}
+                        </div>
+                    }}
                     {if askTail {
                         <div key="ask">
                             <div className={groupClass}>Ask</div>
                             <button
                                 type="button"
                                 role="option"
-                                aria-selected={total - 1 == cursor}
-                                className={rowClass(total - 1)}
-                                onMouseMove={lambda { if active != total - 1 {
-                                    active = total - 1;
+                                aria-selected={askRow == cursor}
+                                className={rowClass(askRow)}
+                                onMouseMove={lambda { if active != ASK_PICKED {
+                                    active = ASK_PICKED;
                                 }}}
-                                onClick={lambda { runItem(total - 1); }}
+                                onClick={lambda { runItem(askRow); }}
                             >
                                 <PageIcon name="ask" className="text-muted-foreground"/>
                                 <span className="truncate">
                                     {"Ask “" + query.strip() + "”"}
                                 </span>
-                                <span className="kbd ml-auto">{mod + "/"}</span>
+                                <span className="kbd ml-auto hidden sm:inline-flex">
+                                    {mod + "/"}
+                                </span>
                             </button>
                         </div>
                     }}
                 </div>
                 <div
-                    className="flex items-center gap-3 border-t px-3.5 py-2 text-xs text-muted-foreground"
+                    className="hidden items-center gap-3 border-t px-3.5 py-2 text-xs text-muted-foreground sm:flex"
                 >
                     <span className="flex items-center gap-1.5">
                         <span className="kbd">↑↓</span>
