@@ -93,7 +93,7 @@ def main() -> int:
     status, ctype, raw = req("GET", "/", accept="text/html")
     html = raw.decode(errors="replace")
     check("GET / is the app shell", status == 200 and "text/html" in ctype
-          and "<title>flowline</title>" in html, f"{status} {ctype}")
+          and "<title>Flowline</title>" in html, f"{status} {ctype}")
     script = re.search(r'src="(/static/client\.js[^"]*)"', html)
     if check("shell references the client bundle", script is not None):
         status, ctype, js = req("GET", script.group(1))
@@ -101,7 +101,7 @@ def main() -> int:
               and len(js) > 100_000, f"{status} {ctype} {len(js)} bytes")
     status, _, raw = req("GET", "/board", accept="text/html")
     check("GET /board serves the shell (SPA fallback)",
-          status == 200 and "<title>flowline</title>" in raw.decode(errors="replace"), str(status))
+          status == 200 and "<title>Flowline</title>" in raw.decode(errors="replace"), str(status))
 
     status, _, _ = req("POST", "/walker/ListProjects", {})
     check("anonymous walker call is 401", status == 401, str(status))
