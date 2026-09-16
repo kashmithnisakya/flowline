@@ -515,7 +515,7 @@ def:pub SetupPage -> JsxPage {
                                                     else "text-subtle"}
                                             />
                                             {t["name"]}
-                                            {if i == 0 {
+                                            {if t["key"] == "simple" {
                                                 <span
                                                     key="rec"
                                                     className="ml-auto text-xs font-medium text-success"

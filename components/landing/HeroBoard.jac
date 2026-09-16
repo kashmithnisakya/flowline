@@ -211,7 +211,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
     }
 
     return
-        <div className="mt-6 mb-2">
+        <div className="mt-5 mb-2">
             <div
                 role="group"
                 aria-label="Sample board you can try"
