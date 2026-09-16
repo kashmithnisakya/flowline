@@ -26,7 +26,7 @@ impl RoadmapPage.loadRoadmap -> None {
         result = root spawn RoadmapSnapshot(
             from_date=windowStart,
             to_date=shiftIso(windowStart, WEEKS * 7 - 1),
-            project_id="" if fProject == "all" else fProject
+            project_id=fProject
         );
         if reqRef.current == seq {
             data = result.reports[0] if result.reports else None;
@@ -46,10 +46,50 @@ impl RoadmapPage.reloadIterations -> None {
     try {
         iResult = root spawn ListIterations();
         iterations = iResult.reports[0] if iResult.reports else [];
+        # A deleted iteration cannot stay the filter.
+        kept = False;
+        for it in iterations {
+            if it.id == fIteration {
+                kept = True;
+            }
+        }
+        if not kept {
+            fIteration = "";
+        }
     } except Exception as e {
         toast("Could not reload the iterations");
     }
     await loadRoadmap();
+}
+
+# ------------------------------------------------------------- window and filters
+# Moving the window by hand drops the iteration filter: the picked box would
+# otherwise scroll out of the weeks on screen and leave the timeline empty.
+
+impl RoadmapPage.stepWindow(weeksDelta: int) -> None {
+    fIteration = "";
+    windowStart = shiftIso(windowStart, 7 * weeksDelta);
+}
+
+impl RoadmapPage.goToday -> None {
+    fIteration = "";
+    windowStart = shiftIso(mondayOf(todayIso()), -7 * LEAD_WEEKS);
+}
+
+# Picking an iteration narrows the rows to it and moves the window over it,
+# with a week of lead so the bars do not start at the very edge.
+impl RoadmapPage.jumpToIteration(iterationId: str) -> None {
+    fIteration = iterationId;
+    for it in iterations {
+        if it.id == iterationId {
+            windowStart = shiftIso(mondayOf(it.start_date), -7);
+        }
+    }
+}
+
+impl RoadmapPage.clearFilters -> None {
+    fIteration = "";
+    fProject = "";
 }
 
 # ------------------------------------------------------------------ columns
@@ -134,6 +174,24 @@ impl RoadmapPage.openTask(tid: str) -> None {
             taskAssignees = t.assignee_ids;
             taskOpen = True;
         }
+    }
+}
+
+# Closing hands focus back to the row that opened the task, so a keyboard user
+# keeps their place. The dialog does not restore it on its own.
+impl RoadmapPage.closeTask(isOpen: bool) -> None {
+    taskOpen = isOpen;
+    if not isOpen {
+        tid = editTaskId;
+        window.setTimeout(
+            lambda {
+                row: any = document.querySelector('[data-task-card="' + tid + '"]');
+                if row {
+                    row.focus({"preventScroll": True});
+                }
+            },
+            0
+        );
     }
 }
 
@@ -222,7 +280,7 @@ impl RoadmapPage.saveTask -> None {
             assignee_ids=taskAssignees,
             project_id=project
         );
-        taskOpen = False;
+        closeTask(False);
         await loadRoadmap();
     } except Exception as e {
         toast("Failed to save task");
@@ -237,7 +295,7 @@ impl RoadmapPage.deleteTask -> None {
     taskSaving = True;
     try {
         root spawn DeleteTask(task_id=editTaskId);
-        taskOpen = False;
+        closeTask(False);
         await loadRoadmap();
     } except Exception as e {
         toast("Failed to delete task");
