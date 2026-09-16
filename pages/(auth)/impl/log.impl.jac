@@ -8,9 +8,6 @@ impl DailyLogPage.loadWeek -> None {
     weekReqRef.current = seq;
     monday = mondayOf(selectedDate);
     sunday = shiftDay(monday, 6);
-    # From the Friday before: a Monday standup reads back to it, and Stuck
-    # sees a task blocked late last week.
-    start = shiftDay(monday, -3);
     # A cold week (a Monday other than the one on screen) re-enters the
     # skeleton; day hops inside the loaded week stay an instant local filter.
     if monday != loadedMonday {
@@ -26,7 +23,7 @@ impl DailyLogPage.loadWeek -> None {
         more = True;
         while more and pageNo <= 10 {
             result = root spawn ListLogEntries(
-                from_date=start, to_date=sunday, page=pageNo, page_size=500
+                from_date=monday, to_date=sunday, page=pageNo, page_size=500
             );
             got = result.reports[0] if result.reports else None;
             if not got {
@@ -35,13 +32,17 @@ impl DailyLogPage.loadWeek -> None {
                 gathered = gathered + got.rows;
                 more = got.has_more;
                 if weekReqRef.current == seq {
-                    # Wire order is newest day first; the components order a
-                    # day by its stamps themselves.
-                    entries = [r for r in gathered];
+                    # The wire order is newest day first (so page 1 is the
+                    # end of the week); the table reads chronologically, so
+                    # the assembled week is sorted back before it renders.
+                    shownRows = [r for r in gathered];
+                    shownRows.sort(
+                        key=lambda (r: LogEntry) { r.date + r.member_name; }
+                    );
+                    entries = shownRows;
                     weekTotal = got.total;
-                    weekLoaded = len(gathered);
+                    weekLoaded = len(shownRows);
                     loadedMonday = monday;
-                    loadedFrom = start;
                     loadFailed = False;
                     loading = False;
                 }
@@ -60,7 +61,6 @@ impl DailyLogPage.loadWeek -> None {
             ];
             members = active;
             memberNames = [m.name for m in active];
-            rosterReady = True;
         }
         if len(projects) == 0 {
             pResult = root spawn ListProjects();
@@ -70,9 +70,6 @@ impl DailyLogPage.loadWeek -> None {
                 for p in allProjects
                 if p.active
             ];
-        }
-        if not blockedLive {
-            loadBlocked();
         }
     } except Exception as e {
         # The page says so itself (panel or strip); no toast.
@@ -87,40 +84,20 @@ impl DailyLogPage.loadWeek -> None {
     }
 }
 
-impl DailyLogPage.loadBlocked -> None {
-    # "attention" lists blocked tasks first; a failure keeps Stuck on the log.
-    try {
-        result = root spawn ListTasks(scope="attention", page_size=100);
-        got = result.reports[0] if result.reports else None;
-        if got {
-            blockedTasks = [
-                t
-                for t in got.rows
-                if t.status == "Blocked"
-            ];
-            blockedLive = True;
-        }
-    } except Exception as e {
-        blockedLive = False;
-    }
-}
-
 impl DailyLogPage.retryLoad -> None {
     retrying = True;
     await loadWeek();
 }
 
-# `rowId`, not `entryId`: a parameter named like a `has` field compiles to
-# that field's state cell, so every toggle used to add the edit dialog's id.
-impl DailyLogPage.toggleSelect(rowId: str) -> None {
-    if rowId in selectedIds {
+impl DailyLogPage.toggleSelect(entryId: str) -> None {
+    if entryId in selectedIds {
         selectedIds = [
             i
             for i in selectedIds
-            if i != rowId
+            if i != entryId
         ];
     } else {
-        selectedIds = selectedIds + [rowId];
+        selectedIds = selectedIds + [entryId];
     }
 }
 
@@ -128,25 +105,13 @@ impl DailyLogPage.deleteSelected -> None {
     if len(selectedIds) == 0 {
         return;
     }
-    gone = [i for i in selectedIds];
     try {
-        root spawn DeleteLogEntries(entry_ids=gone);
+        root spawn DeleteLogEntries(entry_ids=selectedIds);
         selecting = False;
         selectedIds = [];
-        entries = [
-            e
-            for e in entries
-            if jid(e) not in gone
-        ];
         await loadWeek();
-        # A cached read can still carry the rows; they cannot come back.
-        entries = [
-            e
-            for e in entries
-            if jid(e) not in gone
-        ];
     } except Exception as e {
-        toast.error("Failed to delete the selected entries");
+        toast("Failed to delete the selected entries");
     }
 }
 
@@ -201,10 +166,10 @@ impl DailyLogPage.saveEntry -> None {
     if not entryForm["activity"].strip() {
         return;
     }
-    if entryEditing {
-        chosenStatus = "" if entryForm["status"] == "none" else entryForm["status"];
-        entrySaving = True;
-        try {
+    chosenStatus = "" if entryForm["status"] == "none" else entryForm["status"];
+    try {
+        if entryEditing {
+            entrySaving = True;
             uResult = root spawn UpdateLogEntry(
                 entry_id=entryId,
                 activity=entryForm["activity"].strip(),
@@ -222,98 +187,40 @@ impl DailyLogPage.saveEntry -> None {
             if updatedRow {
                 entries = [(updatedRow if jid(e) == entryId else e) for e in entries];
             }
-            entryOpen = False;
-            toast.success("Entry updated");
-        } except Exception as e {
-            toast.error("Could not save the entry");
-        }
-        entrySaving = False;
-        return;
-    }
-    if not entryForm["member"] {
-        return;
-    }
-    entrySaving = True;
-    ok = await createEntry(entryForm);
-    if ok {
-        entryOpen = False;
-        toast.success("Entry added");
-    }
-    entrySaving = False;
-}
-
-impl DailyLogPage.createEntry(fields: dict[str, str]) -> bool {
-    # The one create path: the dialog and the composer both land here.
-    chosenStatus = "" if fields["status"] == "none" else fields["status"];
-    try {
-        result = root spawn LogActivity(
-            date=fields["date"],
-            member_id=fields["member"],
-            activity=fields["activity"].strip(),
-            project_id=("" if fields["project"] == "none" else fields["project"]),
-            category=fields["category"],
-            issue_link=fields["issue_link"],
-            pr_link=fields["pr_link"],
-            status=chosenStatus,
-            notes=fields["notes"]
-        );
-        added = result.reports[0] if result.reports else None;
-        if not added {
-            toast.error("Could not save the entry");
-            return False;
-        }
-        # A row for another day jumps there and the [selectedDate] effect
-        # fetches it; one for this day shows at once and survives a cached read.
-        if fields["date"] != selectedDate {
-            selectedDate = fields["date"];
+            toast("Entry updated");
         } else {
-            entries = entries + [added];
-            await loadWeek();
-            if jid(added) not in [jid(e) for e in entries] {
-                entries = entries + [added];
+            if not entryForm["member"] {
+                return;
+            }
+            entrySaving = True;
+            root spawn LogActivity(
+                date=entryForm["date"],
+                member_id=entryForm["member"],
+                activity=entryForm["activity"].strip(),
+                project_id=(
+                    "" if entryForm["project"] == "none" else entryForm["project"]
+                ),
+                category=entryForm["category"],
+                issue_link=entryForm["issue_link"],
+                pr_link=entryForm["pr_link"],
+                status=chosenStatus,
+                notes=entryForm["notes"]
+            );
+            toast("Entry added");
+        }
+        entryOpen = False;
+        # A new entry can land outside the loaded week; jumping selectedDate
+        # there lets the [selectedDate] effect fetch and show that day. An
+        # edit already patched `entries` and must not refetch over it.
+        if not entryEditing {
+            if entryForm["date"] != selectedDate {
+                selectedDate = entryForm["date"];
+            } else {
+                await loadWeek();
             }
         }
-        return True;
     } except Exception as e {
-        toast.error("Could not save the entry");
+        toast("Could not save the entry");
     }
-    return False;
-}
-
-impl DailyLogPage.quickLog(fields: dict[str, str]) -> bool {
-    quickSaving = True;
-    ok = await createEntry(
-        {
-            "date": selectedDate or todayIso(),
-            "member": fields["member"],
-            "activity": fields["activity"],
-            "project": fields["project"],
-            "category": "",
-            "status": fields["status"],
-            "issue_link": "",
-            "pr_link": "",
-            "notes": ""
-        }
-    );
-    quickSaving = False;
-    return ok;
-}
-
-impl DailyLogPage.logNote -> None {
-    if viewMode != "day" or selecting {
-        viewMode = "day";
-        selecting = False;
-        selectedIds = [];
-        window.setTimeout(lambda { focusComposer(); }, 50);
-        return;
-    }
-    focusComposer();
-}
-
-impl DailyLogPage.step(direction: int) -> None {
-    if selectedDate {
-        selectedDate = shiftDay(
-            selectedDate, direction * (7 if viewMode == "week" else 1)
-        );
-    }
+    entrySaving = False;
 }

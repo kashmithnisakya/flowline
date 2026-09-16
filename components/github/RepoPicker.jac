@@ -1,10 +1,10 @@
-"""Browse the repositories the installation was granted, and add one. Adding
-writes a Repo node on this workspace (the same one Projects manages), which
-makes the issue and PR tables addressable. Repositories already added stay
-visible, marked.
+"""Browse the repositories the installation was granted, and attach one.
+Attaching writes a Repo node on this workspace (the same one Projects manages),
+which makes the issue and PR tables addressable. Attached rows stay visible.
 """
 
 import from ...models { Project, GhRepoRow }
+import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.dialog { Dialog, DialogContent, DialogHeader, DialogTitle }
 import from ..ui.input { Input }
@@ -18,7 +18,6 @@ import from ..ui.select {
 }
 import from ..ui.skeleton { Skeleton }
 import from ..common.glyphs { Spinner }
-import from ..workspace.icons { IconCheck }
 
 def:pub RepoPicker(
     open: bool,
@@ -41,44 +40,33 @@ def:pub RepoPicker(
 ) -> JsxElement {
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="bg-card sm:max-w-2xl">
+            <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle className="section-title">
-                        Add a repository
-                    </DialogTitle>
+                    <DialogTitle>Browse GitHub repos</DialogTitle>
                 </DialogHeader>
-                <div className="flex flex-col gap-3">
-                    <form
-                        className="flex gap-2"
-                        onSubmit={lambda (e: FormEvent) {
-                            e.preventDefault();
-                            onSearch();
-                        }}
-                    >
+                <div className="grid gap-3">
+                    <div className="flex gap-2">
                         <Input
-                            className="h-9"
                             placeholder="Filter by name"
                             value={query}
                             onChange={lambda (e: ChangeEvent) { onQuery(
                                 e.target.value
                             ); }}
+                            onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Enter" {
+                                onSearch();
+                            }}}
                         />
-                        <Button
-                            type="submit"
-                            variant="outline"
-                            size="lg"
-                            disabled={loading}
-                        >
+                        <Button variant="outline" onClick={onSearch} disabled={loading}>
                             {if loading {
                                 <Spinner key="sp"/>
                             }}
-                            {"Loading repositories…" if loading else "Search"}
+                            {"Asking…" if loading else "Search"}
                         </Button>
-                    </form>
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="repo-project">Issues land in</Label>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Attach to project</Label>
                         <Select value={projectId} onValueChange={onProject}>
-                            <SelectTrigger id="repo-project" className="h-9">
+                            <SelectTrigger>
                                 <SelectValue placeholder="Pick a project"/>
                             </SelectTrigger>
                             <SelectContent>
@@ -89,45 +77,56 @@ def:pub RepoPicker(
                                 }}
                             </SelectContent>
                         </Select>
-                        {if not projectId {
-                            <p key="need" className="text-xs text-muted-foreground">
-                                Pick the project first, then add a repository.
-                            </p>
-                        }}
                     </div>
                 </div>
-                <div className="surface max-h-80 overflow-y-auto">
+                <div className="max-h-80 space-y-2 overflow-y-auto">
                     {if loading {
-                        <div key="loading" className="flex flex-col divide-y">
+                        <div key="loading" className="space-y-2">
                             {for i in [0, 1, 2] {
                                 <div
                                     key={"sk-" + str(i)}
-                                    className="flex items-center gap-3 px-3 py-2.5"
+                                    className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
                                 >
-                                    <Skeleton className="h-4 w-40 max-w-full"/>
-                                    <Skeleton className="ml-auto h-7 w-16 shrink-0"/>
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                        <Skeleton className="h-4 w-40 max-w-full"/>
+                                        <Skeleton className="h-3 w-56 max-w-full"/>
+                                    </div>
+                                    <Skeleton className="h-7 w-16 shrink-0 rounded-lg"/>
                                 </div>
                             }}
                         </div>
                     } else {
-                        <div key="list" className="flex flex-col">
+                        <div key="list" className="space-y-2">
                             {if len(rows) == 0 {
                                 <div
                                     key="empty"
-                                    className="flex flex-col items-center gap-1.5 px-6 py-10 text-center"
+                                    className="space-y-2 py-8 text-center text-sm text-muted-foreground"
                                 >
-                                    <p className="text-sm font-semibold">
-                                        Nothing here to add
-                                    </p>
-                                    <p
-                                        className="max-w-sm text-[13px] text-muted-foreground"
+                                    <svg
+                                        className="mx-auto text-muted-foreground/50"
+                                        width={24}
+                                        height={24}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
                                     >
-                                        {"Only repositories you granted the App show up. Grant more from your "}
+                                        <path
+                                            d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"
+                                        />
+                                    </svg>
+                                    <p className="font-medium text-foreground">
+                                        Nothing here to attach.
+                                    </p>
+                                    <p className="text-xs">
+                                        Only repositories granted to the installation show up. Grant more from your{" "}
                                         <a
                                             href="https://github.com/settings/installations"
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="text-primary underline-offset-2 hover:underline"
+                                            className="font-medium text-primary underline-offset-2 hover:underline"
                                         >
                                             GitHub installation settings
                                         </a>
@@ -135,77 +134,78 @@ def:pub RepoPicker(
                                     </p>
                                 </div>
                             }}
-                            <ul className="divide-y">
-                                {for r in rows {
-                                    <li
-                                        key={r.full_name}
-                                        className="flex items-center gap-3 px-3 py-2.5"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="num truncate text-[13px] font-medium"
+                            {for r in rows {
+                                <div
+                                    key={r.full_name}
+                                    className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
+                                >
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className="truncate text-sm font-medium"
+                                            >
+                                                {r.full_name}
+                                            </span>
+                                            {if r.private {
+                                                <Badge
+                                                    key="priv"
+                                                    variant="outline"
+                                                    className="font-normal"
                                                 >
-                                                    {r.full_name}
-                                                </span>
-                                                {if r.private {
-                                                    <span
-                                                        key="priv"
-                                                        className="shrink-0 text-xs text-subtle"
-                                                    >
-                                                        Private
-                                                    </span>
-                                                }}
-                                            </div>
-                                            {if r.description {
-                                                <p
-                                                    key="desc"
-                                                    className="truncate text-xs text-muted-foreground"
-                                                >
-                                                    {r.description}
-                                                </p>
+                                                    Private
+                                                </Badge>
                                             }}
                                         </div>
-                                        {if r.attached {
-                                            <span
-                                                key="on"
-                                                className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-muted-foreground"
+                                        <p
+                                            className="line-clamp-2 text-xs text-muted-foreground"
+                                        >
+                                            {r.description
+                                                or "No description on GitHub."}
+                                        </p>
+                                    </div>
+                                    {if r.attached {
+                                        <Badge
+                                            key="on"
+                                            variant="secondary"
+                                            className="shrink-0 font-normal text-muted-foreground"
+                                        >
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
                                             >
-                                                <IconCheck className="text-success"/>
-                                                Added
-                                            </span>
-                                        } else {
-                                            <Button
-                                                key="add"
-                                                variant="outline"
-                                                size="sm"
-                                                className="shrink-0"
-                                                onClick={lambda { onAttach(
-                                                    r.full_name
-                                                ); }}
-                                                disabled={bool(attaching)
-                                                    or not projectId}
-                                                title={""
-                                                    if projectId
-                                                    else "Pick the project its issues land in first"}
-                                            >
-                                                {if attaching == r.full_name {
-                                                    <Spinner key="sp"/>
-                                                }}
-                                                {"Adding…"
-                                                    if attaching == r.full_name
-                                                    else "Add"}
-                                            </Button>
-                                        } }
-                                    </li>
-                                }}
-                            </ul>
+                                                <path d="M20 6 9 17l-5-5"/>
+                                            </svg>
+                                            Attached
+                                        </Badge>
+                                    } else {
+                                        <Button
+                                            key="add"
+                                            variant="outline"
+                                            size="sm"
+                                            className="shrink-0"
+                                            onClick={lambda { onAttach(r.full_name); }}
+                                            disabled={bool(attaching) or not projectId}
+                                        >
+                                            {if attaching == r.full_name {
+                                                <Spinner key="sp"/>
+                                            }}
+                                            {"Attaching…"
+                                                if attaching == r.full_name
+                                                else "Attach"}
+                                        </Button>
+                                    } }
+                                </div>
+                            }}
                             {if hasMore or loadingMore {
                                 <button
                                     key="more"
                                     type="button"
                                     disabled={loadingMore}
-                                    className="border-t py-2 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:opacity-60"
+                                    className="w-full rounded-lg border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
                                     onClick={lambda { if onMore { onMore(); }}}
                                 >
                                     {"Loading…"

@@ -19,11 +19,18 @@ import from ...services.projects.projects { ListProjects, AssignToProject }
 import from ...services.roster.roster { ListMembers, ListRoles }
 import from ...services.flowlines.flowlines { GetFlowLine }
 import from ...components.roadmap.Timeline { RoadmapTimeline }
-import from ...components.roadmap.RoadmapToolbar { RoadmapToolbar }
 import from ...components.roadmap.IterationsDialog { IterationsDialog }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.ui.button { Button }
+import from ...components.ui.card { Card, CardContent }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.ui.select {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem
+}
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...lib.dates { todayIso, prettyDay }
 import from ...lib.utils { fmtEstimate, parseEstimate }
@@ -68,8 +75,7 @@ def mondayOf(iso: str) -> str {
 
 def:pub RoadmapPage -> JsxPage {
     has windowStart: str = shiftIso(mondayOf(todayIso()), -7 * LEAD_WEEKS),
-        fProject: str = "",
-        fIteration: str = "",
+        fProject: str = "all",
         data: any = None,
         loading: bool = True,
         failed: bool = False,
@@ -98,16 +104,11 @@ def:pub RoadmapPage -> JsxPage {
     async def loadWorkspace -> None;
     async def loadRoadmap -> None;
     async def reloadIterations -> None;
-    def stepWindow(weeksDelta: int) -> None;
-    def goToday -> None;
-    def jumpToIteration(iterationId: str) -> None;
-    def clearFilters -> None;
     def columnKeys -> list[str];
     def columnKind(key: str) -> str;
     def columnKeyOf(t: TaskView, keys: list[str]) -> str;
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
-    def closeTask(isOpen: bool) -> None;
     def replaceRow(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
@@ -116,67 +117,7 @@ def:pub RoadmapPage -> JsxPage {
 
     today = todayIso();
     windowEnd = shiftIso(windowStart, WEEKS * 7 - 1);
-    allRows: list[TaskView] = data["rows"] if data else [];
-    allStarts: list[str] = data["starts"] if data else [];
-    allEnds: list[str] = data["ends"] if data else [];
-    # The iteration filter is a client-side narrowing of the window's rows, so
-    # the three lists have to stay index-aligned.
-    rows: list[TaskView] = [];
-    starts: list[str] = [];
-    ends: list[str] = [];
-    for (i, t) in enumerate(allRows) {
-        if not fIteration or t.iteration_id == fIteration {
-            rows.append(t);
-            starts.append(allStarts[i]);
-            ends.append(allEnds[i]);
-        }
-    }
-    total = int(data["total"]) if data else 0;
-    unscheduled = int(data["unscheduled"]) if data else 0;
-    countLabel = str(len(rows)) + (" task" if len(rows) == 1 else " tasks");
-    if len(rows) != total {
-        countLabel = str(len(rows)) + " of " + str(total) + " tasks";
-    }
-    unscheduledLabel = (
-        "1 open task has" if unscheduled == 1 else str(unscheduled) + " open tasks have"
-    )
-        + " no dates or iteration";
-    projectName = "";
-    for p in projects {
-        if jid(p) == fProject {
-            projectName = p.name;
-        }
-    }
-    iterationName = "";
-    for it in iterations {
-        if it.id == fIteration {
-            iterationName = it.name;
-        }
-    }
-    # The empty panel names why these weeks are blank in one sentence, and its
-    # one action is whatever fixes that reason.
-    hasToday = today >= windowStart and today <= windowEnd;
-    emptyText = "No task has a start or due date in these weeks.";
-    emptyAction = "new";
-    if fIteration {
-        emptyText = "No task "
-            + (("in " + projectName + " ") if projectName else "")
-            + "is planned into "
-            + (iterationName or "this iteration")
-            + ".";
-        emptyAction = "clear";
-    } elif fProject {
-        emptyText = "Nothing in "
-            + (projectName or "this project")
-            + " is scheduled in these weeks.";
-        emptyAction = "clear";
-    } elif not hasToday {
-        emptyText = "Nothing is scheduled in these weeks.";
-        emptyAction = "today";
-    } elif unscheduled > 0 {
-        emptyText = unscheduledLabel + " yet.";
-        emptyAction = "tasks";
-    }
+    rows: list[TaskView] = data["rows"] if data else [];
     activeProjects = [
         p
         for p in projects
@@ -188,15 +129,9 @@ def:pub RoadmapPage -> JsxPage {
         if m.active
     ];
     taskChecklist: list[dict[str, any]] = [];
-    taskCreated: str = "";
-    taskUpdated: str = "";
-    taskPrState: str = "";
-    for t in allRows {
+    for t in rows {
         if t.id == editTaskId {
             taskChecklist = t.checklist;
-            taskCreated = t.created_at;
-            taskUpdated = t.updated_at;
-            taskPrState = t.pr_state;
         }
     }
     colKeys = columnKeys();
@@ -216,119 +151,151 @@ def:pub RoadmapPage -> JsxPage {
     }
 
     return
-        <div className="flex min-w-0 flex-col gap-4">
-            <h1 className="page-title">Roadmap</h1>
-            <div className="surface min-w-0 overflow-hidden">
-                <RoadmapToolbar
-                    projects={activeProjects}
-                    iterations={iterations}
-                    project={fProject}
-                    iteration={fIteration}
-                    rangeLabel={prettyDay(windowStart) + " – " + prettyDay(windowEnd)}
-                    onProject={lambda (v: str) { fProject = v; }}
-                    onIteration={jumpToIteration}
-                    onClear={clearFilters}
-                    onEarlier={lambda { stepWindow(-STEP_WEEKS); }}
-                    onToday={goToday}
-                    onLater={lambda { stepWindow(STEP_WEEKS); }}
-                    onIterations={lambda { iterationsOpen = True; }}
-                />
-                {if loading and not data {
-                    <div key="sk" className="space-y-2 p-4" aria-busy="true">
+        <div className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="page-title">Roadmap</h1>
+                    <p className="page-subtitle">
+                        Work on a timeline, by its dates and iterations. Open a bar to edit it.
+                    </p>
+                </div>
+                <Button variant="outline" onClick={lambda { iterationsOpen = True; }}>
+                    Iterations
+                </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                <Select
+                    value={fProject}
+                    onValueChange={lambda (v: str) { fProject = v; }}
+                >
+                    <SelectTrigger
+                        className="h-8 w-44"
+                        size="sm"
+                        aria-label="Filter by project"
+                    >
+                        <SelectValue placeholder="Project"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All projects</SelectItem>
+                        {for p in activeProjects {
+                            <SelectItem key={jid(p)} value={jid(p)}>
+                                {p.name}
+                            </SelectItem>
+                        }}
+                    </SelectContent>
+                </Select>
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        aria-label="Earlier weeks"
+                        onClick={lambda { windowStart = shiftIso(
+                            windowStart, -7 * STEP_WEEKS
+                        ); }}
+                    >
+                        ‹
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={lambda { windowStart = shiftIso(
+                            mondayOf(today), -7 * LEAD_WEEKS
+                        ); }}
+                    >
+                        Today
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        aria-label="Later weeks"
+                        onClick={lambda { windowStart = shiftIso(
+                            windowStart, 7 * STEP_WEEKS
+                        ); }}
+                    >
+                        ›
+                    </Button>
+                </div>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                    {prettyDay(windowStart) + " – " + prettyDay(windowEnd)}
+                </span>
+            </div>
+            {if loading and not data {
+                <Card key="sk">
+                    <CardContent className="space-y-2 py-4">
                         {for i in range(8) {
                             <Skeleton key={str(i)} className="h-9 w-full"/>
                         }}
-                    </div>
-                } elif failed and not data {
-                    <div key="failed" className="p-4">
-                        <LoadFailed
-                            title="Could not load the roadmap"
-                            onRetry={loadRoadmap}
-                        />
-                    </div>
-                } elif len(rows) == 0 {
-                    <div
-                        key="empty"
-                        className={"flex flex-col items-center gap-4 px-6 py-16 text-center transition-opacity "
-                            + ("opacity-60" if loading else "")}
-                    >
-                        <p className="max-w-md text-sm text-muted-foreground">
-                            {emptyText}
-                        </p>
-                        {if emptyAction == "clear" {
-                            <Button
-                                key="clear"
-                                variant="outline"
-                                size="sm"
-                                onClick={lambda { clearFilters(); }}
+                    </CardContent>
+                </Card>
+            } elif failed and not data {
+                <LoadFailed
+                    key="failed"
+                    title="Could not load the roadmap"
+                    onRetry={loadRoadmap}
+                />
+            } else {
+                <div
+                    key="body"
+                    className={"space-y-3 transition-opacity "
+                        + ("opacity-60" if loading else "")}
+                >
+                    {if len(rows) == 0 {
+                        <Card key="empty">
+                            <CardContent
+                                className="py-12 text-center text-sm text-muted-foreground"
                             >
-                                Clear filters
-                            </Button>
-                        } elif emptyAction == "today" {
-                            <Button
-                                key="today"
-                                variant="outline"
-                                size="sm"
-                                onClick={lambda { goToday(); }}
-                            >
-                                Back to this week
-                            </Button>
-                        } elif emptyAction == "tasks" {
-                            <Button key="tasks" size="sm" asChild={True}>
-                                <Link to="/tasks">Set dates in Tasks</Link>
-                            </Button>
-                        } else {
-                            <Button key="new" size="sm" asChild={True}>
-                                <Link to="/board?new=1">New task</Link>
-                            </Button>
-                        }   }
-                    </div>
-                } else {
-                    <div
-                        key="body"
-                        className={"transition-opacity "
-                            + ("opacity-60" if loading else "")}
-                    >
+                                Nothing is scheduled in these weeks. Give a task a start or due date, or plan it into an iteration.
+                            </CardContent>
+                        </Card>
+                    } else {
                         <RoadmapTimeline
+                            key="timeline"
                             fromDate={windowStart}
                             weeks={WEEKS}
                             today={today}
                             iterations={data["iterations"]}
                             rows={rows}
-                            starts={starts}
-                            ends={ends}
+                            starts={data["starts"]}
+                            ends={data["ends"]}
                             steps={steps}
                             onOpen={openTask}
                         />
-                        <div
-                            className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
-                        >
-                            <span className="num">{countLabel}</span>
-                            {if unscheduled > 0 {
-                                <span key="unscheduled">
-                                    {unscheduledLabel + ". "}
-                                    <Link
-                                        to="/tasks"
-                                        className="font-medium text-foreground underline underline-offset-4 hover:decoration-2"
-                                    >
-                                        See them in Tasks
-                                    </Link>
-                                </span>
-                            }}
-                            {if data["truncated"] {
-                                <span key="truncated">
-                                    {"Showing the first "
-                                        + str(len(allRows))
-                                        + " scheduled tasks. Narrow it by project."}
-                                </span>
-                            }}
-                            <span className="text-subtle sm:ml-auto">
-                                A bar runs from start to due date, or across its iteration.
+                    } }
+                    <div
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground"
+                    >
+                        {if data and int(data["unscheduled"]) > 0 {
+                            <span key="unscheduled">
+                                {str(data["unscheduled"])
+                                    + (
+                                        " open task has"
+                                            if int(data["unscheduled"]) == 1
+                                            else " open tasks have"
+                                    )
+                                    + " no dates or iteration. "}
+                                <Link
+                                    to="/tasks"
+                                    className="text-foreground underline-offset-4 hover:underline"
+                                >
+                                    See them in Tasks
+                                </Link>
                             </span>
-                        </div>
+                        }}
+                        {if data and data["truncated"] {
+                            <span key="truncated">
+                                {"Showing the first "
+                                    + str(len(rows))
+                                    + " of "
+                                    + str(data["total"])
+                                    + " scheduled tasks; narrow it by project."}
+                            </span>
+                        }}
                     </div>
-                }   }
-            </div>
+                </div>
+            }  }
             <IterationsDialog
                 open={iterationsOpen}
                 iterations={iterations}
@@ -344,7 +311,7 @@ def:pub RoadmapPage -> JsxPage {
                 members={activeMembers}
                 saving={taskSaving}
                 onField={setTaskField}
-                onOpenChange={closeTask}
+                onOpenChange={lambda (o: bool) { taskOpen = o; }}
                 onSave={saveTask}
                 onDelete={deleteTask}
                 columnKeys={colKeys}
@@ -358,9 +325,6 @@ def:pub RoadmapPage -> JsxPage {
                 taskId={editTaskId}
                 checklist={taskChecklist}
                 onChecklist={replaceRow}
-                createdAt={taskCreated}
-                historyKey={taskUpdated}
-                prState={taskPrState}
             />
         </div>;
 }

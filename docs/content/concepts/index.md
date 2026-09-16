@@ -130,17 +130,10 @@ File-based routing under `pages/`, with route groups:
 | `/` | `pages/(public)/index.jac` | Public landing page |
 | `/login` | `pages/(public)/login.jac` | Public; `?mode=signup` opens sign-up |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | Receives `?token=` from SSO |
-| `/board`, `/tasks`, `/roadmap`, `/log`, `/overview`, `/flowlines`, `/workspace`, `/github`, `/setup` | `pages/(auth)/...` | Signed in |
-| `/settings`, `/projects`, `/roster`, `/workflow` | `pages/(auth)/...` | Redirects for old links (`/settings` to `/workspace?tab=preferences`) |
+| `/flowlines`, `/board`, `/tasks`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/...` | Signed in |
 
 - `pages/layout.jac` is path-aware: the app chrome renders only for signed-in,
-  non-public paths. It is a top bar grouped into the daily views (Board,
-  Tasks, Roadmap, Log, Overview) and the setup pages (Flow line, Workspace,
-  GitHub), the ⌘K palette, and Ask, docked as a column at 1280px and up and a
-  sheet below. Phones get a tab bar with More instead. `/setup` gets only the
-  mark and Sign out.
-- `/workspace` holds everything configured: Organization, People, Projects,
-  Roles and Preferences (the theme), one section at a time from a rail.
+  non-public paths.
 - Pages are thin stateful shells. They own state and handlers (bodies in
   `pages/(auth)/impl/`) and compose presentational components from
   `components/<area>/`.

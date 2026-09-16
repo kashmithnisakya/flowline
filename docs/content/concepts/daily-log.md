@@ -31,9 +31,9 @@ change, issue and PR links, and the project's name. Their `activity` reads:
 | Event | `activity` |
 | --- | --- |
 | `CreateTask` | `Added to Backlog` (the mapped status) |
-| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on an `auto_close` repo |
+| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on a close-and-reopen repo |
 | `UpdateTask` that changes status | `Moved to Done` |
-| A merged PR or closed issue on an `auto_done` repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
+| A merged PR or closed issue on an auto-done repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
 | An issue imported or auto-filed | `Imported from GitHub org/repo #12` |
 | An issue opened from a card | `Opened GitHub issue org/repo #12` |
 | A checklist item checked off | `Checked off: Draft the rollback steps (2/5)` |
@@ -68,17 +68,9 @@ new links and note.
 
 ## Where the log is read
 
-- `/log` reads the selected week, plus the Friday to Sunday before it, with
-  `ListLogEntries`. **Day** shows the selected day as a written standup grouped
-  by what each entry means (Stuck, Handed off, Finished, In progress, To do)
-  and a timeline, newest first; **Week** shows people by weekday. The
-  one-line composer and the entry dialog write through `LogActivity`, which
-  needs a roster member, so the composer asks who.
-- The task sheet's **Travel so far** reads one task's entries
-  (`ListLogEntries` with `task_id`).
+- `/log` pages entries for a date range (`ListLogEntries`, newest day first).
 - The Overview counts entries per week, per weekday and per person
-  (`LogCounts`, and `logs` inside `OverviewSnapshot`), and reads this week's
-  entries for its moves to Done per day.
+  (`LogCounts`, and `logs` inside `OverviewSnapshot`).
 - The assistant's snapshot includes every entry in the requested window as an
   activity line.
 - Insights use the latest `Blocked` entry's note as a blocked task's reason.

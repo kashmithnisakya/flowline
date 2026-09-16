@@ -78,19 +78,6 @@ class Handler(BaseHTTPRequestHandler):
                 rows = sorted((i for i in items.values() if i["updated_at"] >= since),
                               key=lambda i: (i["updated_at"], i["number"]))
                 return self._send(200, rows if q.get("page", "1") == "1" else [])
-            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/pulls", url.path)
-            if m:
-                if m.group(1) not in STATE["repos"]:
-                    return self._send(404, {"message": "Not Found"})
-                return self._send(200, [])
-            if url.path == "/search/issues":
-                # Title search over the stub's issues, enough for the GitHub page's search box.
-                words = [w for w in q.get("q", "").split() if ":" not in w]
-                repos = [w[5:] for w in q.get("q", "").split() if w.startswith("repo:")]
-                rows = [i for r, items in STATE["repos"].items() if not repos or r in repos
-                        for i in items.values()
-                        if all(w.lower() in i["title"].lower() for w in words)]
-                return self._send(200, {"total_count": len(rows), "incomplete_results": False, "items": rows})
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)/sub_issues", url.path)
             if m:
                 return self._send(200, [])

@@ -53,8 +53,8 @@ invalid; call [`GithubStatus`](github.md#githubstatus) for the detail.
 
 | URL | Opens |
 | --- | --- |
-| `/board?task=<task id>` | That card in the task sheet (fetched with [`GetTask`](tasks.md#gettask) when it is not in the working set) |
-| `/board?new=1` | The task sheet for a new task (setup lands here after applying a template) |
+| `/board?task=<task id>` | That card's dialog (fetched with [`GetTask`](tasks.md#gettask) when it is not in the working set) |
+| `/board?new=1` | The create-task dialog |
 
 An already mounted board listens for the `flowline:open-task` and
 `flowline:new-task` browser events instead; the command palette uses both.

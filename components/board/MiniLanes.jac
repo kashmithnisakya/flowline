@@ -7,7 +7,7 @@ step's name in full."""
 
 import from ...models { StepView, RoleView, MemberView }
 import from ..flowlines.lanes { laneLayout }
-import from ..flowlines.kinds { DOT_FILL, colorKey }
+import from ..flowlines.kinds { DOT_FILL, CARD_TINT, CARD_BAR, colorKey }
 
 # Compact geometry in px: the lane label gutter, a card, a stacked row gap,
 # the band padding, and how far a wire's port sits from the card's middle so
@@ -110,16 +110,18 @@ def:pub MiniLanes(
                     + "))",
                 "width": "calc(" + colPct + " * " + str(1.0 - MINI_INSET * 2.0) + ")",
                 "top": str(top) + "px",
-                "cls": (
-                    "z-10 border-primary bg-card ring-1 ring-primary"
-                        if isHere
-                        else (
-                            "border-border bg-card"
-                                if isNear
-                                else "border-border bg-card opacity-60"
-                        )
-                ),
-                "dot": DOT_FILL[colorKey(s.color)],
+                "cls": CARD_BAR[colorKey(s.color)]
+                    + " "
+                    + (
+                        "z-10 ring-2 ring-primary/70 shadow-sm "
+                            + CARD_TINT[colorKey(s.color)]
+                            if isHere
+                            else (
+                                "border-border bg-card"
+                                    if isNear
+                                    else "border-border/60 bg-card/70 opacity-60"
+                            )
+                    ),
                 "nameCls": "font-semibold text-foreground"
                     if isHere
                     else "text-foreground/85"
@@ -247,9 +249,11 @@ def:pub MiniLanes(
                 headDir = "d" if down else "u";
             }
             tone = (
-                "text-foreground"
+                "text-primary"
                     if touches
-                    else ("text-wire/70" if isBack else "text-wire/50")
+                    else (
+                        "text-destructive/55" if isBack else "text-muted-foreground/45"
+                    )
             );
             wires.append(
                 {
@@ -298,17 +302,17 @@ def:pub MiniLanes(
                 "h": str(miniH[k]) + "px",
                 "cls": "absolute inset-x-0"
                     + (
-                        " bg-accent"
+                        " bg-primary/10"
                             if isHereLane
-                            else (" bg-foreground/[0.03]" if i % 2 == 1 else "")
+                            else (" bg-foreground/[0.045]" if i % 2 == 1 else "")
                     )
                     + ("" if i == 0 else " border-t border-border/60"),
                 "label": str(b["label"]),
                 "sub": str(b["sub"]),
-                "subCls": "truncate text-xs leading-tight "
+                "subCls": "truncate text-[9.5px] leading-tight "
                     + ("text-warning" if b["warn"] else "text-muted-foreground"),
-                "dot": DOT_FILL[colorKey(str(b["color"]))] + " rounded-xs",
-                "labelCls": "truncate text-xs font-semibold leading-tight "
+                "dot": DOT_FILL[colorKey(str(b["color"]))],
+                "labelCls": "truncate text-[11px] font-semibold leading-tight "
                     + ("text-foreground" if isHereLane else "text-foreground/75")
             }
         );
@@ -316,7 +320,7 @@ def:pub MiniLanes(
 
     return
         <div
-            className={"relative w-full overflow-hidden rounded-md border bg-background "
+            className={"relative w-full overflow-hidden rounded-lg border bg-muted/30 "
                 + className}
             style={{"height": str(total) + "px"}}
         >
@@ -330,7 +334,10 @@ def:pub MiniLanes(
                         className="absolute left-2 top-1/2 flex w-[4.75rem] -translate-y-1/2 flex-col"
                     >
                         <div className="flex items-center gap-1.5">
-                            <span className={"size-2 shrink-0 " + r["dot"]}/>
+                            <span
+                                className={"h-1.5 w-1.5 shrink-0 rounded-full "
+                                    + r["dot"]}
+                            />
                             <span className={r["labelCls"]} title={r["label"]}>
                                 {r["label"]}
                             </span>
@@ -381,7 +388,7 @@ def:pub MiniLanes(
             {for c in cards {
                 <div
                     key={c["id"]}
-                    className={"absolute flex items-center gap-1 rounded-sm border pl-1 pr-1 text-xs leading-3 "
+                    className={"absolute flex items-center rounded-md border pl-1.5 pr-1 text-[10.5px] leading-[11px] "
                         + c["cls"]}
                     style={{
                         "left": c["left"],
@@ -391,7 +398,6 @@ def:pub MiniLanes(
                     }}
                     title={c["name"]}
                 >
-                    <span className={"size-2 shrink-0 rounded-xs " + c["dot"]}/>
                     <span className={"line-clamp-2 break-words " + c["nameCls"]}>
                         {c["name"]}
                     </span>

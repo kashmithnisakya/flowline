@@ -1,83 +1,90 @@
-"""flowline brand mark, the single source of truth for the logo: a route with an
-open start node, one bend and a filled end node. `jac run --no-takeover brand/logo.jac`
-regenerates every SVG and PNG/JPG variant into assets/brand/; commit the output.
-The app inlines the same path in currentColor (pages/layout.jac `Mark`).
+"""flowline brand mark, the single source of truth for the logo: a rising bar
+chart with an ember status dot. `jac run brand/logo.jac` regenerates every
+SVG and PNG/JPG variant into assets/brand/; commit the output.
 """
 
 import os;
-import math;
 import from PIL { Image, ImageDraw }
 
 
-# --- brand palette (mirrors --mark, --foreground, --background) --------------
+# --- brand palette (see PLAN.md; mirrors styles/global.css) -----------------
 
-glob MARK_LIGHT: str = "#D9530F",
-     MARK_DARK: str = "#F47C3F",
-     INK_LIGHT: str = "#161A18",
-     INK_DARK: str = "#E4E8E5",
-     GROUND_LIGHT: str = "#F2F3F1",
+glob INK: str = "#14120F",
+     PAPER: str = "#F6F2EB",
+     EMBER: str = "#E8552F",
      OUT_DIR: str = "assets/brand",
-     # The route on a 24x24 grid: start node, a right-then-up bend, end node.
-     START: tuple[float, float] = (5.0, 17.0),
-     END: tuple[float, float] = (19.0, 7.0),
-     NODE_R: float = 3.0,
-     STROKE: float = 2.2,
-     ROUTE: str = "M8 17h3.5a3 3 0 0 0 3-3v-4a3 3 0 0 1 1.5-2.6";
+     BARS: list[tuple[float, float, float]] = [
+         (12.0, 34.0, 12.0),
+         (24.5, 27.0, 19.0),
+         (37.0, 20.0, 26.0)
+     ],
+     BAR_W: float = 7.0,
+     BAR_R: float = 3.5,
+     TILE: float = 56.0,
+     TILE_R: float = 16.0,
+     DOT_R: float = 4.5;
 
 
-# The mark's shapes in one colour (a hex or currentColor), no ground.
-def _shapes(color: str) -> str {
-    (sx, sy) = START;
-    (ex, ey) = END;
-    return (
-        f'\n    <circle cx="{sx}" cy="{sy}" r="{NODE_R}" fill="none" '
-        f'stroke="{color}" stroke-width="{STROKE}"/>'
-        f'\n    <path d="{ROUTE}" fill="none" stroke="{color}" '
-        f'stroke-width="{STROKE}" stroke-linecap="round"/>'
-        f'\n    <circle cx="{ex}" cy="{ey}" r="{NODE_R}" fill="{color}"/>'
-    );
+# Bar geometry on the 56x56 tile: (x, y, height).
+# The three ascending bars; the tallest carries the accent colour.
+def _bars(bar_fill: str, accent: str) -> str {
+    out = "";
+    for (i, bar) in enumerate(BARS) {
+        (x, y, h) = bar;
+        fill = accent if i == len(BARS) - 1 else bar_fill;
+        out += (
+            f'\n    <rect x="{x}" y="{y}" width="{BAR_W}" height="{h}" '
+            f'rx="{BAR_R}" fill="{fill}"/>'
+        );
+    }
+    return out;
 }
 
 
-# The bare mark. `adaptive` embeds a prefers-color-scheme rule so an <img> or a
-# favicon swaps to the brighter dark-ground colour on its own.
-def mark(size: int = 64, color: str = "", adaptive: bool = False) -> str {
-    fill = color or MARK_LIGHT;
-    style = "";
-    body = _shapes(fill);
-    if adaptive {
-        style = (
-            f'\n    <style>.m{{color:{MARK_LIGHT}}}'
-            f'@media (prefers-color-scheme: dark){{.m{{color:{MARK_DARK}}}}}</style>'
-        );
-        body = f'\n    <g class="m">{_shapes("currentColor")}\n    </g>';
-    }
+# Square app icon: rounded tile, bars, and the status dot.
+def mark(size: int = 64, tile: str = "", bar_fill: str = "", accent: str = "") -> str {
+    tile_fill = tile or INK;
+    bars_fill = bar_fill or PAPER;
+    dot = accent or EMBER;
+    (last_x, last_y, last_h) = BARS[-1];
+    cx = last_x + BAR_W / 2;
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {TILE} {TILE}" '
         f'width="{size}" height="{size}" fill="none">'
-        f'\n    <title>flowline</title>{style}{body}'
+        f'\n    <title>flowline</title>'
+        f'\n    <rect x="0" y="0" width="{TILE}" height="{TILE}" '
+        f'rx="{TILE_R}" fill="{tile_fill}"/>'
+        f'{_bars(bars_fill, dot)}'
+        f'\n    <circle cx="{cx}" cy="12" r="{DOT_R}" fill="{dot}"/>'
         f'\n</svg>\n'
     );
 }
 
 
-# Full lockup: the mark plus the `flowline` wordmark, for a light or dark ground.
+# Full lockup: the mark plus the `flowline` wordmark and trailing dot.
 def wordmark(width: int = 240, dark: bool = False) -> str {
-    mark_fill = MARK_DARK if dark else MARK_LIGHT;
-    text_fill = INK_DARK if dark else INK_LIGHT;
+    tile_fill = PAPER if dark else INK;
+    bars_fill = INK if dark else PAPER;
+    text_fill = PAPER if dark else INK;
+    (last_x, last_y, last_h) = BARS[-1];
+    cx = last_x + BAR_W / 2;
     height = int(width * 64 / 240);
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" '
         f'width="{width}" height="{height}" fill="none">'
         f'\n    <title>flowline</title>'
-        f'\n    <g transform="translate(2 8) scale(2)">{_shapes(mark_fill)}\n    </g>'
-        # textLength pins the rendered width: an SVG loaded through <img>
-        # cannot fetch webfonts, so the fallback face must not move the end.
-        f'\n    <text x="64" y="42" font-family="Archivo,\'Helvetica Neue\','
-        f"Arial,sans-serif\" font-size="
-        f'"30" font-weight="700" font-stretch="112%" letter-spacing="-0.3" '
-        f'textLength="150" lengthAdjust="spacingAndGlyphs" '
-        f'fill="{text_fill}">flowline</text>'
+        f'\n    <rect x="0" y="0" width="{TILE}" height="{TILE}" '
+        f'rx="{TILE_R}" fill="{tile_fill}"/>'
+        f'{_bars(bars_fill, EMBER)}'
+        f'\n    <circle cx="{cx}" cy="12" r="{DOT_R}" fill="{EMBER}"/>'
+        # textLength pins the rendered text width: SVGs loaded via <img>
+        # cannot fetch webfonts, and without it the fallback font's metrics
+        # move the wordmark's end away from the fixed-position trailing dot.
+        f'\n    <text x="70" y="38" font-family="\'Bricolage Grotesque\','
+        f"'Helvetica Neue',sans-serif\" font-size="
+        f'"30" font-weight="700" letter-spacing="-1.2" textLength="112" '
+        f'lengthAdjust="spacingAndGlyphs" fill="{text_fill}">flowline</text>'
+        f'\n    <circle cx="193" cy="34" r="4" fill="{EMBER}"/>'
         f'\n</svg>\n'
     );
 }
@@ -92,77 +99,43 @@ def _write(name: str, body: str) {
 }
 
 
-def _hex(color: str) -> tuple[int, int, int, int] {
-    return (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16), 255);
-}
-
-
-# Draw the mark with Pillow from the same geometry the SVGs use, on a 24-unit
-# grid inset by `pad` units, supersampled 4x then downscaled for smooth edges.
-def _draw_mark(size: int, color: str, pad: float = 2.0) -> Image.Image {
+# Draw the mark with Pillow from the same geometry the SVGs use,
+# supersampled 4x then downscaled for smooth edges.
+def _draw_mark(size: int) -> Image.Image {
     ss = 4;
+    s = size * ss / TILE;
     px = size * ss;
-    s = px / (24.0 + 2 * pad);
     img = Image.new("RGBA", (px, px), (0, 0, 0, 0));
     draw = ImageDraw.Draw(img);
-    rgba = _hex(color);
-    w = max(1, int(round(STROKE * s)));
-
-    def at(x: float, y: float) -> tuple[float, float] {
-        return ((x + pad) * s, (y + pad) * s);
+    draw.rounded_rectangle([0, 0, px, px], radius=TILE_R * s, fill=INK);
+    for (i, bar) in enumerate(BARS) {
+        (x, y, h) = bar;
+        fill = EMBER if i == len(BARS) - 1 else PAPER;
+        draw.rounded_rectangle(
+            [x * s, y * s, (x + BAR_W) * s, (y + h) * s], radius=BAR_R * s, fill=fill,
+        );
     }
-
-    def dot(x: float, y: float, r: float) {
-        (cx, cy) = at(x, y);
-        draw.ellipse([cx - r * s, cy - r * s, cx + r * s, cy + r * s], fill=rgba);
-    }
-
-    (sx, sy) = START;
-    (ex, ey) = END;
-    # Start node: a ring whose stroke is centred on the node radius.
-    (cx, cy) = at(sx, sy);
-    outer = (NODE_R + STROKE / 2) * s;
-    draw.ellipse(
-        [cx - outer, cy - outer, cx + outer, cy + outer], outline=rgba, width=w
-    );
-    # Route: 8,17 -> 11.5,17, a quarter bend about 11.5,14 up to 14.5,14, a
-    # rise to 14.5,10, then a 60 degree turn about 17.5,10 toward the end node.
-    draw.line([at(8.0, 17.0), at(11.5, 17.0)], fill=rgba, width=w);
-    # Pillow strokes an arc inside its box, so the box grows by half a stroke.
-    ar = (3 + STROKE / 2) * s;
-    (ax, ay) = at(11.5, 14.0);
-    draw.arc([ax - ar, ay - ar, ax + ar, ay + ar], 0, 90, fill=rgba, width=w);
-    draw.line([at(14.5, 14.0), at(14.5, 10.0)], fill=rgba, width=w);
-    (tx, ty) = at(17.5, 10.0);
-    draw.arc([tx - ar, ty - ar, tx + ar, ty + ar], 180, 240, fill=rgba, width=w);
-    # Round caps and joins, which Pillow lines do not draw.
-    cap = STROKE / 2;
-    dot(8.0, 17.0, cap);
-    dot(11.5, 17.0, cap);
-    dot(14.5, 14.0, cap);
-    dot(14.5, 10.0, cap);
-    dot(
-        17.5 + 3 * math.cos(math.radians(240)),
-        10.0 + 3 * math.sin(math.radians(240)),
-        cap
-    );
-    dot(ex, ey, NODE_R);
+    (last_x, last_y, last_h) = BARS[-1];
+    cx = (last_x + BAR_W / 2) * s;
+    cy = 12 * s;
+    r = DOT_R * s;
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=EMBER);
     return img.resize((size, size), Image.Resampling.LANCZOS);
 }
 
 
 def _write_png(name: str, size: int) {
     path = os.path.join(OUT_DIR, name);
-    _draw_mark(size, MARK_LIGHT).save(path);
+    _draw_mark(size).save(path);
     print(f"  wrote {path} ({os.path.getsize(path)} bytes)");
 }
 
 
-# JPEG has no alpha channel, so flatten onto the light ground first.
+# JPEG has no alpha channel, so flatten onto PAPER first.
 def _write_jpg(name: str, size: int) {
     path = os.path.join(OUT_DIR, name);
-    img = _draw_mark(size, MARK_LIGHT, pad=5.0);
-    flat = Image.new("RGB", img.size, GROUND_LIGHT);
+    img = _draw_mark(size);
+    flat = Image.new("RGB", img.size, PAPER);
     flat.paste(img, (0, 0), img);
     flat.save(path, quality=90);
     print(f"  wrote {path} ({os.path.getsize(path)} bytes)");
@@ -172,11 +145,11 @@ def _write_jpg(name: str, size: int) {
 with entry:__main__ {
     os.makedirs(OUT_DIR, exist_ok=True);
     print("flowline brand assets ->");
-    _write("logo-mark.svg", mark(size=64, adaptive=True));
-    _write("logo-mark-dark.svg", mark(size=64, color=MARK_DARK));
+    _write("logo-mark.svg", mark(size=64));
+    _write("logo-mark-dark.svg", mark(size=64, tile=PAPER, bar_fill=INK, accent=EMBER));
     _write("logo-full.svg", wordmark(width=240));
     _write("logo-full-dark.svg", wordmark(width=240, dark=True));
-    _write("favicon.svg", mark(size=32, adaptive=True));
+    _write("favicon.svg", mark(size=32));
     _write_png("logo-mark.png", size=512);
     _write_jpg("logo-mark.jpg", size=512);
     print("done.");

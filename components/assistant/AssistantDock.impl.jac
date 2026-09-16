@@ -65,16 +65,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             );
             note = noteRun.reports[0] if noteRun.reports else None;
             if note {
-                noteText = " ".join(
-                    note.shipped + note.in_flight + note.blocked + note.needs_attention
-                );
-                cites = await citeTasks(noteText);
-                reply = {
-                    "role": "assistant",
-                    "kind": "note",
-                    "note": note,
-                    "cites": cites
-                };
+                reply = {"role": "assistant", "kind": "note", "note": note};
             } else {
                 reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
@@ -99,13 +90,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             );
             answer = askRun.reports[0] if askRun.reports else "";
             if answer {
-                cites = await citeTasks(answer);
-                reply = {
-                    "role": "assistant",
-                    "kind": "text",
-                    "text": answer,
-                    "cites": cites
-                };
+                reply = {"role": "assistant", "kind": "text", "text": answer};
             }
         }
     } except Exception as e {
@@ -113,36 +98,6 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     }
     turns = history + [reply];
     busy = False;
-}
-
-# The working tasks whose titles the text names as whole words, in the order it
-# names them. The walkers return prose, not ids, so a title match is the citation.
-impl AssistantDock.citeTasks(text: str) -> list[dict[str, str]] {
-    hay = text.lower();
-    found: list[dict] = [];
-    taken: list[dict] = [];
-    try {
-        run = root spawn ListTasks(scope="working", page_size=500);
-        page = run.reports[0] if run.reports else None;
-        pool = page.rows if page else [];
-        for t in sorted(pool, key=citeLength) {
-            title = t.title.strip();
-            needle = title.lower();
-            where = findTitle(hay, needle, taken) if len(title) >= MIN_CITE else -1;
-            if where >= 0 {
-                taken.append({"from": where, "to": where + len(needle)});
-                found.append({"id": t.id, "title": title, "at": where});
-            }
-        }
-    } except Exception as e {
-        return [];
-    }
-    ordered = sorted(found, key=citeOrder);
-    out: list[dict[str, str]] = [];
-    for f in ordered[:MAX_CITES] {
-        out.append({"id": f["id"], "title": f["title"]});
-    }
-    return out;
 }
 
 impl AssistantDock.applyProposal(index: int) -> None {
@@ -165,7 +120,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
             hits = page.rows if page else [];
             taskId = hits[0].id if len(hits) > 0 and wanted else "";
             if not taskId {
-                toast.error("No task called \"" + p.title + "\" on the board");
+                toast("No task called \"" + p.title + "\" on the board");
                 busy = False;
                 return;
             }
@@ -193,7 +148,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
                 }
             }
             if not projectId {
-                toast.error("Create a project before adding tasks");
+                toast("Create a project before adding tasks");
                 busy = False;
                 return;
             }
@@ -216,7 +171,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
             # The walker creates nothing (and reports nothing) for a project
             # it refuses, so an empty report is a failure, not an apply.
             if not made.reports {
-                toast.error("Could not add that task");
+                toast("Could not add that task");
                 busy = False;
                 return;
             }
@@ -225,9 +180,9 @@ impl AssistantDock.applyProposal(index: int) -> None {
         # The board is not in this component tree, so tell it to refetch
         # instead of leaving the change invisible until its next poll.
         announceRefresh();
-        toast.success("Applied", {"description": p.title + where});
+        toast("Applied", {"description": p.title + where});
     } except Exception as e {
-        toast.error("Could not apply that");
+        toast("Could not apply that");
     }
     busy = False;
 }
@@ -244,9 +199,9 @@ impl AssistantDock.copyNote(index: int) -> None {
     lines = lines + noteSection("Needs attention", note.needs_attention);
     try {
         navigator.clipboard.writeText("\n".join(lines));
-        toast.success("Standup note copied");
+        toast("Standup note copied");
     } except Exception as e {
-        toast.error("Could not reach the clipboard");
+        toast("Could not reach the clipboard");
     }
 }
 
@@ -262,6 +217,6 @@ impl AssistantDock.toggleMic -> None {
     );
     listening = started;
     if not started {
-        toast.error("Your browser would not start dictation");
+        toast("Your browser would not start dictation");
     }
 }

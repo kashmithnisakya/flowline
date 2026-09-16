@@ -57,9 +57,8 @@ and switches on through environment variables.
 
 4.  **Sign up**
 
-    Open <http://localhost:8000> and choose **Sign up**. The three-step setup
-    names the workspace and its first project, adds people (or skips), and
-    picks how work moves; the board then opens with a new task ready to type.
+    Open <http://localhost:8000> and choose **Sign up**. The setup wizard asks
+    for your organization's name and a flow line to start from.
 
 ## Next steps
 
