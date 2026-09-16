@@ -1,9 +1,10 @@
 """One page of a repository's pull requests, read-only: a PR joins a task by
 its link or number on the task itself, this table only says which already have.
-Merged and draft are flowline's reading of GitHub's flags (which report
+Merged and draft are Flowline's reading of GitHub's flags (which report
 closed/open).
 """
 
+import from "@jac/runtime" { Link }
 import from ...models { GhPrRow }
 import from ..ui.button { Button }
 import from ..ui.skeleton { Skeleton }
@@ -98,7 +99,7 @@ def:pub PrTable(
 
     return
         <div className="flex flex-col">
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
                 <table className="data-table">
                     <thead>
                         <tr>
@@ -118,16 +119,17 @@ def:pub PrTable(
                                 <td className="num text-muted-foreground">
                                     {"#" + str(r.number)}
                                 </td>
-                                <td className="max-w-80">
+                                <td className="min-w-48">
                                     <a
                                         href={r.html_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="flex items-center gap-1.5 font-medium underline-offset-2 hover:underline"
-                                        title={r.title}
+                                        className="font-medium underline-offset-2 hover:underline"
                                     >
-                                        <span className="truncate">{r.title}</span>
-                                        <IconExternal className="shrink-0 text-subtle"/>
+                                        {r.title}
+                                        <IconExternal
+                                            className="ml-1.5 inline-block align-[-1px] text-subtle"
+                                        />
                                     </a>
                                 </td>
                                 <td
@@ -148,13 +150,13 @@ def:pub PrTable(
                                 </td>
                                 <td className="text-right">
                                     {if r.linked_task_id {
-                                        <a
+                                        <Link
                                             key="card"
-                                            href={"/board?task=" + r.linked_task_id}
+                                            to={"/board?task=" + r.linked_task_id}
                                             className="whitespace-nowrap text-[12.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                                         >
                                             Open card
-                                        </a>
+                                        </Link>
                                     }}
                                 </td>
                             </tr>
@@ -162,6 +164,49 @@ def:pub PrTable(
                     </tbody>
                 </table>
             </div>
+            <ul className="divide-y md:hidden">
+                {for r in rows {
+                    <li
+                        key={str(r.number)}
+                        className="flex items-start gap-3 px-3 py-2.5"
+                    >
+                        <div className="min-w-0 flex-1">
+                            <a
+                                href={r.html_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="line-clamp-2 text-[13.5px] font-medium underline-offset-2 hover:underline"
+                            >
+                                {r.title}
+                            </a>
+                            <p className="meta mt-0.5 truncate">
+                                <span className="num">{"#" + str(r.number)}</span>
+                                {" · "
+                                    + (
+                                        PR_STATE_LABEL[r.state]
+                                            if r.state in PR_STATE_LABEL
+                                            else r.state
+                                    )
+                                    + ((" · @" + r.author) if r.author else "")
+                                    + (
+                                        (" · " + timeAgo(r.updated_at))
+                                            if r.updated_at
+                                            else ""
+                                    )}
+                            </p>
+                        </div>
+                        {if r.linked_task_id {
+                            <Link
+                                key="card"
+                                to={"/board?task=" + r.linked_task_id}
+                                className="shrink-0 py-0.5 text-[12.5px] whitespace-nowrap text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                            >
+                                Open card
+                            </Link>
+                        }}
+                    </li>
+                }}
+            </ul>
             {if hasMore {
                 <div key="more" className="flex justify-center border-t py-2">
                     <Button

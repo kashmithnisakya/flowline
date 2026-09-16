@@ -341,7 +341,7 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
             toast.success(
                 "Cards reaching Done will close their GitHub issue, and reopen it when moved back"
                     if enabled
-                    else "Closing issues from flowline turned off"
+                    else "Closing issues from Flowline turned off"
             );
         } else {
             toast.error("Could not update that repository");

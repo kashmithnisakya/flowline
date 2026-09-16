@@ -1,5 +1,5 @@
 """The disconnected state: what connecting buys, what the App may touch, and
-the one button that starts it. No token field anywhere: flowline connects
+the one button that starts it. No token field anywhere: Flowline connects
 through a GitHub App installation, so the credential is minted per request
 server-side and never typed or stored.
 """
@@ -42,7 +42,7 @@ def:pub ConnectCard(
                 </ul>
                 {if blocked {
                     <p key="gap" className="text-[13px] text-muted-foreground">
-                        GitHub is not set up on this server yet. Ask whoever runs your flowline instance to finish the GitHub App setup.
+                        GitHub is not set up on this server yet. Ask whoever runs your Flowline instance to finish the GitHub App setup.
                     </p>
                 }}
                 <div className="flex flex-wrap items-center gap-3">
@@ -65,7 +65,7 @@ def:pub ConnectCard(
             </div>
             <div className="border-t pt-6 md:border-t-0 md:border-l md:p-7">
                 <h3 className="text-[13px] font-semibold">
-                    What flowline will be able to do
+                    What Flowline will be able to do
                 </h3>
                 <ul className="mt-2 flex flex-col">
                     {for row in PERMISSIONS {
@@ -92,7 +92,7 @@ def:pub ConnectCard(
                     Issues: read and write · Pull requests: read · Metadata: read
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                    flowline stores the installation id, never a token.
+                    Flowline stores the installation id, never a token.
                 </p>
             </div>
         </div>;

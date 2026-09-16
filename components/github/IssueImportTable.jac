@@ -12,6 +12,7 @@ glob STATUSES: list[str] = [
          "Blocked"
      ];
 
+import from "@jac/runtime" { Link }
 import from ...models { Project, StepView, GhIssueRow }
 import from ..ui.button { Button }
 import from ..ui.checkbox { Checkbox }
@@ -99,7 +100,7 @@ def:pub IssueImportTable(
 
     return
         <div className="flex flex-col">
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
                 <table className="data-table">
                     <thead>
                         <tr>
@@ -109,7 +110,7 @@ def:pub IssueImportTable(
                             <th className="w-16">Number</th>
                             <th>Title</th>
                             <th className="hidden md:table-cell">Labels</th>
-                            <th className="hidden lg:table-cell">Assignee</th>
+                            <th className="hidden xl:table-cell">Assignee</th>
                             <th className="w-20">State</th>
                             <th className="relative w-24">
                                 <span className="sr-only">Card</span>
@@ -134,16 +135,17 @@ def:pub IssueImportTable(
                                 <td className="num text-muted-foreground">
                                     {"#" + str(r.number)}
                                 </td>
-                                <td className="max-w-80">
+                                <td className="min-w-48">
                                     <a
                                         href={r.html_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="flex items-center gap-1.5 font-medium underline-offset-2 hover:underline"
-                                        title={r.title}
+                                        className="font-medium underline-offset-2 hover:underline"
                                     >
-                                        <span className="truncate">{r.title}</span>
-                                        <IconExternal className="shrink-0 text-subtle"/>
+                                        {r.title}
+                                        <IconExternal
+                                            className="ml-1.5 inline-block align-[-1px] text-subtle"
+                                        />
                                     </a>
                                 </td>
                                 <td
@@ -152,7 +154,7 @@ def:pub IssueImportTable(
                                     {", ".join(r.labels)}
                                 </td>
                                 <td
-                                    className="num hidden text-xs text-muted-foreground lg:table-cell"
+                                    className="num hidden text-xs text-muted-foreground xl:table-cell"
                                 >
                                     {("@" + r.assignee) if r.assignee else ""}
                                 </td>
@@ -161,13 +163,13 @@ def:pub IssueImportTable(
                                 </td>
                                 <td className="text-right">
                                     {if r.already_imported and r.imported_task_id {
-                                        <a
+                                        <Link
                                             key="card"
-                                            href={"/board?task=" + r.imported_task_id}
+                                            to={"/board?task=" + r.imported_task_id}
                                             className="whitespace-nowrap text-[12.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                                         >
                                             Open card
-                                        </a>
+                                        </Link>
                                     } elif r.already_imported {
                                         <span
                                             key="on"
@@ -182,6 +184,59 @@ def:pub IssueImportTable(
                     </tbody>
                 </table>
             </div>
+            <ul className="divide-y md:hidden">
+                {for r in rows {
+                    <li
+                        key={str(r.number)}
+                        className="flex items-start gap-3 px-3 py-2.5"
+                    >
+                        {if r.already_imported {
+                            <span
+                                key="gap"
+                                className="size-4 shrink-0"
+                                aria-hidden="true"
+                            />
+                        } else {
+                            <label key="pick" className="-m-2 flex shrink-0 p-2">
+                                <Checkbox
+                                    aria-label={"Pick issue " + str(r.number)}
+                                    checked={r.number in selected}
+                                    onCheckedChange={lambda { onToggle(r.number); }}
+                                />
+                            </label>
+                        } }
+                        <div className="min-w-0 flex-1">
+                            <a
+                                href={r.html_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="line-clamp-2 text-[13.5px] font-medium underline-offset-2 hover:underline"
+                            >
+                                {r.title}
+                            </a>
+                            <p className="meta mt-0.5 truncate">
+                                <span className="num">{"#" + str(r.number)}</span>
+                                {" · "
+                                    + ("Closed" if r.state == "closed" else "Open")
+                                    + (
+                                        (" · " + ", ".join(r.labels))
+                                            if len(r.labels) > 0
+                                            else ""
+                                    )}
+                            </p>
+                        </div>
+                        {if r.already_imported and r.imported_task_id {
+                            <Link
+                                key="card"
+                                to={"/board?task=" + r.imported_task_id}
+                                className="shrink-0 py-0.5 text-[12.5px] whitespace-nowrap text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                            >
+                                Open card
+                            </Link>
+                        }}
+                    </li>
+                }}
+            </ul>
             {if hasMore {
                 <div key="more" className="flex justify-center border-t py-2">
                     <Button
@@ -202,8 +257,9 @@ def:pub IssueImportTable(
                     key="importbar"
                     className="sticky bottom-0 flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-card px-3 py-2.5"
                 >
-                    <span className="num text-[13px] font-semibold">
-                        {str(len(selected)) + " selected"}
+                    <span className="text-[13px] font-semibold">
+                        <span className="num">{str(len(selected))}</span>
+                        {" selected"}
                     </span>
                     <span className="flex items-center gap-2 text-[13px]">
                         <span className="text-muted-foreground">Add to</span>
@@ -282,12 +338,7 @@ def:pub IssueImportTable(
                         >
                             Clear
                         </Button>
-                        <Button
-                            size="sm"
-                            className="num"
-                            onClick={onImport}
-                            disabled={importing}
-                        >
+                        <Button size="sm" onClick={onImport} disabled={importing}>
                             {if importing {
                                 <Spinner key="sp"/>
                             }}

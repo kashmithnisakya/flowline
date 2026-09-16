@@ -282,17 +282,10 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     }
     shownCount = len(issues) if tab == "issues" else len(pulls);
     moreLeft = issueHasMore if tab == "issues" else prHasMore;
-    countLabel = str(shownCount) + ("+" if moreLeft else "");
-    if tab == "issues" {
-        countLabel = countLabel
-            + (" issue" if shownCount == 1 and not moreLeft else " issues");
-    } else {
-        countLabel = countLabel
-            + (
-                " pull request"
-                    if shownCount == 1 and not moreLeft
-                    else " pull requests"
-            );
+    countNum = str(shownCount) + ("+" if moreLeft else "");
+    countWord = " issues" if tab == "issues" else " pull requests";
+    if shownCount == 1 and not moreLeft {
+        countWord = " issue" if tab == "issues" else " pull request";
     }
     return
         <div className="flex w-full flex-col gap-5">
@@ -519,8 +512,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 }}
                                             </SelectContent>
                                         </Select>
-                                        <span className="num text-xs text-subtle">
-                                            {countLabel}
+                                        <span className="text-xs text-subtle">
+                                            <span className="num">{countNum}</span>
+                                            {countWord}
                                         </span>
                                         <div
                                             className="relative ml-auto w-full sm:w-56"
@@ -629,7 +623,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
             <ConfirmDialog
                 open={confirmDisconnect}
                 title="Disconnect GitHub?"
-                body="Imported tasks and their links stay on the board. flowline stops reading issues and pull requests, and every repository's automation stops with it."
+                body="Imported tasks and their links stay on the board. Flowline stops reading issues and pull requests, and every repository's automation stops with it."
                 confirmLabel="Disconnect"
                 busy={disconnecting}
                 onConfirm={disconnect}
