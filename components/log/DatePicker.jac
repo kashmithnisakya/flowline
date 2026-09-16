@@ -101,7 +101,13 @@ def:pub DatePicker(
         >
             <DropdownMenuTrigger
                 asChild={False}
-                aria-label={(label or "Pick a date") if iconOnly else None}
+                aria-label={(label or "Pick a date")
+                    if iconOnly
+                    else (
+                        (label + ": " + (prettyLabel(value) if value else "not set"))
+                            if label
+                            else None
+                    )}
                 title={(label or "Pick a date") if iconOnly else None}
                 className={(
                     "inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

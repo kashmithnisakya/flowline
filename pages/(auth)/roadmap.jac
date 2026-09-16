@@ -188,9 +188,15 @@ def:pub RoadmapPage -> JsxPage {
         if m.active
     ];
     taskChecklist: list[dict[str, any]] = [];
+    taskCreated: str = "";
+    taskUpdated: str = "";
+    taskPrState: str = "";
     for t in allRows {
         if t.id == editTaskId {
             taskChecklist = t.checklist;
+            taskCreated = t.created_at;
+            taskUpdated = t.updated_at;
+            taskPrState = t.pr_state;
         }
     }
     colKeys = columnKeys();
@@ -352,6 +358,9 @@ def:pub RoadmapPage -> JsxPage {
                 taskId={editTaskId}
                 checklist={taskChecklist}
                 onChecklist={replaceRow}
+                createdAt={taskCreated}
+                historyKey={taskUpdated}
+                prState={taskPrState}
             />
         </div>;
 }

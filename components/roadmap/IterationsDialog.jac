@@ -272,6 +272,7 @@ def:pub IterationsDialog(
                                 <span className={FIELD_LABEL}>Starts</span>
                                 <DatePicker
                                     value={it.start_date}
+                                    label="Starts"
                                     className={DATE_TRIGGER}
                                     onChange={lambda (d: str) { save(
                                         it, it.name, d, it.end_date
@@ -282,6 +283,7 @@ def:pub IterationsDialog(
                                 <span className={FIELD_LABEL}>Ends</span>
                                 <DatePicker
                                     value={it.end_date}
+                                    label="Ends"
                                     className={DATE_TRIGGER}
                                     onChange={lambda (d: str) { save(
                                         it, it.name, it.start_date, d
