@@ -23,8 +23,8 @@ and passes it to one byLLM function. Source:
 
     When the LLM call fails, the walker logs the cause on the
     `flowline.assistant` logger with a hint (check `OPENAI_API_KEY`,
-    `LLM_MODEL` and the account's credit) and reports nothing. The client shows
-    "The assistant is not available right now."
+    `LLM_MODEL` and the account's credit) and reports nothing. Ask shows
+    "The assistant is not available right now. Try again in a moment."
 
 ::: walker AskAssistant
 

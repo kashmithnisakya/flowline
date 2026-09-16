@@ -1,124 +1,127 @@
-/* flowline docs theme. Colours mirror styles/global.css: ink on warm paper
-   with an ember accent in light, pine with teal in dark. */
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap");
+/* flowline docs theme. Colours mirror styles/global.css: a neutral ground with
+   white surfaces and one rust primary in light, charcoal with a brighter rust
+   in dark. Archivo for text and headings, IBM Plex Mono for code. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&display=swap");
 
 :root {
-  --fl-display: "Bricolage Grotesque", "Space Grotesk", system-ui, sans-serif;
+  --fl-display: "Archivo", "Helvetica Neue", Arial, system-ui, sans-serif;
   --fl-radius: 0.7rem;
-  --fl-step-sky: #3d7ea6;
-  --fl-step-indigo: #6f63b8;
-  --fl-step-amber: #c4891f;
-  --fl-step-rose: #c6544d;
-  --fl-step-emerald: #4e8c5e;
-  --fl-step-slate: #7c7568;
+  --fl-step-sky: #2e6c97;
+  --fl-step-indigo: #5550ac;
+  --fl-step-amber: #a1711a;
+  --fl-step-rose: #a34b83;
+  --fl-step-emerald: #387a51;
+  --fl-step-slate: #6a726e;
 }
 
 /* ------------------------------------------------------------ light scheme */
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: #14120f;
-  --md-primary-fg-color--light: #2a2622;
-  --md-primary-fg-color--dark: #0b0a08;
-  --md-primary-bg-color: #f6f2eb;
-  --md-primary-bg-color--light: rgba(246, 242, 235, 0.72);
-  --md-accent-fg-color: #e8552f;
-  --md-accent-fg-color--transparent: rgba(232, 85, 47, 0.1);
-  --md-accent-bg-color: #fffdfa;
-  --md-default-bg-color: #fbf8f3;
-  --md-default-fg-color: rgba(20, 18, 15, 0.9);
-  --md-default-fg-color--light: rgba(20, 18, 15, 0.64);
-  --md-default-fg-color--lighter: rgba(20, 18, 15, 0.36);
-  --md-default-fg-color--lightest: rgba(20, 18, 15, 0.08);
-  --md-code-bg-color: #f1ece3;
-  --md-code-fg-color: #2a2622;
-  --md-code-hl-color: rgba(232, 85, 47, 0.14);
-  --md-typeset-a-color: #b23c1c;
-  --md-typeset-mark-color: rgba(232, 162, 47, 0.3);
-  --md-footer-bg-color: #14120f;
-  --md-footer-bg-color--dark: #0b0a08;
-  --md-footer-fg-color: #f6f2eb;
-  --md-admonition-bg-color: #fffdfa;
-  --md-mermaid-font-family: "Space Grotesk", system-ui, sans-serif;
-  --md-mermaid-node-bg-color: #fffdfa;
-  --md-mermaid-node-fg-color: #14120f;
-  --md-mermaid-edge-color: #6b6459;
-  --md-mermaid-label-bg-color: #fbf8f3;
-  --md-mermaid-label-fg-color: #3c372f;
-  --md-mermaid-sequence-actor-bg-color: #fffdfa;
-  --md-mermaid-sequence-actor-fg-color: #14120f;
-  --md-mermaid-sequence-actor-border-color: #e6ddcc;
-  --md-mermaid-sequence-actor-line-color: #cfc5b3;
-  --md-mermaid-sequence-note-bg-color: #f1ece3;
-  --md-mermaid-sequence-note-border-color: #e6ddcc;
-  --md-mermaid-sequence-message-line-color: #6b6459;
-  --md-mermaid-sequence-number-bg-color: #e8552f;
-  --md-mermaid-sequence-number-fg-color: #fffdfa;
-  --fl-surface: #fffdfa;
-  --fl-border: #e6ddcc;
-  --fl-muted: #6b6459;
-  --fl-brand: #e8552f;
-  --fl-brand-ink: #b23c1c;
-  --fl-brand-wash: rgba(232, 85, 47, 0.09);
-  --fl-hero-bg: #14120f;
-  --fl-hero-fg: #f6f2eb;
-  --fl-hero-muted: rgba(246, 242, 235, 0.68);
-  --fl-shadow: 0 1px 2px rgb(30 24 15 / 0.05), 0 10px 24px -12px rgb(30 24 15 / 0.18);
+  --md-primary-fg-color: #161a18;
+  --md-primary-fg-color--light: #2a302d;
+  --md-primary-fg-color--dark: #0d100f;
+  --md-primary-bg-color: #f2f3f1;
+  --md-primary-bg-color--light: rgba(242, 243, 241, 0.72);
+  --md-accent-fg-color: #bf3f0b;
+  --md-accent-fg-color--transparent: rgba(191, 63, 11, 0.1);
+  --md-accent-bg-color: #ffffff;
+  --md-default-bg-color: #f2f3f1;
+  --md-default-fg-color: rgba(22, 26, 24, 0.9);
+  --md-default-fg-color--light: rgba(22, 26, 24, 0.66);
+  --md-default-fg-color--lighter: rgba(22, 26, 24, 0.36);
+  --md-default-fg-color--lightest: rgba(22, 26, 24, 0.08);
+  --md-code-bg-color: #e7eae6;
+  --md-code-fg-color: #2a302d;
+  --md-code-hl-color: rgba(191, 63, 11, 0.14);
+  --md-typeset-a-color: #bf3f0b;
+  --md-typeset-mark-color: rgba(161, 113, 26, 0.28);
+  --md-footer-bg-color: #161a18;
+  --md-footer-bg-color--dark: #0d100f;
+  --md-footer-fg-color: #f2f3f1;
+  --md-admonition-bg-color: #ffffff;
+  --md-mermaid-font-family: "Archivo", system-ui, sans-serif;
+  --md-mermaid-node-bg-color: #ffffff;
+  --md-mermaid-node-fg-color: #161a18;
+  --md-mermaid-edge-color: #6f7672;
+  --md-mermaid-label-bg-color: #f2f3f1;
+  --md-mermaid-label-fg-color: #4f5753;
+  --md-mermaid-sequence-actor-bg-color: #ffffff;
+  --md-mermaid-sequence-actor-fg-color: #161a18;
+  --md-mermaid-sequence-actor-border-color: #d3d8d2;
+  --md-mermaid-sequence-actor-line-color: #c2c8c1;
+  --md-mermaid-sequence-note-bg-color: #e7eae6;
+  --md-mermaid-sequence-note-border-color: #d3d8d2;
+  --md-mermaid-sequence-message-line-color: #6f7672;
+  --md-mermaid-sequence-number-bg-color: #bf3f0b;
+  --md-mermaid-sequence-number-fg-color: #ffffff;
+  --fl-surface: #ffffff;
+  --fl-border: #d3d8d2;
+  --fl-muted: #4f5753;
+  --fl-brand: #bf3f0b;
+  --fl-brand-ink: #bf3f0b;
+  --fl-brand-fg: #ffffff;
+  --fl-brand-wash: rgba(191, 63, 11, 0.09);
+  --fl-hero-bg: #161a18;
+  --fl-hero-fg: #f2f3f1;
+  --fl-hero-muted: rgba(242, 243, 241, 0.68);
+  --fl-shadow: 0 1px 2px rgb(22 26 24 / 0.06), 0 8px 24px rgb(22 26 24 / 0.1);
 }
 
 /* ------------------------------------------------------------- dark scheme */
 [data-md-color-scheme="slate"] {
-  --md-hue: 170;
-  --md-primary-fg-color: #0c1110;
-  --md-primary-fg-color--light: #18201f;
-  --md-primary-fg-color--dark: #070a0a;
-  --md-primary-bg-color: #e6edeb;
-  --md-primary-bg-color--light: rgba(230, 237, 235, 0.7);
-  --md-accent-fg-color: #2dd4bf;
-  --md-accent-fg-color--transparent: rgba(45, 212, 191, 0.12);
-  --md-accent-bg-color: #06211d;
-  --md-default-bg-color: #101514;
-  --md-default-bg-color--light: rgba(16, 21, 20, 0.54);
-  --md-default-fg-color: rgba(230, 237, 235, 0.9);
-  --md-default-fg-color--light: rgba(230, 237, 235, 0.64);
-  --md-default-fg-color--lighter: rgba(230, 237, 235, 0.34);
-  --md-default-fg-color--lightest: rgba(230, 237, 235, 0.09);
-  --md-code-bg-color: #18201f;
-  --md-code-fg-color: #d5dfdc;
-  --md-code-hl-color: rgba(45, 212, 191, 0.16);
-  --md-typeset-a-color: #2dd4bf;
-  --md-footer-bg-color: #0c1110;
-  --md-footer-bg-color--dark: #070a0a;
-  --md-admonition-bg-color: #141b1a;
-  --md-mermaid-font-family: "Space Grotesk", system-ui, sans-serif;
-  --md-mermaid-node-bg-color: #18201f;
-  --md-mermaid-node-fg-color: #e6edeb;
-  --md-mermaid-edge-color: #93a5a1;
-  --md-mermaid-label-bg-color: #101514;
-  --md-mermaid-label-fg-color: #c4d0cd;
-  --md-mermaid-sequence-actor-bg-color: #18201f;
-  --md-mermaid-sequence-actor-fg-color: #e6edeb;
-  --md-mermaid-sequence-actor-border-color: #2a3533;
-  --md-mermaid-sequence-actor-line-color: #3a4745;
-  --md-mermaid-sequence-note-bg-color: #1f2827;
-  --md-mermaid-sequence-note-border-color: #2a3533;
-  --md-mermaid-sequence-message-line-color: #93a5a1;
-  --md-mermaid-sequence-number-bg-color: #2dd4bf;
-  --md-mermaid-sequence-number-fg-color: #06211d;
-  --fl-surface: #161d1c;
-  --fl-border: rgba(230, 237, 235, 0.11);
-  --fl-muted: #93a5a1;
-  --fl-brand: #2dd4bf;
-  --fl-brand-ink: #2dd4bf;
-  --fl-brand-wash: rgba(45, 212, 191, 0.1);
-  --fl-hero-bg: #0c1110;
-  --fl-hero-fg: #e6edeb;
-  --fl-hero-muted: rgba(230, 237, 235, 0.66);
-  --fl-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 28px -12px rgb(0 0 0 / 0.55);
-  --fl-step-sky: #6fb1d6;
-  --fl-step-indigo: #a29be0;
-  --fl-step-amber: #e5b14c;
-  --fl-step-rose: #e8827b;
-  --fl-step-emerald: #7dc08c;
-  --fl-step-slate: #a79f92;
+  --md-hue: 150;
+  --md-primary-fg-color: #0d100f;
+  --md-primary-fg-color--light: #191d1b;
+  --md-primary-fg-color--dark: #080a09;
+  --md-primary-bg-color: #e4e8e5;
+  --md-primary-bg-color--light: rgba(228, 232, 229, 0.7);
+  --md-accent-fg-color: #f0702e;
+  --md-accent-fg-color--transparent: rgba(240, 112, 46, 0.12);
+  --md-accent-bg-color: #1b0b02;
+  --md-default-bg-color: #111413;
+  --md-default-bg-color--light: rgba(17, 20, 19, 0.54);
+  --md-default-fg-color: rgba(228, 232, 229, 0.9);
+  --md-default-fg-color--light: rgba(228, 232, 229, 0.64);
+  --md-default-fg-color--lighter: rgba(228, 232, 229, 0.34);
+  --md-default-fg-color--lightest: rgba(228, 232, 229, 0.09);
+  --md-code-bg-color: #1f2421;
+  --md-code-fg-color: #d5dbd7;
+  --md-code-hl-color: rgba(240, 112, 46, 0.16);
+  --md-typeset-a-color: #f0702e;
+  --md-footer-bg-color: #0d100f;
+  --md-footer-bg-color--dark: #080a09;
+  --md-admonition-bg-color: #191d1b;
+  --md-mermaid-font-family: "Archivo", system-ui, sans-serif;
+  --md-mermaid-node-bg-color: #191d1b;
+  --md-mermaid-node-fg-color: #e4e8e5;
+  --md-mermaid-edge-color: #7c8580;
+  --md-mermaid-label-bg-color: #111413;
+  --md-mermaid-label-fg-color: #a0a8a4;
+  --md-mermaid-sequence-actor-bg-color: #191d1b;
+  --md-mermaid-sequence-actor-fg-color: #e4e8e5;
+  --md-mermaid-sequence-actor-border-color: #2d3330;
+  --md-mermaid-sequence-actor-line-color: #3c4440;
+  --md-mermaid-sequence-note-bg-color: #1f2421;
+  --md-mermaid-sequence-note-border-color: #2d3330;
+  --md-mermaid-sequence-message-line-color: #7c8580;
+  --md-mermaid-sequence-number-bg-color: #f0702e;
+  --md-mermaid-sequence-number-fg-color: #1b0b02;
+  --fl-surface: #191d1b;
+  --fl-border: #2d3330;
+  --fl-muted: #a0a8a4;
+  --fl-brand: #f0702e;
+  --fl-brand-ink: #f0702e;
+  --fl-brand-fg: #1b0b02;
+  --fl-brand-wash: rgba(240, 112, 46, 0.1);
+  --fl-hero-bg: #0d100f;
+  --fl-hero-fg: #e4e8e5;
+  --fl-hero-muted: rgba(228, 232, 229, 0.66);
+  --fl-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+  --fl-step-sky: #6faed6;
+  --fl-step-indigo: #a29de3;
+  --fl-step-amber: #ddae52;
+  --fl-step-rose: #d98bc2;
+  --fl-step-emerald: #79c08e;
+  --fl-step-slate: #a3aba7;
 }
 
 /* -------------------------------------------------------------- typography */
@@ -137,6 +140,7 @@
 
 .md-typeset h1 {
   font-weight: 750;
+  font-stretch: 112%;
   letter-spacing: -0.025em;
   color: var(--md-default-fg-color);
 }
@@ -204,17 +208,13 @@
 .md-typeset .md-button--primary {
   background-color: var(--fl-brand);
   border-color: var(--fl-brand);
-  color: #fffdfa;
-}
-
-[data-md-color-scheme="slate"] .md-typeset .md-button--primary {
-  color: #06211d;
+  color: var(--fl-brand-fg);
 }
 
 .md-typeset .md-button--primary:hover,
 .md-typeset .md-button--primary:focus {
   filter: brightness(1.06);
-  color: #fffdfa;
+  color: var(--fl-brand-fg);
 }
 
 .md-typeset .admonition,
@@ -278,19 +278,9 @@
 
 /* ---------------------------------------------------------------- hero */
 .fl-hero {
-  background:
-    radial-gradient(60rem 30rem at 85% -10%, rgba(232, 85, 47, 0.22), transparent 60%),
-    radial-gradient(40rem 24rem at -10% 120%, rgba(44, 85, 69, 0.35), transparent 60%),
-    var(--fl-hero-bg);
+  background: var(--fl-hero-bg);
   color: var(--fl-hero-fg);
   overflow: hidden;
-}
-
-[data-md-color-scheme="slate"] .fl-hero {
-  background:
-    radial-gradient(60rem 30rem at 85% -10%, rgba(45, 212, 191, 0.16), transparent 60%),
-    radial-gradient(40rem 24rem at -10% 120%, rgba(111, 99, 184, 0.18), transparent 60%),
-    var(--fl-hero-bg);
 }
 
 .fl-hero__inner {
@@ -322,7 +312,6 @@
   height: 0.45rem;
   border-radius: 50%;
   background: var(--fl-brand);
-  box-shadow: 0 0 0 3px rgba(232, 85, 47, 0.25);
 }
 
 .fl-hero__title {
@@ -330,6 +319,7 @@
   font-size: clamp(1.7rem, 3.4vw, 2.6rem);
   line-height: 1.06;
   font-weight: 760;
+  font-stretch: 115%;
   letter-spacing: -0.035em;
   color: var(--fl-hero-fg);
 }
@@ -375,18 +365,14 @@
 .fl-hero .md-button--primary {
   background: var(--fl-brand);
   border-color: var(--fl-brand);
-  color: #fffdfa;
-}
-
-[data-md-color-scheme="slate"] .fl-hero .md-button--primary {
-  color: #06211d;
+  color: var(--fl-brand-fg);
 }
 
 .fl-hero .md-button--primary:hover {
   background: var(--fl-brand);
   border-color: var(--fl-brand);
   filter: brightness(1.08);
-  color: #fffdfa;
+  color: var(--fl-brand-fg);
 }
 
 .fl-hero__cmd {
@@ -416,11 +402,12 @@
   user-select: none;
 }
 
-/* The miniature board: five steps of a flow line with a few cards. */
+/* The miniature board: the Simple template's four steps with a few cards. As
+   on the real board, a lane's colour is its 2px rule; cards stay neutral. */
 .fl-board {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
   padding: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -457,16 +444,15 @@
   flex: none;
   width: 0.4rem;
   height: 0.4rem;
-  border-radius: 50%;
+  border-radius: 2px;
   background: var(--lane);
 }
 
 .fl-card {
   padding: 0.45rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: 0.3rem;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-left: 2px solid var(--lane);
 }
 
 .fl-card i {
@@ -483,24 +469,16 @@
 }
 
 .fl-card--hot {
-  animation: fl-float 5s ease-in-out infinite;
   background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-@keyframes fl-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fl-card--hot { animation: none; }
-}
-
-.fl-lane--sky { --lane: #6fb1d6; }
-.fl-lane--indigo { --lane: #a29be0; }
-.fl-lane--amber { --lane: #e5b14c; }
-.fl-lane--rose { --lane: #e8827b; }
-.fl-lane--emerald { --lane: #7dc08c; }
+/* The hero is dark in both schemes, so its lanes use the dark step colours. */
+.fl-lane--sky { --lane: #6faed6; }
+.fl-lane--indigo { --lane: #a29de3; }
+.fl-lane--amber { --lane: #ddae52; }
+.fl-lane--rose { --lane: #d98bc2; }
+.fl-lane--emerald { --lane: #79c08e; }
 
 @media screen and (max-width: 60em) {
   .fl-hero__inner {
@@ -592,13 +570,9 @@
   padding: 0.12rem 0.45rem;
   border-radius: 0.35rem 0 0 0.35rem;
   background: var(--fl-brand);
-  color: #fffdfa;
+  color: var(--fl-brand-fg);
   font-weight: 700;
   letter-spacing: 0.04em;
-}
-
-[data-md-color-scheme="slate"] .md-typeset .jac-verb {
-  color: #06211d;
 }
 
 .md-typeset .jac-meta code.jac-path {
@@ -642,8 +616,12 @@
 }
 
 .md-typeset .jac-chip--warn {
-  border-color: #c4891f;
-  color: #8f6314;
+  border-color: var(--fl-step-amber);
+  color: #8a5a00;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .jac-chip--warn {
+  color: #e3ab48;
 }
 
 .md-typeset .jac-src {

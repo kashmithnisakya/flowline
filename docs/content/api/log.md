@@ -13,6 +13,10 @@ range: `page_size` defaults to 200 and is capped at 500. Rows are ordered by
 date (newest first), then `member_name`, then id. An empty or inverted range,
 or a workspace with no log, reports an empty page.
 
+`task_id` (optional) keeps only that task's entries before paging, so `total`
+and `has_more` count that task alone. The task sheet's **Travel so far** reads
+a task's history this way. An empty `task_id` returns every entry.
+
 ```bash
 curl -X POST $BASE/walker/ListLogEntries -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \

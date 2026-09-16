@@ -24,8 +24,8 @@ theme:
   logo: assets/brand/logo-mark-dark.svg
   favicon: assets/brand/favicon.svg
   font:
-    text: Space Grotesk
-    code: JetBrains Mono
+    text: Archivo
+    code: IBM Plex Mono
   icon:
     repo: fontawesome/brands/github
     edit: material/pencil-outline

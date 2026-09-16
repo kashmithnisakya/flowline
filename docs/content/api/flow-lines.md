@@ -39,8 +39,9 @@ unknown or foreign `step_id` or `project_id` reports an empty page.
 
 ::: walker ApplyTemplate h3
 
-Seeds an empty flow line from a template in one call. The only template today
-is `jaseci`.
+Seeds an empty flow line from a template in one call. The templates today are
+`simple` (shown as Simple) and `jaseci` (shown as Software team); see
+[Templates](../concepts/flow-lines.md#templates).
 
 **Reports** one list of [`StepView`](types.md#stepview):
 
@@ -48,7 +49,7 @@ is `jaseci`.
 | --- | --- | --- |
 | Steps already exist | The existing steps | Nothing |
 | Unknown `template_key` | `[]` | The empty box only |
-| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ...; transitions with labels and carries; `template_key`; the template's roles (existing names kept) |
+| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ...; transitions with labels and carries; `template_key`; the template's roles, if it has any (existing names kept) |
 
 Existing tasks are not touched; tasks with no step start landing on the new
 steps through the status fallback.
