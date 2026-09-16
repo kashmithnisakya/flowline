@@ -162,12 +162,15 @@ def github_install_once(page) -> None:
                 body: "{}",
             });
             const d = await r.json();
-            const reports = d.reports || (d.data && d.data.result && d.data.result.reports) || [];
+            const reports = (d.data && d.data.reports) || d.reports || [];
             return (reports[0] && reports[0].url) || JSON.stringify(reports[0] || d);
         }""",
         BASE,
     )
-    state = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("state", [""])[0]
+    # A dumped payload holds the URL as text, so parsing it would yield a garbage state.
+    state = ""
+    if url.startswith("http"):
+        state = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("state", [""])[0]
     assert state, f"StartGithubInstall gave no install URL: {url[:200]}"
 
     step("github: land on the redirect and finish the install once")
