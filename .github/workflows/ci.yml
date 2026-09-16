@@ -125,13 +125,20 @@ jobs:
 
       # `bundle_storage_class` is the placeholder for the RWX check a real
       # deploy satisfies on the platform; it is added to a scratch copy only.
+      # So is `[scale.secrets]`: jachammer stages one `KEY = "${KEY}"` per
+      # .env key, and jac 0.37.18 fails the dry run on a bare ${VAR} in
+      # jac.toml that no secret supplies to the pods.
       - name: Deploy gate (dry-run manifests build a client bundle and run 2 workers)
+        env:
+          GITHUB_APP_WEBHOOK_SECRET: ci-placeholder
+          GRAFANA_ADMIN_PASSWORD: ci-placeholder
         run: |
           cp jac.toml /tmp/jac.toml.orig
           trap 'mv /tmp/jac.toml.orig jac.toml' EXIT
           python3 - <<'PY'
           s = open("jac.toml", encoding="utf-8").read()
           s = s.replace("[scale.kubernetes]\n", '[scale.kubernetes]\nbundle_storage_class = "ci-placeholder"\n', 1)
+          s += '\n[scale.secrets]\nGITHUB_APP_WEBHOOK_SECRET = "${GITHUB_APP_WEBHOOK_SECRET}"\nGRAFANA_ADMIN_PASSWORD = "${GRAFANA_ADMIN_PASSWORD}"\n'
           open("jac.toml", "w", encoding="utf-8").write(s)
           PY
           jac scale deploy --dry-run --show-yaml main.jac > manifests.yaml

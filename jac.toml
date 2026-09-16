@@ -68,13 +68,16 @@ count = "2"
 host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
 
+# SSO is optional, so an unset pair defaults to empty (the provider reads as not
+# configured). Since jac 0.37.18 a deploy refuses a bare ${VAR} the pods will not
+# get; the webhook secret and Grafana password stay bare on purpose.
 [scale.sso.google]
-client_id = "${GOOGLE_CLIENT_ID}"
-client_secret = "${GOOGLE_CLIENT_SECRET}"
+client_id = "${GOOGLE_CLIENT_ID:-}"
+client_secret = "${GOOGLE_CLIENT_SECRET:-}"
 
 [scale.sso.github]
-client_id = "${GITHUB_CLIENT_ID}"
-client_secret = "${GITHUB_CLIENT_SECRET}"
+client_id = "${GITHUB_CLIENT_ID:-}"
+client_secret = "${GITHUB_CLIENT_SECRET:-}"
 
 # /metrics, walker metrics and one Prometheus + Grafana pair in the namespace.
 # k8s_metrics_enabled defaults to true and adds kube-state-metrics plus a
