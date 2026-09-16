@@ -387,7 +387,7 @@ def:pub TaskTable(
                                 <button
                                     type="button"
                                     data-task-row={str(i)}
-                                    className="max-w-full scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+                                    className="max-w-full scroll-mt-28 scroll-mb-16 rounded-xs text-left leading-snug font-medium [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring focus-visible:outline-solid"
                                     onFocus={lambda { pointAt(i); }}
                                 >
                                     {t.title}
