@@ -75,6 +75,30 @@ def:pub ProjectsSection(
         for p in projects
         if p.active
     ];
+    # The GitHub sync never checks `active`, so an archived project with a
+    # linked repository still receives issues; the confirm says so.
+    linkedRepos: list[str] = [];
+    autoRepos: list[str] = [];
+    for r in repos {
+        if archiveId and r.project_id == archiveId {
+            linkedRepos.append(r.full_name);
+            if r.auto_sync {
+                autoRepos.append(r.full_name);
+            }
+        }
+    }
+    archiveBody = "It leaves the project pickers, so no one can pick it for a new task. Its tasks, log entries and repositories keep pointing at it.";
+    if len(autoRepos) > 0 {
+        archiveBody = archiveBody
+            + " Import issues is on for "
+            + ", ".join(autoRepos)
+            + ", so GitHub keeps adding new issues to it until you turn that off.";
+    } elif len(linkedRepos) > 0 {
+        archiveBody = archiveBody
+            + " Issues you import from "
+            + ", ".join(linkedRepos)
+            + " still land in it.";
+    }
 
     return
         <div className="flex flex-col gap-4">
@@ -132,7 +156,7 @@ def:pub ProjectsSection(
             <ConfirmDialog
                 open={bool(archiveId)}
                 title={"Archive " + archiveName + "?"}
-                body="It leaves the project pickers and stops taking new tasks. Its tasks, log entries and repositories keep pointing at it."
+                body={archiveBody}
                 confirmLabel="Archive project"
                 busy={busy}
                 onConfirm={archiveProject}

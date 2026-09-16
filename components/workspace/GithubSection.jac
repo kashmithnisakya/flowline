@@ -266,12 +266,17 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                 + shortStamp(conn.webhook_seen_at);
         }
     }
+    # Webhook and sync stamps belong to the installation, not a repository, so
+    # the status sits in the connection strip beside the account.
     syncLine = "Updates arrive when the board syncs";
     if lastEventAgo and not liveNow {
         syncLine = "Last GitHub event " + lastEventAgo;
     }
     syncLine = syncLine
         + ((" · synced " + lastSyncAgo) if lastSyncAgo else " · not synced yet");
+    if connectedAgo {
+        exactStamps = "Connected " + connectedAgo + " (" + exactStamps + ")";
+    }
     # The import destination is the repo's own project, chosen when the repo
     # was added; the import bar shows it instead of asking every time.
     repoProjectName: str = "";
@@ -307,18 +312,45 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                         <span className="num text-[13px] font-medium">
                             {"@" + login}
                         </span>
-                        <span className="meta" title={exactStamps}>
-                            {("Connected " + connectedAgo)
-                                if connectedAgo
-                                else "Connected"}
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={lambda { confirmDisconnect = True; }}
-                        >
-                            Disconnect
-                        </Button>
+                        {if liveNow {
+                            <span
+                                key="live"
+                                className="flex items-center gap-1.5 text-[12.5px] text-success"
+                                title={exactStamps}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="size-[7px] shrink-0 rounded-full bg-success"
+                                />
+                                {"Live · last event " + lastEventAgo}
+                            </span>
+                        } else {
+                            <span
+                                key="quiet"
+                                className="text-[12.5px] text-muted-foreground"
+                                title={exactStamps}
+                            >
+                                {syncLine}
+                            </span>
+                        } }
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={syncNow}
+                                disabled={syncing}
+                            >
+                                <IconSync/>
+                                {"Syncing…" if syncing else "Sync now"}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={lambda { confirmDisconnect = True; }}
+                            >
+                                Disconnect
+                            </Button>
+                        </div>
                     </div>
                 }}
             </div>
@@ -349,7 +381,6 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                     <RepoRail
                         repos={repos}
                         selected={repoId}
-                        lastEvent={lastEventAgo}
                         onSelect={selectRepo}
                         onAdd={openPicker}
                     />
@@ -394,37 +425,13 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 > 0
                                             else ""}
                                     </h2>
-                                    {if liveNow {
-                                        <span
-                                            key="live"
-                                            className="flex items-center gap-1.5 text-[12.5px] text-success"
-                                            title={"Last GitHub event " + lastEventAgo}
-                                        >
-                                            <span
-                                                aria-hidden="true"
-                                                className="size-[7px] rounded-full bg-success"
-                                            />
-                                            Live updates on
-                                        </span>
-                                    } else {
-                                        <span
-                                            key="quiet"
-                                            className="text-[12.5px] text-muted-foreground"
-                                            title={exactStamps}
-                                        >
-                                            {syncLine}
-                                        </span>
-                                    } }
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="ml-auto"
-                                        onClick={syncNow}
-                                        disabled={syncing}
+                                    <span
+                                        className="text-[12.5px] text-muted-foreground"
                                     >
-                                        <IconSync/>
-                                        {"Syncing…" if syncing else "Sync now"}
-                                    </Button>
+                                        {("Issues land in " + repoProjectName)
+                                            if repoProjectName
+                                            else "No project picked for its issues"}
+                                    </span>
                                 </div>
                                 {for r in [
                                     x
@@ -524,7 +531,13 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             />
                                             <Input
                                                 value={searchDraft}
-                                                className="h-8 pr-8 pl-8"
+                                                className={"h-8 pl-8 "
+                                                    + (
+                                                        "pr-14"
+                                                            if searchDraft
+                                                                != searchQuery
+                                                            else "pr-8"
+                                                    )}
                                                 placeholder={"Search issues"
                                                     if tab == "issues"
                                                     else "Search pull requests"}
@@ -537,6 +550,15 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                     runSearch();
                                                 }}}
                                             />
+                                            {if searchDraft != searchQuery {
+                                                <span
+                                                    key="enter"
+                                                    aria-hidden="true"
+                                                    className="kbd pointer-events-none absolute top-1/2 right-8 -translate-y-1/2"
+                                                >
+                                                    ↵
+                                                </span>
+                                            }}
                                             {if searchQuery or searchDraft {
                                                 <button
                                                     key="clear"

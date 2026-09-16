@@ -1,6 +1,6 @@
 """The roster: one row per person, with roles and projects assigned in the row
-through checkbox menus. A table at md and up, a two-line list on a phone; both
-use the same menus and the same row menu (Edit, Archive).
+through checkbox menus. A fixed-layout table at md and up, so a long list of
+picks truncates instead of widening the column; a two-line list on a phone.
 """
 
 import from ...models { Project, MemberView }
@@ -48,14 +48,20 @@ def:pub MemberTable(
     return
         <div className="flex flex-col gap-3">
             <div className="surface hidden md:block">
-                <table className="data-table">
+                <table className="data-table table-fixed">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Roles</th>
-                            <th>Projects</th>
+                            <th className={"w-[28%]" if showTags else "w-[34%]"}>
+                                Name
+                            </th>
+                            <th className={"w-[24%]" if showTags else "w-[30%]"}>
+                                Roles
+                            </th>
+                            <th className={"w-[22%]" if showTags else ""}>Projects</th>
                             {if showTags {
-                                <th key="tags">Tags</th>
+                                <th key="tags" className="hidden lg:table-cell">
+                                    Tags
+                                </th>
                             }}
                             <th className="relative w-12">
                                 <span className="sr-only">Actions</span>
@@ -76,12 +82,24 @@ def:pub MemberTable(
                                             <div className="truncate font-medium">
                                                 {m.name}
                                             </div>
-                                            {if m.github_username {
+                                            {if m.email or m.github_username {
                                                 <div
-                                                    key="gh"
-                                                    className="num truncate text-xs text-muted-foreground"
+                                                    key="contact"
+                                                    className="truncate text-xs text-muted-foreground"
+                                                    title={m.email}
                                                 >
-                                                    {"@" + m.github_username}
+                                                    {m.email}
+                                                    {" · "
+                                                        if (
+                                                            m.email
+                                                            and m.github_username
+                                                        )
+                                                        else ""}
+                                                    {if m.github_username {
+                                                        <span key="gh" className="num">
+                                                            {"@" + m.github_username}
+                                                        </span>
+                                                    }}
                                                 </div>
                                             }}
                                         </div>
@@ -118,7 +136,10 @@ def:pub MemberTable(
                                     />
                                 </td>
                                 {if showTags {
-                                    <td key="tags" className="text-muted-foreground">
+                                    <td
+                                        key="tags"
+                                        className="hidden truncate text-muted-foreground lg:table-cell"
+                                    >
                                         {", ".join(m.tags)}
                                     </td>
                                 }}

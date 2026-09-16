@@ -1,6 +1,6 @@
 """The row overflow menu: an edit action, then the destructive one after a
 separator. Non-modal, so a dialog opened from an item never inherits the
-menu's pointer lock on the page.
+menu's pointer lock on the page. A 40px target on a phone, 28px in a table.
 """
 
 import from ..ui.button { Button }
@@ -27,7 +27,7 @@ def:pub RowActions(
                     variant="ghost"
                     size="icon-sm"
                     aria-label={label}
-                    className="text-subtle hover:text-foreground aria-expanded:text-foreground"
+                    className="size-10 text-subtle hover:text-foreground aria-expanded:text-foreground md:size-7"
                 >
                     <IconMore/>
                 </Button>

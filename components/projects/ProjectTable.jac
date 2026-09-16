@@ -109,18 +109,20 @@ def:pub ProjectTable(
                                 />
                             </div>
                             <div
-                                className="num text-[12.5px] text-muted-foreground md:col-start-4 md:text-right md:text-[13px]"
+                                className="text-[12.5px] text-muted-foreground md:col-start-4 md:text-right md:text-[13px]"
                             >
-                                {(
-                                    str(
-                                        openCounts[jid(p)]
-                                            if jid(p) in openCounts
-                                            else 0
-                                    )
-                                    + " open"
-                                )
-                                    if countsReady
-                                    else ""}
+                                {if countsReady {
+                                    <span key="open">
+                                        <span className="num">
+                                            {str(
+                                                openCounts[jid(p)]
+                                                    if jid(p) in openCounts
+                                                    else 0
+                                            )}
+                                        </span>
+                                        {" open"}
+                                    </span>
+                                }}
                             </div>
                         </div>
                         <div

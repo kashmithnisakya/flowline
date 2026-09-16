@@ -1,6 +1,6 @@
 """The repositories this workspace reads, and which one the pane on the right
-is showing. The selected row carries the project its issues land in, and the
-time GitHub last told us something.
+is showing. Each row carries the project its issues land in; live state is
+the installation's, so it lives in the connection strip, not here.
 """
 
 import from ...models { RepoView }
@@ -10,7 +10,6 @@ import from ..workspace.icons { IconPlus }
 def:pub RepoRail(
     repos: list[RepoView],
     selected: str,
-    lastEvent: str,
     onSelect: Callable[[str], None],
     onAdd: Callable[[], None]
 ) -> JsxElement {
@@ -53,12 +52,7 @@ def:pub RepoRail(
                                 {r.full_name}
                             </span>
                             <span className="truncate text-xs text-muted-foreground">
-                                {(r.project_name or "No project")
-                                    + (
-                                        (" · last event " + lastEvent)
-                                            if (r.id == selected and lastEvent)
-                                            else ""
-                                    )}
+                                {r.project_name or "No project"}
                             </span>
                         </button>
                     </li>
