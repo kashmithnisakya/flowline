@@ -9,7 +9,7 @@ obj QA {
 glob FAQS: list[QA] = [
          QA(
              q="Does it connect to GitHub?",
-             a="Yes. Install the GitHub App on the repositories you pick to import issues as cards and see pull request state on them. GitHub tells Flowline about changes as they happen. For each repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue. Both stay off until you turn them on. There is no Slack, Teams or mobile app today."
+             a="Yes. Install the GitHub App on the repositories you pick to import issues as cards and see the state of their pull requests. GitHub tells Flowline about changes as they happen. For each repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue. Both stay off until you turn them on. There is no Slack, Teams or mobile app today."
          ),
          QA(
              q="Where does my data live?",

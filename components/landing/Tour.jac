@@ -4,7 +4,7 @@ The diagram keeps its natural size and scrolls sideways on phones rather than
 shrinking its 12px labels.
 """
 
-import from ..common.Avatar { Avatar }
+import from ..common.Avatar { Avatar, AvatarStack }
 import from ..common.KindGlyph { KindGlyph }
 import from ..common.StepName { StepName }
 
@@ -315,16 +315,8 @@ def BoardFragment -> JsxElement {
                                     className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                                 >
                                     <span className="truncate">{c["meta"]}</span>
-                                    <span className="ml-auto flex shrink-0">
-                                        {for (i, who) in enumerate(c["who"]) {
-                                            <span
-                                                key={who}
-                                                className={"inline-flex rounded-full ring-2 ring-card"
-                                                    + (" -ml-1.5" if i > 0 else "")}
-                                            >
-                                                <Avatar name={who} size="xs"/>
-                                            </span>
-                                        }}
+                                    <span className="ml-auto inline-flex shrink-0">
+                                        <AvatarStack names={c["who"]} max={2}/>
                                     </span>
                                 </span>
                             </div>

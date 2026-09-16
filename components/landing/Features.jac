@@ -13,7 +13,7 @@ glob FEATURES: list[Feature] = [
          Feature(
              key="github",
              label="GitHub",
-             body="Install the GitHub App on the repositories you pick. Issues become cards, pull request and review state shows on them, and changes reach an open board within seconds. Per repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue."
+             body="Install the GitHub App on the repositories you pick. Issues become cards, a card's details show its pull request's state, and GitHub's updates reach an open board in under half a minute. Per repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue."
          ),
          Feature(
              key="assistant",

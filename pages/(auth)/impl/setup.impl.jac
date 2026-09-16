@@ -211,7 +211,9 @@ impl SetupPage.finish -> None {
         return;
     }
     if choice == SCRATCH {
-        navigate("/flowlines");
+        # start=blank asks the flow line page for its empty designer rather
+        # than the template picker; nothing is written here.
+        navigate("/flowlines?start=blank");
         return;
     }
     saveError = "";
