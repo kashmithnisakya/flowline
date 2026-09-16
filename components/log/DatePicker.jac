@@ -1,6 +1,5 @@
 """A month-grid date picker replacing the native input: the trigger shows the
 date the way a person says it, the dropdown is a grid with prev/next controls.
-`iconOnly` shrinks the trigger to a calendar button named by `label`.
 """
 
 import from ..ui.button { Button }
@@ -64,9 +63,7 @@ def:pub DatePicker(
     value: str,
     onChange: Callable[[str], None],
     clearable: bool = False,
-    className: str = "",
-    iconOnly: bool = False,
-    label: str = ""
+    className: str = ""
 ) -> JsxElement {
     has pickerOpen: bool = False,
         viewYear: int = 0,
@@ -80,12 +77,6 @@ def:pub DatePicker(
     offset = firstOffset(year, month);
     prevTotal = daysIn(year - 1, 11) if month == 0 else daysIn(year, month - 1);
     todayStr = todayIso();
-    # Kept out of the grid slot: a multi-statement handler written inline
-    # there compiles into a push onto the rendered children.
-    def choose(iso: str) {
-        onChange(iso);
-        pickerOpen = False;
-    }
 
     return
         <DropdownMenu
@@ -101,19 +92,7 @@ def:pub DatePicker(
         >
             <DropdownMenuTrigger
                 asChild={False}
-                aria-label={(label or "Pick a date")
-                    if iconOnly
-                    else (
-                        (label + ": " + (prettyLabel(value) if value else "not set"))
-                            if label
-                            else None
-                    )}
-                title={(label or "Pick a date") if iconOnly else None}
-                className={(
-                    "inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        if iconOnly
-                        else "inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                )
+                className={"inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     + (" " + className if className else "")}
             >
                 <svg
@@ -126,18 +105,13 @@ def:pub DatePicker(
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className="text-muted-foreground"
-                    aria-hidden="true"
                 >
                     <path d="M8 2v4"/>
                     <path d="M16 2v4"/>
                     <rect width={18} height={18} x={3} y={4} rx={2}/>
                     <path d="M3 10h18"/>
                 </svg>
-                {if not iconOnly {
-                    <span key="label">
-                        {prettyLabel(value) if value else "Pick a date"}
-                    </span>
-                }}
+                {prettyLabel(value) if value else "Pick a date"}
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-64 p-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -213,7 +187,7 @@ def:pub DatePicker(
                     {for i in range(offset) {
                         <span
                             key={"pad" + str(i)}
-                            className="py-1 text-sm tabular-nums text-subtle"
+                            className="py-1 text-sm tabular-nums text-muted-foreground/40"
                         >
                             {prevTotal - offset + 1 + i}
                         </span>
@@ -222,17 +196,20 @@ def:pub DatePicker(
                         <button
                             key={"d" + str(d)}
                             type="button"
-                            className={"rounded-md py-1 text-sm tabular-nums transition-colors "
+                            className={"rounded-md py-1 text-sm tabular-nums transition active:scale-[0.97] "
                                 + (
                                     "bg-primary font-semibold text-primary-foreground"
                                         if isoOf(year, month, d) == value
                                         else (
-                                            "font-semibold text-primary hover:bg-accent"
+                                            "font-semibold text-primary ring-1 ring-primary/40 hover:bg-accent"
                                                 if isoOf(year, month, d) == todayStr
                                                 else "hover:bg-accent"
                                         )
                                 )}
-                            onClick={lambda { choose(isoOf(year, month, d)); }}
+                            onClick={lambda {
+                                onChange(isoOf(year, month, d));
+                                pickerOpen = False;
+                            }}
                         >
                             {d}
                         </button>
@@ -243,7 +220,10 @@ def:pub DatePicker(
                         key="clear"
                         type="button"
                         className="mt-2 w-full rounded-md py-1 text-xs text-muted-foreground transition-colors hover:bg-accent"
-                        onClick={lambda { choose(""); }}
+                        onClick={lambda {
+                            onChange("");
+                            pickerOpen = False;
+                        }}
                     >
                         Clear
                     </button>

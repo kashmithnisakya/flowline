@@ -40,9 +40,7 @@ assigned to `priyar` on GitHub is assigned to this member on the card.
 
 ::: walker SetMemberRoles h3
 
-Changes only a member's roles. The Workspace calls it from a person's roles
-menu under People (the picks save when the menu closes) and from a role's
-holders under Roles (one call per person whose roles change).
+Changes only a member's roles (the Roles tab toggles one at a time).
 
 **Reports** the updated [`MemberView`](types.md#memberview).
 **Side effects** replaces every `HasRole` edge; an empty list clears them; new

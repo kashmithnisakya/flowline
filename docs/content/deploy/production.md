@@ -11,7 +11,7 @@ cluster's Secret.
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `HOST` | Yes | The public origin **with scheme**, for example `https://flowline.jachammer.app`. SSO redirects, `/auth/callback` and the link preview image URL are built from it. The sign-in page finds its providers through that redirect, so a `HOST` that is not the served origin hides both sign-in buttons. |
+| `HOST` | Yes | The public origin **with scheme**, for example `https://flowline.jachammer.app`. SSO redirects and `/auth/callback` are built from it. |
 | `GITHUB_APP_WEBHOOK_SECRET` | Yes | The pods refuse to boot without it. Must equal the GitHub App's webhook secret. |
 | `OPENAI_API_KEY` | For the assistant | Without it the assistant reports "not available". |
 | `LLM_MODEL` | No | Defaults to `gpt-4o-mini`. |

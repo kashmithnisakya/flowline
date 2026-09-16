@@ -1,6 +1,6 @@
 # Connect GitHub
 
-The GitHub page needs a GitHub App of its own. Once installed on the
+The GitHub tab needs a GitHub App of its own. Once installed on the
 repos you choose, issues and pull requests reach an open board within seconds,
 issues import as tasks, and a card can open or close an issue.
 { .fl-lede }
@@ -20,8 +20,8 @@ Open <https://github.com/settings/apps/new> (or your organization's
 
 | Field | Value |
 | --- | --- |
-| Callback URL | `<HOST>/github` |
-| Setup URL | `<HOST>/github`, with **Redirect on update** ticked |
+| Callback URL | `<HOST>/workspace?tab=github` |
+| Setup URL | `<HOST>/workspace?tab=github`, with **Redirect on update** ticked |
 | Request user authorization (OAuth) during installation | **On** |
 | Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, secret from `openssl rand -hex 32` |
 | Webhook content type | `application/json` |
@@ -29,9 +29,7 @@ Open <https://github.com/settings/apps/new> (or your organization's
 | Repository permissions | Issues: read and write, Pull requests: read, Metadata: read |
 
 Installation events (`installation`, `installation_repositories`) are sent to
-every App without subscribing. An App registered with the older
-`<HOST>/workspace?tab=github` URLs keeps working: that link forwards to
-`/github` with its query intact.
+every App without subscribing.
 
 !!! danger "Two settings that are not optional"
 
@@ -67,33 +65,22 @@ GITHUB_APP_WEBHOOK_SECRET=...            # the same secret the webhook uses
 
 | Left empty | What happens |
 | --- | --- |
-| Any of the first five | The GitHub page says GitHub is not set up on this server and disables **Connect GitHub** instead of failing. `GithubStatus` names the missing variables in `missing_config`. |
+| Any of the first five | The GitHub tab explains which variables are missing instead of failing (`GithubStatus` reports them as `missing_config`). |
 | `GITHUB_APP_SLUG` specifically | The receiver cannot recognise the App's own echoes (see [GitHub sync](../concepts/github-sync.md#writing-back-to-github)). |
 | `GITHUB_APP_WEBHOOK_SECRET` | The server refuses to boot. |
 
 ## 3. Connect a workspace
 
-Restart the server with the variables exported, then open **GitHub** in the
-top bar. While nothing is connected the page lists what the App will be able
-to do (read issues and pull requests in the repositories you pick, receive
-events when they change, write to an issue only when you create, close or
-reopen one from a task) beside **Connect GitHub**. GitHub asks which account
-and repositories to install on, then redirects back and the page completes the
-connection once.
+Restart the server with the variables exported, then open **Workspace, GitHub**
+and choose **Connect**. GitHub asks which account and repositories to install
+on, then redirects back and the page completes the connection once. After
+that, attach repos to projects and decide per repo:
 
-Once connected, a strip at the top shows the GitHub account (`@login`), either
-"Live · last event N ago" while deliveries are arriving or the last event and
-sync times, **Sync now** and **Disconnect**. Below it, a rail lists the
-repositories this workspace reads; **Add repository** picks one the
-installation was granted and the project its issues land in. The selected repository shows its issues
-(select some to import them as tasks) and pull requests, and its automation,
-each switch off by default:
-
-| Switch | Effect |
+| Toggle | Effect |
 | --- | --- |
-| Import issues into *project* | New issues arrive as tasks on your start step. Turning it on brings in the repository's existing issues on the next sync, closed ones on Done. |
-| Move a card to Done when its issue closes or its pull request merges | A closed issue, or a merged pull request on a card In Progress or in Review, moves the linked card to the done step. |
-| Close the issue when its card moves to Done | A card landing on Done closes its GitHub issue, and moving it back out reopens it. The only automatic write to GitHub. |
+| Auto-sync | New issues are filed onto the flow line's first start step. Turning it on back-fills the repo's history (closed issues land on Done). |
+| Auto-done | A merged pull request or a closed issue moves the linked card to the done step. |
+| Close & reopen issue | A card landing on Done closes its GitHub issue, and moving it back out reopens it. Off by default; the only automatic write to GitHub. |
 
 ## Local development: tunnel the webhook
 
@@ -122,7 +109,7 @@ delivery on its own.
 | Delivery response `echo` | The App's own write (closing or reopening an issue) coming back. Dropped on purpose. |
 | Delivery status `401` | The signature did not match: the App's webhook secret and `GITHUB_APP_WEBHOOK_SECRET` differ. |
 | Delivery status `415` | The webhook content type is not `application/json`. |
-| A reconnect banner | A GitHub call returned `401` or `404` and the connection was marked invalid. Reconnect from the GitHub page. |
+| A reconnect banner on the board | A GitHub call returned `401` or `404` and the connection was marked invalid. Reconnect from the GitHub tab. |
 
 For the full pipeline (receiver, queue, drain and reconcile poll) read
 [GitHub sync](../concepts/github-sync.md). For the walkers, see the

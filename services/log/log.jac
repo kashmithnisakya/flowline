@@ -25,13 +25,11 @@ import from services.util { today_iso, shift_day, page_bounds, now_iso }
 walker ListLogEntries {
     """One page of entries whose LogDay date falls in [from_date, to_date],
     ISO strings, newest day first. `total` counts the whole range so a page
-    can say how much of the week it is. A `task_id` keeps only that task's
-    rows (the task sheet's history), before paging."""
+    can say how much of the week it is."""
     has from_date: str,
         to_date: str,
         page: int = 1,
         page_size: int = 0,
-        task_id: str = "",
         reports: list[LogPage] = [];
 
     # A read never makes the box: no box, an empty page. The FIRST box only,
@@ -51,9 +49,7 @@ walker ListLogEntries {
         found: list[LogEntry] = [];
         for day in days_between(root, self.from_date, self.to_date) {
             for row in [day-->[?:LogEntry]] {
-                if not self.task_id or row.task_id == self.task_id {
-                    found.append(row);
-                }
+                found.append(row);
             }
         }
         # Newest day first so page 1 is the end of the week; the jid pass

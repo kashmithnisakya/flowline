@@ -9,7 +9,7 @@ import from ..common.glyphs { Spinner, WarnIcon }
 def:pub ReconnectBanner(busy: bool, onReconnect: Callable[[], None]) -> JsxElement {
     return
         <div
-            className="surface flex flex-wrap items-center justify-between gap-3 border-warning/60 p-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/50 bg-warning/10 p-3 animate-in fade-in slide-in-from-top-1 duration-300"
         >
             <div className="flex min-w-0 items-start gap-2.5">
                 <WarnIcon size={16} className="mt-0.5 shrink-0 text-warning"/>

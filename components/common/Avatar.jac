@@ -1,27 +1,20 @@
-"""Initials avatars. The fill is a hash of the name, so the same person (or
-project) gets the same colour on every page; all eight fills carry white
-initials at 4.5:1 or better in both themes. A manager-picked colour key maps
-onto the same set. Class strings are whole literals for Tailwind's scanner.
+"""Initials avatars. The hue is a hash of the name, so the same person (or
+project) gets the same color on every page. Light keeps the initials in ink
+(the pale chart tints cannot carry 8px text); dark lets them take the hue.
+A manager-picked colour key overrides the hash via the step palette (soft
+fill plus ink, legible at avatar size). Class strings are whole literals so
+Tailwind's scanner keeps them.
 """
 
+import from ..flowlines.kinds { COUNT_TINT, colorKey }
+
 glob HUES: list[str] = [
-         "bg-[#2E6C97] text-white",
-         "bg-[#5550AC] text-white",
-         "bg-[#8A5A00] text-white",
-         "bg-[#A34B83] text-white",
-         "bg-[#387A51] text-white",
-         "bg-[#4F5753] text-white",
-         "bg-[#B3261E] text-white",
-         "bg-[#245A80] text-white"
+         "bg-chart-1/25 text-foreground/85 dark:bg-chart-1/15 dark:text-chart-1",
+         "bg-chart-2/25 text-foreground/85 dark:bg-chart-2/15 dark:text-chart-2",
+         "bg-chart-3/25 text-foreground/85 dark:bg-chart-3/15 dark:text-chart-3",
+         "bg-chart-4/25 text-foreground/85 dark:bg-chart-4/15 dark:text-chart-4",
+         "bg-chart-5/25 text-foreground/85 dark:bg-chart-5/15 dark:text-chart-5"
      ],
-     KEY_HUE: dict[str, str] = {
-         "sky": "bg-[#2E6C97] text-white",
-         "indigo": "bg-[#5550AC] text-white",
-         "amber": "bg-[#8A5A00] text-white",
-         "rose": "bg-[#A34B83] text-white",
-         "emerald": "bg-[#387A51] text-white",
-         "slate": "bg-[#4F5753] text-white"
-     },
      DOTS: list[str] = [
          "bg-chart-1",
          "bg-chart-2",
@@ -29,33 +22,32 @@ glob HUES: list[str] = [
          "bg-chart-4",
          "bg-chart-5"
      ],
-     # Initials never drop below 12px, so the two small sizes share 24px.
      SIZES: dict[str, str] = {
-         "xs": "h-6 w-6 text-xs",
-         "sm": "h-6 w-6 text-xs",
+         "xs": "h-5 w-5 text-[8px]",
+         "sm": "h-6 w-6 text-[10px]",
          "md": "h-8 w-8 text-xs"
      };
 
-def hashOf(name: str, buckets: int) -> int {
+def hashOf(name: str) -> int {
     total = 0;
     for ch in name {
         total = total + ord(ch);
     }
-    return total % buckets;
+    return total % 5;
 }
 
-# Solid fill plus white initials. A manager-picked colour key wins (unknown
-# keys read as slate); empty falls back to the fill hashed from the name.
+# Soft fill plus matching text, for an avatar circle. A manager-picked
+# colour key wins; empty falls back to the hue hashed from the name.
 def:pub hueFor(name: str, color: str = "") -> str {
     if color {
-        return KEY_HUE[color] if color in KEY_HUE else KEY_HUE["slate"];
+        return COUNT_TINT[colorKey(color)];
     }
-    return HUES[hashOf(name, 8)];
+    return HUES[hashOf(name)];
 }
 
 # Solid fill, for a small identity dot next to a name.
 def:pub dotFor(name: str) -> str {
-    return DOTS[hashOf(name, 5)];
+    return DOTS[hashOf(name)];
 }
 
 # "Amara Perera" -> "AP", "Priya" -> "P".
@@ -77,7 +69,7 @@ def:pub Avatar(
 ) -> JsxElement {
     return
         <span
-            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold leading-none tracking-normal "
+            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold "
                 + SIZES.get(size, SIZES["sm"])
                 + " "
                 + hueFor(name, color)
@@ -96,16 +88,16 @@ def:pub AvatarStack(names: list[str], max: int = 3, size: str = "xs") -> JsxElem
     extra = len(names) - len(shown);
     return
         <span
-            className="inline-flex shrink-0 items-center -space-x-px"
+            className="inline-flex shrink-0 items-center -space-x-1"
             title={", ".join(names)}
         >
             {for (i, n) in enumerate(shown) {
-                <Avatar key={str(i)} name={n} size={size} className="ring-2 ring-card"/>
+                <Avatar key={str(i)} name={n} size={size} className="ring-1 ring-card"/>
             }}
             {if extra > 0 {
                 <span
                     key="more"
-                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-mono font-medium text-muted-foreground ring-2 ring-card "
+                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground ring-1 ring-card "
                         + SIZES.get(size, SIZES["xs"])}
                 >
                     {"+" + str(extra)}

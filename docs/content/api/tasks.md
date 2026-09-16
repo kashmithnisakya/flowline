@@ -30,8 +30,8 @@ capped at 500.
   (canvas `x`, then `sort_order`, with the same placement fallbacks), then
   board order within a column.
 - `older` is only filled on an unfiltered `working` page: it counts the Done
-  rows the cutoff left out, so a view can say how many it is not showing
-  without a second call.
+  rows the cutoff left out, so the board can show "+N older" without a second
+  call.
 - A foreign or unknown `project_id` or `assignee_id` matches nothing.
 
 ```bash
@@ -122,7 +122,7 @@ curl -X POST $BASE/walker/CreateTask -H "Authorization: Bearer $TOKEN" \
 
 ::: walker UpdateTask h3
 
-The task sheet's save. **It replaces every editable field**, so send the full
+The task dialog's save. **It replaces every editable field**, so send the full
 form, not a patch: a caller that omits `start_date` or `iteration_id` clears
 them. The checklist is the exception; only the [checklist walkers](#checklist)
 write it.
@@ -136,13 +136,13 @@ write it.
 - A different owned `project_id` moves the card to that project; an empty or
   foreign one leaves it where it is.
 - A status change logs `Moved to <status>`. A change that crosses Done keeps a
-  linked GitHub issue in step on repos with `auto_close` on: landing on
+  linked GitHub issue in step on repos with close-and-reopen on: landing on
   Done closes it, leaving Done reopens it.
 
 ::: walker MoveTask h3
 
-The endpoint behind a board drag and drop and the Move menu. The server
-decides where the card lands.
+The drag-and-drop and arrow-move endpoint. The server decides where the card
+lands.
 
 **Reports** the moved [`TaskView`](types.md#taskview).
 **No-op when** `step_id` is set but is not an owned step.
@@ -156,7 +156,7 @@ decides where the card lands.
   write, no handoff, no log entry, no `updated_at` bump.
 - Moving onto a different step whose owner role has exactly one holder on the
   task's project hands the card to that person.
-- Crossing Done keeps a linked issue in step on `auto_close` repos:
+- Crossing Done keeps a linked issue in step on close-and-reopen repos:
   landing closes it (`· closed org/repo #12` on the log line), leaving reopens
   it (`· reopened org/repo #12`).
 
@@ -187,7 +187,7 @@ design: anything empty stays untouched.
 
 A task's checklist is a list of `{"id", "text", "done"}` items in display
 order, stored on the task itself. Each change is applied at once by its own
-walker and none of them touch the other task fields, so a sheet save cannot
+walker and none of them touch the other task fields, so a dialog save cannot
 clobber a checklist and a checklist edit cannot clobber the form. Every one
 reports the task's [`TaskView`](types.md#taskview), changed or not, and nothing
 for an unknown or foreign `task_id`.

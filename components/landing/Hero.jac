@@ -1,59 +1,79 @@
-"""Landing hero: the one idea (draw the steps, the board and the log follow),
-the proof bar, then the playable demo at full container width. Left-aligned
-at every width; on phones the primary action fills the row.
+"""Landing hero. Copy describes only what the app does today (a board plus a
+written daily log): no trial terms, integrations or usage figures. At lg the
+hero splits, copy left and the playable board (HeroBoard) right; below that
+the board stacks under the centered copy.
 """
 
 import from ..ui.button { Button }
+import from ..common.KineticGrid { KineticGrid }
 import from .HeroBoard { HeroBoard }
-import from .ProofStrip { ProofStrip }
-
-glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
-     TEXT_LINK: str = "rounded-sm text-sm font-semibold text-foreground underline-offset-4 hover:underline";
 
 def:pub Hero(loggedIn: bool) -> JsxElement {
     return
-        <section className="mx-auto max-w-[1180px] px-4 sm:px-6">
-            <div className="grid max-w-[900px] gap-4 pt-10 pb-5 sm:pt-12">
-                <p className="font-mono text-[12.5px] text-subtle">
-                    For teams that would rather write than meet
-                </p>
-                <h1
-                    className="max-w-[21ch] text-[clamp(2.125rem,4.4vw,2.875rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
-                >
-                    Draw how your team works. The board and the daily log follow.
-                </h1>
-                <p
-                    className="max-w-[58ch] text-base leading-relaxed text-muted-foreground"
-                >
-                    Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on.
-                </p>
+        <section className="bg-glow relative overflow-hidden">
+            <KineticGrid
+                className="[mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
+            />
+            <div
+                className="relative z-10 mx-auto max-w-[1180px] px-7 pt-16 pb-12 lg:pt-24 lg:pb-16"
+            >
                 <div
-                    className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
+                    className="grid items-center gap-10 lg:grid-cols-[5fr_6fr] lg:gap-14"
                 >
-                    <Button
-                        asChild={True}
-                        className="h-11 w-full px-5 text-[15px] font-semibold sm:w-auto"
-                    >
-                        <a href={"/board" if loggedIn else "/login?mode=signup"}>
-                            {"Go to your board"
-                                if loggedIn
-                                else "Create your workspace"}
-                        </a>
-                    </Button>
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                        <a href="#tour" className={TEXT_LINK}>Take the tour</a>
-                        <a
-                            href={REPO_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={TEXT_LINK}
+                    <div className="text-center lg:text-left">
+                        <span
+                            className="anim-fade-up inline-block rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
                         >
-                            Source on GitHub
-                        </a>
+                            For teams that hate status meetings
+                        </span>
+                        <h1
+                            className="anim-fade-up anim-d1 font-display mx-auto mt-6 max-w-2xl text-[clamp(2.5rem,5.5vw,3.9rem)] font-extrabold leading-[0.94] tracking-[-0.045em] lg:mx-0"
+                        >
+                            Kill the daily meeting.
+                            <br/>
+                            Keep the daily.
+                        </h1>
+                        <p
+                            className="anim-fade-up anim-d2 mx-auto mt-6 max-w-xl text-base leading-relaxed text-muted-foreground lg:mx-0"
+                        >
+                            Flowline keeps a kanban board for every project and a written log of who did what each day, so status is something your team reads, not another fifteen minutes on the calendar.
+                        </p>
+                        <div
+                            className="anim-fade-up anim-d3 mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
+                        >
+                            {if loggedIn {
+                                <Button
+                                    key="app"
+                                    className="h-12 px-7 text-base"
+                                    onClick={lambda { window.location.href = "/board"; }}
+                                >
+                                    Go to your board
+                                </Button>
+                            } else {
+                                <Button
+                                    key="start"
+                                    className="h-12 px-7 text-base"
+                                    onClick={lambda { window.location.href = "/login?mode=signup"; }}
+                                >
+                                    Create your workspace
+                                </Button>
+                            } }
+                            <Button
+                                variant="outline"
+                                className="h-12 px-7 text-base"
+                                onClick={lambda { window.location.href = "#how"; }}
+                            >
+                                See how it works
+                            </Button>
+                        </div>
+                        <p
+                            className="anim-fade-up anim-d4 mt-5 text-xs text-muted-foreground"
+                        >
+                            One account is one organization · your data stays in your own workspace
+                        </p>
                     </div>
+                    <HeroBoard loggedIn={loggedIn}/>
                 </div>
             </div>
-            <ProofStrip/>
-            <HeroBoard loggedIn={loggedIn}/>
         </section>;
 }

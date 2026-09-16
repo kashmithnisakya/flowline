@@ -3,6 +3,7 @@ field at creation, the full chip list (remove + add) when editing.
 """
 
 import from ...models { RepoView }
+import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.dialog {
     Dialog,
@@ -33,7 +34,7 @@ def:pub ProjectDialog(
 ) -> JsxElement {
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="bg-card">
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
                         {"Edit project" if editing else "New project"}
@@ -60,38 +61,27 @@ def:pub ProjectDialog(
                     </div>
                     <div className="grid gap-2">
                         <Label>
-                            {"Repositories"
-                                if editing
-                                else "GitHub repository (optional)"}
+                            {"Repositories" if editing else "GitHub repo (optional)"}
                         </Label>
                         {if editing and len(repos) > 0 {
-                            <ul key="repos" className="surface divide-y">
+                            <div key="chips" className="flex flex-wrap gap-1.5">
                                 {for r in repos {
-                                    <li
+                                    <Badge
                                         key={r.id}
-                                        className="flex items-center gap-2 px-3 py-1.5"
+                                        variant="secondary"
+                                        className="cursor-pointer font-normal animate-in fade-in zoom-in-95 duration-150 hover:bg-destructive/15 hover:text-destructive"
+                                        title="Click to remove"
+                                        onClick={lambda { if onRemoveRepo {
+                                            onRemoveRepo(r.id);
+                                        }}}
                                     >
-                                        <span
-                                            className="num min-w-0 flex-1 truncate text-[13px]"
-                                        >
-                                            {r.full_name}
-                                        </span>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-muted-foreground"
-                                            onClick={lambda { if onRemoveRepo {
-                                                onRemoveRepo(r.id);
-                                            }}}
-                                        >
-                                            Remove
-                                        </Button>
-                                    </li>
+                                        {r.full_name} ✕
+                                    </Badge>
                                 }}
-                            </ul>
+                            </div>
                         }}
                         <Input
-                            placeholder="Paste a GitHub link, or org/repo"
+                            placeholder="Paste a GitHub link or org/repo"
                             value={repoDraft}
                             onChange={lambda (e: ChangeEvent) { if onRepoDraft {
                                 onRepoDraft(e.target.value);
