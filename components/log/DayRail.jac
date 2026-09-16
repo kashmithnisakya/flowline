@@ -45,14 +45,25 @@ def:pub DayRail(
 ) -> JsxElement {
     has scroller: Ref[any] = Ref();
 
-    # Keep the picked day in view when the phone row scrolls sideways.
+    # Keep the picked day (Week view: today) in view when the phone row scrolls
+    # sideways, moving only as far as it takes; a week starts from Monday.
     can with [selectedDate, viewMode] entry {
         box = scroller.current;
         if box and box.scrollWidth > box.clientWidth {
-            picked = box.querySelector("[aria-pressed=true]");
+            if viewMode == "week" {
+                box.scrollLeft = 0;
+            }
+            picked = box.querySelector(
+                "[aria-pressed=true]" if viewMode == "day" else "[data-today=true]"
+            );
             if picked {
-                box.scrollLeft = picked.offsetLeft
-                    - (box.clientWidth - picked.offsetWidth) / 2;
+                pr = picked.getBoundingClientRect();
+                br = box.getBoundingClientRect();
+                if pr.left < br.left {
+                    box.scrollLeft = box.scrollLeft - (br.left - pr.left) - 8;
+                } elif pr.right > br.right {
+                    box.scrollLeft = box.scrollLeft + (pr.right - br.right) + 8;
+                }
             }
         }
     }
@@ -93,6 +104,7 @@ def:pub DayRail(
                         aria-pressed={"true"
                             if viewMode == "day" and weekDays[i] == selectedDate
                             else "false"}
+                        data-today={"true" if weekDays[i] == today else "false"}
                         aria-label={DAY_SHORT[i]
                             + " "
                             + str(int(weekDays[i][8:10]))
