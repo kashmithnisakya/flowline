@@ -110,6 +110,18 @@ def relDay(iso: str, today: str) -> str {
     return prettyDay(iso);
 }
 
+# When a blocked task stopped: "since today", "since yesterday", else a date.
+def sinceDay(iso: str, today: str) -> str {
+    if len(iso) < 10 {
+        return "";
+    }
+    ago = daysUntil(today, iso);
+    if ago <= 0 {
+        return "since today";
+    }
+    return "since yesterday" if ago == 1 else "since " + prettyDay(iso);
+}
+
 # A blocked reason's first line as plain text: move notes arrive as markdown
 # with a "**2026-09-15:**" stamp in front.
 def plainLine(text: str) -> str {
@@ -176,9 +188,7 @@ def withBlocked(
 ) -> dict[str, any] {
     late = len(due) >= 10 and due < today;
     row["late"] = late;
-    row["time"] = relDay(due, today)
-        if late
-        else ("since " + prettyDay(since) if len(since) >= 10 else "");
+    row["time"] = relDay(due, today) if late else sinceDay(since, today);
     row["note"] = plainLine(info["reason"]) if "reason" in info else "";
     return row;
 }

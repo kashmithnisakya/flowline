@@ -53,11 +53,14 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
                     to="/workspace?tab=projects"
                 />
             }}
-            <ul className="px-3.5 pb-2" hidden={len(rows) == 0}>
+            <ul
+                className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] gap-x-2.5 px-3.5 pb-2"
+                hidden={len(rows) == 0}
+            >
                 {for (i, r) in enumerate(rows) {
                     <li
                         key={r["id"]}
-                        className={"grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-2.5 py-1.5 text-[13px] "
+                        className={"col-span-3 grid grid-cols-subgrid items-center py-1.5 text-[13px] "
                             + ("border-t" if i > 0 else "")}
                     >
                         <span className="truncate" title={r["name"]}>{r["name"]}</span>
@@ -142,8 +145,9 @@ def:pub PeopleTable(
     rows: list[dict], dayNames: list[str], todayIndex: int
 ) -> JsxElement {
     # Columns follow the panel's own width: beside a docked Ask it is too
-    # narrow for five, so the counts fold under the name as on a phone.
-    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,1fr)_3rem_6rem_auto_4rem]";
+    # narrow for five, so the counts fold under the name as on a phone. Each
+    # row is its own grid, so wide columns are fixed to line up with the header.
+    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,1fr)_3rem_6rem_7.75rem_4rem]";
     return
         <section className="@container surface min-w-0" aria-labelledby="people-h">
             <div className="px-3.5 pt-3 pb-1">

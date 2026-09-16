@@ -137,7 +137,9 @@ def:pub NeedsYou(
                                         className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm px-2 py-1.5 text-[13.5px] hover:bg-accent"
                                     >
                                         <span className="min-w-0 sm:truncate">
-                                            <span className="block truncate sm:inline">
+                                            <span
+                                                className="block truncate sm:inline max-sm:line-clamp-2 max-sm:whitespace-normal"
+                                            >
                                                 {if r["kind"] {
                                                     <span
                                                         key="kind"
