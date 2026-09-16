@@ -94,12 +94,12 @@ def:pub IterationsDialog(
             if payload and payload["ok"] {
                 onChanged();
             } else {
-                toast(
+                toast.error(
                     payload["message"] if payload else "Could not save the iteration"
                 );
             }
         } except Exception as e {
-            toast("Could not save the iteration");
+            toast.error("Could not save the iteration");
         }
         busy = False;
     }
@@ -114,10 +114,10 @@ def:pub IterationsDialog(
             if payload and payload["ok"] {
                 onChanged();
             } else {
-                toast("Could not add an iteration");
+                toast.error("Could not add an iteration");
             }
         } except Exception as e {
-            toast("Could not add an iteration");
+            toast.error("Could not add an iteration");
         }
         busy = False;
     }
@@ -134,7 +134,7 @@ def:pub IterationsDialog(
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
                 cleared = int(payload["cleared"]);
-                toast(
+                toast.success(
                     "Deleted "
                         + it.name
                         + (
@@ -146,7 +146,7 @@ def:pub IterationsDialog(
                 onChanged();
             }
         } except Exception as e {
-            toast("Could not delete the iteration");
+            toast.error("Could not delete the iteration");
         }
         busy = False;
     }
