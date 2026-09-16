@@ -45,14 +45,20 @@ def:pub DayRail(
 ) -> JsxElement {
     has scroller: Ref[any] = Ref();
 
-    # Keep the picked day in view when the phone row scrolls sideways.
+    # Keep the picked day in view when the phone row scrolls sideways, moving
+    # only as far as it takes so Monday stays put while it fits.
     can with [selectedDate, viewMode] entry {
         box = scroller.current;
         if box and box.scrollWidth > box.clientWidth {
             picked = box.querySelector("[aria-pressed=true]");
             if picked {
-                box.scrollLeft = picked.offsetLeft
-                    - (box.clientWidth - picked.offsetWidth) / 2;
+                pr = picked.getBoundingClientRect();
+                br = box.getBoundingClientRect();
+                if pr.left < br.left {
+                    box.scrollLeft = box.scrollLeft - (br.left - pr.left) - 8;
+                } elif pr.right > br.right {
+                    box.scrollLeft = box.scrollLeft + (pr.right - br.right) + 8;
+                }
             }
         }
     }

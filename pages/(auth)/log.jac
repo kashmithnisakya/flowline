@@ -408,7 +408,7 @@ def:pub DailyLogPage -> JsxPage {
                 />
                 <div className="flex min-w-0 flex-col gap-[18px]">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <h2 className="font-display text-xl leading-7 font-bold">
+                        <h2 className="font-display text-[22px] leading-7 font-bold">
                             {weekTitle(weekMonday)
                                 if isWeek and weekMonday
                                 else (longDate(selectedDate) if selectedDate else "")}
@@ -416,7 +416,7 @@ def:pub DailyLogPage -> JsxPage {
                         <span className="text-[13px] text-muted-foreground">
                             {(countLabel(len(weekEntries)) if not loading else "")
                                 if isWeek
-                                else (sinceLabel(selectedDate) if selectedDate else "")}
+                                else (sinceLabel(selectedDate) if showStandup else "")}
                         </span>
                         <div className="ml-auto flex items-center gap-1 self-center">
                             {if not onToday {

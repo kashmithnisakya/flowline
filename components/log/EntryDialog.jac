@@ -36,7 +36,43 @@ glob FIELD: str = "w-full",
          {"value": "Review", "kind": "handoff", "label": "Handed off"},
          {"value": "Blocked", "kind": "blocked", "label": "Stuck"},
          {"value": "Backlog", "kind": "start", "label": "To do"}
+     ],
+     DAY_LONG: list[str] = [
+         "Sunday",
+         "Monday",
+         "Tuesday",
+         "Wednesday",
+         "Thursday",
+         "Friday",
+         "Saturday"
+     ],
+     MONTH_LONG: list[str] = [
+         "January",
+         "February",
+         "March",
+         "April",
+         "May",
+         "June",
+         "July",
+         "August",
+         "September",
+         "October",
+         "November",
+         "December"
      ];
+
+# "2026-09-15" -> "Tuesday 15 September"
+def longDate(iso: str) -> str {
+    if len(iso) < 10 {
+        return iso;
+    }
+    d = new(Date, iso[:10] + "T00:00:00");
+    return DAY_LONG[int(d.getDay())]
+        + " "
+        + str(int(d.getDate()))
+        + " "
+        + MONTH_LONG[int(d.getMonth())];
+}
 
 def:pub EntryDialog(
     open: bool,
@@ -62,7 +98,7 @@ def:pub EntryDialog(
                         {"Edit log entry" if editing else "Add log entry"}
                     </DialogTitle>
                     <DialogDescription>
-                        {(form["member_name"] + " · " + form["date"])
+                        {(form["member_name"] + " · " + longDate(form["date"]))
                             if editing
                             else "Log work on behalf of a roster member. It lands in that day's log."}
                     </DialogDescription>
@@ -218,7 +254,7 @@ def:pub EntryDialog(
                         />
                     </div>
                 </div>
-                <DialogFooter className="gap-2">
+                <DialogFooter className="-mx-6 -mb-6 gap-2 px-6 py-4">
                     <Button variant="outline" onClick={lambda { onOpenChange(False); }}>
                         Cancel
                     </Button>

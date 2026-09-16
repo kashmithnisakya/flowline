@@ -1,7 +1,7 @@
 """The week as a people by weekday grid: one row per person, one text cell per
 day with its first lines, each led by the entry's kind glyph. Gaps stay empty,
 which is the signal a standup exists to surface. Today's column is marked
-with a primary rule; a cell opens that day.
+with a primary rule; a cell opens that day. Names stay put when a phone scrolls.
 """
 
 import from ...models { LogEntry }
@@ -109,7 +109,7 @@ def:pub WeekMatrix(
                         + ", minmax(0, 1fr))"
                 }}
             >
-                <div className="border-b"/>
+                <div className="sticky left-0 z-[1] -mr-px border-r border-b bg-card"/>
                 {for d in days {
                     <button
                         key={"h" + d}
@@ -129,7 +129,7 @@ def:pub WeekMatrix(
                 {for (r, who) in enumerate(rows) {
                     <div key={who} className="contents">
                         <div
-                            className={"flex min-w-0 items-center gap-2 px-3 py-2 text-[13.5px] font-medium "
+                            className={"sticky left-0 z-[1] -mr-px flex min-w-0 items-center gap-2 border-r bg-card px-3 py-2 text-[13.5px] font-medium "
                                 + ("border-t" if r > 0 else "")}
                         >
                             <Avatar name={who} size="sm"/>
