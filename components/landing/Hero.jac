@@ -13,22 +13,22 @@ glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
 def:pub Hero(loggedIn: bool) -> JsxElement {
     return
         <section className="mx-auto max-w-[1180px] px-4 sm:px-6">
-            <div className="grid max-w-[900px] gap-4 pt-10 pb-6 sm:pt-14">
+            <div className="grid max-w-[900px] gap-4 pt-10 pb-5 sm:pt-12">
                 <p className="font-mono text-[12.5px] text-subtle">
                     For teams that would rather write than meet
                 </p>
                 <h1
-                    className="max-w-[21ch] text-[clamp(2.125rem,4.4vw,3.25rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
+                    className="max-w-[21ch] text-[clamp(2.125rem,4.4vw,2.875rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
                 >
                     Draw how your team works. The board and the daily log follow.
                 </h1>
                 <p
-                    className="max-w-[58ch] text-base leading-relaxed text-muted-foreground sm:text-[17px]"
+                    className="max-w-[58ch] text-base leading-relaxed text-muted-foreground"
                 >
                     Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on.
                 </p>
                 <div
-                    className="mt-2 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
+                    className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
                 >
                     <Button
                         asChild={True}
