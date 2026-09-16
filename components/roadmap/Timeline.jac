@@ -1,17 +1,45 @@
-"""The roadmap grid: a week header, the iterations as a band, then the tasks
-grouped by project, each a bar over its span in its step's colour. Positions
-are percentages of the window, so the grid scrolls sideways on a narrow
-screen instead of squeezing. `starts` / `ends` are index-aligned with `rows`."""
+"""The roadmap grid: mono month and week headers, iterations as quiet shaded
+ranges, then the tasks grouped by project. A bar is neutral and carries its
+step as a 2px rule and its kind as a glyph; overdue turns it red. Positions
+are percentages of the window, so the grid scrolls sideways when it is narrow."""
 
+import from "react" { useEffect }
 import from ...models { TaskView, StepView, IterationView }
 import from ...constants { STATUS_KIND, KIND_COLORS }
-import from ..flowlines.kinds { LANE_BAR, colorKey }
-import from ...lib.dates { prettyDay }
+import from ..flowlines.kinds { DOT_VAR, colorKey }
+import from ..common.KindGlyph { KindGlyph }
+import from ...lib.dates { prettyDay, dueTone, dueLabel }
 
 glob DAY_MS: int = 86400000,
-     # A solid tint for the band and group rows: the sticky label cells sit
-     # over scrolled content, so a translucent fill would let the grid through.
-     TINT: str = "bg-[color-mix(in_oklab,var(--muted)_45%,var(--card))]";
+     # lib/dates keeps its own copy unexported, so the month row carries one.
+     MONTHS: list[str] = [
+         "Jan",
+         "Feb",
+         "Mar",
+         "Apr",
+         "May",
+         "Jun",
+         "Jul",
+         "Aug",
+         "Sep",
+         "Oct",
+         "Nov",
+         "Dec"
+     ],
+     # Iteration shading, mixed off the foreground so it reads in both palettes:
+     # a solid head in the band row, a lighter wash behind the task rows.
+     BAND_HEAD: str = "bg-[color-mix(in_oklab,var(--foreground)_7%,var(--card))]",
+     BAND_WASH: str = "bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
+     GROUP_FILL: str = "bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))]",
+     # A bar's neutral fill and edge, also mixed off the foreground so a bar
+     # still stands off the dark card. The kind glyph knocks out of the same fill.
+     BAR_MIX: str = "color-mix(in oklab, var(--foreground) 9%, var(--card))",
+     BAR_FILL: str = "bg-[color-mix(in_oklab,var(--foreground)_9%,var(--card))]",
+     BAR_EDGE: str = "border-[color-mix(in_oklab,var(--foreground)_20%,var(--card))]",
+     # The sticky label column: narrow enough that a phone still shows time.
+     LABEL_W: str = "w-40 sm:w-60",
+     LABEL_OFFSET: str = "left-40 sm:left-60",
+     LABEL_CELL: str = "sticky left-0 z-20 shrink-0 border-r px-3";
 
 # Whole days since the epoch for an ISO day, read as UTC so DST never shifts it.
 def dayNumber(iso: str) -> int {
@@ -22,17 +50,23 @@ def isoOfDay(n: int) -> str {
     return new(Date, n * DAY_MS).toISOString()[:10];
 }
 
+def pct(days: int, total: int) -> str {
+    return str(days * 100.0 / total) + "%";
+}
+
 # Left edge and width of [first, last] (inclusive days) as percentages of a
 # window of `total` days starting on day `origin`, clipped to the window.
-def spanStyle(first: str, last: str, origin: int, total: int) -> dict[str, str] {
+def spanStyle(
+    first: str, last: str, origin: int, total: int, minPx: int = 24
+) -> dict[str, str] {
     a = dayNumber(first) - origin;
     b = dayNumber(last) - origin + 1;
     a = 0 if a < 0 else a;
     b = total if b > total else b;
     width = b - a if b > a else 1;
     return {
-        "left": str(a * 100.0 / total) + "%",
-        "width": "max(6px, " + str(width * 100.0 / total) + "%)"
+        "left": pct(a, total),
+        "width": "max(" + str(minPx) + "px, " + pct(width, total) + ")"
     };
 }
 
@@ -53,15 +87,48 @@ def:pub RoadmapTimeline(
     steps: list[StepView],
     onOpen: Callable[[str], None]
 ) -> JsxElement {
+    has scroller: Ref[any] = Ref();
+
     origin = dayNumber(fromDate);
     total = weeks * 7;
     lastDay = isoOfDay(origin + total - 1);
     weekStarts = [isoOfDay(origin + 7 * w) for w in range(weeks)];
     todayFrac = (dayNumber(today) - origin + 0.5) * 1.0 / total;
+    todayLeft = str(todayFrac * 100.0) + "%";
     showToday = today >= fromDate and today <= lastDay;
-    stepColor: dict[str, str] = {};
+    stepKind: dict[str, str] = {};
+    stepLabel: dict[str, str] = {};
+    stepHue: dict[str, str] = {};
     for st in steps {
-        stepColor[st.id] = colorKey(st.color);
+        stepKind[st.id] = st.kind;
+        stepLabel[st.id] = st.name;
+        stepHue[st.id] = colorKey(st.color);
+    }
+    # Month cells sit on the real first of each month, so a week that crosses
+    # a month boundary splits where the calendar does. A sliver keeps no label,
+    # and a label scrolled past stays pinned beside the task column.
+    months: list[dict[str, any]] = [];
+    day = origin;
+    while day < origin + total {
+        iso = isoOfDay(day);
+        year = int(iso[:4]);
+        month = int(iso[5:7]);
+        nextFirst = (
+            str(year + 1) + "-01-01"
+                if month == 12
+                else iso[:5] + ("0" if month < 9 else "") + str(month + 1) + "-01"
+        );
+        end = dayNumber(nextFirst);
+        end = origin + total if end > origin + total else end;
+        months.append(
+            {
+                "key": iso[:7],
+                "label": MONTHS[month - 1] + " " + str(year) if end - day >= 7 else "",
+                "left": pct(day - origin, total),
+                "width": pct(end - day, total)
+            }
+        );
+        day = end;
     }
     # Projects in order of their earliest task; rows keep the server's order.
     groups: list[str] = [];
@@ -75,42 +142,125 @@ def:pub RoadmapTimeline(
         groupRows[key].append(i);
     }
 
+    def kindOf(t: TaskView) -> str {
+        if t.step_id in stepKind {
+            return stepKind[t.step_id];
+        }
+        return STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
+    }
+
+    def hueOf(t: TaskView) -> str {
+        if t.step_id in stepHue {
+            return stepHue[t.step_id];
+        }
+        kind = kindOf(t);
+        return KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
+    }
+
+    def nameOf(t: TaskView) -> str {
+        return stepLabel[t.step_id] if t.step_id in stepLabel else t.status;
+    }
+
+    def isLate(t: TaskView) -> bool {
+        return dueTone(t.due_date, t.status, today) == "overdue";
+    }
+
+    # Words for a row's second line: overdue says so in text, not only in red.
+    def lateWords(t: TaskView) -> str {
+        return dueLabel(t.due_date, t.status, today) if isLate(t) else "";
+    }
+
+    # When the grid overflows its box (a phone), open with today a third of the
+    # way across the visible weeks rather than at the window's left edge.
+    useEffect(
+        lambda {
+            el: any = scroller.current;
+            if el and el.scrollWidth > el.clientWidth {
+                label: any = el.querySelector("[data-roadmap-label]");
+                labelW = label.offsetWidth if label else 0;
+                x = (el.scrollWidth - labelW) * todayFrac
+                    - (el.clientWidth - labelW) / 3;
+                el.scrollLeft = x if showToday and x > 0 else 0;
+            }
+        },
+        [fromDate]
+    );
+
     # Today's mark inside one row's timeline cell. Drawn per row rather than
     # as one overlay, so the sticky label column always covers it.
     def TodayMark -> JsxElement {
         return
-            <div
+            <span
                 className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 bg-primary"
-                style={{"left": str(todayFrac * 100.0) + "%"}}
+                style={{"left": todayLeft}}
                 aria-hidden="true"
             />;
     }
 
-    def barClass(t: TaskView) -> str {
-        key = stepColor[t.step_id] if t.step_id in stepColor else "";
-        if not key {
-            kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
-            key = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
+    def barClass(t: TaskView, first: str, last: str) -> str {
+        edges = ("rounded-l-[3px] " if first >= fromDate else "")
+            + ("rounded-r-[3px] " if last <= lastDay else "");
+        base = "pointer-events-none absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden border border-l-2 pl-1 "
+            + edges;
+        if t.status == "Done" {
+            return base + "border-border bg-card text-muted-foreground";
         }
-        return LANE_BAR[key] if key in LANE_BAR else LANE_BAR["slate"];
+        if isLate(t) {
+            return base + "border-destructive/60 text-destructive " + BAR_FILL;
+        }
+        return base + "text-muted-foreground " + BAR_FILL + " " + BAR_EDGE;
+    }
+
+    def barStyle(t: TaskView, first: str, last: str) -> dict[str, str] {
+        css = spanStyle(first, last, origin, total);
+        css["borderLeftColor"] = "var(--destructive)"
+            if isLate(t)
+            else DOT_VAR[hueOf(t)];
+        # The glyph knocks its bar out of its own fill, not the card's.
+        css["--kind-knockout"] = "var(--card)" if t.status == "Done" else BAR_MIX;
+        return css;
     }
 
     return
-        <div className="overflow-x-auto rounded-xl border bg-card">
+        <div ref={scroller} className="overflow-x-auto overscroll-x-contain">
             <div className="relative min-w-[960px]">
                 <div className="flex border-b">
                     <div
-                        className="sticky left-0 z-20 w-60 shrink-0 bg-card px-4 py-2 text-xs font-medium text-muted-foreground"
+                        className={LABEL_CELL + " bg-card " + LABEL_W}
+                        data-roadmap-label="true"
+                    />
+                    <div className="relative h-8 flex-1" aria-hidden="true">
+                        {for m in months {
+                            <div
+                                key={m["key"]}
+                                className="absolute inset-y-0 border-l py-1.5 font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+                                style={{"left": m["left"], "width": m["width"]}}
+                            >
+                                <span
+                                    className={"sticky inline-block px-2 "
+                                        + LABEL_OFFSET}
+                                >
+                                    {m["label"]}
+                                </span>
+                            </div>
+                        }}
+                    </div>
+                </div>
+                <div className="flex border-b">
+                    <div
+                        className={LABEL_CELL
+                            + " bg-card py-1.5 text-xs text-muted-foreground "
+                            + LABEL_W}
                     >
                         Task
                     </div>
-                    <div className="flex flex-1">
+                    <div className="relative flex flex-1">
                         {for w in weekStarts {
                             <div
                                 key={w}
-                                className={"flex-1 border-l px-2 py-2 text-xs tabular-nums "
+                                className={"flex-1 border-l px-2 py-1.5 font-mono text-xs tabular-nums "
                                     + (
-                                        "font-medium text-foreground"
+                                        "font-medium text-primary"
                                             if today >= w
                                                 and dayNumber(today) < dayNumber(w) + 7
                                             else "text-muted-foreground"
@@ -121,59 +271,112 @@ def:pub RoadmapTimeline(
                         }}
                     </div>
                 </div>
-                <div className={"flex border-b " + TINT}>
-                    <div
-                        className={"sticky left-0 z-20 w-60 shrink-0 px-4 py-2.5 text-xs text-muted-foreground "
-                            + TINT}
-                    >
-                        Iterations
-                    </div>
-                    <div className="relative h-10 flex-1">
-                        {for it in iterations {
-                            <div
-                                key={it.id}
-                                className={"absolute top-2 z-[15] flex h-6 items-center truncate rounded-md border px-2 text-xs "
-                                    + (
-                                        "border-primary/50 bg-[color-mix(in_oklab,var(--primary)_15%,var(--card))] font-medium text-foreground"
-                                            if it.start_date <= today
-                                                and it.end_date >= today
-                                            else "border-border bg-card text-muted-foreground"
+                {if len(iterations) > 0 {
+                    <div key="bands" className="flex border-b">
+                        <div
+                            className={LABEL_CELL
+                                + " flex items-center bg-card text-xs text-muted-foreground "
+                                + LABEL_W}
+                        >
+                            Iterations
+                        </div>
+                        <div className="relative h-9 flex-1">
+                            {for it in iterations {
+                                <div
+                                    key={it.id}
+                                    className={"absolute inset-y-0 border-x border-border "
+                                        + BAND_HEAD}
+                                    style={spanStyle(
+                                        it.start_date, it.end_date, origin, total, 2
                                     )}
-                                style={spanStyle(
-                                    it.start_date, it.end_date, origin, total
-                                )}
-                                title={it.name
-                                    + " · "
-                                    + spanLabel(it.start_date, it.end_date)}
-                            >
-                                {it.name}
-                            </div>
-                        }}
-                        {if showToday {
-                            <TodayMark key="today"/>
-                        }}
+                                    aria-hidden="true"
+                                />
+                            }}
+                            {if showToday {
+                                <TodayMark key="today"/>
+                            }}
+                            {for it in iterations {
+                                <div
+                                    key={"label-" + it.id}
+                                    className="absolute inset-y-0 z-[15] flex items-center overflow-clip px-1.5"
+                                    style={spanStyle(
+                                        it.start_date, it.end_date, origin, total, 2
+                                    )}
+                                    title={it.name
+                                        + " · "
+                                        + spanLabel(it.start_date, it.end_date)}
+                                >
+                                    <span
+                                        className={"sticky flex min-w-0 items-baseline gap-2 rounded-xs px-1 "
+                                            + LABEL_OFFSET
+                                            + " "
+                                            + BAND_HEAD}
+                                    >
+                                        <span
+                                            className={"max-w-full shrink-0 truncate text-[13px] "
+                                                + (
+                                                    "font-semibold text-foreground"
+                                                        if it.start_date <= today
+                                                            and it.end_date >= today
+                                                        else "font-medium text-muted-foreground"
+                                                )}
+                                        >
+                                            {it.name}
+                                        </span>
+                                        <span
+                                            className="min-w-0 truncate font-mono text-xs text-muted-foreground tabular-nums"
+                                        >
+                                            {spanLabel(it.start_date, it.end_date)}
+                                        </span>
+                                    </span>
+                                </div>
+                            }}
+                        </div>
                     </div>
-                </div>
+                }}
                 <div className="relative">
                     <div
-                        className="pointer-events-none absolute inset-y-0 right-0 left-60 flex"
+                        className={"pointer-events-none absolute inset-y-0 right-0 "
+                            + LABEL_OFFSET}
                         aria-hidden="true"
                     >
-                        {for w in weekStarts {
-                            <div key={w} className="flex-1 border-l border-border/60"/>
-                        }}
+                        <div className="relative h-full w-full">
+                            {for it in iterations {
+                                <div
+                                    key={it.id}
+                                    className={"absolute inset-y-0 border-x border-border/70 "
+                                        + BAND_WASH}
+                                    style={spanStyle(
+                                        it.start_date, it.end_date, origin, total, 2
+                                    )}
+                                />
+                            }}
+                            <div className="absolute inset-0 flex">
+                                {for w in weekStarts {
+                                    <div
+                                        key={w}
+                                        className="flex-1 border-l border-border/60"
+                                    />
+                                }}
+                            </div>
+                        </div>
                     </div>
                     {for g in groups {
-                        <div key={g}>
-                            <div
-                                className={"relative flex border-b text-xs font-semibold "
-                                    + TINT}
-                            >
+                        <div key={g} role="group" aria-label={g}>
+                            <div className={"relative flex border-b " + GROUP_FILL}>
                                 <span
-                                    className={"sticky left-0 z-20 w-60 shrink-0 px-4 py-1.5 "
-                                        + TINT}
+                                    className={LABEL_CELL
+                                        + " py-1.5 text-xs font-semibold "
+                                        + GROUP_FILL
+                                        + " "
+                                        + LABEL_W}
                                 >
-                                    {g + " · " + str(len(groupRows[g]))}
+                                    {g}
+                                    <span
+                                        className="ml-1.5 font-mono font-normal text-muted-foreground tabular-nums"
+                                    >
+                                        {str(len(groupRows[g]))}
+                                    </span>
                                 </span>
                                 <div className="relative flex-1">
                                     {if showToday {
@@ -182,66 +385,107 @@ def:pub RoadmapTimeline(
                                 </div>
                             </div>
                             {for i in groupRows[g] {
-                                <div
+                                <button
                                     key={rows[i].id}
-                                    className="relative flex h-11 items-center border-b hover:bg-accent/40"
+                                    type="button"
+                                    data-task-card={rows[i].id}
+                                    className="group relative flex h-11 w-full items-center border-b text-left outline-none hover:bg-accent"
+                                    title={rows[i].title
+                                        + " · "
+                                        + nameOf(rows[i])
+                                        + " · "
+                                        + spanLabel(starts[i], ends[i])}
+                                    aria-label={"Open "
+                                        + rows[i].title
+                                        + ", "
+                                        + spanLabel(starts[i], ends[i])
+                                        + (
+                                            ", " + lateWords(rows[i])
+                                                if isLate(rows[i])
+                                                else ""
+                                        )}
+                                    onClick={lambda { onOpen(rows[i].id); }}
                                 >
-                                    <button
-                                        type="button"
-                                        className="sticky left-0 z-20 h-full w-60 shrink-0 border-r bg-card px-4 text-left"
-                                        onClick={lambda { onOpen(rows[i].id); }}
+                                    <span
+                                        className="pointer-events-none absolute inset-0 z-30 hidden outline-2 -outline-offset-2 outline-ring outline-solid group-focus-visible:block"
+                                        aria-hidden="true"
+                                    />
+                                    <span
+                                        className={LABEL_CELL
+                                            + " flex h-full flex-col justify-center gap-0.5 bg-card group-hover:bg-accent "
+                                            + LABEL_W}
                                     >
                                         <span
-                                            className="block truncate text-sm font-medium"
+                                            className="truncate text-[13.5px] leading-tight font-medium"
                                         >
                                             {rows[i].title}
                                         </span>
                                         <span
-                                            className="block truncate text-xs text-muted-foreground"
+                                            className="flex min-w-0 items-center gap-1.5 text-xs leading-tight text-muted-foreground"
                                         >
-                                            {spanLabel(starts[i], ends[i])}
+                                            <span
+                                                className={"shrink-0 font-mono tabular-nums "
+                                                    + (
+                                                        "font-medium text-destructive"
+                                                            if isLate(rows[i])
+                                                            else ""
+                                                    )}
+                                            >
+                                                <span
+                                                    className={"sm:inline "
+                                                        + (
+                                                            "hidden"
+                                                                if isLate(rows[i])
+                                                                else ""
+                                                        )}
+                                                >
+                                                    {spanLabel(starts[i], ends[i])}
+                                                </span>
+                                                {if isLate(rows[i]) {
+                                                    <span
+                                                        key="due"
+                                                        className="sm:hidden"
+                                                    >
+                                                        {prettyDay(ends[i])}
+                                                    </span>
+                                                }}
+                                            </span>
+                                            {if isLate(rows[i]) {
+                                                <span
+                                                    key="late"
+                                                    className="min-w-0 truncate font-medium text-destructive"
+                                                >
+                                                    {"· " + lateWords(rows[i])}
+                                                </span>
+                                            } else {
+                                                <span
+                                                    key="step"
+                                                    className="hidden min-w-0 truncate sm:inline"
+                                                >
+                                                    {"· " + nameOf(rows[i])}
+                                                </span>
+                                            } }
                                         </span>
-                                    </button>
-                                    <div className="relative h-full flex-1">
-                                        <button
-                                            type="button"
-                                            className={"absolute top-3 h-5 "
-                                                + barClass(rows[i])
-                                                + (
-                                                    " rounded-l-md"
-                                                        if starts[i] >= fromDate
-                                                        else ""
-                                                )
-                                                + (
-                                                    " rounded-r-md"
-                                                        if ends[i] <= lastDay
-                                                        else ""
-                                                )
-                                                + (
-                                                    " opacity-50"
-                                                        if rows[i].status == "Done"
-                                                        else ""
-                                                )
-                                                + " transition-[filter] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"}
-                                            style={spanStyle(
-                                                starts[i], ends[i], origin, total
+                                    </span>
+                                    <span className="relative h-full flex-1">
+                                        <span
+                                            className={barClass(
+                                                rows[i], starts[i], ends[i]
                                             )}
-                                            title={rows[i].title
-                                                + " · "
-                                                + spanLabel(starts[i], ends[i])
-                                                + " · "
-                                                + rows[i].status}
-                                            aria-label={"Open "
-                                                + rows[i].title
-                                                + ", "
-                                                + spanLabel(starts[i], ends[i])}
-                                            onClick={lambda { onOpen(rows[i].id); }}
-                                        />
+                                            style={barStyle(
+                                                rows[i], starts[i], ends[i]
+                                            )}
+                                        >
+                                            <KindGlyph
+                                                kind={kindOf(rows[i])}
+                                                size={14}
+                                            />
+                                        </span>
                                         {if showToday {
                                             <TodayMark key="today"/>
                                         }}
-                                    </div>
-                                </div>
+                                    </span>
+                                </button>
                             }}
                         </div>
                     }}
