@@ -18,7 +18,7 @@ def waitChip(days: int) -> str {
     return str(days) + "d";
 }
 
-def:pub ReviewQueueCard(rows: list[dict]) -> JsxElement {
+def:pub ReviewQueueCard(rows: list[dict[str, any]]) -> JsxElement {
     today = todayIso();
     return
         <Card>
@@ -99,7 +99,7 @@ def:pub ReviewQueueCard(rows: list[dict]) -> JsxElement {
         </Card>;
 }
 
-def:pub GoneQuietCard(rows: list[dict]) -> JsxElement {
+def:pub GoneQuietCard(rows: list[dict[str, any]]) -> JsxElement {
     return
         <Card>
             <CardHeader>

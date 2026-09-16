@@ -123,9 +123,9 @@ def:pub OverviewPage -> JsxPage {
         logs: LogTotals | None = None,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
         # objs would pull services.insights.insights types into the client bundle.
-        reviewQueue: list[dict] = [],
-        quiet: list[dict] = [],
-        blockedInfo: dict[str, dict] = {},
+        reviewQueue: list[dict[str, any]] = [],
+        quiet: list[dict[str, any]] = [],
+        blockedInfo: dict[str, dict[str, any]] = {},
         loading: bool = True,
         failed: bool = False,
         # The charts over time, scoped by their own filter row. A refetch

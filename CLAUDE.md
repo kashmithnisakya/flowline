@@ -96,7 +96,7 @@ people it tracks are roster members.
   `github` with `github.jac`, `events.jac` and `util.jac`) plus
   `services/util.jac` for shared server-only helpers. Walkers are **bare
   (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
-  bodies inline, not in an `.impl.jac` annex**, on jac 0.37.14: the endpoint
+  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.18: the endpoint
   effect pass does not follow an ability body into an annex, so an annexed
   walker is classified as a pure read, the client caches it, and a save no
   longer invalidates anything (every write-then-refetch shows stale data;
@@ -133,10 +133,9 @@ people it tracks are roster members.
   single task. `services/insights/insights.jac` does the same thing for the snapshot
   (`_hydrate`). Never build a list by calling `to_view()` in a loop.
 - **List walkers page, and build their rows in a local.** A walker's public
-  `has` fields are serialised into the response beside `reports`, so an
-  accumulator field (`has results`) ships every row a second time; the
-  runtime already ships `walker.reports` a third. Rows go in a local and
-  are reported once. Anything that grows with history (`ListTasks`,
+  `has` fields are serialised into the response (`data.result`) beside
+  `data.reports`, so an accumulator field (`has results`) ships every row a
+  second time. Rows go in a local and are reported once. Anything that grows with history (`ListTasks`,
   `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
   `page_size` (1-based, clamped by `page_bounds` in `services/util.jac`) and
   reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
@@ -204,9 +203,9 @@ parent's jid with the caller's root. `Root` is not a runtime name in
 the webhook receiver cannot apply a delivery itself: it queues, the tenant
 drains (see `services/github/events.jac`).
 
-**An uncaught walker exception is returned to the browser with its Python
-traceback** (the runtime sets `include_traceback` unconditionally, no config
-switch). Anything that can fail outside our control (the LLM, GitHub) is
+**An uncaught walker exception returns its message to the browser** as a 500
+`EXECUTION_ERROR` (since jac 0.37.18 the traceback goes to the server log
+only), and a message can still carry a URL or a config hint. Anything that can fail outside our control (the LLM, GitHub) is
 caught inside the walker, logged server-side with the operator hint, and
 reported as an empty or `{"ok": False, ...}` result; the client shows a plain
 "not available right now". See `_llm_failed` in `services/assistant/assistant.jac`

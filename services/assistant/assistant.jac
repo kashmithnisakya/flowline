@@ -85,7 +85,7 @@ sem ProposedAction.confidence = "high, medium or low: how sure you are this is w
 # ------------------------------------------------------------------- walkers
 # Bare (JWT-required) by design. build_snapshot is a plain def, never a spawn.
 
-def _range(from_date: str, to_date: str) -> tuple {
+def _range(from_date: str, to_date: str) -> tuple[str, str] {
     today = now_iso()[:10];
     return (from_date or today, to_date or today);
 }

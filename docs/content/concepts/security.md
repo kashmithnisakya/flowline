@@ -116,8 +116,9 @@ binds that installation to its root. No walker ever writes a foreign root.
 
 ## Errors do not leak internals
 
-An **uncaught** walker exception is returned to the browser with its Python
-traceback: the runtime includes it unconditionally. So anything that can fail
+An **uncaught** walker exception returns its message to the browser (since Jac
+0.37.18 the traceback goes to the server log only), and a message can still
+carry a URL or a configuration hint. So anything that can fail
 outside the app's control is caught inside the walker, logged server-side with
 an operator hint, and reported as an empty result or an
 `{"ok": false, "error": ...}` dict:

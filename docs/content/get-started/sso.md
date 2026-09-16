@@ -84,12 +84,12 @@ host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
 
 [scale.sso.google]
-client_id = "${GOOGLE_CLIENT_ID}"
-client_secret = "${GOOGLE_CLIENT_SECRET}"
+client_id = "${GOOGLE_CLIENT_ID:-}"
+client_secret = "${GOOGLE_CLIENT_SECRET:-}"
 
 [scale.sso.github]
-client_id = "${GITHUB_CLIENT_ID}"
-client_secret = "${GITHUB_CLIENT_SECRET}"
+client_id = "${GITHUB_CLIENT_ID:-}"
+client_secret = "${GITHUB_CLIENT_SECRET:-}"
 ```
 
 ## Notes and troubleshooting

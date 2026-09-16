@@ -160,7 +160,7 @@ def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntr
 
 # The reason a task is blocked lives on the log row that recorded the move, not
 # on Task.notes (which the handoff dialog may leave untouched).
-def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple {
+def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple[str, str] {
     reason = "";
     since = "";
     for row in entries {
