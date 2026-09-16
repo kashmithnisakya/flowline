@@ -44,22 +44,22 @@ glob FEATURES: list[Feature] = [
 
 def:pub Features -> JsxElement {
     return
-        <section className="mx-auto max-w-[1180px] px-4 pt-14 sm:px-6 sm:pt-20">
+        <section className="landing-wrap pt-14 sm:pt-20">
             <h2
                 className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
             >
                 What else ships
             </h2>
-            <dl className="mt-6 border-b">
+            <dl className="mt-6 border-b xl:grid xl:grid-cols-2">
                 {for f in FEATURES {
                     <div
                         key={f.key}
                         id={f.key}
-                        className="grid scroll-mt-20 gap-1 border-t py-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6"
+                        className="grid scroll-mt-20 gap-1 border-t py-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6 xl:odd:pr-8 xl:even:pl-8"
                     >
                         <dt className="text-[15px] font-semibold">{f.label}</dt>
                         <dd
-                            className="max-w-[72ch] text-[15px] leading-relaxed text-muted-foreground"
+                            className="max-w-[54ch] text-[15px] leading-relaxed text-muted-foreground"
                         >
                             {f.body}
                         </dd>

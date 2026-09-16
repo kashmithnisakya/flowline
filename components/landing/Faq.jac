@@ -37,16 +37,20 @@ def:pub Faq -> JsxElement {
     return
         <section
             id="faq"
-            className="mx-auto grid max-w-[1180px] scroll-mt-16 gap-6 px-4 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10"
+            className="landing-wrap grid scroll-mt-16 gap-6 pt-14 sm:pt-20 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10"
         >
             <h2
                 className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%] lg:sticky lg:top-24 lg:self-start"
             >
                 Questions
             </h2>
-            <div className="border-b">
+            <div className="border-b xl:grid xl:grid-cols-2">
                 {for (i, f) in enumerate(FAQS) {
-                    <details key={f.q} open={i < 2} className="group border-t py-4">
+                    <details
+                        key={f.q}
+                        open={i < 2}
+                        className="group border-t py-4 xl:odd:pr-8 xl:even:pl-8"
+                    >
                         <summary
                             className="flex cursor-pointer list-none items-start justify-between gap-6 text-left [&::-webkit-details-marker]:hidden"
                         >
@@ -69,7 +73,7 @@ def:pub Faq -> JsxElement {
                             </svg>
                         </summary>
                         <p
-                            className="mt-2 max-w-[68ch] text-[15px] leading-relaxed text-muted-foreground"
+                            className="mt-2 max-w-[54ch] text-[15px] leading-relaxed text-muted-foreground"
                         >
                             {f.a}
                         </p>

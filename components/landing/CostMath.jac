@@ -9,7 +9,7 @@ def:pub CostMath -> JsxElement {
     has size: int = 8;
 
     return
-        <section className="mx-auto max-w-[1180px] px-4 pt-14 sm:px-6 sm:pt-20">
+        <section className="landing-wrap pt-14 sm:pt-20">
             <div className="border-y py-8">
                 <p
                     className="max-w-[46ch] text-[clamp(1.25rem,2.4vw,1.625rem)] leading-[1.6] font-semibold [font-stretch:108%]"

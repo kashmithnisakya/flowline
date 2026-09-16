@@ -17,7 +17,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
         <header className="sticky top-0 z-30 border-b bg-background">
             <nav
                 aria-label="Site"
-                className="mx-auto flex h-14 max-w-[1180px] items-center gap-6 px-4 sm:px-6"
+                className="landing-wrap flex h-14 items-center gap-6"
             >
                 <a href="/" aria-label="flowline home" className="shrink-0 rounded-sm">
                     <Wordmark/>

@@ -1,6 +1,7 @@
 """Landing hero: the one idea (draw the steps, the board and the log follow),
-the proof bar, then the playable demo at full container width. Left-aligned
-at every width; on phones the primary action fills the row.
+the proof bar, then the playable demo at full container width. From 2xl the
+demo sits beside the text and the proof bar spans both. Left-aligned at every
+width; on phones the primary action fills the row.
 """
 
 import from ..ui.button { Button }
@@ -11,14 +12,19 @@ glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
      TEXT_LINK: str = "rounded-sm text-sm font-semibold text-foreground underline-offset-4 hover:underline";
 
 def:pub Hero(loggedIn: bool) -> JsxElement {
+    # From 2xl the section is a two column grid: text left, demo board right,
+    # the proof bar spanning both underneath. The board wrapper's top padding
+    # lines the board's border up with the text block's padding.
     return
-        <section className="mx-auto max-w-[1180px] px-4 sm:px-6">
+        <section
+            className="landing-wrap 2xl:grid 2xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] 2xl:items-start 2xl:gap-x-12 2xl:gap-y-6"
+        >
             <div className="grid max-w-[900px] gap-4 pt-10 pb-5 sm:pt-12">
                 <p className="font-mono text-[12.5px] text-subtle">
                     For teams that would rather write than meet
                 </p>
                 <h1
-                    className="max-w-[21ch] text-[clamp(2.125rem,4.4vw,2.875rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
+                    className="max-w-[21ch] text-[clamp(2.125rem,3.2vw,3.5rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
                 >
                     Draw how your team works. The board and the daily log follow.
                 </h1>
@@ -53,7 +59,11 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                     </div>
                 </div>
             </div>
-            <ProofStrip/>
-            <HeroBoard loggedIn={loggedIn}/>
+            <div className="2xl:order-last 2xl:col-span-2">
+                <ProofStrip/>
+            </div>
+            <div className="2xl:pt-7">
+                <HeroBoard loggedIn={loggedIn}/>
+            </div>
         </section>;
 }

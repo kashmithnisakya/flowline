@@ -8,7 +8,7 @@ glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
 
 def:pub SiteFooter(loggedIn: bool) -> JsxElement {
     return
-        <footer className="mx-auto max-w-[1180px] px-4 pt-16 pb-10 sm:px-6 sm:pt-24">
+        <footer className="landing-wrap pt-16 pb-10 sm:pt-24">
             <div className="grid gap-5">
                 <h2
                     className="max-w-[24ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"

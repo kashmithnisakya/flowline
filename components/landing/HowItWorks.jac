@@ -7,10 +7,7 @@ glob STEP_ROW: str = "grid content-start gap-2 border-t py-5 md:border-t-0 md:bo
 
 def:pub HowItWorks -> JsxElement {
     return
-        <section
-            id="how"
-            className="mx-auto max-w-[1180px] scroll-mt-16 px-4 pt-14 sm:px-6 sm:pt-20"
-        >
+        <section id="how" className="landing-wrap scroll-mt-16 pt-14 sm:pt-20">
             <h2
                 className="max-w-[28ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
             >
