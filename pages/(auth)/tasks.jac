@@ -309,9 +309,15 @@ def:pub TasksPage -> JsxPage {
         }
     }
     taskChecklist: list[dict[str, any]] = [];
+    taskCreated: str = "";
+    taskUpdated: str = "";
+    taskPrState: str = "";
     for t in rows {
-        if t.id == editTaskId {
+        if t.id == editTaskId and not creating {
             taskChecklist = t.checklist;
+            taskCreated = t.created_at;
+            taskUpdated = t.updated_at;
+            taskPrState = t.pr_state;
         }
     }
     stepNames: dict[str, str] = {};
@@ -518,6 +524,9 @@ def:pub TasksPage -> JsxPage {
                 checklist={taskChecklist}
                 onChecklist={replaceRow}
                 iterations={iterations}
+                createdAt={taskCreated}
+                historyKey={taskUpdated}
+                prState={taskPrState}
             />
         </div>;
 }
