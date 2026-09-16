@@ -155,7 +155,7 @@ impl OverviewPage.loadMoves -> None {
         taskIds: list[str] = [];
         sinceAt: dict[str, str] = {};
         sinceDay: dict[str, str] = {};
-        entriesToday = 0;
+        handWeek = 0;
         for row in rows {
             stamp = row.at or row.date;
             # A task event is dated by its own UTC stamp; a hand-written line
@@ -182,8 +182,8 @@ impl OverviewPage.loadMoves -> None {
                 }
             }
             if not row.task_id {
-                if day == today {
-                    entriesToday = entriesToday + 1;
+                if slot >= 0 {
+                    handWeek = handWeek + 1;
                 }
                 continue;
             }
@@ -222,7 +222,7 @@ impl OverviewPage.loadMoves -> None {
         }
         doneMoves = perDay;
         blockedSince = sinceDay;
-        todayEntries = entriesToday;
+        handEntries = handWeek;
         weekPeople = people;
         weekEntries = entriesWeek if got["full"] else -1;
     } except Exception as e {

@@ -1,5 +1,5 @@
 """flowline - Overview: what needs someone now, then how the week is going.
-Until the first card reaches Done a first-run checklist stands in for the
+A workspace with nothing to count gets a first-run checklist instead of the
 figures and charts; the impl annex documents each read."""
 
 import from "@jac/runtime" { useState }
@@ -243,9 +243,9 @@ def:pub OverviewPage -> JsxPage {
         dueHasMore: bool = False,
         dueFailed: bool = False,
         # This week off the log, by local day: tasks that entered Done per
-        # weekday, entries written today, and when each blocked task stopped.
+        # weekday, hand-written lines, and when each blocked task stopped.
         doneMoves: list[int] = [0, 0, 0, 0, 0, 0, 0],
-        todayEntries: int = 0,
+        handEntries: int = 0,
         blockedSince: dict[str, str] = {},
         # The week's entries by the same local day rule, per roster name, for
         # the People strip and the entries figure. -1 until a complete read.
@@ -256,7 +256,7 @@ def:pub OverviewPage -> JsxPage {
         weekAdded: int = -1,
         addedFailed: bool = False,
         orgName: str = "",
-        # First-run state, read only for a workspace with no tasks.
+        # First-run state, read only while no card has reached Done.
         setupLoaded: bool = False,
         stepCount: int = 0,
         firstStepName: str = "",
@@ -318,17 +318,17 @@ def:pub OverviewPage -> JsxPage {
         if counts and len(counts.done_by_week) == 4
         else [0, 0, 0, 0];
     entrySpark = logs.by_week if logs and len(logs.by_week) == 4 else [0, 0, 0, 0];
-    dayCounts = logs.by_day
-        if logs and len(logs.by_day) == 7
-        else [0, 0, 0, 0, 0, 0, 0];
     openCount = counts.open if counts else 0;
-    # Figures and charts wait for the first card in Done (loadAll reads the
-    # same rule); until then the page is early and a checklist leads.
+    # Early means nothing to count: no task and no log row in four weeks. The
+    # checklist then stands in for the body; later it joins the rail while no
+    # card has reached Done (loadAll reads the setup on the same rule).
     doneEver = countAll(doneSpark);
     for pt in (counts.projects if counts else []) {
         doneEver = doneEver + pt.done;
     }
-    early = (True if counts else False) and doneEver == 0;
+    early = (True if counts else False)
+        and taskTotal == 0
+        and countAll(entrySpark) == 0;
 
     # ---- Needs you: each task sits in the first group it qualifies for, and
     # `flagged` collects the ids the snapshot's attention_total counts.
@@ -684,12 +684,13 @@ def:pub OverviewPage -> JsxPage {
         } for m in activeMembers
     ];
 
-    # ---- First run: every item from state the page already read. Only a
-    # hand-written line ticks the log item (task events are log rows too).
+    # ---- First run: every item from state the page already read. A
+    # hand-written line this week ticks the log item (task events are log
+    # rows too), so a working team does not get it back each morning.
     noPeople = len(activeMembers) == 0;
-    loggedToday = todayEntries > 0
-        if movesLoaded and not movesFailed
-        else (taskTotal == 0 and dayCounts[todayIdx] > 0);
+    noProject = len(activeProjects) == 0;
+    logKnown = movesLoaded and not movesFailed;
+    loggedWeek = logKnown and handEntries > 0;
     steps: list[dict] = [];
     steps.append(
         {
@@ -708,16 +709,22 @@ def:pub OverviewPage -> JsxPage {
             "primary": False
         }
     );
+    # CreateTask needs an active project, and the board sends a workspace
+    # without one to /setup, so the item asks for a project first.
     steps.append(
         {
             "key": "task",
             "title": "Add your first task",
-            "detail": ("It lands in " + firstStepName + ".")
-                if firstStepName
-                else "It lands in the first column of the board.",
+            "detail": "Tasks live in a project, so add one first."
+                if noProject and taskTotal == 0
+                else (
+                    ("It lands in " + firstStepName + ".")
+                        if firstStepName
+                        else "It lands in the first column of the board."
+                ),
             "done": taskTotal > 0,
-            "action": "New task",
-            "to": "/board?new=1",
+            "action": "Add a project" if noProject else "New task",
+            "to": "/workspace?tab=projects" if noProject else "/board?new=1",
             "primary": False
         }
     );
@@ -726,9 +733,13 @@ def:pub OverviewPage -> JsxPage {
             "key": "log",
             "title": "Write today's first log line",
             "detail": "Add a person first, then log what they worked on."
-                if noPeople and not loggedToday
-                else "One sentence about what you worked on.",
-            "done": loggedToday,
+                if noPeople and not loggedWeek
+                else (
+                    "Logged this week."
+                        if loggedWeek
+                        else "One sentence about what you worked on."
+                ),
+            "done": loggedWeek,
             "action": "Add a person" if noPeople else "Open log",
             "to": "/workspace?tab=people" if noPeople else "/log",
             "primary": False
@@ -758,17 +769,16 @@ def:pub OverviewPage -> JsxPage {
             requiredOpen = requiredOpen + 1;
         }
     }
-    # The checklist stays until its required items are ticked or a card
-    # reaches Done; it waits on both reads so an item never flips on arrival.
+    # Past the early page the checklist is an extra rail panel, shown once
+    # both reads land (so no item flips on arrival) and only while a
+    # required item is open and no card has reached Done.
     checklistReady = setupLoaded and movesLoaded;
-    showChecklist = early and not (checklistReady and requiredOpen == 0);
-    needsHas = len(groups) > 0 or dueFailed;
-    earlyNote = "Figures and charts appear after the first card moves to Done."
-        + (
-            " Until then there is nothing to count, so nothing is shown."
-                if taskTotal == 0
-                else ""
-        );
+    railChecklist = not early
+        and doneEver == 0
+        and checklistReady
+        and logKnown
+        and requiredOpen > 0;
+    earlyNote = "Figures and charts appear once there is a task or a log line. Until then there is nothing to count, so nothing is shown.";
 
     histWeeks = history.weeks if history else [];
     histLabels = [prettyDay(w) for w in histWeeks];
@@ -812,64 +822,48 @@ def:pub OverviewPage -> JsxPage {
                 />
             } elif early {
                 <div key="first" className={zones}>
-                    <div className="flex min-w-0 flex-col gap-4">
-                        {if taskTotal > 0 and (needsHas or not showChecklist) {
-                            <NeedsYou
-                                key="needs"
-                                groups={groups}
-                                total={needsTotal}
-                                totalPlus={dueCut}
-                                pending={not dueLoaded}
-                                failNote={"Could not check what is due this week."
-                                    if dueFailed
-                                    else ""}
-                                onRetry={loadDue}
-                            />
-                        }}
-                        {if showChecklist and checklistReady {
-                            <FirstRun
-                                key="list"
-                                title={"Get "
-                                    + (orgName or "your workspace")
-                                    + " moving"}
-                                items={steps}
-                            />
-                        } elif showChecklist {
-                            <div key="listsk" className="surface space-y-3 p-3.5">
-                                <Skeleton className="h-4 w-48"/>
-                                {for i in range(4) {
-                                    <Skeleton key={str(i)} className="h-10 w-full"/>
-                                }}
-                            </div>
-                        } }
-                    </div>
+                    {if checklistReady {
+                        <FirstRun
+                            key="list"
+                            title={"Get " + (orgName or "your workspace") + " moving"}
+                            items={steps}
+                        />
+                    } else {
+                        <div key="listsk" className="surface space-y-3 p-3.5">
+                            <Skeleton className="h-4 w-48"/>
+                            {for i in range(4) {
+                                <Skeleton key={str(i)} className="h-10 w-full"/>
+                            }}
+                        </div>
+                    } }
                     <ThisWeek figures={[]} days={[]} note={earlyNote}/>
                 </div>
             } else {
                 <div key="body" className={zones}>
-                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
-                        <div className="min-w-0 @max-[52rem]:order-1">
-                            <NeedsYou
-                                groups={groups}
-                                total={needsTotal}
-                                totalPlus={dueCut}
-                                pending={not dueLoaded}
-                                failNote={"Could not check what is due this week."
-                                    if dueFailed
-                                    else ""}
-                                onRetry={loadDue}
-                            />
-                        </div>
-                        <div className="min-w-0 @max-[52rem]:order-5">
-                            <PeopleTable
-                                rows={peopleRows}
-                                dayNames={DAY_LABELS}
-                                todayIndex={todayIdx}
-                            />
-                        </div>
+                    <div className="min-w-0 @max-[52rem]:order-1">
+                        <NeedsYou
+                            groups={groups}
+                            total={needsTotal}
+                            totalPlus={dueCut}
+                            pending={not dueLoaded}
+                            failNote={"Could not check what is due this week."
+                                if dueFailed
+                                else ""}
+                            onRetry={loadDue}
+                        />
                     </div>
                     <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
-                        <div className="min-w-0 @max-[52rem]:order-2">
+                        {if railChecklist {
+                            <div key="list" className="min-w-0 @max-[52rem]:order-2">
+                                <FirstRun
+                                    title={"Get "
+                                        + (orgName or "your workspace")
+                                        + " moving"}
+                                    items={steps}
+                                />
+                            </div>
+                        }}
+                        <div className="min-w-0 @max-[52rem]:order-3">
                             <ThisWeek
                                 figures={figures}
                                 days={dayRows}
@@ -878,12 +872,21 @@ def:pub OverviewPage -> JsxPage {
                                 onRetry={loadMoves if movesFailed else None}
                             />
                         </div>
-                        <div className="min-w-0 @max-[52rem]:order-3">
+                        <div className="min-w-0 @max-[52rem]:order-4">
                             <ProjectBars rows={projRows}/>
                         </div>
                     </div>
+                    <div
+                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2"
+                    >
+                        <PeopleTable
+                            rows={peopleRows}
+                            dayNames={DAY_LABELS}
+                            todayIndex={todayIdx}
+                        />
+                    </div>
                     <section
-                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-4 @min-[52rem]:col-span-2"
+                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2"
                         aria-labelledby="over-time"
                     >
                         <div className="flex flex-wrap items-center gap-2">

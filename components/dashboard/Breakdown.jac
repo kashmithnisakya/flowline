@@ -126,28 +126,29 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
         </section>;
 }
 
-# A day cell's fill by entry count: none, one, two or three, four and up. A
-# past day with none is an empty cell with a solid edge; days ahead are dashed.
+# A day cell's fill by entry count: none, one, two or three, four and up.
+# The lightest step is 3:1 on the card in both themes; every past cell has a
+# solid control edge and days ahead a dashed one.
 def dayFill(count: int) -> str {
     if count <= 0 {
         return "transparent";
     }
     if count == 1 {
-        return "color-mix(in oklab, var(--foreground) 30%, var(--card))";
+        return "color-mix(in oklab, var(--foreground) 50%, var(--card))";
     }
     if count <= 3 {
-        return "color-mix(in oklab, var(--foreground) 55%, var(--card))";
+        return "color-mix(in oklab, var(--foreground) 70%, var(--card))";
     }
-    return "color-mix(in oklab, var(--foreground) 80%, var(--card))";
+    return "color-mix(in oklab, var(--foreground) 90%, var(--card))";
 }
 
 def:pub PeopleTable(
     rows: list[dict], dayNames: list[str], todayIndex: int
 ) -> JsxElement {
-    # Columns follow the panel's own width: beside a docked Ask it is too
-    # narrow for five, so the counts fold under the name as on a phone. Each
-    # row is its own grid, so wide columns are fixed to line up with the header.
-    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,1fr)_3rem_6rem_7.75rem_4rem]";
+    # Columns follow the panel's own width: when narrow the counts fold under
+    # the name as on a phone. Each row is its own grid, so the columns are
+    # fixed to line up with the header, and packed left so numbers sit by names.
+    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,16rem)_3rem_6rem_7.75rem_4rem] @min-[48rem]:gap-x-6";
     return
         <section className="@container surface min-w-0" aria-labelledby="people-h">
             <div className="px-3.5 pt-3 pb-1">
@@ -246,11 +247,7 @@ def:pub PeopleTable(
                                         + (
                                             "border border-dashed border-input"
                                                 if di > todayIndex
-                                                else (
-                                                    "border border-input/70"
-                                                        if r["byDay"][di] <= 0
-                                                        else ""
-                                                )
+                                                else "border border-input"
                                         )
                                         + (
                                             " outline outline-[1.5px] outline-offset-1 outline-primary"
