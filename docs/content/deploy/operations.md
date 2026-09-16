@@ -21,7 +21,7 @@ Kubernetes events; `jachammer top [--prod] --json` reports CPU and memory per
 pod.
 
 **Metrics.** `/metrics` (Prometheus format, with per-walker metrics) requires
-admin authentication. On Jac 0.37.14 with more than one worker it can answer
+admin authentication. Through Jac 0.37.18, with more than one worker, it answers
 `200` with an empty body, because the collector is created before the worker
 supervisor configures multi-process mode (jaseci-labs/jac#9190); prefer
 `jachammer top` until that ships.
@@ -70,6 +70,6 @@ them through its own class registry. Treat a pin bump as a data migration:
 | Board shows a reconnect banner | A GitHub call returned 401 or 404 and marked the connection invalid. Reconnect on the GitHub tab. |
 | GitHub changes stopped arriving | The delivery log: `401` (secret mismatch), `415` (content type), `unknown_installation` (reconnect the workspace), or no deliveries at all (webhook URL). |
 | The assistant is "not available" | `flowline.assistant` in the logs. |
-| `500` from a walker with a traceback in the response | An uncaught exception; usually a name missing from an import. `jac check` does not catch those, so reproduce with the API gate locally. |
+| `500` `EXECUTION_ERROR` from a walker | An uncaught exception, with its traceback in the server log; usually a name missing from an import. `jac check` does not catch those, so reproduce with the API gate locally. |
 | High replica count with low traffic | Memory requests versus idle usage (`jachammer top`). |
 | `503 transport_error` | A call outlasting the gateway's forward timeout. |

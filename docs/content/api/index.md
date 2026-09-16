@@ -114,7 +114,7 @@ guard rails) report a result dict instead, so the client can explain:
 | `401` | Missing, invalid or expired token |
 | `404` | A walker that `main.jac` does not import |
 | `422` | The body does not match the walker's field types (for example a string for an `int` field) |
-| `500` | An uncaught exception. The envelope carries `ok: false` and an `error` object, and the runtime includes the Python traceback. |
+| `500` | An uncaught exception. The envelope carries `ok: false` and an `error` object with `EXECUTION_ERROR` and the exception's message; the traceback goes to the server log. |
 
 A runtime error keeps the envelope and fills `error` with a `code` and a
 `message`, for example `{"code": "UNAUTHORIZED", "message": "..."}`.

@@ -117,7 +117,7 @@ clean and only fail at runtime, in the browser, or on the deployed build.
     raises `name '...' is not defined` at request time and 500s the walker.
     Only calling the endpoint finds it.
 
-??? danger "Walker ability bodies must stay inline on 0.37.14"
+??? danger "Walker ability bodies must stay inline through 0.37.18"
 
     The endpoint effect pass does not follow an ability body into an
     `.impl.jac` annex, so an annexed walker is classified as a read, the
