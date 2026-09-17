@@ -61,7 +61,7 @@ def cachedLogShape -> dict[str, any] {
             }
         }
         rows = int(parsed["rows"]) if parsed["rows"] else 0;
-        return {"lines": lines, "rows": 0 if rows < 0 else (12 if rows > 12 else rows)};
+        return {"lines": lines, "rows": 0 if rows < 0 else (40 if rows > 40 else rows)};
     } except Exception as e {
         return fallback;
     }
