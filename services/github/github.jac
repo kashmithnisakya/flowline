@@ -1265,7 +1265,9 @@ obj SyncContext {
 
 # One walk over the repos builds the context. Hand-pasted PR links not yet
 # numbered are adopted here so they join this increment, but only when
-# they point at a repo the workspace tracks.
+# they point at a repo the workspace tracks. An adopted task goes straight
+# into the lookup cache: a write is not visible to a pushed query until
+# the next request, so the store would still answer with the old number.
 def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
     ctx = SyncContext(
         holder=holder, connection=c, token=token, stamp=stamp, started=clock()
@@ -1288,6 +1290,10 @@ def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
             if not t.gh_repo {
                 t.gh_repo = guess_repo;
             }
+            key = t.gh_repo + "#" + str(guess_number);
+            ctx.task_by_pr[key] = t;
+            ctx.looked_pr[key] = True;
+            ctx.linked = ctx.linked + 1;
         }
     }
     ctx.landing = entry_landing(holder);
