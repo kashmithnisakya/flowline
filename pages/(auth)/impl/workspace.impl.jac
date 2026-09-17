@@ -2,14 +2,16 @@
 
 impl WorkspacePage.loadAll -> None {
     try {
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
-        members = mResult.reports[0] if mResult.reports else [];
-        projects = pResult.reports[0] if pResult.reports else [];
-        # The org's managed roles drive the row menus and the member dialog;
-        # a workspace with none falls back to free text in the dialog.
-        rResult = root spawn ListRoles();
-        roles = rResult.reports[0] if rResult.reports else [];
+        # One read for the roster, projects and the org's managed roles (the
+        # row menus and the member dialog; none means free text there).
+        ws = await loadWorkspace();
+        if ws["ok"] {
+            members = ws["members"];
+            projects = ws["projects"];
+            roles = ws["roles"];
+        } else {
+            toast.error("Could not load the workspace");
+        }
         orgName = await fetchOrgName();
     } except Exception as e {
         toast.error("Could not load the workspace");

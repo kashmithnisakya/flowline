@@ -18,61 +18,31 @@ impl DailyLogPage.loadWeek -> None {
     }
     weekStreaming = True;
     try {
-        # Page 1 lands and paints; a week that outgrew a page (a bulk import
-        # writes a row per issue) streams the rest in behind it. Bounded:
-        # ten pages of 500 is more week than anyone reads.
-        gathered: list[LogEntry] = [];
-        pageNo = 1;
-        more = True;
-        while more and pageNo <= 10 {
-            result = root spawn ListLogEntries(
-                from_date=start, to_date=sunday, page=pageNo, page_size=500
-            );
-            got = result.reports[0] if result.reports else None;
-            if not got {
-                more = False;
-            } else {
-                gathered = gathered + got.rows;
-                more = got.has_more;
-                if weekReqRef.current == seq {
-                    # Wire order is newest day first; the components order a
-                    # day by its stamps themselves.
-                    entries = [r for r in gathered];
-                    weekTotal = got.total;
-                    weekLoaded = len(gathered);
-                    loadedMonday = monday;
-                    loadedFrom = start;
-                    loadFailed = False;
-                    loading = False;
-                }
-            }
-            pageNo = pageNo + 1;
-        }
-        # Roster and projects only on the first load; they do not change
-        # with the week. The full member views feed the entry dialog.
-        if len(memberNames) == 0 {
-            mResult = root spawn ListMembers();
-            fetched = mResult.reports[0] if mResult.reports else [];
-            active = [
-                m
-                for m in fetched
-                if m.active
-            ];
-            members = active;
-            memberNames = [m.name for m in active];
-            rosterReady = True;
-        }
-        if len(projects) == 0 {
-            pResult = root spawn ListProjects();
-            allProjects = pResult.reports[0] if pResult.reports else [];
-            projects = [
-                p
-                for p in allProjects
-                if p.active
-            ];
+        # Page 1 goes out beside the workspace read (first load only) and
+        # the blocked list; it lands and paints on its own. A week that
+        # outgrew a page (a bulk import writes a row per issue) streams the
+        # rest in behind it. Bounded: ten pages of 500 is more week than
+        # anyone reads.
+        w: any = window;
+        jobs: list[any] = [weekPage(seq, monday, start, sunday, 1, [])];
+        needRoster = len(memberNames) == 0 or len(projects) == 0;
+        if needRoster {
+            jobs.append(loadShared());
         }
         if not blockedLive {
-            loadBlocked();
+            jobs.append(loadBlocked());
+        }
+        landed: list[any] = await w.Promise.all(jobs);
+        page: dict[str, any] = landed[0];
+        more = bool(page["more"]);
+        pageNo = 2;
+        while more and pageNo <= 10 {
+            page = await weekPage(seq, monday, start, sunday, pageNo, page["rows"]);
+            more = bool(page["more"]);
+            pageNo = pageNo + 1;
+        }
+        if needRoster and not bool(landed[1]) and weekReqRef.current == seq {
+            loadFailed = True;
         }
     } except Exception as e {
         # The page says so itself (panel or strip); no toast.
@@ -85,6 +55,59 @@ impl DailyLogPage.loadWeek -> None {
         retrying = False;
         weekStreaming = False;
     }
+}
+
+# One page of the week's entries on top of `sofar`; when this request is
+# still the newest, the rows go on screen at once. Answers the rows so far
+# and whether the server has more.
+impl DailyLogPage.weekPage(
+    seq: int, monday: str, start: str, sunday: str, pageNo: int, sofar: list[LogEntry]
+) -> dict[str, any] {
+    result = root spawn ListLogEntries(
+        from_date=start, to_date=sunday, page=pageNo, page_size=500
+    );
+    got = result.reports[0] if result.reports else None;
+    if not got {
+        return {"rows": sofar, "more": False};
+    }
+    gathered = sofar + got.rows;
+    if weekReqRef.current == seq {
+        # Wire order is newest day first; the components order a day by
+        # its stamps themselves.
+        entries = [r for r in gathered];
+        weekTotal = got.total;
+        weekLoaded = len(gathered);
+        loadedMonday = monday;
+        loadedFrom = start;
+        loadFailed = False;
+        loading = False;
+    }
+    return {"rows": gathered, "more": got.has_more};
+}
+
+impl DailyLogPage.loadShared -> bool {
+    # Roster and projects only on the first load; they do not change with
+    # the week. The full member views feed the entry dialog.
+    ws = await loadWorkspace();
+    if not ws["ok"] {
+        return False;
+    }
+    fetched: list[MemberView] = ws["members"];
+    active = [
+        m
+        for m in fetched
+        if m.active
+    ];
+    members = active;
+    memberNames = [m.name for m in active];
+    rosterReady = True;
+    allProjects: list[Project] = ws["projects"];
+    projects = [
+        p
+        for p in allProjects
+        if p.active
+    ];
+    return True;
 }
 
 impl DailyLogPage.loadBlocked -> None {

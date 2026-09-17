@@ -29,9 +29,8 @@ import from ...services.github.github {
     SetRepoAutoClose,
     SyncGithub
 }
-import from ...services.flowlines.flowlines { GetFlowLine }
-import from ...services.projects.projects { ListProjects }
 import from ...services.roster.roster { ListRepos, AddRepo }
+import from ...lib.workspace { loadWorkspace }
 import from ...components.github.ConnectCard { ConnectCard }
 import from ...components.github.ReconnectBanner { ReconnectBanner }
 import from ...components.github.RepoPicker { RepoPicker }
@@ -214,7 +213,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def boot -> None;
     async def finishInstall(code: str, installId: int, state: str) -> None;
     async def loadStatus -> None;
-    async def loadWorkspace -> None;
+    async def loadShared -> None;
     async def startInstall -> None;
     async def disconnect -> None;
     async def syncNow -> None;

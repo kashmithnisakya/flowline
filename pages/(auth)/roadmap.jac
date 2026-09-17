@@ -15,9 +15,9 @@ import from ...models {
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 import from ...services.iterations.iterations { RoadmapSnapshot, ListIterations }
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
-import from ...services.projects.projects { ListProjects, AssignToProject }
-import from ...services.roster.roster { ListMembers, ListRoles }
-import from ...services.flowlines.flowlines { GetFlowLine }
+import from ...services.projects.projects { AssignToProject }
+import from ...services.roster.roster { ListMembers }
+import from ...lib.workspace { loadWorkspace }
 import from ...components.roadmap.Timeline { RoadmapTimeline }
 import from ...components.roadmap.RoadmapToolbar { RoadmapToolbar }
 import from ...components.roadmap.IterationsDialog { IterationsDialog }
@@ -89,14 +89,14 @@ def:pub RoadmapPage -> JsxPage {
         reqRef: Ref[any] = Ref();
 
     async can with entry {
-        loadWorkspace();
+        loadShared();
     }
 
     async can with (windowStart, fProject) entry {
         loadRoadmap();
     }
 
-    async def loadWorkspace -> None;
+    async def loadShared -> None;
     async def loadRoadmap -> None;
     async def reloadIterations -> None;
     def stepWindow(weeksDelta: int) -> None;

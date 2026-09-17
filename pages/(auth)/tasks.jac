@@ -14,10 +14,9 @@ import from ...models {
 }
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 import from ...services.tasks.tasks { ListTasks, CreateTask, UpdateTask, DeleteTask }
-import from ...services.roster.roster { ListMembers, ListRoles }
-import from ...services.iterations.iterations { ListIterations }
-import from ...services.projects.projects { ListProjects, AssignToProject }
-import from ...services.flowlines.flowlines { GetFlowLine }
+import from ...services.roster.roster { ListMembers }
+import from ...services.projects.projects { AssignToProject }
+import from ...lib.workspace { loadWorkspace }
 import from ...components.tasks.TaskTable { TaskTable }
 import from ...components.tasks.TaskToolbar { TaskToolbar, ScopeSwitch }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -187,7 +186,7 @@ def:pub TasksPage -> JsxPage {
         readyRef: Ref[any] = Ref();
 
     async can with entry {
-        loadWorkspace();
+        loadShared();
     }
 
     # One dependent effect covers every input to the same read.
@@ -235,7 +234,7 @@ def:pub TasksPage -> JsxPage {
         []
     );
 
-    async def loadWorkspace -> None;
+    async def loadShared -> None;
     async def loadTasks -> None;
     async def gatherPool(seq: int) -> list[TaskView];
     def sortPool(pool: list[TaskView]) -> list[TaskView];

@@ -404,6 +404,7 @@ def:pub BoardPage -> JsxPage {
     # roster); refreshTasks is the poll's path and skips the workspace lists,
     # which are edited on other pages. Both run through loadBoard.
     async def loadAll -> None;
+    async def reloadAll -> None;
     async def refreshTasks -> None;
     async def loadBoard(withWorkspace: bool) -> dict[str, any];
     async def retryLoad -> None;

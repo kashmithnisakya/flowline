@@ -4,7 +4,6 @@ prev/next truth lives. Zoom and pan go through zoomTo/applyPan, which keep a
 piece of the drawing in view whatever the gesture."""
 
 impl FlowLinePage.boot -> None {
-    loadMeta();
     # The board persists its project filter under the same key, so the two
     # tabs stay on the same project.
     stored = localStorage.getItem("flowline_project")
@@ -18,25 +17,23 @@ impl FlowLinePage.boot -> None {
     if storedView == "lanes" {
         lineView = "lanes";
     }
-    try {
-        result = root spawn ListProjects();
-        projects = result.reports[0] if result.reports else [];
-    } except Exception as e {
-        projects = [];
+    # The workspace lists and the flow line go out together; neither waits.
+    w: any = window;
+    await w.Promise.all([loadShared(), reload(picked)]);
+}
+
+impl FlowLinePage.loadShared -> None {
+    # Projects, roles, roster and iterations feed the filter, the lane
+    # labels and the task dialog; the diagram loads fine without them, so a
+    # failed read stays quiet. The flow line's name rides in the same view.
+    ws = await loadWorkspace();
+    projects = ws["projects"];
+    roleRows = ws["roles"];
+    roleMembers = ws["members"];
+    iterations = ws["iterations"];
+    if ws["ok"] and ws["flow_name"] {
+        lineName = ws["flow_name"];
     }
-    # Roles and roster feed the lane labels and the task dialog; the diagram
-    # loads fine without them, so failure here stays quiet.
-    try {
-        roleResult = root spawn ListRoles();
-        roleRows = roleResult.reports[0] if roleResult.reports else [];
-        memResult = root spawn ListMembers();
-        roleMembers = memResult.reports[0] if memResult.reports else [];
-        itResult = root spawn ListIterations();
-        iterations = itResult.reports[0] if itResult.reports else [];
-    } except Exception as e {
-        roleRows = [];
-    }
-    await reload(picked);
 }
 
 impl FlowLinePage.reload(pid: str) -> None {
@@ -418,18 +415,6 @@ impl FlowLinePage.selectProject(v: str) -> None {
     localStorage.setItem("flowline_project", v);
     await reload(v);
     await refreshPeek(openStep, v);
-}
-
-impl FlowLinePage.loadMeta -> None {
-    try {
-        result = root spawn GetFlowLineMeta();
-        payload = result.reports[0] if result.reports else None;
-        if payload and payload["name"] {
-            lineName = payload["name"];
-        }
-    } except Exception as e {
-        lineName = lineName;
-    }
 }
 
 impl FlowLinePage.switchView(v: str) -> None {
