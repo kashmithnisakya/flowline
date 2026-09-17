@@ -207,11 +207,25 @@ def read_cache_once(page) -> None:
     assert not workspace, f"GetWorkspace was requested {len(workspace)} times, expected none"
     assert len(me) == 1, f"/user/me was requested {len(me)} times, expected 1"
 
+    # The workspace page loads its lists once and the sections render from
+    # props, so a tab switch is a render, not a request (issue #228).
+    step("cache: switching the five workspace tabs makes no request")
+    calls: list[str] = []
+    page.on("request", lambda r: calls.append(r.url) if "/walker/" in r.url or "/user/" in r.url else None)
+    page.get_by_role("link", name="Workspace", exact=True).click()
+    expect(page.get_by_role("heading", name="Organization", exact=True)).to_be_visible()
+    page.wait_for_timeout(1000)
+    del calls[:]
+    for tab, marker in (("people", "Add person"), ("projects", "New project"), ("roles", "Add role"),
+                        ("preferences", "Preferences"), ("organization", "Organization")):
+        page.locator(f'a[href="/workspace?tab={tab}"]').first.click()
+        expect(page.get_by_text(marker, exact=True).first).to_be_visible()
+    page.wait_for_timeout(1000)
+    assert not calls, f"tab switches made {len(calls)} requests: {calls}"
+
     # A roster write drops the cache: the People tab's own refetch is the one
     # request, and /tasks then mounts on it.
     step("cache: a People-tab save then tasks makes exactly one GetWorkspace")
-    page.get_by_role("link", name="Workspace", exact=True).click()
-    expect(page.get_by_role("heading", name="Organization", exact=True)).to_be_visible()
     page.locator('a[href="/workspace?tab=people"]').first.click()
     expect(page.get_by_role("button", name="Add person", exact=True).first).to_be_visible()
     page.wait_for_timeout(1000)

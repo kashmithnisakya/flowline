@@ -31,7 +31,7 @@ import from services.github.github {
     ensure_bound,
     LIVE_WINDOW_MINUTES
 }
-import from services.util { minutes_since }
+import from services.util { minutes_since, ensure_tallies }
 
 obj WorkspaceView {
     """The workspace part of BoardData plus the flow line's own record
@@ -130,6 +130,9 @@ def workspace_view(holder: Root) -> WorkspaceView {
     writes=[]
 )
 def read_workspace(holder: Root) -> WorkspaceView {
+    # The projects ride with their tallies (the Projects tab's open counts),
+    # so a project from before the tallies existed is filled here, once.
+    ensure_tallies(holder);
     return workspace_view(holder);
 }
 

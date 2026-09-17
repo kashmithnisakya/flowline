@@ -23,15 +23,19 @@ but still reports the current name (and creates the box if there was none).
 ::: walker GetFlowLine h3
 
 **Reports** one list of [`StepView`](types.md#stepview) in `sort_order`, each with
-`task_count` filled in (tasks placed by the board's fallback rules count too).
-With no flow line, `[]`.
+`task_count` filled in (tasks placed by the board's fallback rules count too)
+and `task_titles`, the first two titles in the step's panel order (what a node
+shows at the flow line page's closest zoom). With no flow line, `[]`.
 
 - The count is over the board's working set: open tasks plus Done tasks that
   reached Done in the last `done_days` (default 7), so the done step counts
-  recent Done the way the board's column shows it, not the whole history.
+  recent Done the way the board's column shows it, not the whole history. The
+  titles come from the same set, so they are the first two rows
+  [`ListStepTasks`](#liststeptasks) would page for that step.
 - `project_id` counts only that project's tasks. A foreign id still lists the
-  steps, with every count at 0.
-- `with_counts: false` skips the task walk (the board's poll uses it).
+  steps, with every count at 0 and no titles.
+- `with_counts: false` skips the task walk (the board's poll uses it): every
+  count is 0 and every `task_titles` empty.
 
 ::: walker ListStepTasks h3
 

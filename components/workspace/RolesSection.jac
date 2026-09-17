@@ -1,18 +1,12 @@
 """Roles: the link between people and the flow line. Each row says who holds
 the role (assigned right here) and which steps name it as their owner, and
-renames or deletes it from its own menu.
+renames or deletes it from its own menu. The lists are the page's (one
+workspace read); a write here refetches through the page's own loader.
 """
 
 import from ...models { MemberView, RoleView, StepView }
 import from ...lib.workspace { forgetWorkspace }
-import from ...services.roster.roster {
-    ListMembers,
-    ListRoles,
-    SaveRole,
-    DeleteRole,
-    SetMemberRoles
-}
-import from ...services.flowlines.flowlines { GetFlowLine }
+import from ...services.roster.roster { SaveRole, DeleteRole, SetMemberRoles }
 import from ..common.StepName { StepName }
 import from ..roster.AssignMenu { AssignMenu }
 import from ..ui.button { Button }
@@ -27,13 +21,14 @@ import from "sonner" { toast }
 
 
 def:pub RolesSection(
-    onChanged: Callable[[], None] = None, onPeople: Callable[[], None] = None
+    members: list[MemberView] = [],
+    roles: list[RoleView] = [],
+    steps: list[StepView] = [],
+    loading: bool = False,
+    onChanged: Callable[[], any] = None,
+    onPeople: Callable[[], None] = None
 ) -> JsxElement {
-    has members: list[MemberView] = [],
-        roles: list[RoleView] = [],
-        steps: list[StepView] = [],
-        loading: bool = True,
-        saving: bool = False,
+    has saving: bool = False,
         busy: bool = False,
         # The add row is open while this is set, with its own drafts.
         adding: bool = False,
@@ -46,11 +41,7 @@ def:pub RolesSection(
         editBlurb: str = "",
         deleteTarget: str = "";
 
-    async can with entry {
-        load();
-    }
-
-    async def load -> None;
+    async def refresh -> None;
     async def addRole -> None;
     async def saveEdit -> None;
     async def removeRole -> None;

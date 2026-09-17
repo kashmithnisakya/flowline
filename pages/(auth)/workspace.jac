@@ -5,7 +5,7 @@ at /github, so old ?tab=github links forward there."""
 
 import from "@jac/runtime" { useLocation }
 import from "react" { useEffect }
-import from ...models { Project, MemberView, RoleView }
+import from ...models { Project, MemberView, RoleView, RepoView, StepView }
 import from ...lib.session { fetchOrgName, cachedOrgName }
 import from ...services.roster.roster {
     ListMembers,
@@ -70,6 +70,10 @@ def:pub WorkspacePage -> JsxPage {
     has members: list[MemberView] = [],
         projects: list[Project] = [],
         roles: list[RoleView] = [],
+        # The Projects and Roles tabs render from these too: one workspace
+        # read on mount, and a tab switch is a render, not a request.
+        repos: list[RepoView] = [],
+        steps: list[StepView] = [],
         # The header's cache, so the rail shows the name from the first paint.
         orgName: str = cachedOrgName(),
         loading: bool = True,
@@ -292,11 +296,18 @@ def:pub WorkspacePage -> JsxPage {
                             <ProjectsSection
                                 key="projects"
                                 members={active}
+                                projects={projects}
+                                repos={repos}
+                                loading={loading}
                                 onChanged={loadAll}
                             />
                         } elif tab == "roles" {
                             <RolesSection
                                 key="roles"
+                                members={active}
+                                roles={roles}
+                                steps={steps}
+                                loading={loading}
                                 onChanged={loadAll}
                                 onPeople={lambda { selectTab("people"); }}
                             />

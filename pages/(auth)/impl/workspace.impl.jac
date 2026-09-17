@@ -2,13 +2,16 @@
 
 impl WorkspacePage.loadAll -> None {
     try {
-        # One read for the roster, projects and the org's managed roles (the
-        # row menus and the member dialog; none means free text there).
+        # One read for the roster, projects, repos, the org's managed roles
+        # (the row menus and the member dialog; none means free text there)
+        # and the steps the Roles tab names.
         ws = await loadWorkspace();
         if ws["ok"] {
             members = ws["members"];
             projects = ws["projects"];
             roles = ws["roles"];
+            repos = ws["repos"];
+            steps = ws["steps"];
         } else {
             toast.error("Could not load the workspace");
         }
