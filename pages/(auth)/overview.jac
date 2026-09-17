@@ -32,8 +32,9 @@ import from ...components.ui.select {
 }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.LoadFailed { LoadFailed }
+import from ...components.common.Busy { Busy }
 import from ...lib.dates { todayIso, daysUntil, prettyDay }
-import from ...lib.session { fetchOrgName }
+import from ...lib.session { fetchOrgName, cachedOrgName }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      DAY_NAMES: list[str] = [
@@ -255,7 +256,7 @@ def:pub OverviewPage -> JsxPage {
         movesFailed: bool = False,
         weekAdded: int = -1,
         addedFailed: bool = False,
-        orgName: str = "",
+        orgName: str = cachedOrgName(),
         # First-run state, read only while no card has reached Done.
         setupLoaded: bool = False,
         stepCount: int = 0,
@@ -790,6 +791,154 @@ def:pub OverviewPage -> JsxPage {
     # People keeps 37rem so its own 36rem column query holds behind the border.
     zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(37rem,5fr)]";
 
+    # The charts section, in both the first-load frame and the loaded page,
+    # so its heading and selects sit in the same place from the first paint;
+    # `history` is None until the first read lands and draws the chart boxes.
+    def overTime -> JsxElement {
+        return
+            <section
+                className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2 @min-[90rem]:col-span-3"
+                aria-labelledby="over-time"
+            >
+                <div className="flex flex-wrap items-center gap-2">
+                    <h2 id="over-time" className="section-title mr-auto max-sm:w-full">
+                        Over time
+                    </h2>
+                    <Busy active={historyLoading and bool(history)}/>
+                    <Select
+                        value={historyProject}
+                        onValueChange={lambda (v: str) { historyProject = v; }}
+                    >
+                        <SelectTrigger
+                            className="h-8 w-44 max-sm:w-auto max-sm:flex-1"
+                            size="sm"
+                            aria-label="Chart project"
+                        >
+                            <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All projects</SelectItem>
+                            {for p in activeProjects {
+                                <SelectItem key={jid(p)} value={jid(p)}>
+                                    {p.name}
+                                </SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={historyWeeks}
+                        onValueChange={lambda (v: str) { historyWeeks = v; }}
+                    >
+                        <SelectTrigger
+                            className="h-8 w-40 max-sm:w-auto max-sm:flex-1"
+                            size="sm"
+                            aria-label="Chart range"
+                        >
+                            <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {for r in HISTORY_RANGES {
+                                <SelectItem key={r[0]} value={r[0]}>{r[1]}</SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {if historyFailed and not history {
+                    <LoadFailed
+                        key="hfail"
+                        title="Could not load the charts"
+                        onRetry={loadHistory}
+                    />
+                } elif not history {
+                    <div key="hsk" className="grid gap-4 @min-[52rem]:grid-cols-2">
+                        <Skeleton className="h-64 w-full"/>
+                        <Skeleton className="h-64 w-full"/>
+                    </div>
+                } elif not histAny {
+                    <p
+                        key="hempty"
+                        className="surface px-3.5 py-6 text-[13.5px] text-muted-foreground"
+                    >
+                        No tasks in this range yet.
+                    </p>
+                } else {
+                    <div key="hcharts" className="space-y-3" aria-busy={historyLoading}>
+                        <div
+                            className="grid gap-4 @min-[52rem]:grid-cols-2 @min-[52rem]:items-start"
+                        >
+                            <BurnUpChart
+                                labels={histLabels}
+                                scope={history.scope}
+                                done={history.done}
+                            />
+                            {if histFinished {
+                                <ThroughputChart
+                                    key="tp"
+                                    labels={histLabels}
+                                    finished={history.finished}
+                                    added={history.added}
+                                />
+                            } else {
+                                <section
+                                    key="tpnone"
+                                    className="surface min-w-0 px-3.5 pt-3 pb-4"
+                                    aria-label="Throughput"
+                                >
+                                    <h3 className="section-title text-[15px]">
+                                        Throughput
+                                    </h3>
+                                    <p
+                                        className="mt-1.5 text-[13.5px] text-muted-foreground"
+                                    >
+                                        Nothing moved to Done in these weeks, so there are no bars to draw.
+                                    </p>
+                                </section>
+                            } }
+                        </div>
+                        <details className="text-[13px]">
+                            <summary
+                                className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
+                            >
+                                View as table
+                            </summary>
+                            <div className="surface mt-2 overflow-x-auto">
+                                <table className="data-table w-full">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-left">Week of</th>
+                                            <th className="text-right!">Added</th>
+                                            <th className="text-right!">Done</th>
+                                            <th className="text-right!">Scope</th>
+                                            <th className="text-right!">Done total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {for (i, w) in enumerate(histWeeks) {
+                                            <tr key={w}>
+                                                <td className="num">{histLabels[i]}</td>
+                                                <td className="num text-right">
+                                                    {str(history.added[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.finished[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.scope[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.done[i])}
+                                                </td>
+                                            </tr>
+                                        }}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+                    </div>
+                }   }
+            </section>;
+    }
+
     return
         <div className="@container space-y-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -799,22 +948,29 @@ def:pub OverviewPage -> JsxPage {
                 </span>
             </div>
             {if loading {
-                <div key="sk" className={zones}>
-                    <div className="surface space-y-3 p-3.5">
-                        <Skeleton className="h-4 w-24"/>
-                        {for i in range(5) {
-                            <Skeleton key={str(i)} className="h-6 w-full"/>
-                        }}
+                <div key="sk" className={zones} aria-busy="true">
+                    <div className="min-w-0 @max-[52rem]:order-1">
+                        <NeedsYou groups={[]} total={0} placeholder={True}/>
                     </div>
-                    <div className="surface space-y-3 p-3.5">
-                        <Skeleton className="h-4 w-20"/>
-                        <div className="grid grid-cols-2 gap-3">
-                            {for i in range(4) {
-                                <Skeleton key={str(i)} className="h-11 w-full"/>
-                            }}
+                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
+                        <div className="min-w-0 @max-[52rem]:order-3">
+                            <ThisWeek figures={[]} days={[]} placeholder={True}/>
                         </div>
-                        <Skeleton className="h-28 w-full"/>
+                        <div className="min-w-0 @max-[52rem]:order-4">
+                            <ProjectBars rows={[]} placeholder={True}/>
+                        </div>
                     </div>
+                    <div
+                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
+                    >
+                        <PeopleTable
+                            rows={[]}
+                            dayNames={DAY_LABELS}
+                            todayIndex={todayIdx}
+                            placeholder={True}
+                        />
+                    </div>
+                    {overTime()}
                 </div>
             } elif failed {
                 <LoadFailed
@@ -843,7 +999,7 @@ def:pub OverviewPage -> JsxPage {
                     </div>
                 </div>
             } else {
-                <div key="body" className={zones}>
+                <div key="body" className={zones + " animate-in fade-in duration-150"}>
                     <div className="min-w-0 @max-[52rem]:order-1">
                         <NeedsYou
                             groups={groups}
@@ -889,170 +1045,7 @@ def:pub OverviewPage -> JsxPage {
                             todayIndex={todayIdx}
                         />
                     </div>
-                    <section
-                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2 @min-[90rem]:col-span-3"
-                        aria-labelledby="over-time"
-                    >
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h2
-                                id="over-time"
-                                className="section-title mr-auto max-sm:w-full"
-                            >
-                                Over time
-                            </h2>
-                            <Select
-                                value={historyProject}
-                                onValueChange={lambda (v: str) { historyProject = v; }}
-                            >
-                                <SelectTrigger
-                                    className="h-8 w-44 max-sm:w-auto max-sm:flex-1"
-                                    size="sm"
-                                    aria-label="Chart project"
-                                >
-                                    <SelectValue/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All projects</SelectItem>
-                                    {for p in activeProjects {
-                                        <SelectItem key={jid(p)} value={jid(p)}>
-                                            {p.name}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={historyWeeks}
-                                onValueChange={lambda (v: str) { historyWeeks = v; }}
-                            >
-                                <SelectTrigger
-                                    className="h-8 w-40 max-sm:w-auto max-sm:flex-1"
-                                    size="sm"
-                                    aria-label="Chart range"
-                                >
-                                    <SelectValue/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {for r in HISTORY_RANGES {
-                                        <SelectItem key={r[0]} value={r[0]}>
-                                            {r[1]}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {if historyFailed and not history {
-                            <LoadFailed
-                                key="hfail"
-                                title="Could not load the charts"
-                                onRetry={loadHistory}
-                            />
-                        } elif not history {
-                            <div
-                                key="hsk"
-                                className="grid gap-4 @min-[52rem]:grid-cols-2"
-                            >
-                                <Skeleton className="h-64 w-full"/>
-                                <Skeleton className="h-64 w-full"/>
-                            </div>
-                        } elif not histAny {
-                            <p
-                                key="hempty"
-                                className="surface px-3.5 py-6 text-[13.5px] text-muted-foreground"
-                            >
-                                No tasks in this range yet.
-                            </p>
-                        } else {
-                            <div
-                                key="hcharts"
-                                className={"space-y-3 transition-opacity "
-                                    + ("opacity-60" if historyLoading else "")}
-                            >
-                                <div
-                                    className="grid gap-4 @min-[52rem]:grid-cols-2 @min-[52rem]:items-start"
-                                >
-                                    <BurnUpChart
-                                        labels={histLabels}
-                                        scope={history.scope}
-                                        done={history.done}
-                                    />
-                                    {if histFinished {
-                                        <ThroughputChart
-                                            key="tp"
-                                            labels={histLabels}
-                                            finished={history.finished}
-                                            added={history.added}
-                                        />
-                                    } else {
-                                        <section
-                                            key="tpnone"
-                                            className="surface min-w-0 px-3.5 pt-3 pb-4"
-                                            aria-label="Throughput"
-                                        >
-                                            <h3 className="section-title text-[15px]">
-                                                Throughput
-                                            </h3>
-                                            <p
-                                                className="mt-1.5 text-[13.5px] text-muted-foreground"
-                                            >
-                                                Nothing moved to Done in these weeks, so there are no bars to draw.
-                                            </p>
-                                        </section>
-                                    } }
-                                </div>
-                                <details className="text-[13px]">
-                                    <summary
-                                        className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
-                                    >
-                                        View as table
-                                    </summary>
-                                    <div className="surface mt-2 overflow-x-auto">
-                                        <table className="data-table w-full">
-                                            <thead>
-                                                <tr>
-                                                    <th className="text-left">
-                                                        Week of
-                                                    </th>
-                                                    <th className="text-right!">
-                                                        Added
-                                                    </th>
-                                                    <th className="text-right!">
-                                                        Done
-                                                    </th>
-                                                    <th className="text-right!">
-                                                        Scope
-                                                    </th>
-                                                    <th className="text-right!">
-                                                        Done total
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {for (i, w) in enumerate(histWeeks) {
-                                                    <tr key={w}>
-                                                        <td className="num">
-                                                            {histLabels[i]}
-                                                        </td>
-                                                        <td className="num text-right">
-                                                            {str(history.added[i])}
-                                                        </td>
-                                                        <td className="num text-right">
-                                                            {str(history.finished[i])}
-                                                        </td>
-                                                        <td className="num text-right">
-                                                            {str(history.scope[i])}
-                                                        </td>
-                                                        <td className="num text-right">
-                                                            {str(history.done[i])}
-                                                        </td>
-                                                    </tr>
-                                                }}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </details>
-                            </div>
-                        }   }
-                    </section>
+                    {overTime()}
                 </div>
             }   }
         </div>;

@@ -655,17 +655,112 @@ def:pub FlowLinePage -> JsxPage {
     return
         <div className="flex w-full min-w-0 flex-col gap-4">
             {if loading {
-                <div key="sk" className="surface flex flex-col overflow-hidden">
-                    <div className="flex items-center gap-3 border-b px-4 py-2.5">
-                        <Skeleton className="h-7 w-32"/>
-                        <Skeleton className="h-[30px] w-24"/>
-                        <Skeleton className="h-[30px] w-28"/>
-                        <div className="flex-1"/>
-                        <Skeleton className="h-[30px] w-40"/>
+                <div
+                    key="sk"
+                    className="surface flex min-w-0 flex-col overflow-hidden"
+                    aria-busy="true"
+                >
+                    <div
+                        data-flow-toolbar="true"
+                        className="pointer-events-none flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5"
+                    >
+                        <h1 className="page-title mr-1 min-w-0 truncate">{lineName}</h1>
+                        <Segmented label="Mode" options={modeOptions} value="view"/>
+                        {if not showList {
+                            <Segmented
+                                key="layout"
+                                label="Layout"
+                                options={layoutOptions}
+                                value={lineView}
+                            />
+                        }}
+                        <Select value="all">
+                            <SelectTrigger
+                                className="toolbar-filter max-w-48"
+                                data-active="false"
+                                aria-label="Project"
+                            >
+                                <SelectValue placeholder="All projects"/>
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                                <SelectItem value="all">All projects</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <div className="ml-auto flex shrink-0 items-center gap-3">
+                            {if not showList {
+                                <ZoomControls key="zoom" zoom={1.0}/>
+                            }}
+                            {if not narrow {
+                                <Button
+                                    key="edit"
+                                    size="sm"
+                                    className="h-[30px]"
+                                    disabled={True}
+                                >
+                                    Edit flow line
+                                </Button>
+                            }}
+                        </div>
                     </div>
-                    <div style={{"height": canvasH}} className="bg-background p-6">
-                        <Skeleton className="h-full w-full"/>
+                    <div className="relative min-w-0" style={{"height": canvasH}}>
+                        <div
+                            className="absolute inset-0 flex items-center justify-center px-6"
+                        >
+                            {for i in range(3) {
+                                <div key={"n" + str(i)} className="flex items-center">
+                                    {if i > 0 {
+                                        <span
+                                            key="w"
+                                            aria-hidden="true"
+                                            className="h-0.5 w-8 shrink-0 bg-wire sm:w-16"
+                                        />
+                                    }}
+                                    <div
+                                        className="flex h-[52px] w-[132px] shrink-0 flex-col justify-center gap-2 rounded-md border bg-card px-3"
+                                    >
+                                        <Skeleton className="h-3 w-16"/>
+                                        <Skeleton className="h-2.5 w-20"/>
+                                    </div>
+                                </div>
+                            }}
+                        </div>
                     </div>
+                    {if not showList {
+                        <div
+                            key="legend"
+                            aria-label="Key"
+                            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
+                        >
+                            {for i in range(4) {
+                                <span
+                                    key={"k" + str(i)}
+                                    className="inline-flex h-[18px] items-center gap-1.5"
+                                >
+                                    <Skeleton className="size-3.5 rounded-full"/>
+                                    <Skeleton className="h-3 w-12"/>
+                                </span>
+                            }}
+                            <span className="inline-flex h-[18px] items-center gap-1.5">
+                                <svg
+                                    width={22}
+                                    height={8}
+                                    aria-hidden="true"
+                                    className="text-wire"
+                                >
+                                    <path
+                                        d="M1 4 H21"
+                                        stroke="currentColor"
+                                        strokeWidth={1.6}
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                Moves forward
+                            </span>
+                            <span className="ml-auto inline-flex h-6 items-center">
+                                <Skeleton className="h-3 w-44"/>
+                            </span>
+                        </div>
+                    }}
                 </div>
             } elif showPicker {
                 <div key="picker" className="flex flex-col gap-6">
@@ -679,9 +774,10 @@ def:pub FlowLinePage -> JsxPage {
             } else {
                 <div
                     key="line"
-                    className="surface flex min-w-0 flex-col overflow-hidden"
+                    className="surface flex min-w-0 flex-col overflow-hidden animate-in fade-in duration-150"
                 >
                     <div
+                        data-flow-toolbar="true"
                         className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5"
                     >
                         {if renaming {

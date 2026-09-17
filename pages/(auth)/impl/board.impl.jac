@@ -169,6 +169,19 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                 roleRows = fetchedRoles;
                 iterations = fetchedIterations;
                 ghConnected = connected;
+                # The next first-load skeleton draws this many lanes.
+                try {
+                    localStorage.setItem(
+                        LANES_KEY,
+                        str(
+                            len(fetchedSteps)
+                                if len(fetchedSteps) > 0
+                                else len(STATUSES)
+                        )
+                    );
+                } except Exception as e {
+                    connected = connected;
+                }
             }
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`

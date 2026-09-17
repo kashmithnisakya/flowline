@@ -5,6 +5,10 @@ to Sunday strip. Either list empty shows a line linking to Workspace."""
 
 import from "@jac/runtime" { Link }
 import from ..common.Avatar { Avatar }
+import from ..ui.skeleton { Skeleton }
+
+# The people rows' columns; the placeholder rows share them with the header.
+glob PEOPLE_COLS: str = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,16rem)_3rem_6rem_7.75rem_4rem] @min-[48rem]:gap-x-6";
 
 # Share of a total as a CSS width.
 def share(part: int, whole: int) -> str {
@@ -39,13 +43,18 @@ def Key(color: str, label: str) -> JsxElement {
         </span>;
 }
 
-def:pub ProjectBars(rows: list[dict]) -> JsxElement {
+# `placeholder` is the first load: three skeleton rows in the same grid.
+def:pub ProjectBars(rows: list[dict], placeholder: bool = False) -> JsxElement {
     return
-        <section className="surface min-w-0" aria-labelledby="projects-h">
+        <section
+            className="surface min-w-0"
+            aria-labelledby="projects-h"
+            aria-busy={placeholder}
+        >
             <div className="px-3.5 pt-3 pb-1">
                 <h2 id="projects-h" className="section-title text-[15px]">Projects</h2>
             </div>
-            {if len(rows) == 0 {
+            {if len(rows) == 0 and not placeholder {
                 <EmptyLine
                     key="empty"
                     text="No active projects."
@@ -55,8 +64,23 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
             }}
             <ul
                 className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] gap-x-2.5 px-3.5 pb-2"
-                hidden={len(rows) == 0}
+                hidden={len(rows) == 0 and not placeholder}
             >
+                {for i in range(3 if placeholder else 0) {
+                    <li
+                        key={"ph" + str(i)}
+                        className={"col-span-3 grid grid-cols-subgrid items-center py-1.5 "
+                            + ("border-t" if i > 0 else "")}
+                    >
+                        <span className="flex h-5 items-center">
+                            <Skeleton
+                                className={"h-3.5 " + ("w-16" if i == 1 else "w-24")}
+                            />
+                        </span>
+                        <Skeleton className="h-2 w-full rounded-[2px]"/>
+                        <Skeleton className="h-3 w-12"/>
+                    </li>
+                }}
                 {for (i, r) in enumerate(rows) {
                     <li
                         key={r["id"]}
@@ -117,7 +141,7 @@ def:pub ProjectBars(rows: list[dict]) -> JsxElement {
             </ul>
             <div
                 className="flex flex-wrap gap-x-3.5 gap-y-1 px-3.5 pb-3 text-xs text-muted-foreground"
-                hidden={len(rows) == 0}
+                hidden={len(rows) == 0 and not placeholder}
             >
                 <Key color="var(--series-done)" label="Done"/>
                 <Key color="var(--series-open)" label="Open"/>
@@ -142,19 +166,24 @@ def dayFill(count: int) -> str {
     return "color-mix(in oklab, var(--foreground) 90%, var(--card))";
 }
 
+# `placeholder` is the first load: the header and five skeleton rows.
 def:pub PeopleTable(
-    rows: list[dict], dayNames: list[str], todayIndex: int
+    rows: list[dict], dayNames: list[str], todayIndex: int, placeholder: bool = False
 ) -> JsxElement {
     # Columns follow the panel's own width: when narrow the counts fold under
     # the name as on a phone. Each row is its own grid, so the columns are
     # fixed to line up with the header, and packed left so numbers sit by names.
-    cols = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[36rem]:grid-cols-[minmax(0,16rem)_3rem_6rem_7.75rem_4rem] @min-[48rem]:gap-x-6";
+    cols = PEOPLE_COLS;
     return
-        <section className="@container surface min-w-0" aria-labelledby="people-h">
+        <section
+            className="@container surface min-w-0"
+            aria-labelledby="people-h"
+            aria-busy={placeholder}
+        >
             <div className="px-3.5 pt-3 pb-1">
                 <h2 id="people-h" className="section-title text-[15px]">People</h2>
             </div>
-            {if len(rows) == 0 {
+            {if len(rows) == 0 and not placeholder {
                 <EmptyLine
                     key="empty"
                     text="No active people."
@@ -166,7 +195,7 @@ def:pub PeopleTable(
                 className="px-3.5 pb-2"
                 role="table"
                 aria-labelledby="people-h"
-                hidden={len(rows) == 0}
+                hidden={len(rows) == 0 and not placeholder}
             >
                 <div
                     className={cols
@@ -181,6 +210,54 @@ def:pub PeopleTable(
                     <span role="columnheader">Logged, Mon to Sun</span>
                     <span role="columnheader" className="text-right">Entries</span>
                 </div>
+                {for i in range(5 if placeholder else 0) {
+                    <div
+                        key={"ph" + str(i)}
+                        className={cols + " border-t py-1.5 text-[13.5px]"}
+                        role="row"
+                    >
+                        <span className="flex min-w-0 items-center gap-2.5" role="cell">
+                            <Skeleton className="size-6 shrink-0 rounded-full"/>
+                            <Skeleton
+                                className={"h-3.5 " + ("w-24" if i % 2 else "w-32")}
+                            />
+                        </span>
+                        <span
+                            className="flex justify-end @max-[36rem]:hidden"
+                            role="cell"
+                        >
+                            <Skeleton className="h-3.5 w-3"/>
+                        </span>
+                        <span
+                            className="flex justify-end @max-[36rem]:hidden"
+                            role="cell"
+                        >
+                            <Skeleton className="h-3.5 w-3"/>
+                        </span>
+                        <span
+                            className="inline-flex gap-[3px] @min-[36rem]:gap-1"
+                            role="cell"
+                        >
+                            {for (di, name) in enumerate(dayNames) {
+                                <span
+                                    key={name}
+                                    className={"size-3 rounded-[2px] border @min-[36rem]:size-3.5 "
+                                        + (
+                                            "border-dashed border-input"
+                                                if di > todayIndex
+                                                else "border-input"
+                                        )}
+                                />
+                            }}
+                        </span>
+                        <span
+                            className="flex justify-end @max-[36rem]:hidden"
+                            role="cell"
+                        >
+                            <Skeleton className="h-3.5 w-3"/>
+                        </span>
+                    </div>
+                }}
                 {for r in rows {
                     <div
                         key={r["id"]}

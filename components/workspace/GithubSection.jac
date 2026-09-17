@@ -53,11 +53,15 @@ import from .icons { IconGithub, IconPlus, IconSearch, IconSync, IconX }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
-# GitHub's redirect is finished once per page load. The page mounts twice on
-# a full load and both mounts run `boot`, so the in-flight callback lives in
-# module state: the first mount starts it, every mount awaits it before it
-# reads status (issue #187). A dict cell, so a function never rebinds a glob.
+# GitHub's redirect is finished once per page load. The page used to mount
+# twice on a full load (a remount is still one route change away) and every
+# mount runs `boot`, so the in-flight callback lives in module state: the
+# first mount starts it, every mount awaits it before it reads status
+# (issue #187). A dict cell, so a function never rebinds a glob.
 glob INSTALL_ONCE: dict[str, any] = {"pending": None},
+     # Whether this browser last saw the workspace connected, so the first
+     # load draws the frame the page will most likely land on.
+     CONNECTED_KEY: str = "flowline-github",
      # One "Sync now" press reads at most this many increments; the server
      # bounds each one by its own page and time budget.
      SYNC_ROUNDS: int = 6,
@@ -114,6 +118,14 @@ def timeAgo(iso: str) -> str {
         return str(days) + "d ago";
     }
     return iso[:10];
+}
+
+def wasConnected -> bool {
+    try {
+        return localStorage.getItem(CONNECTED_KEY) == "1";
+    } except Exception as e {
+        return False;
+    }
 }
 
 def:pub GithubSection(openNonce: int = 0) -> JsxElement {
@@ -362,21 +374,129 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                 />
             }}
             {if loading {
-                <div key="sk" className="flex flex-col gap-5 lg:flex-row">
-                    <Skeleton className="h-64 w-full lg:w-[250px]"/>
-                    <Skeleton className="h-64 w-full flex-1"/>
+                <div key="sk" aria-busy="true">
+                    {if wasConnected() {
+                        <div
+                            key="two"
+                            className="grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]"
+                        >
+                            <RepoRail
+                                repos={[]}
+                                selected=""
+                                onSelect={selectRepo}
+                                onAdd={openPicker}
+                                placeholder={2}
+                            />
+                            <div className="flex min-w-0 flex-col gap-4">
+                                <div className="flex h-7 items-center gap-3">
+                                    <Skeleton
+                                        className="size-[18px] shrink-0 rounded-full"
+                                    />
+                                    <Skeleton className="h-4 w-48"/>
+                                    <Skeleton className="h-3 w-40"/>
+                                </div>
+                                <div className="surface">
+                                    <div
+                                        className="flex flex-wrap items-center gap-2 border-b px-3 py-2"
+                                    >
+                                        <div
+                                            className="inline-flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
+                                        >
+                                            <span
+                                                className="rounded-sm bg-card px-2.5 py-1 text-[13px] font-semibold text-foreground"
+                                            >
+                                                Issues
+                                            </span>
+                                            <span
+                                                className="px-2.5 py-1 text-[13px] text-muted-foreground"
+                                            >
+                                                Pull requests
+                                            </span>
+                                        </div>
+                                        <Skeleton className="h-[30px] w-20 rounded-md"/>
+                                        <Skeleton className="h-3 w-16"/>
+                                        <div className="ml-auto w-full sm:w-56">
+                                            <Skeleton
+                                                className="h-8 w-full rounded-md"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1 p-3">
+                                        {for i in [0, 1, 2, 3, 4] {
+                                            <div
+                                                key={"row" + str(i)}
+                                                className="flex items-center gap-3 py-2"
+                                            >
+                                                <Skeleton
+                                                    className="size-4 shrink-0 rounded-xs"
+                                                />
+                                                <Skeleton
+                                                    className="h-4 w-10 shrink-0"
+                                                />
+                                                <Skeleton
+                                                    className="h-4 w-full max-w-80"
+                                                />
+                                                <Skeleton
+                                                    className="ml-auto hidden h-4 w-16 shrink-0 sm:block"
+                                                />
+                                            </div>
+                                        }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    } else {
+                        <div
+                            key="card"
+                            className="surface grid gap-8 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-0 md:p-0"
+                        >
+                            <div className="flex flex-col items-start gap-4 md:p-7">
+                                <Skeleton className="size-7 rounded-full"/>
+                                <div className="flex h-[30px] items-center">
+                                    <Skeleton className="h-5 w-72 max-w-full"/>
+                                </div>
+                                <div className="flex w-full flex-col gap-2.5 pl-5">
+                                    <Skeleton className="h-3.5 w-64 max-w-full"/>
+                                    <Skeleton className="h-3.5 w-56 max-w-full"/>
+                                    <Skeleton className="h-3.5 w-72 max-w-full"/>
+                                </div>
+                                <Skeleton className="h-9 w-36 rounded-md"/>
+                            </div>
+                            <div
+                                className="border-t pt-6 md:border-t-0 md:border-l md:p-7"
+                            >
+                                <Skeleton className="h-3.5 w-44"/>
+                                <div className="mt-2 flex flex-col">
+                                    {for i in [0, 1, 2] {
+                                        <div
+                                            key={"perm" + str(i)}
+                                            className="flex items-center border-b py-2.5 last:border-b-0"
+                                        >
+                                            <Skeleton
+                                                className={"h-3.5 "
+                                                    + ("w-3/4" if i else "w-2/3")}
+                                            />
+                                        </div>
+                                    }}
+                                </div>
+                                <Skeleton className="mt-3 h-3 w-56"/>
+                                <Skeleton className="mt-2 h-3 w-48"/>
+                            </div>
+                        </div>
+                    } }
                 </div>
             } elif not connected {
-                <ConnectCard
-                    key="connect"
-                    starting={starting}
-                    missing={configGaps}
-                    onInstall={startInstall}
-                />
+                <div key="connect" className="animate-in fade-in duration-150">
+                    <ConnectCard
+                        starting={starting}
+                        missing={configGaps}
+                        onInstall={startInstall}
+                    />
+                </div>
             } else {
                 <div
                     key="work"
-                    className="grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]"
+                    className="grid items-start gap-5 animate-in fade-in duration-150 lg:grid-cols-[250px_minmax(0,1fr)]"
                 >
                     <RepoRail
                         repos={repos}

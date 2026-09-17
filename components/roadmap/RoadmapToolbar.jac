@@ -3,6 +3,7 @@
 the weeks shown, earlier / this week / later, and the Iterations dialog."""
 
 import from ...models { Project, IterationView }
+import from ..common.Busy { Busy }
 import from ..ui.button { Button }
 import from ..ui.dropdown_menu {
     DropdownMenu,
@@ -150,7 +151,9 @@ def:pub RoadmapToolbar(
     onEarlier: Callable[[], None],
     onToday: Callable[[], None],
     onLater: Callable[[], None],
-    onIterations: Callable[[], None]
+    onIterations: Callable[[], None],
+    # A refetch is in flight behind the rows on screen.
+    busy: bool = False
 ) -> JsxElement {
     projectOptions: list[list[str]] = [[ALL, "All projects"]];
     for p in projects {
@@ -199,6 +202,7 @@ def:pub RoadmapToolbar(
                 </button>
             }}
             <div className="ml-auto flex flex-wrap items-center gap-2">
+                <Busy active={busy}/>
                 <span className="meta num whitespace-nowrap" aria-live="polite">
                     {rangeLabel}
                 </span>

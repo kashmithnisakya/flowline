@@ -26,7 +26,7 @@ import from "sonner" { toast }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.LoadFailed { LoadFailed }
-import from ...components.common.glyphs { Spinner }
+import from ...components.common.Busy { Busy }
 
 glob SCOPE_KEYS: list[str] = ["working", "done", "all", "attention"],
      # Only the table's sortable headers: an old ?sort=estimate link falls back
@@ -414,56 +414,61 @@ def:pub TasksPage -> JsxPage {
                     stepLabel={stepWord}
                 />
                 {if waiting {
-                    <div key="sk" className="space-y-2 px-4 py-3" aria-busy="true">
-                        {for i in range(8) {
-                            <Skeleton key={str(i)} className="h-9 w-full"/>
-                        }}
-                    </div>
+                    <TaskTable
+                        key="sk"
+                        rows={[]}
+                        placeholder={10}
+                        sort={sort}
+                        sortDir={sortDir}
+                        onSort={sortBy}
+                        onOpen={openTask}
+                        stepHeader={stepWord}
+                        stickyTop={stickyTop}
+                    />
                 } elif failed {
                     <div key="failed" className="p-4">
                         <LoadFailed title="Could not load tasks" onRetry={loadTasks}/>
                     </div>
                 } else {
-                    <TaskTable
-                        key="table"
-                        rows={rows}
-                        sort={sort}
-                        sortDir={sortDir}
-                        onSort={sortBy}
-                        onOpen={openTask}
-                        stepNames={stepNames}
-                        stepColors={stepColors}
-                        stepKinds={stepKinds}
-                        stepHeader={stepWord}
-                        leadName={leadName}
-                        cursor={cursor}
-                        onCursor={pointAt}
-                        refreshing={refreshing}
-                        stickyTop={stickyTop}
-                        emptyLabel={emptyLabel}
-                        emptyAction={"Clear filters" if isFiltered else ""}
-                        onEmptyAction={clearFilters}
-                    />
+                    <div key="table" className="animate-in fade-in duration-150">
+                        <TaskTable
+                            rows={rows}
+                            sort={sort}
+                            sortDir={sortDir}
+                            onSort={sortBy}
+                            onOpen={openTask}
+                            stepNames={stepNames}
+                            stepColors={stepColors}
+                            stepKinds={stepKinds}
+                            stepHeader={stepWord}
+                            leadName={leadName}
+                            cursor={cursor}
+                            onCursor={pointAt}
+                            refreshing={refreshing}
+                            stickyTop={stickyTop}
+                            emptyLabel={emptyLabel}
+                            emptyAction={"Clear filters" if isFiltered else ""}
+                            onEmptyAction={clearFilters}
+                        />
+                    </div>
                 }  }
-                {if not waiting and not failed {
+                {if not failed {
                     <div
                         key="foot"
                         className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2 text-[12.5px] text-muted-foreground"
                     >
-                        <span className="num" aria-live="polite">{countLabel}</span>
-                        {if refreshing {
-                            <span
-                                key="busy"
-                                className="inline-flex items-center gap-1.5 @min-[50rem]:hidden"
-                            >
-                                <Spinner/>
-                                Updating
+                        {if waiting {
+                            <Skeleton key="count" className="h-3 w-16"/>
+                        } else {
+                            <span key="count" className="num" aria-live="polite">
+                                {countLabel}
                             </span>
-                        }}
+                        } }
+                        <Busy active={refreshing} className="@min-[50rem]:hidden"/>
                         <div
                             className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2"
                         >
-                            {if len(rows) > 0 {
+                            {if len(rows) > 0 or waiting {
                                 <span
                                     key="keys"
                                     className="hidden items-center gap-1 @min-[50rem]:inline-flex"
@@ -475,7 +480,7 @@ def:pub TasksPage -> JsxPage {
                                     <span>opens</span>
                                 </span>
                             }}
-                            {if pageCount > 1 {
+                            {if pageCount > 1 and not waiting {
                                 <div key="pager" className="flex items-center gap-2">
                                     <span className="num">
                                         {"Page " + str(page) + " of " + str(pageCount)}

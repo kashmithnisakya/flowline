@@ -7,7 +7,11 @@ import from ...models { TaskView }
 import from ..common.Avatar { AvatarStack }
 import from ..common.StepName { StepName }
 import from ..common.KindGlyph { KindGlyph }
+import from ..ui.skeleton { Skeleton }
 import from ...lib.dates { todayIso, dueTone, daysUntil }
+
+# Title widths for the placeholder rows, so they read as a list.
+glob PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"];
 
 glob MONTHS: list[str] = [
          "Jan",
@@ -315,7 +319,10 @@ def:pub TaskTable(
     stickyTop: int = 0,
     emptyLabel: str = "No tasks match these filters.",
     emptyAction: str = "",
-    onEmptyAction: Callable[[], None] = None
+    onEmptyAction: Callable[[], None] = None,
+    # The first load: this many skeleton rows under the real header, at the
+    # real row height, instead of the empty state.
+    placeholder: int = 0
 ) -> JsxElement {
     today = todayIso();
 
@@ -325,7 +332,7 @@ def:pub TaskTable(
         }
     }
 
-    if len(rows) == 0 {
+    if len(rows) == 0 and placeholder == 0 {
         return
             <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
                 <p className="text-sm text-muted-foreground">{emptyLabel}</p>
@@ -342,7 +349,7 @@ def:pub TaskTable(
             </div>;
     }
     return
-        <div className="min-w-0" aria-busy={refreshing}>
+        <div className="min-w-0" aria-busy={refreshing or placeholder > 0}>
             <table className="data-table hidden table-fixed @min-[50rem]:table">
                 <thead>
                     <tr>
@@ -360,10 +367,40 @@ def:pub TaskTable(
                         }}
                     </tr>
                 </thead>
-                <tbody
-                    className={"transition-opacity duration-150 motion-reduce:transition-none "
-                        + ("opacity-60" if refreshing else "")}
-                >
+                <tbody>
+                    {for i in range(placeholder) {
+                        <tr key={"ph" + str(i)}>
+                            <td className="overflow-hidden whitespace-normal">
+                                <div className="flex h-[19px] items-center">
+                                    <Skeleton className={"h-3.5 " + PH_WIDTHS[i % 4]}/>
+                                </div>
+                                <div className="mt-0.5 flex h-4 items-center">
+                                    <Skeleton className="h-3 w-20"/>
+                                </div>
+                            </td>
+                            <td className="overflow-hidden whitespace-nowrap">
+                                <Skeleton className="h-3.5 w-24"/>
+                            </td>
+                            <td className="overflow-hidden whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                    <Skeleton className="size-6 shrink-0 rounded-full"/>
+                                    <Skeleton className="h-3.5 w-12"/>
+                                </div>
+                            </td>
+                            <td className="overflow-hidden">
+                                <Skeleton className="h-3.5 w-20"/>
+                            </td>
+                            <td className="overflow-hidden whitespace-nowrap">
+                                <Skeleton className="h-3.5 w-14"/>
+                            </td>
+                            <td className="overflow-hidden whitespace-nowrap">
+                                <Skeleton className="h-3.5 w-10"/>
+                            </td>
+                            <td className="overflow-hidden">
+                                <Skeleton className="h-3.5 w-20"/>
+                            </td>
+                        </tr>
+                    }}
                     {for (i, t) in enumerate(rows) {
                         <tr
                             key={t.id}
@@ -475,10 +512,23 @@ def:pub TaskTable(
                     }}
                 </tbody>
             </table>
-            <ul
-                className={"divide-y transition-opacity duration-150 motion-reduce:transition-none @min-[50rem]:hidden "
-                    + ("opacity-60" if refreshing else "")}
-            >
+            <ul className="divide-y @min-[50rem]:hidden">
+                {for i in range(placeholder) {
+                    <li key={"ph" + str(i)}>
+                        <div
+                            className="flex min-h-16 w-full flex-col justify-center gap-1 px-4 py-2.5"
+                        >
+                            <div className="flex h-5 items-center">
+                                <Skeleton className={"h-3.5 " + PH_WIDTHS[i % 4]}/>
+                            </div>
+                            <div className="flex min-h-6 items-center gap-1.5">
+                                <Skeleton className="h-3 w-20"/>
+                                <Skeleton className="h-3 w-16"/>
+                                <Skeleton className="ml-auto size-6 rounded-full"/>
+                            </div>
+                        </div>
+                    </li>
+                }}
                 {for (i, t) in enumerate(rows) {
                     <li key={t.id}>
                         <button

@@ -24,6 +24,7 @@ import from ..ui.select {
     SelectItem
 }
 import from ..ui.sheet { Sheet, SheetContent, SheetHeader, SheetTitle }
+import from ..ui.skeleton { Skeleton }
 
 glob CHEVRON_D: str = "m4.5 6.5 3.5 3.5 3.5-3.5";
 
@@ -169,7 +170,9 @@ def:pub FilterBar(
     onQuery: Callable[[str], None] = None,
     onClear: Callable[[], None] = None,
     shownCount: int = 0,
-    doneDays: int = 7
+    doneDays: int = 7,
+    # The first load: the count is not known yet, so its slot holds a block.
+    busy: bool = False
 ) -> JsxElement {
     has sheetOpen: bool = False;
 
@@ -519,7 +522,13 @@ def:pub FilterBar(
                         />
                         {doneLabel}
                     </label>
-                    <span className="num text-xs whitespace-nowrap">{countLabel}</span>
+                    {if busy {
+                        <Skeleton key="count" className="h-3 w-14"/>
+                    } else {
+                        <span key="count" className="num text-xs whitespace-nowrap">
+                            {countLabel}
+                        </span>
+                    } }
                 </div>
             </div>
             <div className="flex items-center gap-2 md:hidden">

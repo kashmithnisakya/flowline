@@ -7,7 +7,7 @@ sheet (container width, so a docked Ask column counts)."""
 import from ...models { Project, MemberView }
 import from ..common.StepName { StepName }
 import from ..common.KindGlyph { KindGlyph }
-import from ..common.glyphs { Spinner }
+import from ..common.Busy { Busy }
 import from ..ui.button { Button }
 import from ..ui.dropdown_menu {
     DropdownMenu,
@@ -528,15 +528,9 @@ def:pub TaskToolbar(
                     </button>
                 }}
                 <span
-                    role="status"
                     className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground"
                 >
-                    {if refreshing {
-                        <span key="busy" className="inline-flex items-center gap-1.5">
-                            <Spinner/>
-                            Updating
-                        </span>
-                    }}
+                    <Busy active={refreshing}/>
                 </span>
             </div>
             <div

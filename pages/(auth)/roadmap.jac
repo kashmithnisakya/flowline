@@ -232,12 +232,30 @@ def:pub RoadmapPage -> JsxPage {
                     onToday={goToday}
                     onLater={lambda { stepWindow(STEP_WEEKS); }}
                     onIterations={lambda { iterationsOpen = True; }}
+                    busy={loading and bool(data)}
                 />
                 {if loading and not data {
-                    <div key="sk" className="space-y-2 p-4" aria-busy="true">
-                        {for i in range(8) {
-                            <Skeleton key={str(i)} className="h-9 w-full"/>
-                        }}
+                    <div key="sk" aria-busy="true">
+                        <RoadmapTimeline
+                            fromDate={windowStart}
+                            weeks={WEEKS}
+                            today={today}
+                            iterations={[]}
+                            rows={[]}
+                            starts={[]}
+                            ends={[]}
+                            steps={[]}
+                            onOpen={openTask}
+                            placeholder={8}
+                        />
+                        <div
+                            className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
+                        >
+                            <Skeleton className="h-3 w-16"/>
+                            <span className="text-subtle sm:ml-auto">
+                                A bar runs from start to due date, or across its iteration.
+                            </span>
+                        </div>
                     </div>
                 } elif failed and not data {
                     <div key="failed" className="p-4">
@@ -249,8 +267,8 @@ def:pub RoadmapPage -> JsxPage {
                 } elif len(rows) == 0 {
                     <div
                         key="empty"
-                        className={"flex flex-col items-center gap-4 px-6 py-16 text-center transition-opacity "
-                            + ("opacity-60" if loading else "")}
+                        className="flex flex-col items-center gap-4 px-6 py-16 text-center animate-in fade-in duration-150"
+                        aria-busy={loading}
                     >
                         <p className="max-w-md text-sm text-muted-foreground">
                             {emptyText}
@@ -286,8 +304,8 @@ def:pub RoadmapPage -> JsxPage {
                 } else {
                     <div
                         key="body"
-                        className={"transition-opacity "
-                            + ("opacity-60" if loading else "")}
+                        className="animate-in fade-in duration-150"
+                        aria-busy={loading}
                     >
                         <RoadmapTimeline
                             fromDate={windowStart}

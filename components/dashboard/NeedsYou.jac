@@ -6,8 +6,11 @@ noteWarn, names, time, late, kind, kindLabel) links to its card."""
 import from "@jac/runtime" { Link }
 import from ..common.KindGlyph { KindGlyph }
 import from ..common.Avatar { AvatarStack }
+import from ..ui.skeleton { Skeleton }
 
-glob SHOW_MAX: int = 6;
+glob SHOW_MAX: int = 6,
+     # Title widths for the placeholder rows, so they read as a list.
+     PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"];
 
 def GroupGlyph(glyph: str) -> JsxElement {
     if glyph == "calendar" {
@@ -90,15 +93,25 @@ def:pub NeedsYou(
     pending: bool = False,
     totalPlus: bool = False,
     failNote: str = "",
-    onRetry: any = None
+    onRetry: any = None,
+    # The first load: the same frame with one group of four skeleton rows.
+    placeholder: bool = False
 ) -> JsxElement {
     return
-        <section className="surface min-w-0" aria-labelledby="needs-you">
+        <section
+            className="surface min-w-0"
+            aria-labelledby="needs-you"
+            aria-busy={placeholder}
+        >
             <div className="flex items-baseline gap-2 px-3.5 pt-3 pb-2">
                 <h2 id="needs-you" className="section-title text-[15px]">Needs you</h2>
-                <span className="num text-xs text-subtle">
-                    {str(total) + ("+" if totalPlus else "")}
-                </span>
+                {if placeholder {
+                    <Skeleton key="n" className="h-3 w-4 self-center"/>
+                } else {
+                    <span key="n" className="num text-xs text-subtle">
+                        {str(total) + ("+" if totalPlus else "")}
+                    </span>
+                } }
                 <Link
                     to="/board"
                     className="ml-auto text-[12.5px] text-primary underline underline-offset-[3px] hover:decoration-2"
@@ -106,6 +119,30 @@ def:pub NeedsYou(
                     Open on the board
                 </Link>
             </div>
+            {if placeholder {
+                <div key="ph" className="px-3.5 pt-0.5 pb-2">
+                    <div className="flex items-center gap-1.5 py-1">
+                        <Skeleton className="size-3.5 rounded-full"/>
+                        <Skeleton className="h-3 w-16"/>
+                    </div>
+                    <ul>
+                        {for i in range(4) {
+                            <li key={str(i)} className={"border-t" if i > 0 else ""}>
+                                <div
+                                    className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-2 py-1.5"
+                                >
+                                    <div className="flex h-5 items-center gap-2">
+                                        <Skeleton className={"h-3.5 " + PH_WIDTHS[i]}/>
+                                        <Skeleton className="h-3 w-16"/>
+                                    </div>
+                                    <Skeleton className="size-6 rounded-full"/>
+                                    <Skeleton className="h-3 w-12"/>
+                                </div>
+                            </li>
+                        }}
+                    </ul>
+                </div>
+            }}
             {for (gi, g) in enumerate(groups) {
                 <div
                     key={g["key"]}
@@ -226,7 +263,7 @@ def:pub NeedsYou(
                     }}
                 </p>
             }}
-            {if len(groups) == 0 and not failNote {
+            {if len(groups) == 0 and not failNote and not placeholder {
                 <p
                     key="clear"
                     className="px-3.5 pt-0.5 pb-3.5 text-[13.5px] text-muted-foreground"

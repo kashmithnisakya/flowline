@@ -8,7 +8,12 @@ import from ...models { TaskView, StepView, IterationView }
 import from ...constants { STATUS_KIND, KIND_COLORS }
 import from ..flowlines.kinds { DOT_VAR, colorKey }
 import from ..common.KindGlyph { KindGlyph }
+import from ..ui.skeleton { Skeleton }
 import from ...lib.dates { prettyDay, dueTone, dueLabel }
+
+# Placeholder rows: title widths and where each bar sits across the window.
+glob PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"],
+     PH_LEFT: list[str] = ["18%", "31%", "26%", "44%", "52%", "38%", "61%", "35%"];
 
 glob DAY_MS: int = 86400000,
      # lib/dates keeps its own copy unexported, so the month row carries one.
@@ -85,7 +90,10 @@ def:pub RoadmapTimeline(
     starts: list[str],
     ends: list[str],
     steps: list[StepView],
-    onOpen: Callable[[str], None]
+    onOpen: Callable[[str], None],
+    # The first load: this many skeleton rows under the real month and week
+    # headers, at the real row height.
+    placeholder: int = 0
 ) -> JsxElement {
     has scroller: Ref[any] = Ref();
 
@@ -361,6 +369,28 @@ def:pub RoadmapTimeline(
                             </div>
                         </div>
                     </div>
+                    {for i in range(placeholder) {
+                        <div
+                            key={"ph" + str(i)}
+                            className="relative flex h-11 w-full items-center border-b"
+                            aria-hidden="true"
+                        >
+                            <span
+                                className={LABEL_CELL
+                                    + " flex h-full flex-col justify-center gap-1 bg-card "
+                                    + LABEL_W}
+                            >
+                                <Skeleton className={"h-3.5 " + PH_WIDTHS[i % 4]}/>
+                                <Skeleton className="h-3 w-24"/>
+                            </span>
+                            <span className="relative h-full flex-1">
+                                <Skeleton
+                                    className="absolute top-1/2 h-5 -translate-y-1/2 rounded-[3px]"
+                                    style={{"left": PH_LEFT[i % 8], "width": "8%"}}
+                                />
+                            </span>
+                        </div>
+                    }}
                     {for g in groups {
                         <div key={g} role="group" aria-label={g}>
                             <div className={"relative flex border-b " + GROUP_FILL}>

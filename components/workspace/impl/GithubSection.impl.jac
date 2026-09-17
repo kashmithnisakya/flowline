@@ -73,6 +73,11 @@ impl GithubSection.loadStatus -> None {
         if view {
             conn = view;
             configGaps = view.missing_config;
+            try {
+                localStorage.setItem(CONNECTED_KEY, "1" if view.connected else "0");
+            } except Exception as e {
+                configGaps = configGaps;
+            }
         }
     } except Exception as e {
         toast.error("Could not read the GitHub connection");

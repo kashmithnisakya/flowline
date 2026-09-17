@@ -12,7 +12,11 @@ impl OverviewPage.fetchSnapshot(monday: str) -> any {
 
 impl OverviewPage.loadAll -> None {
     monday = mondayOf(todayIso());
-    loading = True;
+    # A retry with figures already on screen keeps them; only an empty page
+    # shows the frame.
+    if not counts {
+        loading = True;
+    }
     failed = False;
     mine = False;
     if not inflight("snap") {

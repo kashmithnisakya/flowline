@@ -6,20 +6,60 @@ ledger, then moves to Done per day (`chartState` is chart, loading or none;
 import from .HistoryCharts { DayChart }
 import from ..ui.skeleton { Skeleton }
 
+# The four figures in order, for the placeholder ledger before they land.
+glob FIGURE_LABELS: list[str] = [
+         "moved to Done",
+         "tasks added",
+         "log entries",
+         "open tasks"
+     ];
+
 def:pub ThisWeek(
     figures: list[dict],
     days: list[dict],
     chartState: str = "chart",
     chartNote: str = "",
     note: str = "",
-    onRetry: any = None
+    onRetry: any = None,
+    # The first load: the ledger with its labels and skeleton figures, and
+    # the day chart's box.
+    placeholder: bool = False
 ) -> JsxElement {
     return
-        <section className="surface min-w-0" aria-labelledby="this-week">
+        <section
+            className="surface min-w-0"
+            aria-labelledby="this-week"
+            aria-busy={placeholder}
+        >
             <div className="flex items-baseline gap-2 px-3.5 pt-3 pb-2">
                 <h2 id="this-week" className="section-title text-[15px]">This week</h2>
             </div>
-            {if len(figures) == 0 {
+            {if placeholder {
+                <div key="ph">
+                    <dl className="grid grid-cols-2 border-t">
+                        {for (i, label) in enumerate(FIGURE_LABELS) {
+                            <div
+                                key={label}
+                                className={"flex flex-col-reverse gap-0.5 border-b px-3.5 py-2.5 "
+                                    + ("border-r" if i % 2 == 0 else "")}
+                            >
+                                <dt className="text-[12.5px] text-muted-foreground">
+                                    {label}
+                                </dt>
+                                <dd className="flex h-7 items-center">
+                                    <Skeleton className="h-4 w-8"/>
+                                </dd>
+                            </div>
+                        }}
+                    </dl>
+                    <div className="px-3.5 pt-1 pb-3">
+                        <Skeleton className="mt-4 h-[118px] w-full"/>
+                        <p className="mt-2 text-xs text-subtle">
+                            Tasks moved to Done per day. Days still ahead are outlined.
+                        </p>
+                    </div>
+                </div>
+            } elif len(figures) == 0 {
                 <p
                     key="note"
                     className="px-3.5 pb-4 text-[13.5px] text-muted-foreground"
@@ -50,7 +90,7 @@ def:pub ThisWeek(
                         {if chartState == "chart" {
                             <DayChart key="chart" days={days}/>
                         } elif chartState == "loading" {
-                            <Skeleton key="sk" className="mt-4 h-[134px] w-full"/>
+                            <Skeleton key="sk" className="mt-4 h-[118px] w-full"/>
                         } }
                         <p
                             className="mt-2 flex flex-wrap items-baseline gap-x-2 text-xs text-subtle"
@@ -69,6 +109,6 @@ def:pub ThisWeek(
                         </p>
                     </div>
                 </div>
-            } }
+            }  }
         </section>;
 }

@@ -94,15 +94,38 @@ glob BLANK_TASK: dict[str, str] = {
      # kind "task" (id, title) or "new" (lane key); kind "" is nothing.
      NO_SWITCH: dict[str, str] = {"kind": "", "id": "", "key": "", "title": ""};
 
-# The auto sync's one-shot lives at module level on purpose: a full page
-# load mounts the board twice and each instance owns its own `has` flags.
+# The auto sync's one-shot lives at module level on purpose: a remount
+# (the page used to mount twice on a full load) gets its own `has` flags.
 glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
      AUTO_SYNC_ROUNDS: int = 3,
      SYNC_ROUNDS: int = 40,
      # How often an open board applies queued webhook deliveries: one keyed
      # store read per tick, no GitHub call, so it can be far shorter than
      # the 60s task poll.
-     DRAIN_MS: int = 20000;
+     DRAIN_MS: int = 20000,
+     # The lane grid, shared by the lanes and their first-load skeleton.
+     # Lanes are minmax(252px,1fr): they share the width when they all fit
+     # and the grid scrolls sideways once seven of them no longer do. The
+     # md:-mr-1 md:pr-1 pair gives the last card list's 4px overhang a home
+     # in the scroller's padding, so it neither scrolls nor clips a focus ring.
+     LANE_GRID: str = "relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:-mr-1 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5 md:pr-1",
+     # Node and card title widths for the skeleton, so it reads as a board.
+     NODE_WIDTHS: list[int] = [96, 88, 120, 104, 128, 96, 92],
+     CARD_WIDTHS: list[str] = ["w-4/5", "w-3/5", "w-[70%]", "w-1/2"],
+     LANES_KEY: str = "flowline-lanes";
+
+# How many lanes the skeleton draws: the count the last load saw in this
+# browser, else six (the legacy statuses).
+def guessLanes -> int {
+    raw = "";
+    try {
+        raw = localStorage.getItem(LANES_KEY) or "";
+    } except Exception as e {
+        raw = "";
+    }
+    n = int(raw) if raw else 6;
+    return n if n >= 3 and n <= 10 else 6;
+}
 
 
 def:pub BoardPage -> JsxPage {
@@ -669,10 +692,7 @@ def:pub BoardPage -> JsxPage {
     } elif switchTo["kind"] == "new" {
         switchLabel = "a new task";
     }
-    # Lanes are minmax(252px,1fr): they share the width when they all fit
-    # and the grid scrolls sideways once seven of them no longer do. The
-    # md:-mr-1 md:pr-1 pair gives the last card list's 4px overhang a home in
-    # the scroller's padding, so it neither scrolls nor clips a focus ring.
+    laneGuess = guessLanes();
     laneStyle: dict[str, str] = {};
     if wideView and laneH > 0 {
         laneStyle["height"] = str(laneH) + "px";
@@ -690,7 +710,7 @@ def:pub BoardPage -> JsxPage {
         <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-h-9 flex-wrap items-center gap-3">
                 <h1 className="page-title">Board</h1>
-                {if not loading and not noFlowLine and not nothingLoaded {
+                {if not noFlowLine and not nothingLoaded {
                     <div key="actions" className="ml-auto flex items-center gap-2">
                         {if ghConnected {
                             <Button
@@ -730,6 +750,7 @@ def:pub BoardPage -> JsxPage {
                         }}
                         <Button
                             aria-label="New task"
+                            disabled={loading}
                             onClick={lambda { openCreate(""); }}
                         >
                             <svg
@@ -779,24 +800,99 @@ def:pub BoardPage -> JsxPage {
                     className="flex min-w-0 flex-col gap-3"
                     aria-busy="true"
                 >
-                    <div className="hidden items-center gap-4 md:flex">
-                        {for i in [0, 1, 2, 3, 4, 5] {
-                            <Skeleton key={"rs" + str(i)} className="h-7 w-28"/>
-                        }}
-                    </div>
-                    <Skeleton className="h-[46px] w-full"/>
-                    <div
-                        className="grid auto-cols-[100%] grid-flow-col gap-2.5 overflow-hidden md:auto-cols-[minmax(252px,1fr)]"
+                    <nav
+                        aria-label="Steps"
+                        className="hidden min-w-0 items-center gap-3 md:flex"
                     >
-                        {for i in [0, 1, 2, 3, 4, 5] {
-                            <div key={"sk" + str(i)} className="flex flex-col gap-1.5">
-                                <Skeleton className="mb-1 h-8 w-full"/>
-                                <Skeleton className="h-16 w-full"/>
-                                <Skeleton className="h-16 w-full"/>
-                                {if i % 2 == 0 {
-                                    <Skeleton key="c3" className="h-16 w-full"/>
-                                }}
-                            </div>
+                        <div
+                            className="flex min-w-0 flex-1 items-center overflow-hidden py-0.5"
+                        >
+                            {for i in range(laneGuess) {
+                                <div
+                                    key={"rs" + str(i)}
+                                    className="flex shrink-0 items-center"
+                                >
+                                    {if i > 0 {
+                                        <span
+                                            key="w"
+                                            aria-hidden="true"
+                                            className="h-0.5 w-[18px] shrink-0 bg-wire"
+                                        />
+                                    }}
+                                    <Skeleton
+                                        className="h-7 rounded-md"
+                                        style={{
+                                            "width": str(NODE_WIDTHS[i % 7]) + "px"
+                                        }}
+                                    />
+                                </div>
+                            }}
+                        </div>
+                    </nav>
+                    <FilterBar
+                        projects={activeProjects}
+                        members={activeMembers}
+                        project={fProject}
+                        assignee={fAssignee}
+                        category={fCategory}
+                        hideDone={hideDone}
+                        onProject={setProjectFilter}
+                        onAssignee={setAssigneeFilter}
+                        onCategory={setCategoryFilter}
+                        onHideDone={lambda { hideDone = not hideDone; }}
+                        query={boardQuery}
+                        onQuery={lambda (v: str) { boardQuery = v; }}
+                        onClear={clearFilters}
+                        busy={True}
+                    />
+                    <div
+                        ref={lanesRef}
+                        data-board-lanes="true"
+                        className={LANE_GRID}
+                        style={laneStyle}
+                    >
+                        {for i in range(laneGuess) {
+                            <section
+                                key={"sk" + str(i)}
+                                data-lane={"sk" + str(i)}
+                                className="flex min-w-0 snap-start flex-col rounded-md md:h-full"
+                            >
+                                <div
+                                    className="mx-0.5 flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-border pl-0.5"
+                                >
+                                    <Skeleton className="size-[13px] rounded-full"/>
+                                    <Skeleton
+                                        className={"h-3 "
+                                            + ("w-24" if i % 2 else "w-16")}
+                                    />
+                                    <Skeleton className="h-3 w-3"/>
+                                </div>
+                                <div
+                                    className="-mx-1 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-1.5 pt-2 pb-3"
+                                >
+                                    {for j in range(2 + (i % 2)) {
+                                        <div
+                                            key={"c" + str(j)}
+                                            className="flex shrink-0 flex-col gap-1 rounded-md border bg-card px-2.5 pt-2 pb-2"
+                                        >
+                                            <div className="flex h-[18px] items-center">
+                                                <Skeleton
+                                                    className={"h-3 "
+                                                        + CARD_WIDTHS[(i + j) % 4]}
+                                                />
+                                            </div>
+                                            <div
+                                                className="flex min-h-6 items-center gap-1.5"
+                                            >
+                                                <Skeleton className="h-2.5 w-20"/>
+                                                <Skeleton
+                                                    className="ml-auto size-6 rounded-full"
+                                                />
+                                            </div>
+                                        </div>
+                                    }}
+                                </div>
+                            </section>
                         }}
                     </div>
                 </div>
@@ -863,7 +959,10 @@ def:pub BoardPage -> JsxPage {
                     </div>
                 </div>
             } else {
-                <div key="board" className="flex min-w-0 flex-col gap-3">
+                <div
+                    key="board"
+                    className="flex min-w-0 flex-col gap-3 animate-in fade-in duration-150"
+                >
                     <div className="hidden md:block">
                         <RouteStrip
                             keys={colKeys}
@@ -923,7 +1022,7 @@ def:pub BoardPage -> JsxPage {
                         data-board-lanes="true"
                         onScroll={lambda { scheduleMeasure(); }}
                         onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
-                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:-mr-1 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5 md:pr-1"
+                        className={LANE_GRID}
                         style={laneStyle}
                     >
                         {for (ci, key) in enumerate(colKeys) {
