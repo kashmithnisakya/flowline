@@ -11,9 +11,35 @@ import from ..common.KindGlyph { KindGlyph }
 import from ..ui.skeleton { Skeleton }
 import from ...lib.dates { prettyDay, dueTone, dueLabel }
 
-# Placeholder rows: title widths and where each bar sits across the window.
+# Placeholder rows: title widths, where each bar sits across the window and
+# how wide it is (mostly the one-day minimum, like a loaded roadmap).
 glob PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"],
-     PH_LEFT: list[str] = ["18%", "31%", "26%", "44%", "52%", "38%", "61%", "35%"];
+     PH_LEFT: list[str] = ["18%", "31%", "26%", "44%", "52%", "38%", "61%", "35%"],
+     PH_BAR: list[str] = ["24px", "24px", "9%", "24px", "24px", "6%", "24px", "24px"],
+     # The project groups the last loaded roadmap had in this browser (rows
+     # per group), so the first-load frame reserves the same group rows.
+     SHAPE_KEY: str = "flowline-roadmap-shape";
+
+# Rows per placeholder group: the cached shape, else one group of `fallback`.
+def cachedGroups(fallback: int) -> list[int] {
+    try {
+        raw = localStorage.getItem(SHAPE_KEY) or "";
+        parsed: any = JSON.parse(raw) if raw else [];
+        out: list[int] = [];
+        total = 0;
+        for n in parsed {
+            m = int(n) if n else 0;
+            m = 1 if m < 1 else (12 if m > 12 else m);
+            if len(out) < 6 and total + m <= 30 {
+                out.append(m);
+                total = total + m;
+            }
+        }
+        return out if len(out) > 0 else [fallback];
+    } except Exception as e {
+        return [fallback];
+    }
+}
 
 glob DAY_MS: int = 86400000,
      # lib/dates keeps its own copy unexported, so the month row carries one.
@@ -149,6 +175,25 @@ def:pub RoadmapTimeline(
         }
         groupRows[key].append(i);
     }
+    # Remember the groups' shape once rows are on screen, for the next
+    # first-load frame; a placeholder draws the cached groups instead.
+    shapeStamp = ",".join([str(len(groupRows[g])) for g in groups]);
+    useEffect(
+        lambda {
+            if len(rows) > 0 {
+                try {
+                    localStorage.setItem(
+                        SHAPE_KEY, JSON.stringify([len(groupRows[g]) for g in groups])
+                    );
+                } except Exception as e {
+                    shapeStamp = shapeStamp;
+                }
+            }
+            return lambda { shapeStamp = shapeStamp; };
+        },
+        [shapeStamp]
+    );
+    phGroups = cachedGroups(placeholder) if placeholder > 0 else [];
 
     def kindOf(t: TaskView) -> str {
         if t.step_id in stepKind {
@@ -369,26 +414,49 @@ def:pub RoadmapTimeline(
                             </div>
                         </div>
                     </div>
-                    {for i in range(placeholder) {
-                        <div
-                            key={"ph" + str(i)}
-                            className="relative flex h-11 w-full items-center border-b"
-                            aria-hidden="true"
-                        >
-                            <span
-                                className={LABEL_CELL
-                                    + " flex h-full flex-col justify-center gap-1 bg-card "
-                                    + LABEL_W}
-                            >
-                                <Skeleton className={"h-3.5 " + PH_WIDTHS[i % 4]}/>
-                                <Skeleton className="h-3 w-24"/>
-                            </span>
-                            <span className="relative h-full flex-1">
-                                <Skeleton
-                                    className="absolute top-1/2 h-5 -translate-y-1/2 rounded-[3px]"
-                                    style={{"left": PH_LEFT[i % 8], "width": "8%"}}
-                                />
-                            </span>
+                    {for (gi, n) in enumerate(phGroups) {
+                        <div key={"pg" + str(gi)} aria-hidden="true">
+                            <div className={"relative flex border-b " + GROUP_FILL}>
+                                <span
+                                    className={LABEL_CELL
+                                        + " py-1.5 text-xs "
+                                        + GROUP_FILL
+                                        + " "
+                                        + LABEL_W}
+                                >
+                                    <span className="flex h-4 items-center">
+                                        <Skeleton className="h-3 w-28"/>
+                                    </span>
+                                </span>
+                                <div className="relative flex-1"/>
+                            </div>
+                            {for i in range(n) {
+                                <div
+                                    key={"ph" + str(i)}
+                                    className="relative flex h-11 w-full items-center border-b"
+                                >
+                                    <span
+                                        className={LABEL_CELL
+                                            + " flex h-full flex-col justify-center gap-1 bg-card "
+                                            + LABEL_W}
+                                    >
+                                        <Skeleton
+                                            className={"h-3.5 "
+                                                + PH_WIDTHS[(gi + i) % 4]}
+                                        />
+                                        <Skeleton className="h-3 w-24"/>
+                                    </span>
+                                    <span className="relative h-full flex-1">
+                                        <Skeleton
+                                            className="absolute top-1/2 h-5 -translate-y-1/2 rounded-[3px]"
+                                            style={{
+                                                "left": PH_LEFT[(gi * 3 + i) % 8],
+                                                "width": PH_BAR[(gi * 3 + i) % 8]
+                                            }}
+                                        />
+                                    </span>
+                                </div>
+                            }}
                         </div>
                     }}
                     {for g in groups {

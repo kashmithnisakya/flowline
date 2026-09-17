@@ -708,34 +708,66 @@ def:pub Standup(
         </section>;
 }
 
-# The standup's frame before the week has loaded: four section headings with
-# two lines each and the copy button's row, at the standup's own sizes.
-def:pub StandupPlaceholder -> JsxElement {
-    widths: list[list[str]] = [
-        ["w-[78%]", "w-[62%]"],
-        ["w-[70%]", "w-[84%]"],
-        ["w-[66%]", "w-[58%]"],
-        ["w-[74%]", "w-[52%]"]
+# The standup's line count per shown section for a day, as Standup draws
+# them (a folded section at its fold), for the log's first-load frame.
+def:pub standupLines(
+    entries: list[LogEntry],
+    day: str,
+    since: str,
+    loadedFrom: str,
+    today: str,
+    blocked: list[TaskView],
+    live: bool,
+    roster: list[str]
+) -> list[int] {
+    sections = buildSections(
+        entries, day, since, loadedFrom, today, blocked, live, roster
+    );
+    out: list[int] = [];
+    for k in SECTIONS {
+        n = len(sections[k]);
+        if n > 0 {
+            out.append(n if n <= FOLD_AT or k in NEVER_FOLD else FOLD_AT);
+        }
+    }
+    return out;
+}
+
+# The standup's frame before the week has loaded: one heading per entry of
+# `lines` with that many line blocks, then the copy button's row, at the
+# standup's own sizes. No lines, no standup, as on a quiet day.
+def:pub StandupPlaceholder(lines: list[int]) -> JsxElement {
+    widths: list[str] = [
+        "w-[78%]",
+        "w-[62%]",
+        "w-[70%]",
+        "w-[84%]",
+        "w-[66%]",
+        "w-[58%]",
+        "w-[74%]",
+        "w-[52%]"
     ];
+    if len(lines) == 0 {
+        return <span className="hidden"/>;
+    }
     return
         <section
             aria-label="Standup"
             aria-busy="true"
             className="grid max-w-[68ch] gap-3.5"
         >
-            {for i in range(4) {
+            {for (i, n) in enumerate(lines) {
                 <div key={str(i)}>
                     <div className="mb-1 flex h-5 items-center gap-x-[7px]">
                         <Skeleton className="size-3.5 rounded-full"/>
                         <Skeleton className="h-3.5 w-20"/>
                     </div>
                     <div className="grid gap-1 pl-[21px]">
-                        <div className="flex h-[21px] items-center">
-                            <Skeleton className={"h-3 " + widths[i][0]}/>
-                        </div>
-                        <div className="flex h-[21px] items-center">
-                            <Skeleton className={"h-3 " + widths[i][1]}/>
-                        </div>
+                        {for j in range(n) {
+                            <div key={str(j)} className="flex h-[21px] items-center">
+                                <Skeleton className={"h-3 " + widths[(i * 3 + j) % 8]}/>
+                            </div>
+                        }}
                     </div>
                 </div>
             }}

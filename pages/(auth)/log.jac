@@ -18,7 +18,12 @@ import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { ListProjects }
 import from ...services.tasks.tasks { ListTasks }
 import from ...components.log.DayRail { DayRail }
-import from ...components.log.DayLog { Standup, StandupPlaceholder, LogTimeline }
+import from ...components.log.DayLog {
+    Standup,
+    StandupPlaceholder,
+    LogTimeline,
+    standupLines
+}
 import from ...components.common.Busy { Busy }
 import from ...components.log.Composer { Composer }
 import from ...components.log.EntryDialog { EntryDialog }
@@ -26,6 +31,7 @@ import from ...components.log.DatePicker { DatePicker }
 import from ...components.log.WeekMatrix { WeekMatrix }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from ...components.ui.dropdown_menu {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -35,6 +41,31 @@ import from ...components.ui.dropdown_menu {
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...components.common.glyphs { Spinner }
 import from "sonner" { toast }
+
+# The day's shape on the last visit (standup lines per section, timeline
+# rows), so the first-load frame reserves the space the loaded day takes.
+glob LOG_SHAPE_KEY: str = "flowline-log-shape";
+
+def cachedLogShape -> dict[str, any] {
+    fallback: dict[str, any] = {"lines": [2, 2, 2, 2], "rows": 3};
+    try {
+        raw = localStorage.getItem(LOG_SHAPE_KEY) or "";
+        if not raw {
+            return fallback;
+        }
+        parsed: any = JSON.parse(raw);
+        lines: list[int] = [];
+        for n in (parsed["lines"] or []) {
+            if len(lines) < 5 {
+                lines.append(1 if int(n) < 1 else (8 if int(n) > 8 else int(n)));
+            }
+        }
+        rows = int(parsed["rows"]) if parsed["rows"] else 0;
+        return {"lines": lines, "rows": 0 if rows < 0 else (12 if rows > 12 else rows)};
+    } except Exception as e {
+        return fallback;
+    }
+}
 
 glob DAY_LONG: list[str] = [
          "Sunday",
@@ -277,6 +308,39 @@ def:pub DailyLogPage -> JsxPage {
     showStandup = windowCount > 0
         or (focus == today and blockedLive and len(blockedTasks) > 0);
     dayName = DAY_LONG[weekdayOf(focus)] if focus else "";
+    # Remember the day's shape once it is on screen, for the next first-load
+    # frame. Computed here so the effect's deps read a finished value.
+    shapeReady = not loading and bool(loadedMonday) and not stale and not isWeek;
+    shapeLines: list[int] = standupLines(
+        entries,
+        focus,
+        since,
+        loadedFrom,
+        today,
+        blockedTasks,
+        blockedLive and focus == today,
+        memberNames
+    )
+        if shapeReady and showStandup
+        else [];
+    shapeStamp = ",".join([str(n) for n in shapeLines]) + "|" + str(len(dayEntries));
+    useEffect(
+        lambda {
+            if shapeReady {
+                try {
+                    localStorage.setItem(
+                        LOG_SHAPE_KEY,
+                        JSON.stringify({"lines": shapeLines, "rows": len(dayEntries)})
+                    );
+                } except Exception as e {
+                    shapeLines = shapeLines;
+                }
+            }
+            return lambda { shapeLines = shapeLines; };
+        },
+        [shapeReady, shapeStamp]
+    );
+    logShape = cachedLogShape();
     emptyLine = (
         "Nothing logged this week; board moves land here on their own."
             if isWeek
@@ -285,6 +349,62 @@ def:pub DailyLogPage -> JsxPage {
                 + (" yet" if focus >= today else "")
                 + "; board moves land here on their own."
     );
+
+    def loadFrame -> JsxElement {
+        return
+            <div
+                className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                aria-busy="true"
+            >
+                <StandupPlaceholder lines={logShape["lines"]}/>
+                {if logShape["rows"] > 0 {
+                    <section key="timeline" aria-label="Timeline">
+                        <div className="mb-2 flex h-5 items-center">
+                            <Skeleton className="h-3.5 w-16"/>
+                        </div>
+                        <ul className="border-t">
+                            {for i in range(logShape["rows"]) {
+                                <li
+                                    key={str(i)}
+                                    className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b py-2"
+                                >
+                                    <Skeleton className="h-3 w-9"/>
+                                    <div className="flex h-5 items-center">
+                                        <Skeleton
+                                            className={"h-3 "
+                                                + ("w-3/5" if i == 1 else "w-4/5")}
+                                        />
+                                    </div>
+                                    <Skeleton className="h-3 w-14"/>
+                                </li>
+                            }}
+                        </ul>
+                    </section>
+                } else {
+                    <div
+                        key="empty"
+                        className="flex flex-col items-start gap-3 border-y py-5"
+                    >
+                        <div className="flex h-5 items-center">
+                            <Skeleton className="h-3.5 w-80 max-w-full"/>
+                        </div>
+                        <div className="flex h-8 items-center gap-2">
+                            <Skeleton className="h-8 w-24"/>
+                            <Skeleton className="h-8 w-28"/>
+                        </div>
+                    </div>
+                } }
+                <div className="@min-[90rem]:col-span-2">
+                    <Composer
+                        members={[]}
+                        projects={[]}
+                        saving={False}
+                        onLog={quickLog}
+                        rosterReady={False}
+                    />
+                </div>
+            </div>;
+    }
 
     return
         <div className="@container flex min-w-0 flex-col gap-4">
@@ -515,159 +635,125 @@ def:pub DailyLogPage -> JsxPage {
                             />
                         </div>
                     </div>
-                    {if firstLoad {
-                        <div
-                            key="sk"
-                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
-                            aria-busy="true"
-                        >
-                            <StandupPlaceholder/>
-                            <section aria-label="Timeline">
-                                <div className="mb-2 flex h-5 items-center">
-                                    <Skeleton className="h-3.5 w-16"/>
-                                </div>
-                                <ul className="border-t">
-                                    {for i in range(3) {
-                                        <li
-                                            key={str(i)}
-                                            className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b py-2"
-                                        >
-                                            <Skeleton className="h-3 w-9"/>
-                                            <div className="flex h-5 items-center">
-                                                <Skeleton
-                                                    className={"h-3 "
-                                                        + (
-                                                            "w-3/5"
-                                                                if i == 1
-                                                                else "w-4/5"
-                                                        )}
-                                                />
-                                            </div>
-                                            <Skeleton className="h-3 w-14"/>
-                                        </li>
-                                    }}
-                                </ul>
-                            </section>
-                            <div className="@min-[90rem]:col-span-2">
-                                <Composer
-                                    members={[]}
-                                    projects={[]}
-                                    saving={False}
-                                    onLog={quickLog}
-                                    rosterReady={False}
+                    <Reveal
+                        ready={not firstLoad}
+                        frame={loadFrame()}
+                        className="min-w-0"
+                    >
+                        {if loadFailed and len(entries) == 0 {
+                            <LoadFailed
+                                key="failed"
+                                title="Could not load the log"
+                                onRetry={retryLoad}
+                                retrying={retrying}
+                            />
+                        } elif selecting {
+                            <div key="picklist" className="flex min-w-0 flex-col gap-2">
+                                <p className="text-[13px] text-muted-foreground">
+                                    {"Pick the entries to delete from "
+                                        + ("this week." if isWeek else "this day.")}
+                                </p>
+                                <LogTimeline
+                                    entries={weekEntries if isWeek else dayEntries}
+                                    roster={memberNames}
+                                    showDate={isWeek}
+                                    selecting={True}
+                                    selected={selectedIds}
+                                    onToggleSelect={toggleSelect}
                                 />
                             </div>
-                        </div>
-                    } elif loadFailed and len(entries) == 0 {
-                        <LoadFailed
-                            key="failed"
-                            title="Could not load the log"
-                            onRetry={retryLoad}
-                            retrying={retrying}
-                        />
-                    } elif selecting {
-                        <div key="picklist" className="flex min-w-0 flex-col gap-2">
-                            <p className="text-[13px] text-muted-foreground">
-                                {"Pick the entries to delete from "
-                                    + ("this week." if isWeek else "this day.")}
-                            </p>
-                            <LogTimeline
-                                entries={weekEntries if isWeek else dayEntries}
-                                roster={memberNames}
-                                showDate={isWeek}
-                                selecting={True}
-                                selected={selectedIds}
-                                onToggleSelect={toggleSelect}
-                            />
-                        </div>
-                    } elif isWeek and len(weekEntries) > 0 {
-                        <div
-                            key="matrix"
-                            className="animate-in fade-in duration-150"
-                            aria-busy={stale}
-                        >
-                            <WeekMatrix
-                                entries={weekEntries}
-                                weekDays={viewDays}
-                                memberNames={memberNames}
-                                selectedDate={selectedDate}
-                                today={today}
-                                onSelectDate={lambda (d: str) {
-                                    selectedDate = d;
-                                    viewMode = "day";
-                                }}
-                            />
-                        </div>
-                    } else {
-                        <div
-                            key="day"
-                            className="grid min-w-0 gap-[18px] animate-in fade-in duration-150 @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
-                            aria-busy={stale}
-                        >
-                            {if showStandup and not isWeek {
-                                <Standup
-                                    key={"standup" + focus}
-                                    entries={entries}
-                                    day={focus}
-                                    since={since}
-                                    loadedFrom={loadedFrom}
+                        } elif isWeek and len(weekEntries) > 0 {
+                            <div key="matrix" aria-busy={stale}>
+                                <WeekMatrix
+                                    entries={weekEntries}
+                                    weekDays={viewDays}
+                                    memberNames={memberNames}
+                                    selectedDate={selectedDate}
                                     today={today}
-                                    blocked={blockedTasks}
-                                    liveBlocked={blockedLive}
-                                    roster={memberNames}
-                                    windowLabel={sinceLabel(focus)}
+                                    onSelectDate={lambda (d: str) {
+                                        selectedDate = d;
+                                        viewMode = "day";
+                                    }}
                                 />
-                            }}
-                            {if len(dayEntries) > 0 and not isWeek {
-                                <section key="timeline" aria-label="Timeline">
-                                    <h3 className="mb-2 text-[13.5px] font-semibold">
-                                        Timeline
-                                    </h3>
-                                    <LogTimeline
-                                        entries={dayEntries}
+                            </div>
+                        } else {
+                            <div
+                                key="day"
+                                className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                                aria-busy={stale}
+                            >
+                                {if showStandup and not isWeek {
+                                    <Standup
+                                        key={"standup" + focus}
+                                        entries={entries}
+                                        day={focus}
+                                        since={since}
+                                        loadedFrom={loadedFrom}
+                                        today={today}
+                                        blocked={blockedTasks}
+                                        liveBlocked={blockedLive}
                                         roster={memberNames}
-                                        onEdit={openEditEntry}
+                                        windowLabel={sinceLabel(focus)}
                                     />
-                                </section>
-                            } else {
-                                <div
-                                    key="empty"
-                                    className="flex flex-col items-start gap-3 border-y py-5"
-                                >
-                                    <p className="text-sm text-foreground">
-                                        {emptyLine}
-                                    </p>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={logNote}
+                                }}
+                                {if len(dayEntries) > 0 and not isWeek {
+                                    <section key="timeline" aria-label="Timeline">
+                                        <h3
+                                            className="mb-2 text-[13.5px] font-semibold"
                                         >
-                                            Log a note
-                                        </Button>
-                                        <Button
-                                            asChild={True}
-                                            variant="ghost"
-                                            size="sm"
+                                            Timeline
+                                        </h3>
+                                        <LogTimeline
+                                            entries={dayEntries}
+                                            roster={memberNames}
+                                            onEdit={openEditEntry}
+                                        />
+                                    </section>
+                                } else {
+                                    <div
+                                        key="empty"
+                                        className="flex flex-col items-start gap-3 border-y py-5"
+                                    >
+                                        <p className="text-sm text-foreground">
+                                            {emptyLine}
+                                        </p>
+                                        <div
+                                            className="flex flex-wrap items-center gap-2"
                                         >
-                                            <Link to="/board">Open the board</Link>
-                                        </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={logNote}
+                                            >
+                                                Log a note
+                                            </Button>
+                                            <Button
+                                                asChild={True}
+                                                variant="ghost"
+                                                size="sm"
+                                            >
+                                                <Link to="/board">Open the board</Link>
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            } }
-                            {if not isWeek {
-                                <div key="composer" className="@min-[90rem]:col-span-2">
-                                    <Composer
-                                        members={members}
-                                        projects={projects}
-                                        saving={quickSaving}
-                                        onLog={quickLog}
-                                        rosterReady={rosterReady}
-                                    />
-                                </div>
-                            }}
-                        </div>
-                    }    }
+                                } }
+                                {if not isWeek {
+                                    <div
+                                        key="composer"
+                                        className="@min-[90rem]:col-span-2"
+                                    >
+                                        <Composer
+                                            members={members}
+                                            projects={projects}
+                                            saving={quickSaving}
+                                            onLog={quickLog}
+                                            rosterReady={rosterReady}
+                                        />
+                                    </div>
+                                }}
+                            </div>
+                        }   }
+                    </Reveal>
                 </div>
             </div>
             <EntryDialog
