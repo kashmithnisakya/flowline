@@ -239,7 +239,12 @@ people it tracks are roster members.
   `working` (open plus Done reached in the last `done_days`, what the board
   renders, `older` counting what the cutoff left out from the tallies, on
   an unfiltered page only), `older`, `done`, `all`; `q` is a server-side
-  title search ranked exact, prefix, contains. `GetFlowLine` counts and
+  title search ranked exact, prefix, contains. `scope_total` on every
+  page is the scope's count with no filter on (the pool when the page
+  loaded the whole scope, else a tally or one more pushed read), so the
+  table says "12 of 210" off its own page. `ListLogEntries` orders a day
+  by stamp, newest first, the order every view shows, so a page fetched
+  behind the first only adds rows below what is on screen. `GetFlowLine` counts and
   `ListStepTasks` lists the same working set (`done_days`), so a done step
   shows recent Done the way the board's column does; the count's pass over
   that set also keeps each step's first two titles (`StepView.task_titles`,
@@ -425,6 +430,16 @@ File-based routing with route groups:
   Checkbox once needed the same treatment (`tickbox.jac`, for a stray
   `# noqa` text node); the registry copy at jac 0.34.14 is clean, so
   `checkbox.jac` is imported directly again.
+- **A list paints after its first page; the rest lands behind it.** The
+  board's first load (`loadBoard`, `paintPages`) shows page 1 of
+  `BoardSnapshot` and appends the pages behind it (the working set is one
+  `sort_order` run, so a later page lands under the cards on screen; the
+  newest load owns the state through `loadReqRef`); a refetch keeps its
+  rows until the whole set is in. The log week (`weekPage`) and the
+  Overview's week log (`absorbWeekLog`) do the same. Nothing is fetched
+  twice on a mount: the log page starts on today rather than writing
+  `selectedDate` in an entry (the live-cell gotcha below), and the tasks
+  table's scope count rides on its page (`scope_total`).
 - **A page fires the workspace read beside its own data, never after it.**
   `lib/workspace.jac` `loadWorkspace()` answers a dict keyed like
   `WorkspaceView` plus `ok` from its minute-long cache, or spawns
@@ -664,6 +679,12 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   an argument or keep it on a `Ref`, which is still correct and stays.
   Keep the habit of building a new list in a local and assigning once
   rather than appending twice around a walker call.
+- **A dependent entry reads the live cell, so an entry write fires it
+  twice.** `can with [x] entry` runs on mount and reads `x` through the
+  cell; an `entry` that assigns `x` in the same commit is visible to that
+  mount run, and the re-render's changed deps run it again (the log page
+  fetched its week twice, #225). A value known at render time is the `has`
+  default (`selectedDate: str = todayIso()`), never an entry assignment.
 - **A Radix `Select` shows its placeholder only for the value `""`.** A
   sentinel such as `"none"` with no matching item renders an empty
   trigger and no muted styling. Seed `""` for "nothing picked" (project on
