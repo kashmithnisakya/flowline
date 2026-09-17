@@ -4,33 +4,19 @@ services/insights/insights.jac). Everything traverses the caller's root directly
 
 import from models {
     Project,
-    Member,
     Task,
-    Repo,
-    Role,
-    WorkflowStep,
     TaskView,
     MemberView,
     RepoView,
     RoleView,
     StepView,
     IterationView,
-    iteration_view,
-    iterations_of,
-    member_view,
-    repo_view,
-    role_view,
-    step_view,
     task_links,
     views_from,
-    all_tasks,
-    projects_of,
-    members_of,
-    roles_of,
-    steps_of
+    all_tasks
 }
 import from services.util { page_bounds, done_cutoff, is_older, order_working }
-import from services.github.github { connection_of, connection_view }
+import from services.workspace.workspace { workspace_view }
 
 obj BoardData {
     """One page of the board's working set, plus the workspace lists it
@@ -92,31 +78,17 @@ walker BoardSnapshot {
         roles: list[RoleView] = [];
         iterations: list[IterationView] = [];
         connected = False;
+        # One definition of the lists and their order, shared with
+        # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
-            for m in members_of(here) {
-                members.append(member_view(m));
-            }
-            members.sort(key=lambda (m: MemberView) { m.name; });
-            projects = projects_of(here);
-            projects.sort(key=lambda (pr: Project) { pr.name; });
-            line_steps = steps_of(here);
-            for st in line_steps {
-                steps.append(step_view(st, line_steps));
-            }
-            steps.sort(key=lambda (s: StepView) { s.sort_order; });
-            for r in [here-->[?:Repo]] {
-                repos.append(repo_view(r));
-            }
-            repos.sort(key=lambda (rv: RepoView) { rv.full_name; });
-            for ro in roles_of(here) {
-                roles.append(role_view(ro));
-            }
-            roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });
-            for it in iterations_of(here) {
-                iterations.append(iteration_view(it));
-            }
-            iterations.sort(key=lambda (iv: IterationView) { iv.start_date; });
-            connected = connection_view(connection_of(here)).connected;
+            ws = workspace_view(here);
+            members = ws.members;
+            projects = ws.projects;
+            steps = ws.steps;
+            repos = ws.repos;
+            roles = ws.roles;
+            iterations = ws.iterations;
+            connected = ws.github_connected;
         }
         report BoardData(
             rows=views_from(links, picked[start:end]),
