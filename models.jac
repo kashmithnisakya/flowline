@@ -917,11 +917,8 @@ def tasks_on_step(holder: Root, step: str) -> list[Task] {
 
 def tasks_on_steps(holder: Root, step_ids: list[str]) -> list[Task] {
     out: list[Task] = [];
-    if not step_ids {
-        return out;
-    }
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, step_idinstep_ids]]);
+    for step in step_ids {
+        out.extend(tasks_on_step(holder, step));
     }
     return out;
 }
@@ -948,7 +945,8 @@ def tasks_in_iteration(holder: Root, it_id: str) -> list[Task] {
 # The Done tasks whose span (task_span in the iterations service) can
 # overlap [lo, hi]: due or start inside the window, one on each side of it,
 # or an iteration touching it. A superset on purpose: the caller applies
-# the exact span test, so these only have to be cheap and complete.
+# the exact span test, so these only have to be cheap and complete. The
+# iteration ids are few, so each is its own query.
 def done_in_window(
     holder: Root,
     lo: str,
@@ -973,19 +971,19 @@ def done_in_window(
         found.extend(
             [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date<lo, start_date>hi]]
         );
-        if window_ids {
+        for it_id in window_ids {
             found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", iteration_idinwindow_ids]]
+                [box-->[?:Project]-->[?:Task, status=="Done", iteration_id==it_id]]
             );
         }
-        if after_ids {
+        for it_id in after_ids {
             found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, iteration_idinafter_ids]]
+                [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, iteration_id==it_id]]
             );
         }
-        if before_ids {
+        for it_id in before_ids {
             found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date>hi, iteration_idinbefore_ids]]
+                [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date>hi, iteration_id==it_id]]
             );
         }
         for t in found {
@@ -1000,16 +998,54 @@ def done_in_window(
 
 
 # GitHub lookups by the machine key, per page of items rather than per
-# workspace: `numbers` are the issue or PR numbers on the page.
+# workspace. `numbers` are the issue or PR numbers on the page: a short
+# list is one query per number; a long one is one query over the numbers'
+# range, kept to the page in Python. (A pushed `in` list would be one
+# query, but the pinned formatter mangles `in` inside a filter.)
+glob LOOKUP_ONE_BY_ONE: int = 8;
+
+
+def number_range(numbers: list[int]) -> list[int] {
+    lo = numbers[0];
+    hi = numbers[0];
+    for n in numbers {
+        if n < lo {
+            lo = n;
+        }
+        if n > hi {
+            hi = n;
+        }
+    }
+    return [lo, hi];
+}
+
+
 def tasks_by_issue(holder: Root, full_name: str, numbers: list[int]) -> list[Task] {
     out: list[Task] = [];
     if not numbers {
         return out;
     }
+    if len(numbers) <= LOOKUP_ONE_BY_ONE {
+        for box in [holder-->[?:Projects]] {
+            for n in numbers {
+                out.extend(
+                    [box-->[?:Project]-->[?:Task, gh_repo==full_name, gh_issue_number==n]]
+                );
+            }
+        }
+        return out;
+    }
+    (lo, hi) = number_range(numbers);
+    wanted: dict[int, bool] = {};
+    for n in numbers {
+        wanted[n] = True;
+    }
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, gh_repo==full_name, gh_issue_numberinnumbers]]
-        );
+        for t in [box-->[?:Project]-->[?:Task, gh_repo==full_name, gh_issue_number>=lo, gh_issue_number<=hi]] {
+            if t.gh_issue_number in wanted {
+                out.append(t);
+            }
+        }
     }
     return out;
 }
@@ -1020,22 +1056,55 @@ def tasks_by_pr(holder: Root, full_name: str, numbers: list[int]) -> list[Task] 
     if not numbers {
         return out;
     }
+    if len(numbers) <= LOOKUP_ONE_BY_ONE {
+        for box in [holder-->[?:Projects]] {
+            for n in numbers {
+                out.extend(
+                    [box-->[?:Project]-->[?:Task, gh_repo==full_name, pr_number==n]]
+                );
+            }
+        }
+        return out;
+    }
+    (lo, hi) = number_range(numbers);
+    wanted: dict[int, bool] = {};
+    for n in numbers {
+        wanted[n] = True;
+    }
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, gh_repo==full_name, pr_numberinnumbers]]
-        );
+        for t in [box-->[?:Project]-->[?:Task, gh_repo==full_name, pr_number>=lo, pr_number<=hi]] {
+            if t.pr_number in wanted {
+                out.append(t);
+            }
+        }
     }
     return out;
 }
 
 
-def tasks_by_pr_link(holder: Root, links: list[str]) -> list[Task] {
+# Tasks whose pr_link is one of `links`, any repo: the numbered ones by the
+# number the link carries, the unnumbered ones from the small set the sync
+# has not adopted yet. Exact on the link, so a cross-repo paste still hits.
+def tasks_by_pr_link(holder: Root, links: list[str], numbers: list[int]) -> list[Task] {
     out: list[Task] = [];
     if not links {
         return out;
     }
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, pr_linkinlinks]]);
+    wanted: dict[str, bool] = {};
+    for link in links {
+        wanted[link] = True;
+    }
+    found: list[Task] = unnumbered_pr_links(holder);
+    if numbers {
+        (lo, hi) = number_range(numbers);
+        for box in [holder-->[?:Projects]] {
+            found.extend([box-->[?:Project]-->[?:Task, pr_number>=lo, pr_number<=hi]]);
+        }
+    }
+    for t in found {
+        if t.pr_link in wanted {
+            out.append(t);
+        }
     }
     return out;
 }

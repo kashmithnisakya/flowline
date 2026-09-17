@@ -476,7 +476,7 @@ def linked_pulls(holder: Root, full_name: str, items: list[any]) -> dict[int, st
         }
     }
     found: dict[int, str] = {};
-    for t in tasks_by_pr_link(holder, links) {
+    for t in tasks_by_pr_link(holder, links, numbers) {
         found[pr_number_from(t.pr_link)] = jid(t);
     }
     for t in tasks_by_pr(holder, full_name, numbers) {
