@@ -787,7 +787,8 @@ def:pub OverviewPage -> JsxPage {
     # Layout follows the width the page is given (Ask docks beside it at
     # 1280px), not the viewport: two zones from 52rem, and from 90rem (what
     # 2xl gives the page without Ask) three columns: Needs you, the week, People.
-    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(0,5fr)]";
+    # People keeps 37rem so its own 36rem column query holds behind the border.
+    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(37rem,5fr)]";
 
     return
         <div className="@container space-y-4">
@@ -837,7 +838,9 @@ def:pub OverviewPage -> JsxPage {
                             }}
                         </div>
                     } }
-                    <ThisWeek figures={[]} days={[]} note={earlyNote}/>
+                    <div key="note" className="min-w-0 @min-[90rem]:col-span-2">
+                        <ThisWeek figures={[]} days={[]} note={earlyNote}/>
+                    </div>
                 </div>
             } else {
                 <div key="body" className={zones}>

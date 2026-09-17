@@ -535,7 +535,7 @@ def:pub DailyLogPage -> JsxPage {
                     } else {
                         <div
                             key="day"
-                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
                         >
                             {if showStandup and not isWeek {
                                 <Standup
