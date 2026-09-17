@@ -53,8 +53,7 @@ import from ...components.flowlines.geometry {
     nextStop,
     detailOf,
     NODE_W,
-    NODE_H,
-    DETAIL_HIGH
+    NODE_H
 }
 import from ...components.flowlines.kinds { KIND_LABEL, KIND_TONE, DOT_FILL, colorKey }
 import from ...components.common.KindGlyph { KindGlyph }
@@ -199,11 +198,9 @@ def:pub FlowLinePage -> JsxPage {
         # diagram is one tap away.
         narrow: bool = False,
         phoneView: str = "list",
-        # First task titles per step for the high-detail zoom, and the
-        # project + reload they were fetched for.
+        # First task titles per step for the high-detail zoom, read off
+        # the flow line with its counts.
         stepTitles: dict[str, list[str]] = {},
-        titlesFor: str = "",
-        flowVersion: int = 0,
         busyRef: Ref[any] = Ref(),
         viewportRef: Ref[any] = Ref(),
         # Mirrors of zoom and pan for native listeners and quick repeats.
@@ -318,19 +315,6 @@ def:pub FlowLinePage -> JsxPage {
         []
     );
 
-    # Above the high-detail zoom a node lists its first tasks; fetch them
-    # once per project and reload, only when that zoom is reached.
-    useEffect(
-        lambda {
-            wanted = projectId + ":" + str(flowVersion);
-            if zoom > DETAIL_HIGH and not editing and titlesFor != wanted {
-                loadTitles(wanted);
-            }
-            return lambda { wanted = ""; };
-        },
-        [zoom > DETAIL_HIGH, flowVersion, projectId, editing]
-    );
-
     async def boot -> None;
     async def loadShared -> None;
     async def reload(pid: str) -> None;
@@ -339,8 +323,7 @@ def:pub FlowLinePage -> JsxPage {
     async def peekStep(stepId: str) -> None;
     async def refreshPeek(stepId: str, pid: str) -> None;
     async def morePeek -> None;
-    async def loadTitles(wanted: str) -> None;
-    async def firstTitles(stepId: str, pid: str) -> list[str];
+    def loadTitles(fresh: list[StepView]) -> None;
     def closePeek -> None;
     def revealStep(stepId: str) -> None;
     def openTask(tid: str) -> None;

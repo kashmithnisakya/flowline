@@ -673,7 +673,10 @@ obj StepView {
         next_carries: list[str] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
-        task_count: int = 0;
+        task_count: int = 0,
+        # The first two titles in the step panel's order, filled with the
+        # count, so a close zoom on the flow line needs no request.
+        task_titles: list[str] = [];
 }
 
 # What the client is allowed to know about the GitHub link. The connection
