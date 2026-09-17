@@ -46,9 +46,11 @@ def sync_workspace(root_jid: str, installation_id: int) {
     try {
         # A pass on cooldown reports the previous stamp back; a pass that
         # ran stamps a new one, even with nothing to poll.
-        c = connection_of(ctx.get_root());
+        holder: any = ctx.get_root();
+        c = connection_of(holder);
         was = c.last_sync_at if isinstance(c, GithubConnection) else "";
-        w: any = Jac.spawn(SyncGithub(auto=True), ctx.get_root());
+        pass_walker: any = SyncGithub(auto=True);
+        w: any = Jac.spawn(pass_walker, holder);
         Jac.commit();
         summary: dict[str, any] = w.reports[0] if w.reports else {};
         on_cooldown = str(summary.get("last_sync_at") or "") == was;
