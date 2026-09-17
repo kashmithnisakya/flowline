@@ -144,11 +144,7 @@ walker RenameFlowLine {
 # the browser caches GetFlowLine; a write anywhere invalidates it.
 @effects(reads=["WorkflowStep", "Task"], writes=[])
 def read_flow_line(
-    box: WorkflowSteps,
-    holder: Root,
-    project_id: str,
-    with_counts: bool,
-    done_days: int
+    box: WorkflowSteps, holder: Root, project_id: str, with_counts: bool, done_days: int
 ) -> list[StepView] {
     views: list[StepView] = [];
     line_steps = [box-->[?:WorkflowStep]];

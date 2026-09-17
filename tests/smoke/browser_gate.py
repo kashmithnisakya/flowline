@@ -2,9 +2,11 @@
 """Playwright smoke against a running server: sign up, finish the three-step
 setup wizard on the Simple template, land on the board with the create dialog
 open, create a task from the board's New task button and see its card survive
-a reload, then land on GitHub's install redirect and check the page finishes it
-with exactly one callback. Every step is a real click or keystroke, so a dead
-button fails here.
+a reload, check the runtime reads the served effects table, reads /user/me
+once and mounts the pages after the board on the cached workspace until a
+roster write drops it, then land
+on GitHub's install redirect and check the page finishes it with exactly one
+callback. Every step is a real click or keystroke, so a dead button fails here.
 Usage: browser_gate.py [base_url] [stub_url]"""
 import json
 import re
@@ -160,8 +162,74 @@ def run(page, tag: str) -> list[str]:
     page.get_by_role("link", name="Log", exact=True).click()
     expect(page.get_by_role("heading", name="Log", exact=True)).to_be_visible()
 
+    read_cache_once(page)
     github_install_once(page)
     return []
+
+
+def read_cache_once(page) -> None:
+    # The runtime caches a pure reader for 60 s through the effects table the
+    # shell serves in __jac_init__. A client-imported module that owns a
+    # server def:pub registers a partial table at load, which shadows the
+    # served one and sends every walker down the writer path (issue #224):
+    # so the table is empty before the first spawn and the served size after.
+    step("cache: no module registers an effects table before the first spawn")
+    page.goto(f"{BASE}/")
+    expect(page.get_by_role("heading").first).to_be_visible()
+    early = page.evaluate("() => Object.keys(globalThis.__jacEndpointEffects__ || {}).length")
+    assert early == 0, f"a client module registered {early} effects rows at load"
+
+    step("cache: after the board's first spawn the runtime holds the served table")
+    hits: list[str] = []
+    page.on("request", lambda r: hits.append(r.url)
+            if r.url.endswith("/walker/GetWorkspace") or r.url.endswith("/user/me") else None)
+    page.goto(f"{BASE}/board")
+    settle(page, "/board", "Board")
+    served = page.evaluate(
+        """() => Object.keys(JSON.parse(document.getElementById("__jac_init__").textContent)
+                 .endpointEffects || {}).length"""
+    )
+    used = page.evaluate("() => Object.keys(globalThis.__jacEndpointEffects__ || {}).length")
+    assert served > 20 and used == served, f"runtime holds {used} effects rows, the shell serves {served}"
+
+    # The board's snapshot primes the app's workspace cache (lib/workspace),
+    # so the pages after it mount on it without a request.
+    step("cache: board, tasks, roadmap, board make no GetWorkspace and one /user/me")
+    page.get_by_role("link", name="Tasks", exact=True).click()
+    expect(page.get_by_role("heading", name="Tasks", exact=True)).to_be_visible()
+    page.get_by_role("link", name="Roadmap", exact=True).click()
+    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
+    page.get_by_role("link", name="Board", exact=True).click()
+    settle(page, "/board", "Board")
+    page.wait_for_timeout(1500)
+    workspace = [u for u in hits if u.endswith("/walker/GetWorkspace")]
+    me = [u for u in hits if u.endswith("/user/me")]
+    assert not workspace, f"GetWorkspace was requested {len(workspace)} times, expected none"
+    assert len(me) == 1, f"/user/me was requested {len(me)} times, expected 1"
+
+    # A roster write drops the cache: the People tab's own refetch is the one
+    # request, and /tasks then mounts on it.
+    step("cache: a People-tab save then tasks makes exactly one GetWorkspace")
+    page.get_by_role("link", name="Workspace", exact=True).click()
+    expect(page.get_by_role("heading", name="Organization", exact=True)).to_be_visible()
+    page.locator('a[href="/workspace?tab=people"]').first.click()
+    expect(page.get_by_role("button", name="Add person", exact=True).first).to_be_visible()
+    page.wait_for_timeout(1000)
+    del hits[:]
+    page.get_by_role("button", name="Add person", exact=True).first.click()
+    dialog = page.locator("[role=dialog][data-state=open]")
+    expect(dialog).to_be_visible()
+    dialog.get_by_placeholder("First name").fill("Cache")
+    dialog.get_by_placeholder("Last name").fill("Probe")
+    dialog.get_by_role("button", name="Add person", exact=True).click()
+    expect(dialog).to_be_hidden()
+    expect(page.get_by_text("Cache Probe", exact=True).first).to_be_visible()
+    page.get_by_role("link", name="Tasks", exact=True).click()
+    expect(page.get_by_role("heading", name="Tasks", exact=True)).to_be_visible()
+    page.wait_for_timeout(1500)
+    workspace = [u for u in hits if u.endswith("/walker/GetWorkspace")]
+    assert len(workspace) == 1, f"GetWorkspace was requested {len(workspace)} times after the save, expected 1"
+    assert not [u for u in hits if u.endswith("/user/me")], "/user/me was requested again after the first load"
 
 
 def github_install_once(page) -> None:
