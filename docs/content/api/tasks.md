@@ -55,7 +55,7 @@ curl -X POST $BASE/walker/ListTasks -H "Authorization: Bearer $TOKEN" \
         "assignee_names": ["Priya Raman"], "project_id": "<project-id>",
         "project_name": "Docs site", "tags": ["q3"], "estimate": 3.0,
         "iteration_id": "<iteration-id>", "start_date": "2026-09-15",
-        "checklist": [{"id": "3f9c1a2b7d4e", "text": "Draft the rollback steps", "done": true}],
+        "note_lead": "Rollback first, then the schema.", "checklist_done": 1, "checklist_total": 3,
         "gh_repo": "", "gh_issue_number": 0, "pr_state": ""
       }
     ],
@@ -64,15 +64,27 @@ curl -X POST $BASE/walker/ListTasks -H "Authorization: Bearer $TOKEN" \
 ]
 ```
 
-The row above is trimmed; see [`TaskView`](types.md#taskview) for every field.
+The row above is trimmed; see [`TaskRow`](types.md#taskrow) for every field.
+A list row carries no `notes` and no `checklist` items: the note's first line
+(`note_lead`, at most 200 characters) and the checklist counts ride instead,
+and [`GetTask`](#gettask) has the rest.
 
 ::: walker GetTask h3
 
-For a deep link to a card the board's working set does not hold (older history
-or a search hit).
+The task in full: what the task sheet loads when it opens, and a deep link to a
+card the board's working set does not hold (older history or a search hit).
 
-**Reports** one [`TaskView`](types.md#taskview), or nothing for an unknown or
-foreign id.
+**Reports** one [`TaskView`](types.md#taskview), every `TaskRow` field plus
+`notes`, the `checklist` items and the GitHub-only fields (`gh_assignees`,
+`gh_synced_at`, `pr_review_state`), or nothing for an unknown or foreign id.
+
+::: walker ListTaskTitles h3
+
+The assistant's citation lookup: the working set as `id` and `title` only.
+
+**Reports** one list of [`TaskTitle`](types.md#tasktitle): the rows and order of
+`ListTasks(scope="working")` for the same `done_days`, at most `limit` (capped
+at 500).
 
 ::: walker TaskCounts h3
 

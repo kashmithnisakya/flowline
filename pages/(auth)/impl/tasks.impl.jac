@@ -62,7 +62,7 @@ impl TasksPage.loadTasks -> None {
         refreshing = True;
     }
     try {
-        fetched: list[TaskView] = [];
+        fetched: list[TaskRow] = [];
         matched = 0;
         more = False;
         if fStep != "All" or fPriority != "All" {
@@ -149,7 +149,7 @@ impl TasksPage.loadTasks -> None {
 # at the walker's largest size and kept until the filters or the data change.
 # A new sort re-sorts the kept rows. A step filter keys on the flow line too,
 # since placement depends on it.
-impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
+impl TasksPage.gatherPool(seq: int) -> list[TaskRow] {
     keys = columnKeys();
     sig = "|".join(
         [
@@ -168,14 +168,14 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
     order = sort + "|" + sortDir;
     cached: any = poolRef.current;
     if cached and cached["sig"] == sig {
-        kept: list[TaskView] = cached["rows"];
+        kept: list[TaskRow] = cached["rows"];
         if cached["order"] != order {
             kept = sortPool(kept);
             poolRef.current = {"sig": sig, "order": order, "rows": kept};
         }
         return kept;
     }
-    pool: list[TaskView] = [];
+    pool: list[TaskRow] = [];
     pg = 1;
     more = True;
     while more and pg <= GATHER_PAGES and reqRef.current == seq {
@@ -193,7 +193,7 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
             page_size=GATHER_SIZE
         );
         data = result.reports[0] if result.reports else None;
-        got: list[TaskView] = data.rows if data else [];
+        got: list[TaskRow] = data.rows if data else [];
         for t in got {
             if (fPriority == "All" or t.priority == fPriority)
                 and (fStep == "All" or columnKeyOf(t, keys) == fStep) {
@@ -212,31 +212,31 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskView] {
 # The walker's column sort (sort_tasks) over rows already in hand: a jid pass,
 # then the key. A descending pass runs on the reversed list and reverses back,
 # which keeps ties in jid order as Python's reverse=True does.
-impl TasksPage.sortPool(pool: list[TaskView]) -> list[TaskView] {
+impl TasksPage.sortPool(pool: list[TaskRow]) -> list[TaskRow] {
     rows = [t for t in pool];
-    rows.sort(key=lambda (t: TaskView) { t.id; });
+    rows.sort(key=lambda (t: TaskRow) { t.id; });
     desc = sortDir == "desc";
     keys = columnKeys();
     if sort == "step" {
-        rows.sort(key=lambda (t: TaskView) { t.sort_order; });
+        rows.sort(key=lambda (t: TaskRow) { t.sort_order; });
     }
     if desc {
         rows.reverse();
     }
     if sort == "step" {
-        rows.sort(key=lambda (t: TaskView) { keys.index(columnKeyOf(t, keys)); });
+        rows.sort(key=lambda (t: TaskRow) { keys.index(columnKeyOf(t, keys)); });
     } elif sort == "title" {
-        rows.sort(key=lambda (t: TaskView) { t.title.lower(); });
+        rows.sort(key=lambda (t: TaskRow) { t.title.lower(); });
     } elif sort == "priority" {
         rows.sort(
-            key=lambda (t: TaskView) { PRIORITY_RANK[t.priority]
+            key=lambda (t: TaskRow) { PRIORITY_RANK[t.priority]
                 if t.priority in PRIORITY_RANK
                 else 1; }
         );
     } elif sort == "due" {
-        rows.sort(key=lambda (t: TaskView) { t.due_date or "9999-12-31"; });
+        rows.sort(key=lambda (t: TaskRow) { t.due_date or "9999-12-31"; });
     } else {
-        rows.sort(key=lambda (t: TaskView) { t.updated_at; });
+        rows.sort(key=lambda (t: TaskRow) { t.updated_at; });
     }
     if desc {
         rows.reverse();
@@ -558,7 +558,7 @@ impl TasksPage.columnKind(key: str) -> str {
 
 # A task with no step of its own (or whose step was deleted) sits in the first
 # column of its status's kind; without a flow line the status is the column.
-impl TasksPage.columnKeyOf(t: TaskView, keys: list[str]) -> str {
+impl TasksPage.columnKeyOf(t: TaskRow, keys: list[str]) -> str {
     if t.step_id and t.step_id in keys {
         return t.step_id;
     }
@@ -602,7 +602,7 @@ impl TasksPage.openTask(tid: str) -> None {
                 "due_date": t.due_date,
                 "start_date": t.start_date,
                 "iteration": t.iteration_id or "none",
-                "notes": t.notes,
+                "notes": "",
                 "issue": t.issue_link,
                 "pr": t.pr_link,
                 "reviewer": t.reviewer_id or "none",
@@ -652,6 +652,16 @@ impl TasksPage.dialogOpenChange(o: bool) -> None {
 impl TasksPage.replaceRow(view: TaskView) -> None {
     rows = [view if t.id == view.id else t for t in rows];
     poolRef.current = None;
+}
+
+# The sheet's GetTask hands the open task's notes to the form.
+impl TasksPage.absorbDetails(view: TaskView) -> None {
+    if creating or view.id != editTaskId {
+        return;
+    }
+    updated = {** taskForm};
+    updated["notes"] = view.notes;
+    taskForm = updated;
 }
 
 impl TasksPage.setTaskField(key: str, value: str) -> None {

@@ -7,7 +7,7 @@ Sunday before it, so a Monday standup can read back to Friday.
 
 import from "@jac/runtime" { useState, Link }
 import from "react" { useEffect, useRef }
-import from ...models { LogEntry, MemberView, Project, TaskView }
+import from ...models { LogEntry, MemberView, Project, TaskRow }
 import from ...services.log.log {
     ListLogEntries,
     DeleteLogEntries,
@@ -212,7 +212,7 @@ def:pub DailyLogPage -> JsxPage {
         weekReqRef: Ref[any] = Ref(),
         # Tasks blocked right now, so today's Stuck is not limited to what
         # the loaded log shows; `blockedLive` is False until that call lands.
-        blockedTasks: list[TaskView] = [],
+        blockedTasks: list[TaskRow] = [],
         blockedLive: bool = False,
         rosterReady: bool = False,
         # The streaming note shows only once a page has been in flight for

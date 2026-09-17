@@ -4,7 +4,7 @@ from the entries the page already loaded, so neither can fail on its own.
 """
 
 import from "@jac/runtime" { Link }
-import from ...models { LogEntry, TaskView }
+import from ...models { LogEntry, TaskRow }
 import from ...constants { STATUS_KIND }
 import from ...lib.dates { daysUntil }
 import from ..common.KindGlyph { KindGlyph }
@@ -381,7 +381,7 @@ def buildSections(
     since: str,
     loadedFrom: str,
     today: str,
-    blocked: list[TaskView],
+    blocked: list[TaskRow],
     live: bool,
     roster: list[str]
 ) -> dict[str, list[dict[str, str]]] {
@@ -587,7 +587,7 @@ def:pub Standup(
     since: str,
     loadedFrom: str,
     today: str,
-    blocked: list[TaskView] = [],
+    blocked: list[TaskRow] = [],
     liveBlocked: bool = False,
     roster: list[str] = [],
     windowLabel: str = ""
@@ -716,7 +716,7 @@ def:pub standupLines(
     since: str,
     loadedFrom: str,
     today: str,
-    blocked: list[TaskView],
+    blocked: list[TaskRow],
     live: bool,
     roster: list[str]
 ) -> list[int] {

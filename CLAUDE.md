@@ -150,9 +150,18 @@ people it tracks are roster members.
   the sync's date corrections (`reseed`) are the write points. A task
   carries `project_id` and `assignee_ids` (written wherever an `AssignedTo`
   edge or the container changes: `link_assignees`, `rehome_task`,
-  `file_issue_item`, `ArchiveMember`), so `hydrate_views` / `views_from`
+  `file_issue_item`, `ArchiveMember`), so `hydrate_rows` / `rows_from`
   build a page from fields plus `task_names` (two roster lists), never a
-  hop; `to_view()` still hops and is for a single task.
+  hop; `to_view()` still hops and is for a single task. **A list reports
+  `TaskRow`**, what the card, the table row, the roadmap bar, the step
+  panel and the Overview's queues render: the note's first line as
+  `note_lead` (200 characters) and `checklist_done` / `checklist_total`
+  instead of the notes and the items, and no `gh_assignees`,
+  `gh_synced_at` or `pr_review_state`. `TaskView` is a `TaskRow` plus
+  those (`obj TaskView(TaskRow)`, built as `TaskView(**vars(row), ...)`),
+  reported by `GetTask` and every task write, so a page splices a reported
+  view straight into its rows. The assistant's citations read
+  `ListTaskTitles` (ids and titles of the working set), never a task page.
   `ensure_tallies(holder)` in `services/util.jac` fills tallies, link
   fields and a missing `done_at` for a project whose `tallies_at` is empty
   (one full load, once; `SaveProject` stamps a new project) and every
@@ -420,12 +429,20 @@ File-based routing with route groups:
   opens it from a bar. **`UpdateTask` overwrites every field**, so each page
   that opens the sheet must carry `start_date` and `iteration` (a jid or
   `"none"`) in its form and pass them on save, or a save clears them.
+  **The sheet loads the open task's `TaskView` itself** (`GetTask` in its
+  entry ability, since a list row carries no notes or checklist items): the
+  checklist stays in the sheet's own state, the notes go to the page's form
+  through `onLoaded` (the page seeds `"notes": ""` on open and the board
+  rebases `baseForm` too, so the load never reads as an edit), and Save
+  stays off until the view lands, or it would write empty notes over the
+  real ones.
 - **A task's checklist is not part of the form.** `Task.checklist` is written
   only by `AddChecklistItem` / `SetChecklistItem` / `RemoveChecklistItem`,
   each applied at once from `components/board/Checklist.jac`, so a sheet
   save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
-  page that opens `TaskDialog` passes `taskId`, `checklist` and an
-  `onChecklist` that swaps the reported view into its rows.
+  page that opens `TaskDialog` passes `taskId`, `onLoaded` and an
+  `onChecklist` that swaps the reported view into its rows (its
+  `checklist_done` / `checklist_total` are what the card shows).
 - **The board polls, it does not react to focus.** `BoardSnapshot` every
   `POLL_MS` (60 s); a tab return refetches only when the snapshot on screen
   is older than that; `DrainGithubEvents` every `DRAIN_MS` (20 s) only while

@@ -116,15 +116,15 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
 }
 
 # The working tasks whose titles the text names as whole words, in the order it
-# names them. The walkers return prose, not ids, so a title match is the citation.
+# names them. The walkers return prose, not ids, so a title match is the
+# citation; ListTaskTitles carries ids and titles alone.
 impl AssistantDock.citeTasks(text: str) -> list[dict[str, str]] {
     hay = text.lower();
     found: list[dict[str, any]] = [];
     taken: list[dict[str, int]] = [];
     try {
-        run = root spawn ListTasks(scope="working", page_size=500);
-        page = run.reports[0] if run.reports else None;
-        pool = page.rows if page else [];
+        run = root spawn ListTaskTitles();
+        pool = run.reports[0] if run.reports else [];
         for t in sorted(pool, key=citeLength) {
             title = t.title.strip();
             needle = title.lower();

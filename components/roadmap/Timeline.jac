@@ -5,7 +5,7 @@ are percentages of the window, so the grid scrolls sideways when it is narrow.""
 
 import from "react" { useEffect }
 import from ...lib.session { ROADMAP_SHAPE_KEY }
-import from ...models { TaskView, StepView, IterationView }
+import from ...models { TaskRow, StepView, IterationView }
 import from ...constants { STATUS_KIND, KIND_COLORS }
 import from ..flowlines.kinds { DOT_VAR, colorKey }
 import from ..common.KindGlyph { KindGlyph }
@@ -111,7 +111,7 @@ def:pub RoadmapTimeline(
     weeks: int,
     today: str,
     iterations: list[IterationView],
-    rows: list[TaskView],
+    rows: list[TaskRow],
     starts: list[str],
     ends: list[str],
     steps: list[StepView],
@@ -198,14 +198,14 @@ def:pub RoadmapTimeline(
     );
     phGroups = cachedGroups(placeholder) if placeholder > 0 else [];
 
-    def kindOf(t: TaskView) -> str {
+    def kindOf(t: TaskRow) -> str {
         if t.step_id in stepKind {
             return stepKind[t.step_id];
         }
         return STATUS_KIND[t.status] if t.status in STATUS_KIND else "active";
     }
 
-    def hueOf(t: TaskView) -> str {
+    def hueOf(t: TaskRow) -> str {
         if t.step_id in stepHue {
             return stepHue[t.step_id];
         }
@@ -213,16 +213,16 @@ def:pub RoadmapTimeline(
         return KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
     }
 
-    def nameOf(t: TaskView) -> str {
+    def nameOf(t: TaskRow) -> str {
         return stepLabel[t.step_id] if t.step_id in stepLabel else t.status;
     }
 
-    def isLate(t: TaskView) -> bool {
+    def isLate(t: TaskRow) -> bool {
         return dueTone(t.due_date, t.status, today) == "overdue";
     }
 
     # Words for a row's second line: overdue says so in text, not only in red.
-    def lateWords(t: TaskView) -> str {
+    def lateWords(t: TaskRow) -> str {
         return dueLabel(t.due_date, t.status, today) if isLate(t) else "";
     }
 
@@ -253,7 +253,7 @@ def:pub RoadmapTimeline(
             />;
     }
 
-    def barClass(t: TaskView, first: str, last: str) -> str {
+    def barClass(t: TaskRow, first: str, last: str) -> str {
         edges = ("rounded-l-[3px] " if first >= fromDate else "")
             + ("rounded-r-[3px] " if last <= lastDay else "");
         base = "pointer-events-none absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden border border-l-2 pl-1 "
@@ -267,7 +267,7 @@ def:pub RoadmapTimeline(
         return base + "text-muted-foreground " + BAR_FILL + " " + BAR_EDGE;
     }
 
-    def barStyle(t: TaskView, first: str, last: str) -> dict[str, str] {
+    def barStyle(t: TaskRow, first: str, last: str) -> dict[str, str] {
         css = spanStyle(first, last, origin, total);
         css["borderLeftColor"] = "var(--destructive)"
             if isLate(t)

@@ -140,7 +140,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         # Pages of 500 so a big board paints after the first; the loop is
         # bounded and says so rather than showing part of the workspace.
         # Only page 1 carries the workspace lists.
-        fetchedTasks: list[TaskView] = [];
+        fetchedTasks: list[TaskRow] = [];
         olderUnfiltered = 0;
         cats: list[str] = [];
         fetchedMembers: list[MemberView] = [];
@@ -327,7 +327,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
     filterRef.current = stamp;
     # Rows already on screen come from the ref: `olderDone` read after the
     # await is the value from the render that started this call.
-    have: list[TaskView] = rowsRef.current or [];
+    have: list[TaskRow] = rowsRef.current or [];
     try {
         result = root spawn ListTasks(
             scope="older",
@@ -474,7 +474,7 @@ impl BoardPage.showCreate(inKey: str = "") -> None {
     dialogOpen = True;
 }
 
-impl BoardPage.openEdit(t: TaskView) -> None {
+impl BoardPage.openEdit(t: TaskRow) -> None {
     # The open card again keeps its edits; another card waits for them.
     if dialogOpen and editingId == t.id {
         switchTo = NO_SWITCH;
@@ -488,7 +488,7 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     showTask(t);
 }
 
-impl BoardPage.showTask(t: TaskView) -> None {
+impl BoardPage.showTask(t: TaskRow) -> None {
     editingId = t.id;
     fresh = {
         "title": t.title,
@@ -501,7 +501,7 @@ impl BoardPage.showTask(t: TaskView) -> None {
         "due_date": t.due_date,
         "start_date": t.start_date,
         "iteration": t.iteration_id or "none",
-        "notes": t.notes,
+        "notes": "",
         "issue": t.issue_link,
         "pr": t.pr_link,
         "reviewer": t.reviewer_id or "none",
@@ -571,6 +571,20 @@ impl BoardPage.sheetOpenChange(o: bool) -> None {
 impl BoardPage.replaceRow(view: TaskView) -> None {
     tasks = [view if t.id == view.id else t for t in tasks];
     olderDone = [view if t.id == view.id else t for t in olderDone];
+}
+
+# The sheet's GetTask hands the open task's notes here: into the form and
+# its opened copy alike, so loading them never reads as an unsaved edit.
+impl BoardPage.absorbDetails(view: TaskView) -> None {
+    if view.id != editingId {
+        return;
+    }
+    updated = {** form};
+    updated["notes"] = view.notes;
+    form = updated;
+    rebased = {** baseForm};
+    rebased["notes"] = view.notes;
+    baseForm = rebased;
 }
 
 impl BoardPage.openTaskById(tid: str) -> None {
@@ -767,7 +781,7 @@ impl BoardPage.mappedStatus(key: str) -> str {
 # Which column a task is drawn in. A task written before flow lines existed
 # (or whose step was deleted) has no step_id, so its status decides: it lands
 # in the first column of the matching kind.
-impl BoardPage.columnKeyOf(t: TaskView) -> str {
+impl BoardPage.columnKeyOf(t: TaskRow) -> str {
     keys = columnKeys();
     if t.step_id {
         for key in keys {
@@ -852,8 +866,8 @@ impl BoardPage.moveTo(
     }
     # The rendered order is the array order, so a positioned drop splices
     # the row beside its anchor; an append keeps the sort_order patch.
-    row: list[TaskView] = [];
-    rest: list[TaskView] = [];
+    row: list[TaskRow] = [];
+    rest: list[TaskRow] = [];
     for t in working {
         if t.id == taskId {
             t.status = landing;
@@ -867,7 +881,7 @@ impl BoardPage.moveTo(
         }
     }
     if positioned and len(row) > 0 {
-        spliced: list[TaskView] = [];
+        spliced: list[TaskRow] = [];
         for t in rest {
             if ahead and t.id == anchorId {
                 spliced.append(row[0]);
@@ -943,7 +957,7 @@ impl BoardPage.moveTo(
         }
         # `tasks` read after the await is the pre-call snapshot, which is
         # exactly the list the optimistic patch produced; swap the row in.
-        swapped: list[TaskView] = [];
+        swapped: list[TaskRow] = [];
         for t in tasks {
             if t.id == taskId {
                 swapped.append(landed[0]);
@@ -1045,7 +1059,7 @@ impl BoardPage.sheetMove(columnKey: str) -> None {
     }
 }
 
-impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
+impl BoardPage.arrowMove(t: TaskRow, columnKey: str) -> None {
     if columnKey {
         moveTo(t.id, columnKey);
     }

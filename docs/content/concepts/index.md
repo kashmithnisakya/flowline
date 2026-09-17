@@ -45,7 +45,7 @@ still has to be followed by hand.
 
 | Path | Holds |
 | --- | --- |
-| `models.jac` | Every `node`, `edge` and `obj` archetype, plus the graph helpers (`owned`, the `*_box` get-or-create helpers, the `*_of` readers, the pushed task readers such as `open_tasks` and `done_since`, the tally helpers, `hydrate_views`). Nothing else, and no Python imports. |
+| `models.jac` | Every `node`, `edge` and `obj` archetype, plus the graph helpers (`owned`, the `*_box` get-or-create helpers, the `*_of` readers, the pushed task readers such as `open_tasks` and `done_since`, the tally helpers, `hydrate_rows`). Nothing else, and no Python imports. |
 | `services/<section>/` | The API, one folder per section: `projects`, `roster`, `tasks`, `board`, `log`, `flowlines`, `iterations`, `insights`, `assistant`, `github`. `services/util.jac` holds shared server-only helpers such as `now_iso` and `page_bounds`. |
 | `constants.jac` | The vocabularies shared by client dropdowns and server validation: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_STATUS`, `FLOW_LINE_TEMPLATES` and friends. |
 | `main.jac` | The entry point. **Its import list is the router**: a walker missing from it returns 404. |
@@ -120,10 +120,15 @@ and `total`. Two performance rules shaped every list walker:
   (`tasks_by_issue`). The all-time totals come from tallies kept on every
   task write (`Project.task_total`, `done_total`, `seeded_done_total`,
   `Projects.categories`), and a task carries its `project_id` and
-  `assignee_ids` so a list row never hops an edge (`hydrate_views` reads
+  `assignee_ids` so a list row never hops an edge (`hydrate_rows` reads
   those fields and resolves names from the roster). Only the explicit
   history scopes of `ListTasks` (`older`, `done`, `all`) still load what
   they page over. Never build a list by calling `to_view()` in a loop.
+- **A list row carries what lists render.** Every list walker reports
+  `TaskRow`: the note's first line (`note_lead`) and the checklist counts
+  instead of the notes and the items, and none of the GitHub-only fields.
+  `TaskView` is a `TaskRow` plus those, for one task: `GetTask` and every
+  task write report it, and the task sheet loads it when it opens.
 
 Every ordering ends in the jid, so a row cannot move between pages from one
 request to the next.

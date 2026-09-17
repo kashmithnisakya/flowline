@@ -4,7 +4,7 @@ Native HTML5 drag with a custom MIME type; M opens the move menu, which on
 phones and touch screens also has a visible button. shrink-0 matters: the
 lane's list is a scrolling flex column that would otherwise squash cards."""
 
-import from ...models { TaskView, StepView }
+import from ...models { TaskRow, StepView }
 import from ...lib.dates { todayIso, dueTone, daysUntil, prettyDay }
 import from ..common.Avatar { AvatarStack }
 import from ..common.KindGlyph { KindGlyph }
@@ -42,6 +42,7 @@ def:pub cardDue(iso: str, status: str, today: str) -> str {
 
 # The reason a move recorded ("**2026-09-14:** needs a device"), or the
 # first line of the notes for a blocked card, without the markdown marks.
+# A list row carries that first line alone (`note_lead`).
 def:pub leadNote(notes: str, anyLine: bool) -> str {
     text = notes.strip() if notes else "";
     if not text {
@@ -63,9 +64,9 @@ def:pub leadNote(notes: str, anyLine: bool) -> str {
 }
 
 def:pub TaskCard(
-    task: TaskView,
-    onOpen: Callable[[TaskView], None],
-    onArrowMove: Callable[[TaskView, str], None],
+    task: TaskRow,
+    onOpen: Callable[[TaskRow], None],
+    onArrowMove: Callable[[TaskRow, str], None],
     color: str = "",
     doneKey: str = "",
     # A drop on the card's upper half inserts before it, lower half after.
@@ -118,21 +119,16 @@ def:pub TaskCard(
     if tone == "overdue" {
         late = 0 - daysUntil(task.due_date, today);
         alert = str(late) + (" day overdue" if late == 1 else " days overdue");
-        why = leadNote(task.notes, False);
+        why = leadNote(task.note_lead, False);
         if why {
             alert = alert + " · " + why;
         }
     } elif blocked {
-        alert = leadNote(task.notes, True) or "Blocked";
+        alert = leadNote(task.note_lead, True) or "Blocked";
     }
     num = ghNumber(task);
-    clTotal = len(task.checklist);
-    clDone = 0;
-    for item in task.checklist {
-        if item["done"] {
-            clDone = clDone + 1;
-        }
-    }
+    clTotal = task.checklist_total;
+    clDone = task.checklist_done;
 
     return
         <div

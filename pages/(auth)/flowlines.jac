@@ -6,6 +6,7 @@ Validation is advisory and never blocks saving. Keep notes out of JSX."""
 import from ...models {
     Project,
     StepView,
+    TaskRow,
     TaskView,
     MemberView,
     RoleView,
@@ -170,7 +171,7 @@ def:pub FlowLinePage -> JsxPage {
         dragId: str = "",
         # Clicking a step outside edit mode opens its work.
         peekId: str = "",
-        peekTasks: list[TaskView] = [],
+        peekTasks: list[TaskRow] = [],
         peekLoading: bool = False,
         peekTotal: int = 0,
         peekMore: bool = False,
@@ -344,6 +345,7 @@ def:pub FlowLinePage -> JsxPage {
     def revealStep(stepId: str) -> None;
     def openTask(tid: str) -> None;
     def replacePeekRow(view: TaskView) -> None;
+    def absorbDetails(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
     async def saveTask -> None;
@@ -475,12 +477,6 @@ def:pub FlowLinePage -> JsxPage {
         colLabels.append(st.name);
         if st.kind in HANDOFF_KINDS {
             handoffKeys.append(st.id);
-        }
-    }
-    taskChecklist: list[dict[str, any]] = [];
-    for t in peekTasks {
-        if t.id == editTaskId {
-            taskChecklist = t.checklist;
         }
     }
     taskCategories: list[str] = [];
@@ -1529,7 +1525,7 @@ def:pub FlowLinePage -> JsxPage {
                 steps={steps}
                 roles={roleRows}
                 taskId={editTaskId}
-                checklist={taskChecklist}
+                onLoaded={absorbDetails}
                 onChecklist={replacePeekRow}
                 iterations={iterations}
             />

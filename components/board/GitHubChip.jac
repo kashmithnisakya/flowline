@@ -2,7 +2,7 @@
 merged PR earns. Auto-done repos move the card server-side on sync instead,
 from the same statuses (MERGE_SUGGEST_STATUSES)."""
 
-import from ...models { TaskView }
+import from ...models { TaskRow }
 import from ...constants { MERGE_SUGGEST_STATUSES }
 
 # The trailing number of a GitHub issue or pull URL, 0 for anything else.
@@ -28,7 +28,7 @@ def linkNumber(url: str) -> int {
 }
 
 # The number a card shows: the synced issue, else its PR, else a pasted link.
-def:pub ghNumber(task: TaskView) -> int {
+def:pub ghNumber(task: TaskRow) -> int {
     if task.gh_issue_number > 0 {
         return task.gh_issue_number;
     }
@@ -39,7 +39,7 @@ def:pub ghNumber(task: TaskView) -> int {
     return fromIssue if fromIssue > 0 else linkNumber(task.pr_link);
 }
 
-def:pub ghHref(task: TaskView) -> str {
+def:pub ghHref(task: TaskRow) -> str {
     if task.gh_issue_number > 0 {
         return task.issue_link;
     }
@@ -49,11 +49,11 @@ def:pub ghHref(task: TaskView) -> str {
     return task.issue_link;
 }
 
-def:pub suggestsDone(task: TaskView) -> bool {
+def:pub suggestsDone(task: TaskRow) -> bool {
     return task.pr_state == "merged" and task.status in MERGE_SUGGEST_STATUSES;
 }
 
-def:pub GitHubChip(task: TaskView, onMarkDone: Callable[[str], None]) -> JsxElement {
+def:pub GitHubChip(task: TaskRow, onMarkDone: Callable[[str], None]) -> JsxElement {
     return
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>PR merged</span>

@@ -2,7 +2,7 @@
 bottom sheet on phones). Rows are buttons: clicking one opens the board's task
 dialog, so the panel is a way into the work rather than a read-only list."""
 
-import from ...models { StepView, TaskView }
+import from ...models { StepView, TaskRow }
 import from .kinds { KIND_LABEL, KIND_TONE, colorKey }
 import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
 import from ..common.KindGlyph { KindGlyph }
@@ -19,7 +19,7 @@ glob DUE_TINT: dict[str, str] = {
 
 def:pub StepTasksPanel(
     step: StepView,
-    tasks: list[TaskView],
+    tasks: list[TaskRow],
     loading: bool,
     scope: str,
     className: str = "",

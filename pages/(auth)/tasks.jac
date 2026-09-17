@@ -7,6 +7,7 @@ import from "react" { useEffect }
 import from ...models {
     Project,
     MemberView,
+    TaskRow,
     TaskView,
     StepView,
     RoleView,
@@ -133,7 +134,7 @@ def PagerArrow(back: bool) -> JsxElement {
 }
 
 def:pub TasksPage -> JsxPage {
-    has rows: list[TaskView] = [],
+    has rows: list[TaskRow] = [],
         members: list[MemberView] = [],
         projects: list[Project] = [],
         # The view starts from the URL; writeUrl mirrors every change back.
@@ -236,8 +237,8 @@ def:pub TasksPage -> JsxPage {
 
     async def loadShared -> None;
     async def loadTasks -> None;
-    async def gatherPool(seq: int) -> list[TaskView];
-    def sortPool(pool: list[TaskView]) -> list[TaskView];
+    async def gatherPool(seq: int) -> list[TaskRow];
+    def sortPool(pool: list[TaskRow]) -> list[TaskRow];
     def filtered -> bool;
     def forget -> None;
     def sortBy(field: str) -> None;
@@ -262,12 +263,13 @@ def:pub TasksPage -> JsxPage {
     def measureHeader -> None;
     def columnKeys -> list[str];
     def columnKind(key: str) -> str;
-    def columnKeyOf(t: TaskView, keys: list[str]) -> str;
+    def columnKeyOf(t: TaskRow, keys: list[str]) -> str;
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
     def openCreate -> None;
     def dialogOpenChange(o: bool) -> None;
     def replaceRow(view: TaskView) -> None;
+    def absorbDetails(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
     async def saveTask -> None;
@@ -311,13 +313,11 @@ def:pub TasksPage -> JsxPage {
             handoffKeys.append(key);
         }
     }
-    taskChecklist: list[dict[str, any]] = [];
     taskCreated: str = "";
     taskUpdated: str = "";
     taskPrState: str = "";
     for t in rows {
         if t.id == editTaskId and not creating {
-            taskChecklist = t.checklist;
             taskCreated = t.created_at;
             taskUpdated = t.updated_at;
             taskPrState = t.pr_state;
@@ -536,7 +536,7 @@ def:pub TasksPage -> JsxPage {
                 steps={steps}
                 roles={roleRows}
                 taskId={"" if creating else editTaskId}
-                checklist={taskChecklist}
+                onLoaded={absorbDetails}
                 onChecklist={replaceRow}
                 iterations={iterations}
                 createdAt={taskCreated}
