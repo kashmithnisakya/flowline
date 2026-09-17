@@ -11,6 +11,7 @@ import from ...components.projects.ProjectTable { ProjectTable }
 import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
+import from ..common.Reveal { Reveal }
 import from .SectionHeader { SectionHeader }
 import from .ConfirmDialog { ConfirmDialog }
 import from .icons { IconPlus }
@@ -100,6 +101,20 @@ def:pub ProjectsSection(
             + " still land in it.";
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <ProjectTable
+                projects={[]}
+                repos={[]}
+                members={[]}
+                openCounts={{}}
+                countsReady={False}
+                onEdit={openEdit}
+                onArchive={askArchive}
+                placeholder={3}
+            />;
+    }
+
     return
         <div className="flex flex-col gap-4">
             <SectionHeader title="Projects" count={"" if loading else str(len(active))}>
@@ -108,20 +123,8 @@ def:pub ProjectsSection(
                     New project
                 </Button>
             </SectionHeader>
-            {if loading {
-                <ProjectTable
-                    key="sk"
-                    projects={[]}
-                    repos={[]}
-                    members={[]}
-                    openCounts={{}}
-                    countsReady={False}
-                    onEdit={openEdit}
-                    onArchive={askArchive}
-                    placeholder={3}
-                />
-            } else {
-                <div key="rows" className="animate-in fade-in duration-150">
+            <Reveal ready={not loading} frame={loadFrame()}>
+                <div key="rows">
                     <ProjectTable
                         projects={active}
                         repos={repos}
@@ -133,7 +136,7 @@ def:pub ProjectsSection(
                         onCreate={openCreate}
                     />
                 </div>
-            } }
+            </Reveal>
             <ProjectDialog
                 open={dialogOpen}
                 editing={bool(editingId)}

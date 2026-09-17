@@ -38,6 +38,7 @@ import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.board.RouteStrip { RouteStrip }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
@@ -706,6 +707,104 @@ def:pub BoardPage -> JsxPage {
         laneStyle["WebkitMaskImage"] = "linear-gradient(to right, #000 calc(100% - 56px), transparent)";
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <div className="flex min-w-0 flex-col gap-3" aria-busy="true">
+                <nav
+                    aria-label="Steps"
+                    className="hidden min-w-0 items-center gap-3 md:flex"
+                >
+                    <div
+                        className="flex min-w-0 flex-1 items-center overflow-hidden py-0.5"
+                    >
+                        {for i in range(laneGuess) {
+                            <div
+                                key={"rs" + str(i)}
+                                className="flex shrink-0 items-center"
+                            >
+                                {if i > 0 {
+                                    <span
+                                        key="w"
+                                        aria-hidden="true"
+                                        className="h-0.5 w-[18px] shrink-0 bg-wire"
+                                    />
+                                }}
+                                <Skeleton
+                                    className="h-7 rounded-md"
+                                    style={{"width": str(NODE_WIDTHS[i % 7]) + "px"}}
+                                />
+                            </div>
+                        }}
+                    </div>
+                </nav>
+                <FilterBar
+                    projects={activeProjects}
+                    members={activeMembers}
+                    project={fProject}
+                    assignee={fAssignee}
+                    category={fCategory}
+                    hideDone={hideDone}
+                    onProject={setProjectFilter}
+                    onAssignee={setAssigneeFilter}
+                    onCategory={setCategoryFilter}
+                    onHideDone={lambda { hideDone = not hideDone; }}
+                    query={boardQuery}
+                    onQuery={lambda (v: str) { boardQuery = v; }}
+                    onClear={clearFilters}
+                    busy={True}
+                />
+                <div
+                    ref={lanesRef if loading else None}
+                    data-board-lanes="true"
+                    className={LANE_GRID}
+                    style={laneStyle}
+                >
+                    {for i in range(laneGuess) {
+                        <section
+                            key={"sk" + str(i)}
+                            data-lane={"sk" + str(i)}
+                            className="flex min-w-0 snap-start flex-col rounded-md md:h-full"
+                        >
+                            <div
+                                className="mx-0.5 flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-border pl-0.5"
+                            >
+                                <Skeleton className="size-[13px] rounded-full"/>
+                                <Skeleton
+                                    className={"h-3 " + ("w-24" if i % 2 else "w-16")}
+                                />
+                                <Skeleton className="h-3 w-3"/>
+                            </div>
+                            <div
+                                className="-mx-1 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-1.5 pt-2 pb-3"
+                            >
+                                {for j in range(2 + (i % 2)) {
+                                    <div
+                                        key={"c" + str(j)}
+                                        className="flex shrink-0 flex-col gap-1 rounded-md border bg-card px-2.5 pt-2 pb-2"
+                                    >
+                                        <div className="flex h-[18px] items-center">
+                                            <Skeleton
+                                                className={"h-3 "
+                                                    + CARD_WIDTHS[(i + j) % 4]}
+                                            />
+                                        </div>
+                                        <div
+                                            className="flex min-h-6 items-center gap-1.5"
+                                        >
+                                            <Skeleton className="h-2.5 w-20"/>
+                                            <Skeleton
+                                                className="ml-auto size-6 rounded-full"
+                                            />
+                                        </div>
+                                    </div>
+                                }}
+                            </div>
+                        </section>
+                    }}
+                </div>
+            </div>;
+    }
+
     return
         <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-h-9 flex-wrap items-center gap-3">
@@ -794,276 +893,181 @@ def:pub BoardPage -> JsxPage {
                     retrying={retrying}
                 />
             }}
-            {if loading {
-                <div
-                    key="skeletons"
-                    className="flex min-w-0 flex-col gap-3"
-                    aria-busy="true"
-                >
-                    <nav
-                        aria-label="Steps"
-                        className="hidden min-w-0 items-center gap-3 md:flex"
-                    >
-                        <div
-                            className="flex min-w-0 flex-1 items-center overflow-hidden py-0.5"
-                        >
-                            {for i in range(laneGuess) {
-                                <div
-                                    key={"rs" + str(i)}
-                                    className="flex shrink-0 items-center"
-                                >
-                                    {if i > 0 {
-                                        <span
-                                            key="w"
-                                            aria-hidden="true"
-                                            className="h-0.5 w-[18px] shrink-0 bg-wire"
-                                        />
-                                    }}
-                                    <Skeleton
-                                        className="h-7 rounded-md"
-                                        style={{
-                                            "width": str(NODE_WIDTHS[i % 7]) + "px"
-                                        }}
-                                    />
-                                </div>
-                            }}
-                        </div>
-                    </nav>
-                    <FilterBar
-                        projects={activeProjects}
-                        members={activeMembers}
-                        project={fProject}
-                        assignee={fAssignee}
-                        category={fCategory}
-                        hideDone={hideDone}
-                        onProject={setProjectFilter}
-                        onAssignee={setAssigneeFilter}
-                        onCategory={setCategoryFilter}
-                        onHideDone={lambda { hideDone = not hideDone; }}
-                        query={boardQuery}
-                        onQuery={lambda (v: str) { boardQuery = v; }}
-                        onClear={clearFilters}
-                        busy={True}
+            <Reveal ready={not loading} frame={loadFrame()} className="min-w-0">
+                {if nothingLoaded {
+                    <LoadFailed
+                        key="failed"
+                        title="Could not load the board"
+                        onRetry={retryLoad}
+                        retrying={retrying}
                     />
-                    <div
-                        ref={lanesRef}
-                        data-board-lanes="true"
-                        className={LANE_GRID}
-                        style={laneStyle}
-                    >
-                        {for i in range(laneGuess) {
-                            <section
-                                key={"sk" + str(i)}
-                                data-lane={"sk" + str(i)}
-                                className="flex min-w-0 snap-start flex-col rounded-md md:h-full"
-                            >
-                                <div
-                                    className="mx-0.5 flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-border pl-0.5"
+                } elif noFlowLine {
+                    <div key="noflowline" className="flex min-w-0 flex-col gap-6 pt-2">
+                        <div className="flex max-w-lg flex-col items-start gap-3">
+                            <h2 className="section-title text-lg">
+                                Your board follows your flow line
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                Each column here is a step your team moves work through, in the order you draw them. Start from a template, or draw the steps yourself.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                    onClick={lambda { window.location.href = "/flowlines"; }}
                                 >
-                                    <Skeleton className="size-[13px] rounded-full"/>
-                                    <Skeleton
-                                        className={"h-3 "
-                                            + ("w-24" if i % 2 else "w-16")}
-                                    />
-                                    <Skeleton className="h-3 w-3"/>
-                                </div>
-                                <div
-                                    className="-mx-1 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-1.5 pt-2 pb-3"
+                                    Pick a template
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    onClick={lambda { window.location.href = "/flowlines"; }}
                                 >
-                                    {for j in range(2 + (i % 2)) {
+                                    Draw the steps yourself
+                                </Button>
+                            </div>
+                        </div>
+                        <div
+                            aria-hidden="true"
+                            className="grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(4,minmax(0,252px))]"
+                        >
+                            {for i in [0, 1, 2, 3] {
+                                <div
+                                    key={"ghost" + str(i)}
+                                    className={"flex flex-col gap-1.5"
+                                        + (" max-md:hidden" if i > 1 else "")}
+                                >
+                                    <div
+                                        className="flex h-9 items-center border-b-2 border-border px-0.5"
+                                    >
+                                        <span
+                                            className="h-2.5 w-20 rounded-xs bg-muted"
+                                        />
+                                    </div>
+                                    {for j in range(3 - (i % 2)) {
                                         <div
-                                            key={"c" + str(j)}
-                                            className="flex shrink-0 flex-col gap-1 rounded-md border bg-card px-2.5 pt-2 pb-2"
+                                            key={"g" + str(i) + "-" + str(j)}
+                                            className="flex h-[62px] flex-col justify-center gap-2 rounded-md border border-border bg-card/60 px-2.5"
                                         >
-                                            <div className="flex h-[18px] items-center">
-                                                <Skeleton
-                                                    className={"h-3 "
-                                                        + CARD_WIDTHS[(i + j) % 4]}
-                                                />
-                                            </div>
-                                            <div
-                                                className="flex min-h-6 items-center gap-1.5"
-                                            >
-                                                <Skeleton className="h-2.5 w-20"/>
-                                                <Skeleton
-                                                    className="ml-auto size-6 rounded-full"
-                                                />
-                                            </div>
+                                            <span
+                                                className="h-2.5 w-4/5 rounded-xs bg-muted"
+                                            />
+                                            <span
+                                                className="h-2 w-1/2 rounded-xs bg-muted"
+                                            />
                                         </div>
                                     }}
                                 </div>
-                            </section>
-                        }}
-                    </div>
-                </div>
-            } elif nothingLoaded {
-                <LoadFailed
-                    key="failed"
-                    title="Could not load the board"
-                    onRetry={retryLoad}
-                    retrying={retrying}
-                />
-            } elif noFlowLine {
-                <div key="noflowline" className="flex min-w-0 flex-col gap-6 pt-2">
-                    <div className="flex max-w-lg flex-col items-start gap-3">
-                        <h2 className="section-title text-lg">
-                            Your board follows your flow line
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Each column here is a step your team moves work through, in the order you draw them. Start from a template, or draw the steps yourself.
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <Button
-                                onClick={lambda { window.location.href = "/flowlines"; }}
-                            >
-                                Pick a template
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={lambda { window.location.href = "/flowlines"; }}
-                            >
-                                Draw the steps yourself
-                            </Button>
+                            }}
                         </div>
                     </div>
-                    <div
-                        aria-hidden="true"
-                        className="grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(4,minmax(0,252px))]"
-                    >
-                        {for i in [0, 1, 2, 3] {
-                            <div
-                                key={"ghost" + str(i)}
-                                className={"flex flex-col gap-1.5"
-                                    + (" max-md:hidden" if i > 1 else "")}
-                            >
-                                <div
-                                    className="flex h-9 items-center border-b-2 border-border px-0.5"
-                                >
-                                    <span className="h-2.5 w-20 rounded-xs bg-muted"/>
-                                </div>
-                                {for j in range(3 - (i % 2)) {
-                                    <div
-                                        key={"g" + str(i) + "-" + str(j)}
-                                        className="flex h-[62px] flex-col justify-center gap-2 rounded-md border border-border bg-card/60 px-2.5"
-                                    >
-                                        <span
-                                            className="h-2.5 w-4/5 rounded-xs bg-muted"
-                                        />
-                                        <span
-                                            className="h-2 w-1/2 rounded-xs bg-muted"
-                                        />
-                                    </div>
-                                }}
-                            </div>
-                        }}
-                    </div>
-                </div>
-            } else {
-                <div
-                    key="board"
-                    className="flex min-w-0 flex-col gap-3 animate-in fade-in duration-150"
-                >
-                    <div className="hidden md:block">
-                        <RouteStrip
-                            keys={colKeys}
-                            labels={colLabels}
-                            colors={colColors}
-                            counts={laneCounts}
-                            inView={inView}
-                            active={activeLane}
-                            hiddenAfter={hiddenAfter}
-                            onPick={scrollToLane}
-                            onMore={scrollToHidden}
-                        />
-                    </div>
-                    <FilterBar
-                        projects={activeProjects}
-                        members={activeMembers}
-                        project={fProject}
-                        assignee={fAssignee}
-                        category={fCategory}
-                        hideDone={hideDone}
-                        onProject={setProjectFilter}
-                        onAssignee={setAssigneeFilter}
-                        onCategory={setCategoryFilter}
-                        onHideDone={lambda { hideDone = not hideDone; }}
-                        categories={allCategories}
-                        tags={allTags}
-                        tag={fTag}
-                        estimate={fEstimate}
-                        onTag={lambda (v: str) { fTag = v; }}
-                        onEstimate={lambda (v: str) { fEstimate = v; }}
-                        iterations={iterations}
-                        iteration={fIteration}
-                        onIteration={lambda (v: str) { fIteration = v; }}
-                        priority={fPriority}
-                        onPriority={lambda (v: str) { fPriority = v; }}
-                        query={boardQuery}
-                        onQuery={lambda (v: str) { boardQuery = v; }}
-                        onClear={clearFilters}
-                        shownCount={shownCount}
-                    />
-                    <div className="md:hidden">
-                        <RouteStrip
-                            tabs={True}
-                            keys={colKeys}
-                            labels={colLabels}
-                            colors={colColors}
-                            counts={laneCounts}
-                            inView={inView}
-                            active={activeLane}
-                            hiddenAfter={0}
-                            onPick={scrollToLane}
-                            onMore={scrollToHidden}
-                        />
-                    </div>
-                    <div
-                        ref={lanesRef}
-                        data-board-lanes="true"
-                        onScroll={lambda { scheduleMeasure(); }}
-                        onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
-                        className={LANE_GRID}
-                        style={laneStyle}
-                    >
-                        {for (ci, key) in enumerate(colKeys) {
-                            <KanbanColumn
-                                key={key}
-                                columnKey={key}
-                                label={colLabels[ci]}
-                                kind={columnKind(key)}
-                                color={columnColor(key)}
-                                tasks={laneRows[ci]}
-                                onOpen={openEdit}
-                                onArrowMove={arrowMove}
-                                onDropTask={moveTo}
-                                onDropBeside={moveBeside}
-                                doneKey={doneKey}
-                                extraCount={olderTotal
-                                    if key == doneKey and not hideDone
-                                    else 0}
-                                showingAll={showAllDone
-                                    if key == doneKey and not hideDone
-                                    else False}
-                                onToggleOlder={toggleOlder}
-                                moreOlder={olderMore if key == doneKey else False}
-                                loadingOlder={loadingOlder if key == doneKey else False}
-                                olderShown={len(olderShown) if key == doneKey else 0}
-                                onMoreOlder={lambda { loadOlder(
-                                    olderPage + 1, fProject, fAssignee, fCategory
-                                ); }}
-                                onAddTask={openCreate}
-                                overdueCount={laneOverdue[ci]}
+                } else {
+                    <div key="board" className="flex min-w-0 flex-col gap-3">
+                        <div className="hidden md:block">
+                            <RouteStrip
                                 keys={colKeys}
                                 labels={colLabels}
                                 colors={colColors}
-                                steps={steps}
-                                selectedId={selectedId}
-                                doneHidden={hideDone and key == doneKey}
+                                counts={laneCounts}
+                                inView={inView}
+                                active={activeLane}
+                                hiddenAfter={hiddenAfter}
+                                onPick={scrollToLane}
+                                onMore={scrollToHidden}
                             />
-                        }}
+                        </div>
+                        <FilterBar
+                            projects={activeProjects}
+                            members={activeMembers}
+                            project={fProject}
+                            assignee={fAssignee}
+                            category={fCategory}
+                            hideDone={hideDone}
+                            onProject={setProjectFilter}
+                            onAssignee={setAssigneeFilter}
+                            onCategory={setCategoryFilter}
+                            onHideDone={lambda { hideDone = not hideDone; }}
+                            categories={allCategories}
+                            tags={allTags}
+                            tag={fTag}
+                            estimate={fEstimate}
+                            onTag={lambda (v: str) { fTag = v; }}
+                            onEstimate={lambda (v: str) { fEstimate = v; }}
+                            iterations={iterations}
+                            iteration={fIteration}
+                            onIteration={lambda (v: str) { fIteration = v; }}
+                            priority={fPriority}
+                            onPriority={lambda (v: str) { fPriority = v; }}
+                            query={boardQuery}
+                            onQuery={lambda (v: str) { boardQuery = v; }}
+                            onClear={clearFilters}
+                            shownCount={shownCount}
+                        />
+                        <div className="md:hidden">
+                            <RouteStrip
+                                tabs={True}
+                                keys={colKeys}
+                                labels={colLabels}
+                                colors={colColors}
+                                counts={laneCounts}
+                                inView={inView}
+                                active={activeLane}
+                                hiddenAfter={0}
+                                onPick={scrollToLane}
+                                onMore={scrollToHidden}
+                            />
+                        </div>
+                        <div
+                            ref={lanesRef}
+                            data-board-lanes="true"
+                            onScroll={lambda { scheduleMeasure(); }}
+                            onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(
+                                e
+                            ); }}
+                            className={LANE_GRID}
+                            style={laneStyle}
+                        >
+                            {for (ci, key) in enumerate(colKeys) {
+                                <KanbanColumn
+                                    key={key}
+                                    columnKey={key}
+                                    label={colLabels[ci]}
+                                    kind={columnKind(key)}
+                                    color={columnColor(key)}
+                                    tasks={laneRows[ci]}
+                                    onOpen={openEdit}
+                                    onArrowMove={arrowMove}
+                                    onDropTask={moveTo}
+                                    onDropBeside={moveBeside}
+                                    doneKey={doneKey}
+                                    extraCount={olderTotal
+                                        if key == doneKey and not hideDone
+                                        else 0}
+                                    showingAll={showAllDone
+                                        if key == doneKey and not hideDone
+                                        else False}
+                                    onToggleOlder={toggleOlder}
+                                    moreOlder={olderMore if key == doneKey else False}
+                                    loadingOlder={loadingOlder
+                                        if key == doneKey
+                                        else False}
+                                    olderShown={len(olderShown)
+                                        if key == doneKey
+                                        else 0}
+                                    onMoreOlder={lambda { loadOlder(
+                                        olderPage + 1, fProject, fAssignee, fCategory
+                                    ); }}
+                                    onAddTask={openCreate}
+                                    overdueCount={laneOverdue[ci]}
+                                    keys={colKeys}
+                                    labels={colLabels}
+                                    colors={colColors}
+                                    steps={steps}
+                                    selectedId={selectedId}
+                                    doneHidden={hideDone and key == doneKey}
+                                />
+                            }}
+                        </div>
                     </div>
-                </div>
-            }   }
+                }  }
+            </Reveal>
             <TaskDialog
                 open={dialogOpen}
                 editing={bool(editingId)}

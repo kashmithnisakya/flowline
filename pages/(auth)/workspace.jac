@@ -31,7 +31,7 @@ import from ...components.workspace.WorkspaceRail { WorkspaceRail }
 import from ...components.workspace.icons { IconPlus, IconSearch }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
-import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
@@ -196,6 +196,26 @@ def:pub WorkspacePage -> JsxPage {
         );
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <MemberTable
+                members={[]}
+                projects={[]}
+                roleOptions={[]}
+                onEdit={openEdit}
+                onArchive={askArchive}
+                onRoles={lambda (memberId: str, next: list[str]) { applyRoles(
+                    memberId, next, True
+                ); }}
+                onProjects={lambda (memberId: str, next: list[str]) { applyProjects(
+                    memberId, next, True
+                ); }}
+                onManageRoles={lambda { selectTab("roles"); }}
+                onManageProjects={lambda { selectTab("projects"); }}
+                placeholder={4}
+            />;
+    }
+
     return
         <div className="w-full">
             <div
@@ -244,31 +264,8 @@ def:pub WorkspacePage -> JsxPage {
                                         Add person
                                     </Button>
                                 </SectionHeader>
-                                {if loading {
-                                    <MemberTable
-                                        key="sk"
-                                        members={[]}
-                                        projects={[]}
-                                        roleOptions={[]}
-                                        onEdit={openEdit}
-                                        onArchive={askArchive}
-                                        onRoles={lambda (
-                                            memberId: str, next: list[str]
-                                        ) { applyRoles(memberId, next, True); }}
-                                        onProjects={lambda (
-                                            memberId: str, next: list[str]
-                                        ) { applyProjects(memberId, next, True); }}
-                                        onManageRoles={lambda { selectTab("roles"); }}
-                                        onManageProjects={lambda { selectTab(
-                                            "projects"
-                                        ); }}
-                                        placeholder={4}
-                                    />
-                                } else {
-                                    <div
-                                        key="table"
-                                        className="animate-in fade-in duration-150"
-                                    >
+                                <Reveal ready={not loading} frame={loadFrame()}>
+                                    <div key="table">
                                         <MemberTable
                                             members={shown}
                                             projects={activeProjects}
@@ -292,7 +289,7 @@ def:pub WorkspacePage -> JsxPage {
                                             ); }}
                                         />
                                     </div>
-                                } }
+                                </Reveal>
                             </div>
                         } elif tab == "projects" {
                             <ProjectsSection

@@ -24,6 +24,7 @@ import from ...components.roadmap.IterationsDialog { IterationsDialog }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...lib.dates { todayIso, prettyDay }
 import from ...lib.utils { fmtEstimate, parseEstimate }
@@ -215,6 +216,32 @@ def:pub RoadmapPage -> JsxPage {
         }
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <div key="sk" aria-busy="true">
+                <RoadmapTimeline
+                    fromDate={windowStart}
+                    weeks={WEEKS}
+                    today={today}
+                    iterations={[]}
+                    rows={[]}
+                    starts={[]}
+                    ends={[]}
+                    steps={[]}
+                    onOpen={openTask}
+                    placeholder={8}
+                />
+                <div
+                    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
+                >
+                    <Skeleton className="h-3 w-16"/>
+                    <span className="text-subtle sm:ml-auto">
+                        A bar runs from start to due date, or across its iteration.
+                    </span>
+                </div>
+            </div>;
+    }
+
     return
         <div className="flex min-w-0 flex-col gap-4">
             <h1 className="page-title">Roadmap</h1>
@@ -234,118 +261,93 @@ def:pub RoadmapPage -> JsxPage {
                     onIterations={lambda { iterationsOpen = True; }}
                     busy={loading and bool(data)}
                 />
-                {if loading and not data {
-                    <div key="sk" aria-busy="true">
-                        <RoadmapTimeline
-                            fromDate={windowStart}
-                            weeks={WEEKS}
-                            today={today}
-                            iterations={[]}
-                            rows={[]}
-                            starts={[]}
-                            ends={[]}
-                            steps={[]}
-                            onOpen={openTask}
-                            placeholder={8}
-                        />
-                        <div
-                            className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
-                        >
-                            <Skeleton className="h-3 w-16"/>
-                            <span className="text-subtle sm:ml-auto">
-                                A bar runs from start to due date, or across its iteration.
-                            </span>
+                <Reveal ready={bool(data) or not loading} frame={loadFrame()}>
+                    {if failed and not data {
+                        <div key="failed" className="p-4">
+                            <LoadFailed
+                                title="Could not load the roadmap"
+                                onRetry={loadRoadmap}
+                            />
                         </div>
-                    </div>
-                } elif failed and not data {
-                    <div key="failed" className="p-4">
-                        <LoadFailed
-                            title="Could not load the roadmap"
-                            onRetry={loadRoadmap}
-                        />
-                    </div>
-                } elif len(rows) == 0 {
-                    <div
-                        key="empty"
-                        className="flex flex-col items-center gap-4 px-6 py-16 text-center animate-in fade-in duration-150"
-                        aria-busy={loading}
-                    >
-                        <p className="max-w-md text-sm text-muted-foreground">
-                            {emptyText}
-                        </p>
-                        {if emptyAction == "clear" {
-                            <Button
-                                key="clear"
-                                variant="outline"
-                                size="sm"
-                                onClick={lambda { clearFilters(); }}
-                            >
-                                Clear filters
-                            </Button>
-                        } elif emptyAction == "today" {
-                            <Button
-                                key="today"
-                                variant="outline"
-                                size="sm"
-                                onClick={lambda { goToday(); }}
-                            >
-                                Back to this week
-                            </Button>
-                        } elif emptyAction == "tasks" {
-                            <Button key="tasks" size="sm" asChild={True}>
-                                <Link to="/tasks">Set dates in Tasks</Link>
-                            </Button>
-                        } else {
-                            <Button key="new" size="sm" asChild={True}>
-                                <Link to="/board?new=1">New task</Link>
-                            </Button>
-                        }   }
-                    </div>
-                } else {
-                    <div
-                        key="body"
-                        className="animate-in fade-in duration-150"
-                        aria-busy={loading}
-                    >
-                        <RoadmapTimeline
-                            fromDate={windowStart}
-                            weeks={WEEKS}
-                            today={today}
-                            iterations={data["iterations"]}
-                            rows={rows}
-                            starts={starts}
-                            ends={ends}
-                            steps={steps}
-                            onOpen={openTask}
-                        />
+                    } elif len(rows) == 0 {
                         <div
-                            className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
+                            key="empty"
+                            className="flex flex-col items-center gap-4 px-6 py-16 text-center"
+                            aria-busy={loading}
                         >
-                            <span className="num">{countLabel}</span>
-                            {if unscheduled > 0 {
-                                <span key="unscheduled">
-                                    {unscheduledLabel + ". "}
-                                    <Link
-                                        to="/tasks"
-                                        className="font-medium text-foreground underline underline-offset-4 hover:decoration-2"
-                                    >
-                                        See them in Tasks
-                                    </Link>
-                                </span>
-                            }}
-                            {if data["truncated"] {
-                                <span key="truncated">
-                                    {"Showing the first "
-                                        + str(len(allRows))
-                                        + " scheduled tasks. Narrow it by project."}
-                                </span>
-                            }}
-                            <span className="text-subtle sm:ml-auto">
-                                A bar runs from start to due date, or across its iteration.
-                            </span>
+                            <p className="max-w-md text-sm text-muted-foreground">
+                                {emptyText}
+                            </p>
+                            {if emptyAction == "clear" {
+                                <Button
+                                    key="clear"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={lambda { clearFilters(); }}
+                                >
+                                    Clear filters
+                                </Button>
+                            } elif emptyAction == "today" {
+                                <Button
+                                    key="today"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={lambda { goToday(); }}
+                                >
+                                    Back to this week
+                                </Button>
+                            } elif emptyAction == "tasks" {
+                                <Button key="tasks" size="sm" asChild={True}>
+                                    <Link to="/tasks">Set dates in Tasks</Link>
+                                </Button>
+                            } else {
+                                <Button key="new" size="sm" asChild={True}>
+                                    <Link to="/board?new=1">New task</Link>
+                                </Button>
+                            }   }
                         </div>
-                    </div>
-                }   }
+                    } else {
+                        <div key="body" aria-busy={loading}>
+                            <RoadmapTimeline
+                                fromDate={windowStart}
+                                weeks={WEEKS}
+                                today={today}
+                                iterations={data["iterations"]}
+                                rows={rows}
+                                starts={starts}
+                                ends={ends}
+                                steps={steps}
+                                onOpen={openTask}
+                            />
+                            <div
+                                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"
+                            >
+                                <span className="num">{countLabel}</span>
+                                {if unscheduled > 0 {
+                                    <span key="unscheduled">
+                                        {unscheduledLabel + ". "}
+                                        <Link
+                                            to="/tasks"
+                                            className="font-medium text-foreground underline underline-offset-4 hover:decoration-2"
+                                        >
+                                            See them in Tasks
+                                        </Link>
+                                    </span>
+                                }}
+                                {if data["truncated"] {
+                                    <span key="truncated">
+                                        {"Showing the first "
+                                            + str(len(allRows))
+                                            + " scheduled tasks. Narrow it by project."}
+                                    </span>
+                                }}
+                                <span className="text-subtle sm:ml-auto">
+                                    A bar runs from start to due date, or across its iteration.
+                                </span>
+                            </div>
+                        </div>
+                    }  }
+                </Reveal>
             </div>
             <IterationsDialog
                 open={iterationsOpen}

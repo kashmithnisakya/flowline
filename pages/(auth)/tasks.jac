@@ -25,6 +25,7 @@ import from ...lib.utils { fmtEstimate, parseEstimate }
 import from "sonner" { toast }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.Busy { Busy }
 
@@ -366,6 +367,20 @@ def:pub TasksPage -> JsxPage {
         emptyLabel = "Nothing is blocked or overdue.";
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <TaskTable
+                rows={[]}
+                placeholder={10}
+                sort={sort}
+                sortDir={sortDir}
+                onSort={sortBy}
+                onOpen={openTask}
+                stepHeader={stepWord}
+                stickyTop={stickyTop}
+            />;
+    }
+
     return
         <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -413,45 +428,38 @@ def:pub TasksPage -> JsxPage {
                     countLabel={countLabel}
                     stepLabel={stepWord}
                 />
-                {if waiting {
-                    <TaskTable
-                        key="sk"
-                        rows={[]}
-                        placeholder={10}
-                        sort={sort}
-                        sortDir={sortDir}
-                        onSort={sortBy}
-                        onOpen={openTask}
-                        stepHeader={stepWord}
-                        stickyTop={stickyTop}
-                    />
-                } elif failed {
-                    <div key="failed" className="p-4">
-                        <LoadFailed title="Could not load tasks" onRetry={loadTasks}/>
-                    </div>
-                } else {
-                    <div key="table" className="animate-in fade-in duration-150">
-                        <TaskTable
-                            rows={rows}
-                            sort={sort}
-                            sortDir={sortDir}
-                            onSort={sortBy}
-                            onOpen={openTask}
-                            stepNames={stepNames}
-                            stepColors={stepColors}
-                            stepKinds={stepKinds}
-                            stepHeader={stepWord}
-                            leadName={leadName}
-                            cursor={cursor}
-                            onCursor={pointAt}
-                            refreshing={refreshing}
-                            stickyTop={stickyTop}
-                            emptyLabel={emptyLabel}
-                            emptyAction={"Clear filters" if isFiltered else ""}
-                            onEmptyAction={clearFilters}
-                        />
-                    </div>
-                }  }
+                <Reveal ready={not waiting} frame={loadFrame()}>
+                    {if failed {
+                        <div key="failed" className="p-4">
+                            <LoadFailed
+                                title="Could not load tasks"
+                                onRetry={loadTasks}
+                            />
+                        </div>
+                    } else {
+                        <div key="table">
+                            <TaskTable
+                                rows={rows}
+                                sort={sort}
+                                sortDir={sortDir}
+                                onSort={sortBy}
+                                onOpen={openTask}
+                                stepNames={stepNames}
+                                stepColors={stepColors}
+                                stepKinds={stepKinds}
+                                stepHeader={stepWord}
+                                leadName={leadName}
+                                cursor={cursor}
+                                onCursor={pointAt}
+                                refreshing={refreshing}
+                                stickyTop={stickyTop}
+                                emptyLabel={emptyLabel}
+                                emptyAction={"Clear filters" if isFiltered else ""}
+                                onEmptyAction={clearFilters}
+                            />
+                        </div>
+                    } }
+                </Reveal>
                 {if not failed {
                     <div
                         key="foot"

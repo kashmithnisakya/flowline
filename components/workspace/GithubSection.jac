@@ -48,6 +48,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from ...components.ui.skeleton { Skeleton }
+import from ..common.Reveal { Reveal }
 import from .ConfirmDialog { ConfirmDialog }
 import from .icons { IconGithub, IconPlus, IconSearch, IconSync, IconX }
 import from "sonner" { toast }
@@ -304,6 +305,113 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     if shownCount == 1 and not moreLeft {
         countWord = " issue" if tab == "issues" else " pull request";
     }
+    def loadFrame -> JsxElement {
+        return
+            <div key="sk" aria-busy="true">
+                {if wasConnected() {
+                    <div
+                        key="two"
+                        className="grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]"
+                    >
+                        <RepoRail
+                            repos={[]}
+                            selected=""
+                            onSelect={selectRepo}
+                            onAdd={openPicker}
+                            placeholder={2}
+                        />
+                        <div className="flex min-w-0 flex-col gap-4">
+                            <div className="flex h-7 items-center gap-3">
+                                <Skeleton
+                                    className="size-[18px] shrink-0 rounded-full"
+                                />
+                                <Skeleton className="h-4 w-48"/>
+                                <Skeleton className="h-3 w-40"/>
+                            </div>
+                            <div className="surface">
+                                <div
+                                    className="flex flex-wrap items-center gap-2 border-b px-3 py-2"
+                                >
+                                    <div
+                                        className="inline-flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
+                                    >
+                                        <span
+                                            className="rounded-sm bg-card px-2.5 py-1 text-[13px] font-semibold text-foreground"
+                                        >
+                                            Issues
+                                        </span>
+                                        <span
+                                            className="px-2.5 py-1 text-[13px] text-muted-foreground"
+                                        >
+                                            Pull requests
+                                        </span>
+                                    </div>
+                                    <Skeleton className="h-[30px] w-20 rounded-md"/>
+                                    <Skeleton className="h-3 w-16"/>
+                                    <div className="ml-auto w-full sm:w-56">
+                                        <Skeleton className="h-8 w-full rounded-md"/>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-1 p-3">
+                                    {for i in [0, 1, 2, 3, 4] {
+                                        <div
+                                            key={"row" + str(i)}
+                                            className="flex items-center gap-3 py-2"
+                                        >
+                                            <Skeleton
+                                                className="size-4 shrink-0 rounded-xs"
+                                            />
+                                            <Skeleton className="h-4 w-10 shrink-0"/>
+                                            <Skeleton className="h-4 w-full max-w-80"/>
+                                            <Skeleton
+                                                className="ml-auto hidden h-4 w-16 shrink-0 sm:block"
+                                            />
+                                        </div>
+                                    }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                } else {
+                    <div
+                        key="card"
+                        className="surface grid gap-8 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-0 md:p-0"
+                    >
+                        <div className="flex flex-col items-start gap-4 md:p-7">
+                            <Skeleton className="size-7 rounded-full"/>
+                            <div className="flex h-[30px] items-center">
+                                <Skeleton className="h-5 w-72 max-w-full"/>
+                            </div>
+                            <div className="flex w-full flex-col gap-2.5 pl-5">
+                                <Skeleton className="h-3.5 w-64 max-w-full"/>
+                                <Skeleton className="h-3.5 w-56 max-w-full"/>
+                                <Skeleton className="h-3.5 w-72 max-w-full"/>
+                            </div>
+                            <Skeleton className="h-9 w-36 rounded-md"/>
+                        </div>
+                        <div className="border-t pt-6 md:border-t-0 md:border-l md:p-7">
+                            <Skeleton className="h-3.5 w-44"/>
+                            <div className="mt-2 flex flex-col">
+                                {for i in [0, 1, 2] {
+                                    <div
+                                        key={"perm" + str(i)}
+                                        className="flex items-center border-b py-2.5 last:border-b-0"
+                                    >
+                                        <Skeleton
+                                            className={"h-3.5 "
+                                                + ("w-3/4" if i else "w-2/3")}
+                                        />
+                                    </div>
+                                }}
+                            </div>
+                            <Skeleton className="mt-3 h-3 w-56"/>
+                            <Skeleton className="mt-2 h-3 w-48"/>
+                        </div>
+                    </div>
+                } }
+            </div>;
+    }
+
     return
         <div className="flex w-full flex-col gap-5">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -373,374 +481,278 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                     onReconnect={startInstall}
                 />
             }}
-            {if loading {
-                <div key="sk" aria-busy="true">
-                    {if wasConnected() {
-                        <div
-                            key="two"
-                            className="grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]"
-                        >
-                            <RepoRail
-                                repos={[]}
-                                selected=""
-                                onSelect={selectRepo}
-                                onAdd={openPicker}
-                                placeholder={2}
-                            />
-                            <div className="flex min-w-0 flex-col gap-4">
-                                <div className="flex h-7 items-center gap-3">
-                                    <Skeleton
-                                        className="size-[18px] shrink-0 rounded-full"
-                                    />
-                                    <Skeleton className="h-4 w-48"/>
-                                    <Skeleton className="h-3 w-40"/>
-                                </div>
-                                <div className="surface">
-                                    <div
-                                        className="flex flex-wrap items-center gap-2 border-b px-3 py-2"
-                                    >
-                                        <div
-                                            className="inline-flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
-                                        >
-                                            <span
-                                                className="rounded-sm bg-card px-2.5 py-1 text-[13px] font-semibold text-foreground"
-                                            >
-                                                Issues
-                                            </span>
-                                            <span
-                                                className="px-2.5 py-1 text-[13px] text-muted-foreground"
-                                            >
-                                                Pull requests
-                                            </span>
-                                        </div>
-                                        <Skeleton className="h-[30px] w-20 rounded-md"/>
-                                        <Skeleton className="h-3 w-16"/>
-                                        <div className="ml-auto w-full sm:w-56">
-                                            <Skeleton
-                                                className="h-8 w-full rounded-md"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-1 p-3">
-                                        {for i in [0, 1, 2, 3, 4] {
-                                            <div
-                                                key={"row" + str(i)}
-                                                className="flex items-center gap-3 py-2"
-                                            >
-                                                <Skeleton
-                                                    className="size-4 shrink-0 rounded-xs"
-                                                />
-                                                <Skeleton
-                                                    className="h-4 w-10 shrink-0"
-                                                />
-                                                <Skeleton
-                                                    className="h-4 w-full max-w-80"
-                                                />
-                                                <Skeleton
-                                                    className="ml-auto hidden h-4 w-16 shrink-0 sm:block"
-                                                />
-                                            </div>
-                                        }}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    } else {
-                        <div
-                            key="card"
-                            className="surface grid gap-8 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-0 md:p-0"
-                        >
-                            <div className="flex flex-col items-start gap-4 md:p-7">
-                                <Skeleton className="size-7 rounded-full"/>
-                                <div className="flex h-[30px] items-center">
-                                    <Skeleton className="h-5 w-72 max-w-full"/>
-                                </div>
-                                <div className="flex w-full flex-col gap-2.5 pl-5">
-                                    <Skeleton className="h-3.5 w-64 max-w-full"/>
-                                    <Skeleton className="h-3.5 w-56 max-w-full"/>
-                                    <Skeleton className="h-3.5 w-72 max-w-full"/>
-                                </div>
-                                <Skeleton className="h-9 w-36 rounded-md"/>
-                            </div>
-                            <div
-                                className="border-t pt-6 md:border-t-0 md:border-l md:p-7"
-                            >
-                                <Skeleton className="h-3.5 w-44"/>
-                                <div className="mt-2 flex flex-col">
-                                    {for i in [0, 1, 2] {
-                                        <div
-                                            key={"perm" + str(i)}
-                                            className="flex items-center border-b py-2.5 last:border-b-0"
-                                        >
-                                            <Skeleton
-                                                className={"h-3.5 "
-                                                    + ("w-3/4" if i else "w-2/3")}
-                                            />
-                                        </div>
-                                    }}
-                                </div>
-                                <Skeleton className="mt-3 h-3 w-56"/>
-                                <Skeleton className="mt-2 h-3 w-48"/>
-                            </div>
-                        </div>
-                    } }
-                </div>
-            } elif not connected {
-                <div key="connect" className="animate-in fade-in duration-150">
-                    <ConnectCard
-                        starting={starting}
-                        missing={configGaps}
-                        onInstall={startInstall}
-                    />
-                </div>
-            } else {
-                <div
-                    key="work"
-                    className="grid items-start gap-5 animate-in fade-in duration-150 lg:grid-cols-[250px_minmax(0,1fr)]"
-                >
-                    <RepoRail
-                        repos={repos}
-                        selected={repoId}
-                        onSelect={selectRepo}
-                        onAdd={openPicker}
-                    />
-                    <div className="flex min-w-0 flex-col gap-4">
-                        {if not repoId {
-                            <div
-                                key="norepo"
-                                className="surface flex flex-col items-center gap-2 px-6 py-12 text-center"
-                            >
-                                <p className="text-sm font-semibold">
-                                    No repository yet
-                                </p>
-                                <p className="max-w-sm text-sm text-muted-foreground">
-                                    Add one of the repositories you granted the App, and pick the project its issues land in.
-                                </p>
-                                <Button size="sm" className="mt-1" onClick={openPicker}>
-                                    <IconPlus/>
-                                    Add repository
-                                </Button>
-                            </div>
-                        } else {
-                            <div key="repo" className="flex min-w-0 flex-col gap-4">
-                                <div
-                                    className="flex flex-wrap items-center gap-x-3 gap-y-2"
-                                >
-                                    <IconGithub size={18} className="shrink-0"/>
-                                    <h2
-                                        className="num min-w-0 truncate text-base font-semibold"
-                                    >
-                                        {[
-                                            r.full_name
-                                            for r in repos
-                                            if r.id == repoId
-                                        ][0]
-                                            if len(
-                                                [
-                                                    r
-                                                    for r in repos
-                                                    if r.id == repoId
-                                                ]
-                                            )
-                                                > 0
-                                            else ""}
-                                    </h2>
-                                    <span
-                                        className="text-[12.5px] text-muted-foreground"
-                                    >
-                                        {("Issues land in " + repoProjectName)
-                                            if repoProjectName
-                                            else "No project picked for its issues"}
-                                    </span>
-                                </div>
-                                {for r in [
-                                    x
-                                    for x in repos
-                                    if x.id == repoId
-                                ] {
-                                    <RepoAutomation
-                                        key={r.id}
-                                        repo={r}
-                                        onSync={lambda (v: bool) { toggleAutoSync(
-                                            r.id, v
-                                        ); }}
-                                        onDone={lambda (v: bool) { toggleAutoDone(
-                                            r.id, v
-                                        ); }}
-                                        onClose={lambda (v: bool) { toggleAutoClose(
-                                            r.id, v
-                                        ); }}
-                                    />
-                                }}
-                                <div className="surface">
-                                    <div
-                                        className="flex flex-wrap items-center gap-2 border-b px-3 py-2"
-                                    >
-                                        <div
-                                            className="inline-flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
-                                        >
-                                            <button
-                                                type="button"
-                                                aria-pressed={tab == "issues"}
-                                                className={"rounded-sm px-2.5 py-1 text-[13px] "
-                                                    + (
-                                                        "bg-card font-semibold text-foreground"
-                                                            if tab == "issues"
-                                                            else "text-muted-foreground hover:text-foreground"
-                                                    )}
-                                                onClick={lambda { tab = "issues"; }}
-                                            >
-                                                Issues
-                                            </button>
-                                            <button
-                                                type="button"
-                                                aria-pressed={tab == "pulls"}
-                                                className={"rounded-sm px-2.5 py-1 text-[13px] "
-                                                    + (
-                                                        "bg-card font-semibold text-foreground"
-                                                            if tab == "pulls"
-                                                            else "text-muted-foreground hover:text-foreground"
-                                                    )}
-                                                onClick={lambda { tab = "pulls"; }}
-                                            >
-                                                Pull requests
-                                            </button>
-                                        </div>
-                                        <Select
-                                            value={issueState
-                                                if tab == "issues"
-                                                else prState}
-                                            onValueChange={lambda (v: str) { if tab
-                                                == "issues" {
-                                                issueState = v;
-                                            } else {
-                                                prState = v;
-                                            } }}
-                                        >
-                                            <SelectTrigger
-                                                className="toolbar-filter"
-                                                aria-label="Filter by state"
-                                                data-active={"true"
-                                                    if (
-                                                        issueState
-                                                            if tab == "issues"
-                                                            else prState
-                                                    )
-                                                        != "open"
-                                                    else "false"}
-                                            >
-                                                <SelectValue placeholder="State"/>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {for s in ISSUE_STATES {
-                                                    <SelectItem key={s[0]} value={s[0]}>
-                                                        {s[1]}
-                                                    </SelectItem>
-                                                }}
-                                            </SelectContent>
-                                        </Select>
-                                        <span className="text-xs text-subtle">
-                                            <span className="num">{countNum}</span>
-                                            {countWord}
-                                        </span>
-                                        <div
-                                            className="relative ml-auto w-full sm:w-56"
-                                        >
-                                            <IconSearch
-                                                className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-subtle"
-                                            />
-                                            <Input
-                                                value={searchDraft}
-                                                className={"h-8 pl-8 "
-                                                    + (
-                                                        "pr-14"
-                                                            if searchDraft
-                                                                != searchQuery
-                                                            else "pr-8"
-                                                    )}
-                                                placeholder={"Search issues"
-                                                    if tab == "issues"
-                                                    else "Search pull requests"}
-                                                aria-label={"Search issues"
-                                                    if tab == "issues"
-                                                    else "Search pull requests"}
-                                                onChange={lambda (e: ChangeEvent) { searchDraft = e.target.value; }}
-                                                onKeyDown={lambda (e: KeyboardEvent) { if e.key
-                                                    == "Enter" {
-                                                    runSearch();
-                                                }}}
-                                            />
-                                            {if searchDraft != searchQuery {
-                                                <span
-                                                    key="enter"
-                                                    aria-hidden="true"
-                                                    className="kbd pointer-events-none absolute top-1/2 right-8 -translate-y-1/2"
-                                                >
-                                                    ↵
-                                                </span>
-                                            }}
-                                            {if searchQuery or searchDraft {
-                                                <button
-                                                    key="clear"
-                                                    type="button"
-                                                    aria-label="Clear search"
-                                                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-subtle transition-colors duration-150 hover:bg-accent hover:text-foreground"
-                                                    onClick={clearSearch}
-                                                >
-                                                    <IconX/>
-                                                </button>
-                                            }}
-                                        </div>
-                                    </div>
-                                    {if tab == "issues" {
-                                        <IssueImportTable
-                                            key="issues"
-                                            rows={issues}
-                                            loading={issueLoading}
-                                            loadingMore={issueMore}
-                                            hasMore={issueHasMore}
-                                            state={issueState}
-                                            selected={selected}
-                                            projectName={repoProjectName}
-                                            projects={[
-                                                p
-                                                for p in projects
-                                                if p.active
-                                            ]}
-                                            projectId={importProject}
-                                            status={importStatus}
-                                            steps={steps}
-                                            stepId={importStep}
-                                            query={searchQuery}
-                                            importing={importing}
-                                            onState={lambda (v: str) { issueState = v; }}
-                                            onToggle={toggleIssue}
-                                            onProject={lambda (v: str) { importProject = v; }}
-                                            onStatus={lambda (v: str) { importStatus = v; }}
-                                            onStep={lambda (v: str) { importStep = v; }}
-                                            onImport={importSelected}
-                                            onLoadMore={lambda { loadIssues(False); }}
-                                            onClear={lambda { selected = []; }}
-                                        />
-                                    } else {
-                                        <PrTable
-                                            key="pulls"
-                                            rows={pulls}
-                                            loading={prLoading}
-                                            loadingMore={prMore}
-                                            hasMore={prHasMore}
-                                            state={prState}
-                                            query={searchQuery}
-                                            onState={lambda (v: str) { prState = v; }}
-                                            onLoadMore={lambda { loadPulls(False); }}
-                                        />
-                                    } }
-                                </div>
-                            </div>
-                        } }
+            <Reveal ready={not loading} frame={loadFrame()}>
+                {if not connected {
+                    <div key="connect">
+                        <ConnectCard
+                            starting={starting}
+                            missing={configGaps}
+                            onInstall={startInstall}
+                        />
                     </div>
-                </div>
-            }  }
+                } else {
+                    <div
+                        key="work"
+                        className="grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]"
+                    >
+                        <RepoRail
+                            repos={repos}
+                            selected={repoId}
+                            onSelect={selectRepo}
+                            onAdd={openPicker}
+                        />
+                        <div className="flex min-w-0 flex-col gap-4">
+                            {if not repoId {
+                                <div
+                                    key="norepo"
+                                    className="surface flex flex-col items-center gap-2 px-6 py-12 text-center"
+                                >
+                                    <p className="text-sm font-semibold">
+                                        No repository yet
+                                    </p>
+                                    <p
+                                        className="max-w-sm text-sm text-muted-foreground"
+                                    >
+                                        Add one of the repositories you granted the App, and pick the project its issues land in.
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        className="mt-1"
+                                        onClick={openPicker}
+                                    >
+                                        <IconPlus/>
+                                        Add repository
+                                    </Button>
+                                </div>
+                            } else {
+                                <div key="repo" className="flex min-w-0 flex-col gap-4">
+                                    <div
+                                        className="flex flex-wrap items-center gap-x-3 gap-y-2"
+                                    >
+                                        <IconGithub size={18} className="shrink-0"/>
+                                        <h2
+                                            className="num min-w-0 truncate text-base font-semibold"
+                                        >
+                                            {[
+                                                r.full_name
+                                                for r in repos
+                                                if r.id == repoId
+                                            ][0]
+                                                if len(
+                                                    [
+                                                        r
+                                                        for r in repos
+                                                        if r.id == repoId
+                                                    ]
+                                                )
+                                                    > 0
+                                                else ""}
+                                        </h2>
+                                        <span
+                                            className="text-[12.5px] text-muted-foreground"
+                                        >
+                                            {("Issues land in " + repoProjectName)
+                                                if repoProjectName
+                                                else "No project picked for its issues"}
+                                        </span>
+                                    </div>
+                                    {for r in [
+                                        x
+                                        for x in repos
+                                        if x.id == repoId
+                                    ] {
+                                        <RepoAutomation
+                                            key={r.id}
+                                            repo={r}
+                                            onSync={lambda (v: bool) { toggleAutoSync(
+                                                r.id, v
+                                            ); }}
+                                            onDone={lambda (v: bool) { toggleAutoDone(
+                                                r.id, v
+                                            ); }}
+                                            onClose={lambda (v: bool) { toggleAutoClose(
+                                                r.id, v
+                                            ); }}
+                                        />
+                                    }}
+                                    <div className="surface">
+                                        <div
+                                            className="flex flex-wrap items-center gap-2 border-b px-3 py-2"
+                                        >
+                                            <div
+                                                className="inline-flex items-center gap-0.5 rounded-md border bg-muted p-0.5"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    aria-pressed={tab == "issues"}
+                                                    className={"rounded-sm px-2.5 py-1 text-[13px] "
+                                                        + (
+                                                            "bg-card font-semibold text-foreground"
+                                                                if tab == "issues"
+                                                                else "text-muted-foreground hover:text-foreground"
+                                                        )}
+                                                    onClick={lambda { tab = "issues"; }}
+                                                >
+                                                    Issues
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    aria-pressed={tab == "pulls"}
+                                                    className={"rounded-sm px-2.5 py-1 text-[13px] "
+                                                        + (
+                                                            "bg-card font-semibold text-foreground"
+                                                                if tab == "pulls"
+                                                                else "text-muted-foreground hover:text-foreground"
+                                                        )}
+                                                    onClick={lambda { tab = "pulls"; }}
+                                                >
+                                                    Pull requests
+                                                </button>
+                                            </div>
+                                            <Select
+                                                value={issueState
+                                                    if tab == "issues"
+                                                    else prState}
+                                                onValueChange={lambda (v: str) { if tab
+                                                    == "issues" {
+                                                    issueState = v;
+                                                } else {
+                                                    prState = v;
+                                                } }}
+                                            >
+                                                <SelectTrigger
+                                                    className="toolbar-filter"
+                                                    aria-label="Filter by state"
+                                                    data-active={"true"
+                                                        if (
+                                                            issueState
+                                                                if tab == "issues"
+                                                                else prState
+                                                        )
+                                                            != "open"
+                                                        else "false"}
+                                                >
+                                                    <SelectValue placeholder="State"/>
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {for s in ISSUE_STATES {
+                                                        <SelectItem
+                                                            key={s[0]}
+                                                            value={s[0]}
+                                                        >
+                                                            {s[1]}
+                                                        </SelectItem>
+                                                    }}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="text-xs text-subtle">
+                                                <span className="num">{countNum}</span>
+                                                {countWord}
+                                            </span>
+                                            <div
+                                                className="relative ml-auto w-full sm:w-56"
+                                            >
+                                                <IconSearch
+                                                    className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-subtle"
+                                                />
+                                                <Input
+                                                    value={searchDraft}
+                                                    className={"h-8 pl-8 "
+                                                        + (
+                                                            "pr-14"
+                                                                if searchDraft
+                                                                    != searchQuery
+                                                                else "pr-8"
+                                                        )}
+                                                    placeholder={"Search issues"
+                                                        if tab == "issues"
+                                                        else "Search pull requests"}
+                                                    aria-label={"Search issues"
+                                                        if tab == "issues"
+                                                        else "Search pull requests"}
+                                                    onChange={lambda (e: ChangeEvent) { searchDraft = e.target.value; }}
+                                                    onKeyDown={lambda (
+                                                        e: KeyboardEvent
+                                                    ) { if e.key == "Enter" {
+                                                        runSearch();
+                                                    }}}
+                                                />
+                                                {if searchDraft != searchQuery {
+                                                    <span
+                                                        key="enter"
+                                                        aria-hidden="true"
+                                                        className="kbd pointer-events-none absolute top-1/2 right-8 -translate-y-1/2"
+                                                    >
+                                                        ↵
+                                                    </span>
+                                                }}
+                                                {if searchQuery or searchDraft {
+                                                    <button
+                                                        key="clear"
+                                                        type="button"
+                                                        aria-label="Clear search"
+                                                        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-subtle transition-colors duration-150 hover:bg-accent hover:text-foreground"
+                                                        onClick={clearSearch}
+                                                    >
+                                                        <IconX/>
+                                                    </button>
+                                                }}
+                                            </div>
+                                        </div>
+                                        {if tab == "issues" {
+                                            <IssueImportTable
+                                                key="issues"
+                                                rows={issues}
+                                                loading={issueLoading}
+                                                loadingMore={issueMore}
+                                                hasMore={issueHasMore}
+                                                state={issueState}
+                                                selected={selected}
+                                                projectName={repoProjectName}
+                                                projects={[
+                                                    p
+                                                    for p in projects
+                                                    if p.active
+                                                ]}
+                                                projectId={importProject}
+                                                status={importStatus}
+                                                steps={steps}
+                                                stepId={importStep}
+                                                query={searchQuery}
+                                                importing={importing}
+                                                onState={lambda (v: str) { issueState = v; }}
+                                                onToggle={toggleIssue}
+                                                onProject={lambda (v: str) { importProject = v; }}
+                                                onStatus={lambda (v: str) { importStatus = v; }}
+                                                onStep={lambda (v: str) { importStep = v; }}
+                                                onImport={importSelected}
+                                                onLoadMore={lambda { loadIssues(
+                                                    False
+                                                ); }}
+                                                onClear={lambda { selected = []; }}
+                                            />
+                                        } else {
+                                            <PrTable
+                                                key="pulls"
+                                                rows={pulls}
+                                                loading={prLoading}
+                                                loadingMore={prMore}
+                                                hasMore={prHasMore}
+                                                state={prState}
+                                                query={searchQuery}
+                                                onState={lambda (v: str) { prState = v; }}
+                                                onLoadMore={lambda { loadPulls(
+                                                    False
+                                                ); }}
+                                            />
+                                        } }
+                                    </div>
+                                </div>
+                            } }
+                        </div>
+                    </div>
+                } }
+            </Reveal>
             <RepoPicker
                 open={pickerOpen}
                 query={pickerQuery}

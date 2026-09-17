@@ -17,6 +17,7 @@ import from ..roster.AssignMenu { AssignMenu }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 import from ..ui.skeleton { Skeleton }
+import from ..common.Reveal { Reveal }
 import from .ConfirmDialog { ConfirmDialog }
 import from .RowActions { RowActions }
 import from .SectionHeader { SectionHeader }
@@ -101,6 +102,54 @@ def:pub RolesSection(
         }
     }
     deleteCount = len(holdersOf[deleteTarget]) if deleteTarget in holdersOf else 0;
+    def loadFrame -> JsxElement {
+        return
+            <div key="sk" className="surface" aria-busy="true">
+                <div
+                    className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground md:grid"
+                >
+                    <span>Role</span>
+                    <span>Held by</span>
+                    <span>Flow line</span>
+                    <span/>
+                </div>
+                <ul className="divide-y">
+                    {for i in [0, 1, 2] {
+                        <li key={"r" + str(i)} className="px-3 py-2.5 md:py-2">
+                            <div
+                                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px]"
+                            >
+                                <div className="col-start-1 row-start-1 min-w-0">
+                                    <div className="flex h-5 items-center">
+                                        <Skeleton
+                                            className={"h-3.5 "
+                                                + ("w-24" if i % 2 else "w-32")}
+                                        />
+                                    </div>
+                                    <div className="flex h-4 items-center">
+                                        <Skeleton className="h-3 w-40"/>
+                                    </div>
+                                </div>
+                                <div
+                                    className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:contents"
+                                >
+                                    <div className="min-w-0 md:col-start-2">
+                                        <Skeleton className="h-3.5 w-36"/>
+                                    </div>
+                                    <div className="min-w-0 md:col-start-3">
+                                        <Skeleton className="h-3 w-28"/>
+                                    </div>
+                                </div>
+                                <div
+                                    className="col-start-2 row-span-2 row-start-1 justify-self-end md:col-start-4 md:row-span-1"
+                                />
+                            </div>
+                        </li>
+                    }}
+                </ul>
+            </div>;
+    }
+
     return
         <div className="flex flex-col gap-4">
             <SectionHeader title="Roles" count={"" if loading else str(len(cards))}>
@@ -109,53 +158,8 @@ def:pub RolesSection(
                     Add role
                 </Button>
             </SectionHeader>
-            {if loading {
-                <div key="sk" className="surface" aria-busy="true">
-                    <div
-                        className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground md:grid"
-                    >
-                        <span>Role</span>
-                        <span>Held by</span>
-                        <span>Flow line</span>
-                        <span/>
-                    </div>
-                    <ul className="divide-y">
-                        {for i in [0, 1, 2] {
-                            <li key={"r" + str(i)} className="px-3 py-2.5 md:py-2">
-                                <div
-                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px]"
-                                >
-                                    <div className="col-start-1 row-start-1 min-w-0">
-                                        <div className="flex h-5 items-center">
-                                            <Skeleton
-                                                className={"h-3.5 "
-                                                    + ("w-24" if i % 2 else "w-32")}
-                                            />
-                                        </div>
-                                        <div className="flex h-4 items-center">
-                                            <Skeleton className="h-3 w-40"/>
-                                        </div>
-                                    </div>
-                                    <div
-                                        className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:contents"
-                                    >
-                                        <div className="min-w-0 md:col-start-2">
-                                            <Skeleton className="h-3.5 w-36"/>
-                                        </div>
-                                        <div className="min-w-0 md:col-start-3">
-                                            <Skeleton className="h-3 w-28"/>
-                                        </div>
-                                    </div>
-                                    <div
-                                        className="col-start-2 row-span-2 row-start-1 justify-self-end md:col-start-4 md:row-span-1"
-                                    />
-                                </div>
-                            </li>
-                        }}
-                    </ul>
-                </div>
-            } else {
-                <div key="rows" className="surface animate-in fade-in duration-150">
+            <Reveal ready={not loading} frame={loadFrame()}>
+                <div key="rows" className="surface">
                     <div
                         className={"hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground "
                             + ("md:grid" if len(cards) > 0 else "")}
@@ -352,7 +356,7 @@ def:pub RolesSection(
                         }}
                     </ul>
                 </div>
-            } }
+            </Reveal>
             {if len(unplaced) > 0 {
                 <p key="unplaced" className="text-[13px] text-muted-foreground">
                     {"No role yet: " + ", ".join(unplaced)}
