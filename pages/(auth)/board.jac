@@ -670,7 +670,9 @@ def:pub BoardPage -> JsxPage {
         switchLabel = "a new task";
     }
     # Lanes are minmax(252px,1fr): they share the width when they all fit
-    # and the grid scrolls sideways once seven of them no longer do.
+    # and the grid scrolls sideways once seven of them no longer do. The
+    # md:-mr-1 md:pr-1 pair gives the last card list's 4px overhang a home in
+    # the scroller's padding, so it neither scrolls nor clips a focus ring.
     laneStyle: dict[str, str] = {};
     if wideView and laneH > 0 {
         laneStyle["height"] = str(laneH) + "px";
@@ -921,7 +923,7 @@ def:pub BoardPage -> JsxPage {
                         data-board-lanes="true"
                         onScroll={lambda { scheduleMeasure(); }}
                         onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
-                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5"
+                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:-mr-1 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5 md:pr-1"
                         style={laneStyle}
                     >
                         {for (ci, key) in enumerate(colKeys) {
