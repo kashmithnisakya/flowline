@@ -5,6 +5,7 @@ step and works there; the traversal from the caller's root is the isolation.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
 
+import from jaclang.lib.effects { effects }
 import from models {
     WorkflowStep,
     WorkflowSteps,
@@ -98,6 +99,12 @@ def safe_coord(v: float) -> float {
 }
 
 
+@effects(reads=["WorkflowSteps"], writes=[])
+def read_flow_line_meta(box: WorkflowSteps) -> dict[str, str] {
+    return {"name": box.name, "template_key": box.template_key};
+}
+
+
 walker GetFlowLineMeta {
     """Read-only: a GET must not write, so a workspace with no box yet
     reports the defaults without creating one."""
@@ -110,7 +117,7 @@ walker GetFlowLineMeta {
     }
 
     can read with WorkflowSteps entry {
-        report {"name": here.name, "template_key": here.template_key};
+        report read_flow_line_meta(here);
     }
 }
 
@@ -129,6 +136,51 @@ walker RenameFlowLine {
         }
         report {"name": here.name};
     }
+}
+
+
+# The steps in order, each counting the tasks it holds when `with_counts`.
+# Declared a pure read (the `task_count` stamp is on a view, not a node) so
+# the browser caches GetFlowLine; a write anywhere invalidates it.
+@effects(reads=["WorkflowStep", "Task"], writes=[])
+def read_flow_line(
+    box: WorkflowSteps,
+    holder: Root,
+    project_id: str,
+    with_counts: bool,
+    done_days: int
+) -> list[StepView] {
+    views: list[StepView] = [];
+    line_steps = [box-->[?:WorkflowStep]];
+    for st in line_steps {
+        views.append(step_view(st, line_steps));
+    }
+    views.sort(key=lambda (s: StepView) { s.sort_order; });
+    if not with_counts {
+        return views;
+    }
+    # Count into a plain map first, then stamp the views: mutating a
+    # view through a dict lookup is more than the checker can follow.
+    counts: dict[str, int] = {};
+    known: list[str] = [];
+    first_of_kind: dict[str, str] = {};
+    for v in views {
+        counts[v.id] = 0;
+        known.append(v.id);
+        if v.kind not in first_of_kind {
+            first_of_kind[v.kind] = v.id;
+        }
+    }
+    for t in flow_pool(holder, project_id, done_days) {
+        landing = landing_step(t, known, first_of_kind);
+        if landing {
+            counts[landing] = int(counts[landing]) + 1;
+        }
+    }
+    for v in views {
+        v.task_count = counts[v.id];
+    }
+    return views;
 }
 
 
@@ -154,38 +206,9 @@ walker GetFlowLine {
     }
 
     can gather with WorkflowSteps entry {
-        views: list[StepView] = [];
-        line_steps = [here-->[?:WorkflowStep]];
-        for st in line_steps {
-            views.append(step_view(st, line_steps));
-        }
-        views.sort(key=lambda (s: StepView) { s.sort_order; });
-        if not self.with_counts {
-            report views;
-            disengage;
-        }
-        # Count into a plain map first, then stamp the views: mutating a
-        # view through a dict lookup is more than the checker can follow.
-        counts: dict[str, int] = {};
-        known: list[str] = [];
-        first_of_kind: dict[str, str] = {};
-        for v in views {
-            counts[v.id] = 0;
-            known.append(v.id);
-            if v.kind not in first_of_kind {
-                first_of_kind[v.kind] = v.id;
-            }
-        }
-        for t in flow_pool(root, self.project_id, self.done_days) {
-            landing = landing_step(t, known, first_of_kind);
-            if landing {
-                counts[landing] = int(counts[landing]) + 1;
-            }
-        }
-        for v in views {
-            v.task_count = counts[v.id];
-        }
-        report views;
+        report read_flow_line(
+            here, root, self.project_id, self.with_counts, self.done_days
+        );
     }
 }
 

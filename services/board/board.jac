@@ -33,7 +33,8 @@ obj BoardData {
         repos: list[RepoView],
         roles: list[RoleView],
         iterations: list[IterationView],
-        github_connected: bool;
+        github_connected: bool,
+        webhook_live: bool;
 }
 
 
@@ -75,6 +76,7 @@ walker BoardSnapshot {
         roles: list[RoleView] = [];
         iterations: list[IterationView] = [];
         connected = False;
+        live = False;
         # One definition of the lists and their order, shared with
         # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
@@ -86,6 +88,7 @@ walker BoardSnapshot {
             roles = ws.roles;
             iterations = ws.iterations;
             connected = ws.github_connected;
+            live = ws.webhook_live;
         }
         report BoardData(
             rows=hydrate_views(here, picked[start:end]),
@@ -98,7 +101,8 @@ walker BoardSnapshot {
             repos=repos,
             roles=roles,
             iterations=iterations,
-            github_connected=connected
+            github_connected=connected,
+            webhook_live=live
         );
     }
 }

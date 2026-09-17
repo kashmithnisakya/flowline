@@ -3,6 +3,7 @@ as tasks, open an issue from a task. Auth is an App installation (tokens minted
 per call, never reported). Every walker but GithubStatus reports ONE envelope,
 {"ok": True, ...} or {"ok": False, "error", "message"}. Nothing polls."""
 
+import from jaclang.lib.effects { effects }
 import from models {
     Project,
     Member,
@@ -171,14 +172,23 @@ def not_connected -> dict[str, any] {
 }
 
 
+# Declared a pure read so the browser caches GithubStatus. ensure_bound's
+# one index write (a claim of this workspace's own installation) is
+# idempotent and nothing a cached reader shows, so it counts as none.
+@effects(reads=["GithubConnection"], writes=[])
+def read_connection(holder: Root) -> GithubConnectionView {
+    c = connection_of(holder);
+    ensure_bound(holder, c);
+    return connection_view(c);
+}
+
+
 walker GithubStatus {
     """Cheap, no GitHub call: every page showing GitHub UI opens with it."""
     has reports: list[GithubConnectionView] = [];
 
     can look with Root entry {
-        c = connection_of(here);
-        ensure_bound(here, c);
-        report connection_view(c);
+        report read_connection(here);
     }
 }
 
