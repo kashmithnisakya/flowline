@@ -191,14 +191,9 @@ def ensure_tallies(holder: Root) -> None {
 }
 
 
-# A task that reached Done before the cutoff: history, not the working set.
-# Shared by the list walkers and the board so the split has one definition,
-# and measured by done_day so it agrees with the charts.
-def is_older(t: Task, cutoff: str) -> bool {
-    return t.status == "Done" and bool(cutoff) and done_day(t) < cutoff;
-}
-
-
+# The cutoff Done tasks fall behind is applied in the store's query
+# (`done_at < cutoff` in the models readers), the same test as done_day
+# once ensure_tallies has filled `done_at` on every Done row.
 # Board order: the drag order the user arranged. Callers sort by jid first,
 # so ties stay deterministic across two requests.
 def order_working(rows: list[Task]) {

@@ -333,12 +333,12 @@ walker ListTasks {
         cutoff = done_cutoff(self.done_days);
         filtered = bool(
             needle
-            or self.category
-            or self.tag
-            or self.estimated
-            or self.iteration_id
-            or self.project_id
-            or self.assignee_id
+                or self.category
+                or self.tag
+                or self.estimated
+                or self.iteration_id
+                or self.project_id
+                or self.assignee_id
         );
         picked: list[Task] = [];
         recent_done = 0;
@@ -463,18 +463,25 @@ def task_totals(
         if t.status == "Blocked" {
             blocked_count = blocked_count + 1;
             blocked_by_project[t.project_id] = (
-                blocked_by_project[t.project_id] if t.project_id in blocked_by_project else 0
-            ) + 1;
+                blocked_by_project[t.project_id]
+                    if t.project_id in blocked_by_project
+                    else 0
+            )
+                + 1;
         } elif t.status in ACTIVE_STATUSES {
             active_by_project[t.project_id] = (
-                active_by_project[t.project_id] if t.project_id in active_by_project else 0
-            ) + 1;
+                active_by_project[t.project_id]
+                    if t.project_id in active_by_project
+                    else 0
+            )
+                + 1;
         }
         if t.due_date and t.due_date < today {
             overdue_count = overdue_count + 1;
         }
         for who in names.ids_of(t) {
-            open_by_member[who] = (open_by_member[who] if who in open_by_member else 0) + 1;
+            open_by_member[who] = (open_by_member[who] if who in open_by_member else 0)
+                + 1;
         }
     }
     for t in recent {
@@ -491,7 +498,8 @@ def task_totals(
             for who in names.ids_of(t) {
                 done_by_member[who] = (
                     done_by_member[who] if who in done_by_member else 0
-                ) + 1;
+                )
+                    + 1;
             }
         }
     }

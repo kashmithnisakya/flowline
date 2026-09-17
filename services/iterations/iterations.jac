@@ -240,7 +240,9 @@ walker RoadmapSnapshot {
         if self.project_id and not only {
             pool = [];
         } else {
-            for t in done_in_window(holder, lo, hi, window_ids, after_ids, before_ids) {
+            for t in done_in_window(
+                holder, lo, hi, window_ids, after_ids, before_ids
+            ) {
                 if not only or t.project_id == only {
                     pool.append(t);
                 }

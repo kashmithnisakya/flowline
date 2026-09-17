@@ -759,7 +759,7 @@ def all_tasks(holder: Root) -> list[Task] {
 def all_tasks_in(holder: Root, said: str) -> list[Task] {
     out: list[Task] = [];
     for p in projects_of(holder) {
-        out.extend([p-->[?:Task, category == said]]);
+        out.extend([p-->[?:Task, category==said]]);
     }
     return out;
 }
@@ -769,7 +769,7 @@ def all_tasks_in(holder: Root, said: str) -> list[Task] {
 def open_tasks(holder: Root) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, status != "Done"]]);
+        out.extend([box-->[?:Project]-->[?:Task, status!="Done"]]);
     }
     return out;
 }
@@ -779,9 +779,7 @@ def open_tasks(holder: Root) -> list[Task] {
 def done_since(holder: Root, since: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status == "Done", done_at >= since]]
-        );
+        out.extend([box-->[?:Project]-->[?:Task, status=="Done", done_at>=since]]);
     }
     return out;
 }
@@ -795,9 +793,7 @@ def done_before(holder: Root, cutoff: str) -> list[Task] {
         return out;
     }
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status == "Done", done_at < cutoff]]
-        );
+        out.extend([box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff]]);
     }
     return out;
 }
@@ -810,9 +806,7 @@ def done_before_in(holder: Root, cutoff: str, said: str) -> list[Task] {
     }
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == "Done", done_at < cutoff, category == said]
-            ]
+            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, category==said]]
         );
     }
     return out;
@@ -822,7 +816,7 @@ def done_before_in(holder: Root, cutoff: str, said: str) -> list[Task] {
 def done_tasks(holder: Root) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, status == "Done"]]);
+        out.extend([box-->[?:Project]-->[?:Task, status=="Done"]]);
     }
     return out;
 }
@@ -831,9 +825,7 @@ def done_tasks(holder: Root) -> list[Task] {
 def done_tasks_in(holder: Root, said: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status == "Done", category == said]]
-        );
+        out.extend([box-->[?:Project]-->[?:Task, status=="Done", category==said]]);
     }
     return out;
 }
@@ -852,7 +844,7 @@ def working_tasks(holder: Root, cutoff: str) -> list[Task] {
 def created_since(holder: Root, since: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, created_at >= since]]);
+        out.extend([box-->[?:Project]-->[?:Task, created_at>=since]]);
     }
     return out;
 }
@@ -860,27 +852,27 @@ def created_since(holder: Root, since: str) -> list[Task] {
 
 # The same readers for one project, which a project-scoped walker visits.
 def project_tasks_in(p: Project, said: str) -> list[Task] {
-    return [p-->[?:Task, category == said]];
+    return [p-->[?:Task, category==said]];
 }
 
 
 def project_open(p: Project) -> list[Task] {
-    return [p-->[?:Task, status != "Done"]];
+    return [p-->[?:Task, status!="Done"]];
 }
 
 
 def project_done(p: Project) -> list[Task] {
-    return [p-->[?:Task, status == "Done"]];
+    return [p-->[?:Task, status=="Done"]];
 }
 
 
 def project_done_in(p: Project, said: str) -> list[Task] {
-    return [p-->[?:Task, status == "Done", category == said]];
+    return [p-->[?:Task, status=="Done", category==said]];
 }
 
 
 def project_done_since(p: Project, since: str) -> list[Task] {
-    return [p-->[?:Task, status == "Done", done_at >= since]];
+    return [p-->[?:Task, status=="Done", done_at>=since]];
 }
 
 
@@ -888,7 +880,7 @@ def project_done_before(p: Project, cutoff: str) -> list[Task] {
     if not cutoff {
         return [];
     }
-    return [p-->[?:Task, status == "Done", done_at < cutoff]];
+    return [p-->[?:Task, status=="Done", done_at<cutoff]];
 }
 
 
@@ -896,7 +888,7 @@ def project_done_before_in(p: Project, cutoff: str, said: str) -> list[Task] {
     if not cutoff {
         return [];
     }
-    return [p-->[?:Task, status == "Done", done_at < cutoff, category == said]];
+    return [p-->[?:Task, status=="Done", done_at<cutoff, category==said]];
 }
 
 
@@ -908,7 +900,7 @@ def project_working(p: Project, cutoff: str) -> list[Task] {
 
 
 def project_created_since(p: Project, since: str) -> list[Task] {
-    return [p-->[?:Task, created_at >= since]];
+    return [p-->[?:Task, created_at>=since]];
 }
 
 
@@ -917,7 +909,7 @@ def project_created_since(p: Project, since: str) -> list[Task] {
 def tasks_on_step(holder: Root, step: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, step_id == step]]);
+        out.extend([box-->[?:Project]-->[?:Task, step_id==step]]);
     }
     return out;
 }
@@ -929,7 +921,7 @@ def tasks_on_steps(holder: Root, step_ids: list[str]) -> list[Task] {
         return out;
     }
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, step_id in step_ids]]);
+        out.extend([box-->[?:Project]-->[?:Task, step_idinstep_ids]]);
     }
     return out;
 }
@@ -938,9 +930,7 @@ def tasks_on_steps(holder: Root, step_ids: list[str]) -> list[Task] {
 def mismatched_on_step(holder: Root, step: str, landing: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, step_id == step, status != landing]]
-        );
+        out.extend([box-->[?:Project]-->[?:Task, step_id==step, status!=landing]]);
     }
     return out;
 }
@@ -949,7 +939,7 @@ def mismatched_on_step(holder: Root, step: str, landing: str) -> list[Task] {
 def tasks_in_iteration(holder: Root, it_id: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, iteration_id == it_id]]);
+        out.extend([box-->[?:Project]-->[?:Task, iteration_id==it_id]]);
     }
     return out;
 }
@@ -972,44 +962,30 @@ def done_in_window(
     for box in [holder-->[?:Projects]] {
         found: list[Task] = [];
         found.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == "Done", due_date >= lo, due_date <= hi]
-            ]
+            [box-->[?:Project]-->[?:Task, status=="Done", due_date>=lo, due_date<=hi]]
         );
         found.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == "Done", start_date >= lo, start_date <= hi]
-            ]
+            [box-->[?:Project]-->[?:Task, status=="Done", start_date>=lo, start_date<=hi]]
         );
         found.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == "Done", start_date != "", start_date < lo, due_date > hi]
-            ]
+            [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, due_date>hi]]
         );
         found.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == "Done", due_date != "", due_date < lo, start_date > hi]
-            ]
+            [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date<lo, start_date>hi]]
         );
         if window_ids {
             found.extend(
-                [
-                    box-->[?:Project]-->[?:Task, status == "Done", iteration_id in window_ids]
-                ]
+                [box-->[?:Project]-->[?:Task, status=="Done", iteration_idinwindow_ids]]
             );
         }
         if after_ids {
             found.extend(
-                [
-                    box-->[?:Project]-->[?:Task, status == "Done", start_date != "", start_date < lo, iteration_id in after_ids]
-                ]
+                [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, iteration_idinafter_ids]]
             );
         }
         if before_ids {
             found.extend(
-                [
-                    box-->[?:Project]-->[?:Task, status == "Done", due_date != "", due_date > hi, iteration_id in before_ids]
-                ]
+                [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date>hi, iteration_idinbefore_ids]]
             );
         }
         for t in found {
@@ -1032,9 +1008,7 @@ def tasks_by_issue(holder: Root, full_name: str, numbers: list[int]) -> list[Tas
     }
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, gh_repo == full_name, gh_issue_number in numbers]
-            ]
+            [box-->[?:Project]-->[?:Task, gh_repo==full_name, gh_issue_numberinnumbers]]
         );
     }
     return out;
@@ -1048,7 +1022,7 @@ def tasks_by_pr(holder: Root, full_name: str, numbers: list[int]) -> list[Task] 
     }
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [box-->[?:Project]-->[?:Task, gh_repo == full_name, pr_number in numbers]]
+            [box-->[?:Project]-->[?:Task, gh_repo==full_name, pr_numberinnumbers]]
         );
     }
     return out;
@@ -1061,7 +1035,7 @@ def tasks_by_pr_link(holder: Root, links: list[str]) -> list[Task] {
         return out;
     }
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, pr_link in links]]);
+        out.extend([box-->[?:Project]-->[?:Task, pr_linkinlinks]]);
     }
     return out;
 }
@@ -1072,7 +1046,7 @@ def tasks_by_pr_link(holder: Root, links: list[str]) -> list[Task] {
 def unnumbered_pr_links(holder: Root) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, pr_number == 0, pr_link != ""]]);
+        out.extend([box-->[?:Project]-->[?:Task, pr_number==0, pr_link!=""]]);
     }
     return out;
 }
@@ -1083,9 +1057,7 @@ def children_of(holder: Root, full_name: str, number: int) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, gh_parent_repo == full_name, gh_parent_number == number]
-            ]
+            [box-->[?:Project]-->[?:Task, gh_parent_repo==full_name, gh_parent_number==number]]
         );
     }
     return out;
@@ -1098,9 +1070,7 @@ def earliest_synced(holder: Root, full_name: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, gh_repo == full_name, gh_issue_number > 0, gh_synced_at != "", gh_synced_at]
-            ][:1]
+            [box-->[?:Project]-->[?:Task, gh_repo==full_name, gh_issue_number>0, gh_synced_at!="", gh_synced_at]][:1]
         );
     }
     out.sort(key=lambda (t: Task) { t.gh_synced_at; });
@@ -1116,9 +1086,7 @@ def earliest_synced(holder: Root, full_name: str) -> list[Task] {
 def step_column_peak(holder: Root, step: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, step_id == step, -sort_order]][:2]
-        );
+        out.extend([box-->[?:Project]-->[?:Task, step_id==step, -sort_order]][:2]);
     }
     out.sort(key=lambda (t: Task) { -t.sort_order; });
     return out[:2];
@@ -1129,9 +1097,7 @@ def step_column_below(holder: Root, step: str, bound: float) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, step_id == step, sort_order < bound, -sort_order]
-            ][:2]
+            [box-->[?:Project]-->[?:Task, step_id==step, sort_order<bound, -sort_order]][:2]
         );
     }
     out.sort(key=lambda (t: Task) { -t.sort_order; });
@@ -1143,9 +1109,7 @@ def step_column_above(holder: Root, step: str, bound: float) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, step_id == step, sort_order > bound, sort_order]
-            ][:2]
+            [box-->[?:Project]-->[?:Task, step_id==step, sort_order>bound, sort_order]][:2]
         );
     }
     out.sort(key=lambda (t: Task) { t.sort_order; });
@@ -1162,9 +1126,7 @@ def status_column_peak(holder: Root, col: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == col, step_id == "", -sort_order]
-            ][:2]
+            [box-->[?:Project]-->[?:Task, status==col, step_id=="", -sort_order]][:2]
         );
     }
     out.sort(key=lambda (t: Task) { -t.sort_order; });
@@ -1176,9 +1138,7 @@ def status_column_below(holder: Root, col: str, bound: float) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == col, step_id == "", sort_order < bound, -sort_order]
-            ][:2]
+            [box-->[?:Project]-->[?:Task, status==col, step_id=="", sort_order<bound, -sort_order]][:2]
         );
     }
     out.sort(key=lambda (t: Task) { -t.sort_order; });
@@ -1190,9 +1150,7 @@ def status_column_above(holder: Root, col: str, bound: float) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
         out.extend(
-            [
-                box-->[?:Project]-->[?:Task, status == col, step_id == "", sort_order > bound, sort_order]
-            ][:2]
+            [box-->[?:Project]-->[?:Task, status==col, step_id=="", sort_order>bound, sort_order]][:2]
         );
     }
     out.sort(key=lambda (t: Task) { t.sort_order; });
@@ -1203,7 +1161,7 @@ def status_column_above(holder: Root, col: str, bound: float) -> list[Task] {
 def status_column(holder: Root, col: str) -> list[Task] {
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, status == col, step_id == ""]]);
+        out.extend([box-->[?:Project]-->[?:Task, status==col, step_id==""]]);
     }
     return out;
 }
@@ -1214,7 +1172,7 @@ def status_column(holder: Root, col: str) -> list[Task] {
 def status_peak(holder: Root, col: str) -> float {
     peak = 0.0;
     for box in [holder-->[?:Projects]] {
-        for t in [box-->[?:Project]-->[?:Task, status == col, -sort_order]][:1] {
+        for t in [box-->[?:Project]-->[?:Task, status==col, -sort_order]][:1] {
             if t.sort_order > peak {
                 peak = t.sort_order;
             }
@@ -1297,7 +1255,7 @@ def forget_category(holder: Root, said: str, except_id: str) {
         return;
     }
     others = 0;
-    for t in [boxes[0]-->[?:Project]-->[?:Task, category == said, created_at]][:2] {
+    for t in [boxes[0]-->[?:Project]-->[?:Task, category==said, created_at]][:2] {
         if jid(t) != except_id {
             others = others + 1;
         }

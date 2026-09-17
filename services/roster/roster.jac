@@ -192,7 +192,7 @@ walker ArchiveMember(find_member) {
         # Filter to Task explicitly: the reverse read also surfaces the
         # box's generic parent edge, which has no `status`. The status
         # predicate is pushed, so the Done history is never loaded.
-        for t in [here<-:AssignedTo:<-[?:Task, status != "Done"]] {
+        for t in [here<-:AssignedTo:<-[?:Task, status!="Done"]] {
             for e in [edge t->:AssignedTo:->] {
                 del e;
             }

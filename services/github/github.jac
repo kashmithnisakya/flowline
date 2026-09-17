@@ -21,7 +21,16 @@ import from models {
     on_attached,
     owned,
     repo_view,
-    all_tasks,
+    tasks_by_issue,
+    tasks_by_pr,
+    tasks_by_pr_link,
+    unnumbered_pr_links,
+    children_of,
+    earliest_synced,
+    status_peak,
+    count_task,
+    task_project,
+    seeded_done,
     members_of,
     steps_of
 }
@@ -430,8 +439,55 @@ def label_names(item: dict[str, any]) -> list[str] {
 }
 
 
+# The task jid per issue number for one page of GitHub items: one pushed
+# lookup for the page, never a walk over the workspace.
+def linked_issues(holder: Root, full_name: str, items: list[any]) -> dict[int, str] {
+    numbers: list[int] = [];
+    for item in items {
+        if isinstance(item, dict) {
+            number = int(item.get("number") or 0);
+            if number > 0 {
+                numbers.append(number);
+            }
+        }
+    }
+    found: dict[int, str] = {};
+    for t in tasks_by_issue(holder, full_name, numbers) {
+        found[t.gh_issue_number] = jid(t);
+    }
+    return found;
+}
+
+
+# The same for pull requests, by number or by a hand-pasted link.
+def linked_pulls(holder: Root, full_name: str, items: list[any]) -> dict[int, str] {
+    numbers: list[int] = [];
+    links: list[str] = [];
+    for item in items {
+        if isinstance(item, dict) {
+            number = int(item.get("number") or 0);
+            if number > 0 {
+                numbers.append(number);
+            }
+            url = str(item.get("html_url") or "");
+            if url {
+                links.append(url);
+            }
+        }
+    }
+    found: dict[int, str] = {};
+    for t in tasks_by_pr_link(holder, links) {
+        found[pr_number_from(t.pr_link)] = jid(t);
+    }
+    for t in tasks_by_pr(holder, full_name, numbers) {
+        found[t.pr_number] = jid(t);
+    }
+    return found;
+}
+
+
 def issue_row(
-    item: dict[str, any], owned_tasks: list[Task], full_name: str
+    item: dict[str, any], linked: dict[int, str], full_name: str
 ) -> GhIssueRow {
     number = int(item.get("number") or 0);
     labels = label_names(item);
@@ -440,12 +496,6 @@ def issue_row(
     if isinstance(who, dict) {
         assignee = str(who.get("login") or "");
     }
-    linked = "";
-    for t in owned_tasks {
-        if t.gh_repo == full_name and t.gh_issue_number == number {
-            linked = jid(t);
-        }
-    }
     return GhIssueRow(
         number=number,
         title=str(item.get("title") or ""),
@@ -453,8 +503,8 @@ def issue_row(
         labels=labels,
         assignee=assignee,
         html_url=str(item.get("html_url") or ""),
-        already_imported=bool(linked),
-        imported_task_id=linked
+        already_imported=number in linked,
+        imported_task_id=linked[number] if number in linked else ""
     );
 }
 
@@ -574,7 +624,7 @@ walker ListRepoIssues {
         if isinstance(data, list) {
             raw = data;
         }
-        owned_tasks = all_tasks(here);
+        linked = linked_issues(here, full_name, raw);
         rows: list[GhIssueRow] = [];
         for item in raw {
             if not isinstance(item, dict) {
@@ -585,7 +635,7 @@ walker ListRepoIssues {
             if item.get("pull_request") {
                 continue;
             }
-            rows.append(issue_row(item, owned_tasks, full_name));
+            rows.append(issue_row(item, linked, full_name));
         }
         report {
             "ok": True,
@@ -633,7 +683,7 @@ walker ListRepoPulls {
         if isinstance(data, list) {
             raw = data;
         }
-        owned_tasks = all_tasks(here);
+        linked = linked_pulls(here, full_name, raw);
         rows: list[GhPrRow] = [];
         for item in raw {
             if not isinstance(item, dict) {
@@ -646,14 +696,6 @@ walker ListRepoPulls {
             if isinstance(who, dict) {
                 author = str(who.get("login") or "");
             }
-            linked = "";
-            for t in owned_tasks {
-                if t.gh_repo == full_name and t.pr_number == number {
-                    linked = jid(t);
-                } elif url and t.pr_link == url {
-                    linked = jid(t);
-                }
-            }
             rows.append(
                 GhPrRow(
                     number=number,
@@ -661,7 +703,7 @@ walker ListRepoPulls {
                     state=pr_state_of(item),
                     author=author,
                     html_url=url,
-                    linked_task_id=linked,
+                    linked_task_id=linked[number] if number in linked else "",
                     updated_at=str(item.get("updated_at") or "")
                 )
             );
@@ -733,7 +775,11 @@ walker SearchRepoItems {
             }
             total = int(data.get("total_count") or 0);
         }
-        owned_tasks = all_tasks(here);
+        linked = (
+            linked_pulls(here, full_name, items)
+                if pulls
+                else linked_issues(here, full_name, items)
+        );
         issue_rows: list[GhIssueRow] = [];
         pr_rows: list[GhPrRow] = [];
         for item in items {
@@ -747,14 +793,6 @@ walker SearchRepoItems {
                 who = item.get("user") or {};
                 if isinstance(who, dict) {
                     author = str(who.get("login") or "");
-                }
-                linked = "";
-                for t in owned_tasks {
-                    if t.gh_repo == full_name and t.pr_number == number {
-                        linked = jid(t);
-                    } elif url and t.pr_link == url {
-                        linked = jid(t);
-                    }
                 }
                 # Search items nest merge status under pull_request rather
                 # than at the top level, so pr_state_of needs a flattened view.
@@ -773,7 +811,7 @@ walker SearchRepoItems {
                         state=pr_state_of(flat),
                         author=author,
                         html_url=url,
-                        linked_task_id=linked,
+                        linked_task_id=linked[number] if number in linked else "",
                         updated_at=str(item.get("updated_at") or "")
                     )
                 );
@@ -781,7 +819,7 @@ walker SearchRepoItems {
                 if item.get("pull_request") {
                     continue;
                 }
-                issue_rows.append(issue_row(item, owned_tasks, full_name));
+                issue_rows.append(issue_row(item, linked, full_name));
             }
         }
         report {
@@ -827,12 +865,7 @@ def auto_done_land(
     peak: float
 ) -> float {
     if peak < 0.0 {
-        peak = 0.0;
-        for d in all_tasks(holder) {
-            if d.status == "Done" and d.sort_order > peak {
-                peak = d.sort_order;
-            }
-        }
+        peak = status_peak(holder, "Done");
     }
     peak = peak + 1024.0;
     t.set_status("Done", stamp);
@@ -888,13 +921,7 @@ def file_issue_item(
     landing = "Done" if issue_state == "closed" else col;
     landing_step = done_step if issue_state == "closed" else step;
     if landing not in peaks {
-        top = 0.0;
-        for t in all_tasks(holder) {
-            if t.status == landing and t.sort_order > top {
-                top = t.sort_order;
-            }
-        }
-        peaks[landing] = top;
+        peaks[landing] = status_peak(holder, landing);
     }
     peaks[landing] = peaks[landing] + 1024.0;
     subs = item.get("sub_issues_summary") or {};
@@ -925,18 +952,23 @@ def file_issue_item(
         gh_synced_at=stamp,
         gh_updated_at=str(item.get("updated_at") or ""),
         gh_sub_total=sub_total,
-        gh_sub_done=sub_done
+        gh_sub_done=sub_done,
+        project_id=jid(target_project)
     );
     on_attached(holder, fresh);
+    count_task(target_project, fresh, 1);
     # Map GitHub assignees onto roster members by username. Anyone without
     # a match is simply left off; we never invent people.
     logins = assignee_logins(item);
     fresh.gh_assignees = logins;
+    linked: list[str] = [];
     for m in members {
         if m.github_username and m.github_username.lower() in logins {
             fresh +>:AssignedTo():+> m;
+            linked.append(jid(m));
         }
     }
+    fresh.assignee_ids = linked;
     record_task_event(
         holder, fresh, "Imported from GitHub " + full_name + " #" + str(number), stamp
     );
@@ -1001,22 +1033,20 @@ walker ImportIssues {
             disengage;
         }
         members = members_of(here);
-        held: dict[str, bool] = {};
-        for t in all_tasks(here) {
-            if t.gh_issue_number > 0 {
-                held[t.gh_repo + "#" + str(t.gh_issue_number)] = True;
-            }
+        wanted = self.numbers[:IMPORT_CAP];
+        held: dict[int, bool] = {};
+        for t in tasks_by_issue(here, full_name, wanted) {
+            held[t.gh_issue_number] = True;
         }
         imported: list[TaskView] = [];
         skipped: list[int] = [];
         failed: list[int] = [];
         peaks: dict[str, float] = {};
-        wanted = self.numbers[:IMPORT_CAP];
         for number in wanted {
             if number <= 0 {
                 continue;
             }
-            if full_name + "#" + str(number) in held {
+            if number in held {
                 skipped.append(number);
                 continue;
             }
@@ -1195,9 +1225,11 @@ walker SetRepoAutoClose {
 
 # ------------------------------------------------------------------- sync
 
-# Everything one sync increment needs, built once per call so the per-item
-# helpers below never scan the graph. Request-scoped, never persisted; the
-# counters are what sync_summary reports.
+# Everything one sync increment needs, built once per call. The task
+# lookups are caches filled per page of items (prefetch_*) or per key
+# (issue_task / pull_task), each one pushed query, so an increment reads
+# the tasks it touches and never the workspace. Request-scoped, never
+# persisted; the counters are what sync_summary reports.
 obj SyncContext {
     has holder: Root,
         connection: any,
@@ -1209,9 +1241,10 @@ obj SyncContext {
         by_name: dict[str, Repo] = {},
         task_by_key: dict[str, Task] = {},
         task_by_pr: dict[str, Task] = {},
+        # Keys already looked up, hit or miss, so a miss is not asked twice.
+        looked_key: dict[str, bool] = {},
+        looked_pr: dict[str, bool] = {},
         child_stamped: dict[str, bool] = {},
-        earliest: dict[str, str] = {},
-        linked_tasks: list[Task] = [],
         landing: list[str] = [],
         done_step: str = "",
         done_name: str = "Done",
@@ -1219,6 +1252,8 @@ obj SyncContext {
         peaks: dict[str, float] = {},
         done_peak: float = -1.0,
         family_calls: int = 0,
+        # Linked tasks this increment looked at (a lookup that hit).
+        linked: int = 0,
         refreshed: int = 0,
         auto_added: int = 0,
         auto_done_moves: int = 0,
@@ -1228,9 +1263,9 @@ obj SyncContext {
 }
 
 
-# One walk over the repos and one over the tasks builds every lookup the
-# stream needs. Hand-pasted PR links are adopted here so they join this
-# increment, but only when they point at a repo the workspace tracks.
+# One walk over the repos builds the context. Hand-pasted PR links not yet
+# numbered are adopted here so they join this increment, but only when
+# they point at a repo the workspace tracks.
 def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
     ctx = SyncContext(
         holder=holder, connection=c, token=token, stamp=stamp, started=clock()
@@ -1245,36 +1280,14 @@ def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
             ctx.merge_done.append(r.full_name);
         }
     }
-    for t in all_tasks(holder) {
-        if t.pr_link and t.pr_number == 0 {
-            guess_repo = repo_from_link(t.pr_link);
-            guess_number = pr_number_from(t.pr_link);
-            if guess_number > 0 and guess_repo in ctx.tracked {
-                t.pr_number = guess_number;
-                if not t.gh_repo {
-                    t.gh_repo = guess_repo;
-                }
+    for t in unnumbered_pr_links(holder) {
+        guess_repo = repo_from_link(t.pr_link);
+        guess_number = pr_number_from(t.pr_link);
+        if guess_number > 0 and guess_repo in ctx.tracked {
+            t.pr_number = guess_number;
+            if not t.gh_repo {
+                t.gh_repo = guess_repo;
             }
-        }
-        if not t.gh_repo {
-            continue;
-        }
-        if t.gh_issue_number > 0 {
-            ctx.task_by_key[t.gh_repo + "#" + str(t.gh_issue_number)] = t;
-            ctx.linked_tasks.append(t);
-            if t.gh_parent_repo and t.gh_parent_number > 0 {
-                ctx.child_stamped[t.gh_parent_repo + "#" + str(t.gh_parent_number)] = True;
-            }
-            if t.gh_synced_at
-                and (
-                    t.gh_repo not in ctx.earliest
-                    or t.gh_synced_at < ctx.earliest[t.gh_repo]
-                ) {
-                ctx.earliest[t.gh_repo] = t.gh_synced_at;
-            }
-        }
-        if t.pr_number > 0 {
-            ctx.task_by_pr[t.gh_repo + "#" + str(t.pr_number)] = t;
         }
     }
     ctx.landing = entry_landing(holder);
@@ -1287,6 +1300,80 @@ def sync_context(holder: Root, c: any, token: str, stamp: str) -> SyncContext {
     }
     ctx.members = members_of(holder);
     return ctx;
+}
+
+
+# Fill the issue lookup for the numbers on one page of items, one query.
+def prefetch_issues(ctx: SyncContext, full_name: str, numbers: list[int]) {
+    wanted = [
+        n
+        for n in numbers
+        if full_name + "#" + str(n) not in ctx.looked_key
+    ];
+    for t in tasks_by_issue(ctx.holder, full_name, wanted) {
+        ctx.task_by_key[full_name + "#" + str(t.gh_issue_number)] = t;
+        ctx.linked = ctx.linked + 1;
+    }
+    for n in wanted {
+        ctx.looked_key[full_name + "#" + str(n)] = True;
+    }
+}
+
+
+def prefetch_pulls(ctx: SyncContext, full_name: str, numbers: list[int]) {
+    wanted = [
+        n
+        for n in numbers
+        if full_name + "#" + str(n) not in ctx.looked_pr
+    ];
+    for t in tasks_by_pr(ctx.holder, full_name, wanted) {
+        ctx.task_by_pr[full_name + "#" + str(t.pr_number)] = t;
+        ctx.linked = ctx.linked + 1;
+    }
+    for n in wanted {
+        ctx.looked_pr[full_name + "#" + str(n)] = True;
+    }
+}
+
+
+# The task linked to one issue or PR, as a list (empty when none). A key
+# not prefetched costs one query the first time it is asked for.
+def issue_task(ctx: SyncContext, full_name: str, number: int) -> list[Task] {
+    key = full_name + "#" + str(number);
+    if key not in ctx.looked_key {
+        prefetch_issues(ctx, full_name, [number]);
+    }
+    return [ctx.task_by_key[key]] if key in ctx.task_by_key else [];
+}
+
+
+def pull_task(ctx: SyncContext, full_name: str, number: int) -> list[Task] {
+    key = full_name + "#" + str(number);
+    if key not in ctx.looked_pr {
+        prefetch_pulls(ctx, full_name, [number]);
+    }
+    return [ctx.task_by_pr[key]] if key in ctx.task_by_pr else [];
+}
+
+
+# A task the increment filed joins the lookup, so a later item for the
+# same issue on the same page finds it.
+def remember_issue(ctx: SyncContext, key: str, t: Task) {
+    ctx.task_by_key[key] = t;
+    ctx.looked_key[key] = True;
+}
+
+
+# GitHub's dates can move a Done task between "moved to Done" and "created
+# already Done"; the project's seeded tally follows.
+def reseed(t: Task, was_seeded: bool) {
+    now_seeded = seeded_done(t);
+    if was_seeded == now_seeded {
+        return;
+    }
+    for p in task_project(t) {
+        p.seeded_done_total = p.seeded_done_total + (1 if now_seeded else -1);
+    }
 }
 
 
@@ -1313,10 +1400,11 @@ def stamp_pr_updated(t: Task, item: dict[str, any]) {
 def apply_pr_item(
     ctx: SyncContext, full_name: str, key: str, item: dict[str, any]
 ) -> None {
-    if key not in ctx.task_by_pr {
+    hits = pull_task(ctx, full_name, int(item.get("number") or 0));
+    if not hits {
         return;
     }
-    pt = ctx.task_by_pr[key];
+    pt = hits[0];
     fresh_pr = pr_state_of(item);
     if fresh_pr and fresh_pr != pt.pr_state {
         pt.pr_state = fresh_pr;
@@ -1356,7 +1444,8 @@ def apply_issue_item(
     item: dict[str, any]
 ) -> bool {
     full_name = r.full_name;
-    if key not in ctx.task_by_key {
+    hits = issue_task(ctx, full_name, number);
+    if not hits {
         if r.auto_sync and not isinstance(repo_project, Project) {
             ctx.unfiled = ctx.unfiled + 1;
         } elif r.auto_sync {
@@ -1372,14 +1461,15 @@ def apply_issue_item(
                 ctx.done_step,
                 ctx.peaks
             );
-            ctx.task_by_key[key] = fresh;
+            remember_issue(ctx, key, fresh);
             ctx.auto_added = ctx.auto_added + 1;
         }
         return False;
     }
-    t = ctx.task_by_key[key];
+    t = hits[0];
     # GitHub's dates win when they are earlier: a sync-stamped import is
     # corrected, while a card that closed its own issue keeps its moment.
+    was_seeded = seeded_done(t);
     made = str(item.get("created_at") or "");
     if made and made < t.created_at {
         t.created_at = made;
@@ -1388,6 +1478,7 @@ def apply_issue_item(
     if closed and t.status == "Done" and (not t.done_at or closed < t.done_at) {
         t.done_at = closed;
     }
+    reseed(t, was_seeded);
     fresh_state = str(item.get("state") or "");
     if fresh_state and fresh_state != t.gh_issue_state {
         t.gh_issue_state = fresh_state;
@@ -1429,14 +1520,21 @@ def apply_issue_item(
     t.gh_sub_total = pair[0];
     t.gh_sub_done = pair[1];
     if moved and pair[0] == 0 {
-        for kid_t in ctx.linked_tasks {
-            if kid_t.gh_parent_repo == full_name and kid_t.gh_parent_number == number {
-                kid_t.gh_parent_repo = "";
-                kid_t.gh_parent_number = 0;
-            }
+        for kid_t in children_of(ctx.holder, full_name, number) {
+            kid_t.gh_parent_repo = "";
+            kid_t.gh_parent_number = 0;
         }
     }
-    unstamped = pair[0] > 0 and key not in ctx.child_stamped;
+    # A family whose children were never stamped asks for the child list;
+    # one bounded read per parent, remembered for the increment.
+    unstamped = False;
+    if pair[0] > 0 and key not in ctx.child_stamped {
+        if children_of(ctx.holder, full_name, number) {
+            ctx.child_stamped[key] = True;
+        } else {
+            unstamped = True;
+        }
+    }
     t.gh_synced_at = ctx.stamp;
     stamp_updated(t, item);
     return (moved and pair[0] > 0) or unstamped;
@@ -1458,12 +1556,10 @@ def refresh_family(ctx: SyncContext, full_name: str, key: str, number: int) {
             if not isinstance(kid, dict) {
                 continue;
             }
-            child_key = repo_from_api_url(str(kid.get("repository_url") or ""))
-                + "#"
-                + str(int(kid.get("number") or 0));
-            if child_key in ctx.task_by_key {
-                ctx.task_by_key[child_key].gh_parent_repo = full_name;
-                ctx.task_by_key[child_key].gh_parent_number = number;
+            child_repo = repo_from_api_url(str(kid.get("repository_url") or ""));
+            for child in issue_task(ctx, child_repo, int(kid.get("number") or 0)) {
+                child.gh_parent_repo = full_name;
+                child.gh_parent_number = number;
                 ctx.child_stamped[key] = True;
             }
         }
@@ -1528,9 +1624,9 @@ def apply_issue(
     if item.get("pull_request") {
         return apply_pull(ctx, full_name, action, item);
     }
+    hits = issue_task(ctx, full_name, number);
     if action == "deleted" or action == "transferred" {
-        if key in ctx.task_by_key {
-            t = ctx.task_by_key[key];
+        for t in hits {
             t.gh_issue_number = 0;
             t.gh_issue_state = "";
             t.gh_synced_at = ctx.stamp;
@@ -1538,7 +1634,7 @@ def apply_issue(
         }
         return delivery_outcome("ignored", key);
     }
-    if key in ctx.task_by_key and stale(item, ctx.task_by_key[key].gh_updated_at) {
+    if hits and stale(item, hits[0].gh_updated_at) {
         return delivery_outcome("stale", key);
     }
     apply_issue_item(
@@ -1553,19 +1649,20 @@ def apply_pull(
 ) -> dict[str, any] {
     number = int(item.get("number") or 0);
     key = full_name + "#" + str(number);
-    if number <= 0 or key not in ctx.task_by_pr {
+    hits = pull_task(ctx, full_name, number) if number > 0 else [];
+    if not hits {
         return delivery_outcome("unlinked", key);
     }
-    if stale(item, ctx.task_by_pr[key].pr_updated_at) {
+    if stale(item, hits[0].pr_updated_at) {
         return delivery_outcome("stale", key);
     }
     apply_pr_item(ctx, full_name, key, item);
     # Who is waiting on whom rides the PR event: the request is a fact about
     # the PR, and its answer arrives later as a review of its own.
     if action == "review_requested" {
-        ctx.task_by_pr[key].pr_review_state = "requested";
+        hits[0].pr_review_state = "requested";
     } elif action == "review_request_removed" {
-        ctx.task_by_pr[key].pr_review_state = "";
+        hits[0].pr_review_state = "";
     }
     return delivery_outcome("applied", key);
 }
@@ -1579,14 +1676,15 @@ def apply_review(
 ) -> dict[str, any] {
     number = int(item.get("number") or 0);
     key = full_name + "#" + str(number);
-    if number <= 0 or key not in ctx.task_by_pr {
+    hits = pull_task(ctx, full_name, number) if number > 0 else [];
+    if not hits {
         return delivery_outcome("unlinked", key);
     }
     verdict = str(review.get("state") or "").lower();
     if verdict not in REVIEW_VERDICTS {
         return delivery_outcome("ignored", key + " " + (verdict or "no state"));
     }
-    t = ctx.task_by_pr[key];
+    t = hits[0];
     at = str(review.get("submitted_at") or "");
     if at and t.pr_review_at and at <= t.pr_review_at {
         return delivery_outcome("stale", key);
@@ -1624,8 +1722,7 @@ def apply_family(
     added = action.endswith("_added");
     touched = 0;
     child_key = c_repo + "#" + str(c_num);
-    if child_key in ctx.task_by_key {
-        kid = ctx.task_by_key[child_key];
+    for kid in issue_task(ctx, c_repo, c_num) {
         if added {
             kid.gh_parent_repo = p_repo;
             kid.gh_parent_number = p_num;
@@ -1637,8 +1734,7 @@ def apply_family(
         touched = touched + 1;
     }
     parent_key = p_repo + "#" + str(p_num);
-    if parent_key in ctx.task_by_key {
-        par = ctx.task_by_key[parent_key];
+    for par in issue_task(ctx, p_repo, p_num) {
         subs = parent.get("sub_issues_summary") or {};
         if isinstance(subs, dict) and subs {
             par.gh_sub_total = int(subs.get("total") or 0);
@@ -1882,10 +1978,11 @@ walker SyncGithub {
             # tasks, since everything older was fresh when it was imported.
             cursor = r.issue_cursor;
             if not cursor and not r.auto_sync and not self.full {
-                if full_name not in ctx.earliest {
+                oldest = earliest_synced(here, full_name);
+                if not oldest {
                     continue;
                 }
-                cursor = ctx.earliest[full_name][:19] + "Z";
+                cursor = oldest[0].gh_synced_at[:19] + "Z";
             }
             attached = [r<-:HasRepo:<-[?:Project]];
             repo_project = attached[0] if attached else None;
@@ -1918,6 +2015,21 @@ walker SyncGithub {
                 if not isinstance(data, list) {
                     break;
                 }
+                # The page's linked tasks in two queries, before any item
+                # asks for one of its own.
+                issue_numbers: list[int] = [];
+                pr_numbers: list[int] = [];
+                for item in data {
+                    if isinstance(item, dict) and int(item.get("number") or 0) > 0 {
+                        if item.get("pull_request") {
+                            pr_numbers.append(int(item.get("number") or 0));
+                        } else {
+                            issue_numbers.append(int(item.get("number") or 0));
+                        }
+                    }
+                }
+                prefetch_issues(ctx, full_name, issue_numbers);
+                prefetch_pulls(ctx, full_name, pr_numbers);
                 newest = cursor;
                 for item in data {
                     if not isinstance(item, dict) {
@@ -1970,7 +2082,7 @@ walker SyncGithub {
         }
         report sync_summary(
             [
-                len(ctx.linked_tasks),
+                ctx.linked,
                 ctx.refreshed,
                 ctx.auto_added,
                 ctx.auto_done_moves,
