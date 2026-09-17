@@ -72,6 +72,219 @@ def walker(name, body=None):
     return status, payload, reports or []
 
 
+def report(name, body=None):
+    # The first report of a walker, or {} / [] when it reports nothing.
+    _, _, reports = walker(name, body)
+    return reports[0] if reports else {}
+
+
+STATUS_KIND = {"Backlog": "start", "In Progress": "active", "Review": "handoff",
+               "Changes Requested": "active", "Done": "done", "Blocked": "blocked"}
+
+
+def done_day(t):
+    # The rule in services/util.jac: done_at, else updated_at, never before created.
+    day = (t.get("done_at") or t.get("updated_at") or "")[:10]
+    made = (t.get("created_at") or "")[:10]
+    return made if made and day < made else day
+
+
+def moved_to_done(t):
+    return t.get("status") == "Done" and not (t.get("done_at") and t.get("done_at") == t.get("created_at"))
+
+
+def all_rows():
+    rows, page = [], 1
+    while True:
+        pg = report("ListTasks", {"scope": "all", "page": page, "page_size": 100})
+        rows.extend(pg.get("rows", []))
+        if not pg.get("has_more"):
+            return rows
+        page += 1
+
+
+def board_rows():
+    rows, page, older, cats = [], 1, None, None
+    while True:
+        b = report("BoardSnapshot", {"page": page, "page_size": 500})
+        rows.extend(b.get("rows", []))
+        older, cats = b.get("older"), b.get("categories")
+        if not b.get("has_more"):
+            return rows, older, cats
+        page += 1
+
+
+def brute_force(rows, steps, project_ids, member_ids, today, cutoff, weeks):
+    # Everything the aggregators report, recomputed from the all-scope rows.
+    working = [t for t in rows if t["status"] != "Done" or done_day(t) >= cutoff]
+    open_rows = [t for t in rows if t["status"] != "Done"]
+    exp = {
+        "open": len(open_rows),
+        "blocked": sum(1 for t in open_rows if t["status"] == "Blocked"),
+        "overdue": sum(1 for t in open_rows if t["due_date"] and t["due_date"] < today),
+        "categories": sorted({t["category"] for t in rows if t["category"]}),
+        "working": len(working),
+        "older": len(rows) - len(working),
+        "done": sum(1 for t in rows if t["status"] == "Done"),
+        "attention": sum(1 for t in open_rows if t["status"] == "Blocked" or (t["due_date"] and t["due_date"] < today)),
+        "all": len(rows),
+        "board_ids": sorted(t["id"] for t in working),
+    }
+    exp["projects"] = {pid: {
+        "total": sum(1 for t in rows if t["project_id"] == pid),
+        "done": sum(1 for t in rows if t["project_id"] == pid and t["status"] == "Done"),
+        "blocked": sum(1 for t in open_rows if t["project_id"] == pid and t["status"] == "Blocked"),
+        "active": sum(1 for t in open_rows if t["project_id"] == pid and t["status"] in ("In Progress", "Review", "Changes Requested")),
+    } for pid in project_ids}
+    exp["members"] = {mid: {
+        "open": sum(1 for t in open_rows if mid in t["assignee_ids"]),
+        "done_in_week": sum(1 for t in rows if mid in t["assignee_ids"] and moved_to_done(t) and done_day(t) >= weeks[-1]),
+    } for mid in member_ids}
+
+    def slot(day):
+        found = -1
+        for i, w in enumerate(weeks):
+            if day and day >= w:
+                found = i
+        return found
+    added = [0] * len(weeks)
+    finished = [0] * len(weeks)
+    scope_before = done_before = 0
+    for t in rows:
+        if t["status"] == "Done" and not moved_to_done(t):
+            continue
+        s = slot(t["created_at"][:10])
+        if s < 0:
+            scope_before += 1
+        else:
+            added[s] += 1
+        if t["status"] == "Done":
+            s = slot(done_day(t))
+            if s < 0:
+                done_before += 1
+            else:
+                finished[s] += 1
+    scope, done = [], []
+    for i in range(len(weeks)):
+        scope_before += added[i]
+        done_before += finished[i]
+        scope.append(scope_before)
+        done.append(done_before)
+    exp["history"] = {"added": added, "finished": finished, "scope": scope, "done": done}
+    known = [s["id"] for s in steps]
+    first_of_kind = {}
+    for s in steps:
+        first_of_kind.setdefault(s["kind"], s["id"])
+    counts = {s["id"]: 0 for s in steps}
+    for t in working:
+        landing = t["step_id"] if t["step_id"] in known else first_of_kind.get(STATUS_KIND.get(t["status"], "active"), "")
+        if landing:
+            counts[landing] += 1
+    exp["step_counts"] = counts
+    return exp
+
+
+def assert_parity(label, project_ids, member_ids, expected_links):
+    # Every aggregator against a brute-force pass over ListTasks(scope="all").
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    cutoff = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    rows = all_rows()
+    counts = report("TaskCounts")
+    history = report("TaskHistory")
+    steps = report("GetFlowLine", {"with_counts": True}) or []
+    weeks = history.get("weeks", [])
+    exp = brute_force(rows, steps, project_ids, member_ids, today, cutoff, weeks)
+    ok_links = all(t["project_id"] == expected_links[t["id"]][0] and sorted(t["assignee_ids"]) == sorted(expected_links[t["id"]][1])
+                   for t in rows if t["id"] in expected_links)
+    check(f"{label}: rows carry their project and assignee ids", ok_links and len(rows) == len(expected_links),
+          f"{[(t['title'], t['project_id'], t['assignee_ids']) for t in rows]}")
+    check(f"{label}: TaskCounts open/blocked/overdue/categories",
+          (counts.get("open"), counts.get("blocked"), counts.get("overdue"), counts.get("categories"))
+          == (exp["open"], exp["blocked"], exp["overdue"], exp["categories"]),
+          f"{counts.get('open'), counts.get('blocked'), counts.get('overdue'), counts.get('categories')} vs {exp['open'], exp['blocked'], exp['overdue'], exp['categories']}")
+    got_projects = {p["project_id"]: {k: p[k] for k in ("total", "done", "blocked", "active")} for p in counts.get("projects", [])}
+    check(f"{label}: TaskCounts per-project tallies", got_projects == exp["projects"], f"{got_projects} vs {exp['projects']}")
+    got_members = {m["member_id"]: {k: m[k] for k in ("open", "done_in_week")} for m in counts.get("members", [])}
+    check(f"{label}: TaskCounts per-member tallies", got_members == exp["members"], f"{got_members} vs {exp['members']}")
+    check(f"{label}: TaskCounts done_by_week sums to this month's moves",
+          sum(counts.get("done_by_week", [])) == sum(1 for t in rows if moved_to_done(t) and done_day(t) >= weeks[-4] if weeks) if weeks else True,
+          f"{counts.get('done_by_week')}")
+    brows, older, cats = board_rows()
+    check(f"{label}: BoardSnapshot rows, older and categories",
+          sorted(r["id"] for r in brows) == exp["board_ids"] and older == exp["older"] and cats == exp["categories"],
+          f"{len(brows), older, cats} vs {len(exp['board_ids']), exp['older'], exp['categories']}")
+    got_history = {k: history.get(k) for k in ("added", "finished", "scope", "done")}
+    check(f"{label}: TaskHistory added/finished/scope/done", got_history == exp["history"], f"{got_history} vs {exp['history']}")
+    got_counts = {s["id"]: s["task_count"] for s in steps}
+    check(f"{label}: GetFlowLine step counts", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    totals = {sc: report("ListTasks", {"scope": sc, "page_size": 1}) for sc in ("working", "older", "done", "attention", "all")}
+    got_totals = {sc: totals[sc].get("total") for sc in totals}
+    exp_totals = {sc: exp[sc] for sc in totals}
+    check(f"{label}: ListTasks totals per scope", got_totals == exp_totals and totals["working"].get("older") == exp["older"],
+          f"{got_totals} older={totals['working'].get('older')} vs {exp_totals} older={exp['older']}")
+
+
+def parity_suite(project_id, member_id, tag):
+    # Tasks across statuses, projects, members and categories, some created
+    # Done and some moved there, then deletes and a re-parent; the counters
+    # and the pushed readers must agree with a brute-force pass each time.
+    steps = report("ApplyTemplate", {"template_key": "simple"}) or []
+    by_kind = {}
+    for s in steps:
+        by_kind.setdefault(s["kind"], s["id"])
+    check("parity: the Simple template is applied", len(steps) == 4, str(steps)[:200])
+    p2 = report("SaveProject", {"name": "CI Parity", "description": ""})
+    p2_id = str(find_key(p2, "id", "_jac_id") or "")
+    m2 = report("SaveMember", {"first_name": "Omar", "last_name": "Diaz"})
+    m2_id = str(find_key(m2, "id", "_jac_id") or "")
+    check("parity: second project and member", bool(p2_id) and bool(m2_id))
+    links = {}
+    plan = [
+        ("open backlog", "Docs", "Backlog", "", project_id, [member_id], ""),
+        ("open doing", "Docs", "In Progress", by_kind.get("active", ""), project_id, [member_id, m2_id], ""),
+        ("open review", "Infra", "Review", by_kind.get("handoff", ""), p2_id, [m2_id], ""),
+        ("blocked overdue", "Infra", "Blocked", "", p2_id, [member_id], "2020-01-01"),
+        ("open overdue", "Ops", "In Progress", "", p2_id, [], "2020-01-01"),
+        ("seeded done", "Ops", "Done", "", project_id, [m2_id], ""),
+        ("seeded done two", "Docs", "Done", by_kind.get("done", ""), p2_id, [], ""),
+        ("to move one", "Infra", "Backlog", by_kind.get("start", ""), project_id, [member_id], ""),
+        ("to move two", "Ops", "In Progress", "", p2_id, [m2_id], ""),
+        ("to delete open", "Gone", "Backlog", "", project_id, [member_id], ""),
+        ("to delete done", "Gone", "Done", "", p2_id, [], ""),
+        ("to rehome", "Docs", "Review", "", project_id, [member_id], ""),
+    ]
+    made = {}
+    for title, cat, status, step, pid, who, due in plan:
+        t = report("CreateTask", {"title": f"{title} {tag}", "category": cat, "status": status, "step_id": step,
+                                  "project_id": pid, "assignee_ids": who, "due_date": due, "priority": "Medium"})
+        tid = str(t.get("id") or "")
+        made[title] = t
+        links[tid] = (pid, who)
+    check("parity: every planned task was created", all(t.get("id") for t in made.values()), str(len(made)))
+    for title in ("to move one", "to move two"):
+        mv = report("MoveTask", {"task_id": made[title]["id"], "status": "Done"})
+        check(f"parity: '{title}' moved to Done", mv.get("status") == "Done" and mv.get("done_at") != mv.get("created_at"), str(mv)[:160])
+    first_task = report("ListTasks", {"scope": "all", "q": f"CI task {tag}", "page_size": 1}).get("rows", [{}])[0]
+    if first_task.get("id"):
+        links[first_task["id"]] = (project_id, [])
+    assert_parity("parity before", [project_id, p2_id], [member_id, m2_id], links)
+    for title in ("to delete open", "to delete done"):
+        gone = report("DeleteTask", {"task_id": made[title]["id"]})
+        check(f"parity: '{title}' deleted", gone.get("deleted") == made[title]["id"], str(gone))
+        links.pop(made[title]["id"], None)
+    row = made["to rehome"]
+    moved = report("UpdateTask", {"task_id": row["id"], "title": row["title"], "category": "Moved", "tags": [], "estimate": 0,
+                                  "priority": row["priority"], "status": row["status"], "step_id": row["step_id"], "due_date": "",
+                                  "start_date": "", "iteration_id": "", "notes": "", "issue_link": "", "pr_link": "",
+                                  "reviewer_id": "", "review_due": "", "assignee_ids": [m2_id], "project_id": p2_id})
+    check("parity: re-parented task reports its new project and assignee",
+          moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
+    links[row["id"]] = (p2_id, [m2_id])
+    assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
+
+
 def wait_ready():
     deadline = time.time() + READY_TIMEOUT
     while time.time() < deadline:
@@ -161,6 +374,7 @@ def main() -> int:
 
     status, payload, reports = walker("SaveMember", {"first_name": "Priya", "last_name": "Raman"})
     member = reports[0] if reports else {}
+    member_id = str(find_key(member, "id", "_jac_id") or "")
     check("SaveMember stores first and last name", status == 200 and member.get("first_name") == "Priya"
           and member.get("last_name") == "Raman" and member.get("name") == "Priya Raman", f"{status} {payload}")
 
@@ -192,6 +406,8 @@ def main() -> int:
           and len(ws.get("projects", [])) == counts["ListProjects"] == 1
           and len(ws.get("roles", [])) == counts["ListRoles"],
           f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
+
+    parity_suite(project_id, member_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))
