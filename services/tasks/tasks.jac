@@ -6,6 +6,7 @@ import from models {
     Task,
     TaskView,
     TaskPage,
+    TaskTitle,
     TaskTotals,
     WeeklyHistory,
     ProjectTally,
@@ -17,8 +18,7 @@ import from models {
     HasRole,
     TaskNames,
     task_names,
-    hydrate_views,
-    views_from,
+    hydrate_rows,
     resolve,
     on_attached,
     owned,
@@ -403,7 +403,7 @@ walker ListTasks {
             order_working(picked);
         }
         return TaskPage(
-            rows=hydrate_views(holder, picked[start:end]),
+            rows=hydrate_rows(holder, picked[start:end]),
             page=p,
             page_size=size,
             has_more=len(picked) > end,
@@ -858,13 +858,34 @@ walker UpdateTask(find_task) {
 }
 
 walker GetTask(find_task) {
-    """One task by jid, owner-checked by find_task. For a deep link to a card
-    the board's working set does not hold (older history, a search hit)."""
+    """One task by jid, owner-checked by find_task: the full TaskView, which
+    is what the task sheet loads when it opens (a list row carries no notes
+    or checklist items), and a deep link to a card the board's working set
+    does not hold (older history, a search hit)."""
     has reports: list[TaskView] = [];
 
     can deliver with Task entry {
         report here.to_view();
         disengage;
+    }
+}
+
+
+walker ListTaskTitles {
+    """The working set as id and title only, for the assistant's citations:
+    the rows and order of ListTasks(scope="working"), at most `limit` (capped
+    at 500), with nothing else on the wire."""
+    has done_days: int = 7,
+        limit: int = 500,
+        reports: list[list[TaskTitle]] = [];
+
+    can gather with Root entry {
+        ensure_tallies(here);
+        (p, size, start, end) = page_bounds(1, self.limit, 500, 500);
+        picked = working_tasks(here, done_cutoff(self.done_days));
+        picked.sort(key=lambda (t: Task) { jid(t); });
+        order_working(picked);
+        report [TaskTitle(id=jid(t), title=t.title) for t in picked[:size]];
     }
 }
 
