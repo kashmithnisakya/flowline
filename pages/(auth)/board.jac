@@ -3,15 +3,23 @@ ARE the flow line steps in designed order, so board and Flow line tab cannot
 disagree; with no flow line yet it falls back to the six statuses. Stateful
 shell: data and handlers here, columns/cards/filters/dialog presentational."""
 
-import from ...models { Project, MemberView, TaskView, StepView, RepoView, RoleView }
+import from ...models {
+    Project,
+    MemberView,
+    TaskView,
+    StepView,
+    RepoView,
+    RoleView,
+    IterationView
+}
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
 # compiles lazily, and a module nothing imports produces no output.
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS }
 
-import from ...walkers.board { BoardSnapshot }
-import from ...walkers.projects { AssignToProject }
-import from ...walkers.tasks {
+import from ...services.board.board { BoardSnapshot }
+import from ...services.projects.projects { AssignToProject }
+import from ...services.tasks.tasks {
     ListTasks,
     GetTask,
     CreateTask,
@@ -20,7 +28,8 @@ import from ...walkers.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from ...walkers.github { SyncGithub, CreateIssueFromTask }
+import from ...services.github.github { SyncGithub, CreateIssueFromTask }
+import from ...services.github.events { DrainGithubEvents }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.board.KanbanColumn { KanbanColumn }
@@ -41,10 +50,12 @@ glob BLANK_TASK: dict[str, str] = {
          "category": "",
          "estimate": "",
          "tags": "",
-         "project": "none",
+         "project": "",
          "priority": "Medium",
          "status": "Backlog",
          "due_date": "",
+         "start_date": "",
+         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -65,7 +76,11 @@ glob BLANK_TASK: dict[str, str] = {
 # load mounts the board twice and each instance owns its own `has` flags.
 glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
      AUTO_SYNC_ROUNDS: int = 3,
-     SYNC_ROUNDS: int = 40;
+     SYNC_ROUNDS: int = 40,
+     # How often an open board applies queued webhook deliveries: one keyed
+     # store read per tick, no GitHub call, so it can be far shorter than
+     # the 60s task poll.
+     DRAIN_MS: int = 20000;
 
 
 def:pub BoardPage -> JsxPage {
@@ -100,6 +115,9 @@ def:pub BoardPage -> JsxPage {
         steps: list[StepView] = [],
         repos: list[RepoView] = [],
         ghConnected: bool = False,
+        # Bumped after each drain so the effect below re-arms its timer with
+        # the current state (a setInterval closure would keep the first one).
+        drainTick: int = 0,
         syncing: bool = False,
         syncNote: str = "",
         loading: bool = True,
@@ -111,6 +129,9 @@ def:pub BoardPage -> JsxPage {
         # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
         fTag: str = "All",
         fEstimate: str = "All",
+        # "All", "current" (whichever iterations hold today), "none" or a jid.
+        fIteration: str = "All",
+        iterations: list[IterationView] = [],
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
         boardQuery: str = "",
@@ -138,7 +159,9 @@ def:pub BoardPage -> JsxPage {
 
     async can with entry {
         movesRef.current = 0;
-        stored = localStorage.getItem("standup_project") or "";
+        stored = localStorage.getItem("flowline_project")
+            or localStorage.getItem("standup_project")
+            or "";
         if stored {
             fProject = stored;
             # boot() runs in this same tick, where `fProject` still reads
@@ -191,32 +214,47 @@ def:pub BoardPage -> JsxPage {
             # The assistant dock lives in the layout, not in this tree, so an
             # applied proposal announces itself with an event rather than leaving
             # the new card invisible until the next poll.
-            window.addEventListener("standup:refresh", onFocus);
+            window.addEventListener("flowline:refresh", onFocus);
             # The command palette, mounted in the layout, asks an already
             # mounted board to open a card or the new-task dialog.
             onOpenTask = lambda (e: any) { pendingTaskId = str(e.detail or ""); };
             onNewTask = lambda { pendingTaskId = "new"; };
-            window.addEventListener("standup:open-task", onOpenTask);
-            window.addEventListener("standup:new-task", onNewTask);
+            window.addEventListener("flowline:open-task", onOpenTask);
+            window.addEventListener("flowline:new-task", onNewTask);
             timer = window.setInterval(lambda { refreshTasks(); }, 60000);
             return lambda {
                 window.removeEventListener("focus", onFocus);
-                window.removeEventListener("standup:refresh", onFocus);
-                window.removeEventListener("standup:open-task", onOpenTask);
-                window.removeEventListener("standup:new-task", onNewTask);
+                window.removeEventListener("flowline:refresh", onFocus);
+                window.removeEventListener("flowline:open-task", onOpenTask);
+                window.removeEventListener("flowline:new-task", onNewTask);
                 window.clearInterval(timer);
             };
         },
         []
     );
 
+    # Webhook deliveries queue on the server until the workspace applies
+    # them; while the board is open that is this timer, so a merged PR moves
+    # its card within a tick rather than on the next visit.
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if ghConnected and not loading {
+                timer = window.setTimeout(lambda { drainDeliveries(); }, DRAIN_MS);
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [ghConnected, loading, drainTick]
+    );
+
     async def boot -> None;
+    async def drainDeliveries -> None;
     # loadAll refreshes everything (boot, and every write that can touch the
     # roster); refreshTasks is the poll's path and skips the workspace lists,
     # which are edited on other pages. Both run through loadBoard.
     async def loadAll -> None;
     async def refreshTasks -> None;
-    async def loadBoard(withWorkspace: bool) -> dict;
+    async def loadBoard(withWorkspace: bool) -> dict[str, any];
     async def retryLoad -> None;
     # Older Done history: page 1 replaces, later pages append; any filter
     # change or task write starts over so the rows never go stale.
@@ -254,6 +292,7 @@ def:pub BoardPage -> JsxPage {
     # Empty inKey lands the task in the first column.
     def openCreate(inKey: str = "") -> None;
     def openEdit(t: TaskView) -> None;
+    def replaceRow(view: TaskView) -> None;
     async def syncGithub -> None;
     async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
@@ -300,6 +339,14 @@ def:pub BoardPage -> JsxPage {
     # One filter predicate for both the working set and the older-Done list,
     # so a new condition is added once. hideDone and the older-list's own
     # showAllDone guard stay at the call sites, since they differ per list.
+    todayDay = todayIso();
+    currentIterations: list[str] = [];
+    for it in iterations {
+        if it.start_date <= todayDay and it.end_date >= todayDay {
+            currentIterations.append(it.id);
+        }
+    }
+
     def matches(t: TaskView) -> bool {
         # The issue/PR number lives in the synced numeric field OR the tail of
         # a hand-pasted link, so search the number wherever it actually is.
@@ -316,6 +363,12 @@ def:pub BoardPage -> JsxPage {
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)
+            and (
+                fIteration == "All"
+                or (fIteration == "none" and not t.iteration_id)
+                or (fIteration == "current" and t.iteration_id in currentIterations)
+                or (bool(t.iteration_id) and t.iteration_id == fIteration)
+            )
             and (
                 fEstimate == "All"
                 or (fEstimate == "yes" and t.estimate > 0.0)
@@ -364,9 +417,11 @@ def:pub BoardPage -> JsxPage {
     famDone: int = 0;
     famParentId: str = "";
     famParentLabel: str = "";
+    editingChecklist: list[dict[str, any]] = [];
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
+            editingChecklist = t.checklist;
             famTotal = t.gh_sub_total;
             famDone = t.gh_sub_done;
             if t.gh_sub_total > 0 {
@@ -461,6 +516,9 @@ def:pub BoardPage -> JsxPage {
                             estimate={fEstimate}
                             onTag={lambda (v: str) { fTag = v; }}
                             onEstimate={lambda (v: str) { fEstimate = v; }}
+                            iterations={iterations}
+                            iteration={fIteration}
+                            onIteration={lambda (v: str) { fIteration = v; }}
                         />
                         {if ghConnected {
                             <Button
@@ -702,7 +760,11 @@ def:pub BoardPage -> JsxPage {
                 familyDone={famDone}
                 parentTaskId={famParentId}
                 parentLabel={famParentLabel}
+                iterations={iterations}
                 onOpenTask={openTaskById}
+                taskId={editingId}
+                checklist={editingChecklist}
+                onChecklist={replaceRow}
             />
             <MoveDialog
                 open={bool(moveTaskId)}

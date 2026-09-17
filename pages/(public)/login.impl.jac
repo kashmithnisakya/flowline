@@ -19,9 +19,9 @@ impl LoginPage.submit(e: FormEvent) -> None {
     try {
         if signingUp {
             # The profile starts empty on purpose: the setup wizard collects
-            # the organization and PM name, where there is room to say what
-            # they are for. jacSignup still needs the argument.
-            res: dict = {};
+            # the organization name, where there is room to say what it is
+            # for. jacSignup still needs the argument.
+            res: any = {};
             res = await jacSignup(addr, pw, {});
             if not res["success"] {
                 error = "Signup failed. Is that email already registered?";
@@ -34,7 +34,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
         if ok {
             # Marker for the session-expired notice: a 401 clears the JWT
             # and reloads, and this is how /login knows it was a timeout.
-            localStorage.setItem("standup_session", "1");
+            localStorage.setItem("flowline_session", "1");
             window.location.href = "/board";
         } else {
             error = "Invalid email or password.";

@@ -29,6 +29,7 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
     AUTO_SYNC["at"] = now;
     syncing = True;
     added: int = 0;
+    landed: int = 0;
     more = False;
     try {
         rounds = 0;
@@ -44,10 +45,13 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
                 break;
             }
             added = added + int(payload["auto_added"] or 0);
+            landed = landed + int(payload["drained"] or 0);
             more = bool(payload["has_more"]) and not payload["failure"];
         }
-        if added > 0 {
+        if added > 0 or landed > 0 {
             await loadAll();
+        }
+        if added > 0 {
             toast(
                 str(added)
                     + (
@@ -72,12 +76,33 @@ impl BoardPage.loadAll -> None {
 }
 
 
+impl BoardPage.drainDeliveries -> None {
+    # A hidden tab and a running sync both skip the tick but keep the
+    # timer going; the sync drains on its own and would race this one.
+    d: any = document;
+    if not d.hidden and not syncing {
+        try {
+            result = root spawn DrainGithubEvents();
+            payload = result.reports[0] if result.reports else None;
+            if payload and payload["ok"] and int(payload["applied"] or 0) > 0 {
+                await refreshTasks();
+            }
+        } except Exception as e {
+            # Quiet: nothing was asked for, and the queue keeps the row for
+            # the next tick.
+            payload = None;
+        }
+    }
+    drainTick = drainTick + 1;
+}
+
+
 impl BoardPage.refreshTasks -> None {
     await loadBoard(False);
 }
 
 
-impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
+impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     # While a move is in flight its optimistic state is newer than anything
     # a concurrent fetch started earlier could return, skip.
     if movesRef.current {
@@ -97,6 +122,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
         fetchedSteps: list[StepView] = [];
         fetchedRepos: list[RepoView] = [];
         fetchedRoles: list[RoleView] = [];
+        fetchedIterations: list[IterationView] = [];
         pageNo = 1;
         more = True;
         gotPage = False;
@@ -119,6 +145,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                     fetchedSteps = data.steps;
                     fetchedRepos = data.repos;
                     fetchedRoles = data.roles;
+                    fetchedIterations = data.iterations;
                     connected = data.github_connected;
                     projectCount = len(data.projects);
                 }
@@ -140,6 +167,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                 steps = fetchedSteps;
                 repos = fetchedRepos;
                 roleRows = fetchedRoles;
+                iterations = fetchedIterations;
                 ghConnected = connected;
             }
             # A filtered fetch owns the count while filters are on; the poll
@@ -159,7 +187,9 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
             + ("0" + mm if len(mm) < 2 else mm);
         # A stale persisted filter (archived project) would show an empty
         # board with no hint, reset it to "all".
-        stored = localStorage.getItem("standup_project") or "";
+        stored = localStorage.getItem("flowline_project")
+            or localStorage.getItem("standup_project")
+            or "";
         if withWorkspace and stored and stored != "all" {
             found = False;
             for pr in fetchedProjects {
@@ -168,7 +198,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
                 }
             }
             if not found {
-                localStorage.setItem("standup_project", "all");
+                localStorage.setItem("flowline_project", "all");
                 fProject = "all";
             }
         }
@@ -203,7 +233,7 @@ impl BoardPage.setProjectFilter(v: str) -> None {
     # The new value is handed to refreshOlder rather than read back: a
     # `has` assigned here is still the old value for the rest of this call.
     fProject = v;
-    localStorage.setItem("standup_project", v);
+    localStorage.setItem("flowline_project", v);
     refreshOlder(v, fAssignee, fCategory);
 }
 
@@ -331,11 +361,32 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
     # hardcoded "Backlog" that may not exist.
     keys = columnKeys();
     landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
+    # A task always has a project: the filtered one, else the first active.
+    firstProject = "";
+    for pr in projects {
+        if pr.active and not firstProject {
+            firstProject = jid(pr);
+        }
+    }
+    # A board filtered to an iteration plans the new task into it.
+    planned = "none";
+    for it in iterations {
+        if fIteration == it.id
+            or (
+                fIteration == "current"
+                and planned == "none"
+                and it.start_date <= shifted.toISOString()[:10]
+                and it.end_date >= shifted.toISOString()[:10]
+            ) {
+            planned = it.id;
+        }
+    }
     form = {
         ** BLANK_TASK,
-        "project": fProject if fProject != "all" else "none",
+        "project": fProject if fProject != "all" else firstProject,
         "status": landing,
-        "due_date": shifted.toISOString()[:10]
+        "due_date": shifted.toISOString()[:10],
+        "iteration": planned
     };
     fAssignees = [];
     dialogOpen = True;
@@ -348,10 +399,12 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "category": t.category,
         "tags": ", ".join(t.tags),
         "estimate": fmtEstimate(t.estimate) if t.estimate > 0.0 else "",
-        "project": t.project_id or "none",
+        "project": t.project_id,
         "priority": t.priority,
         "status": columnKeyOf(t),
         "due_date": t.due_date,
+        "start_date": t.start_date,
+        "iteration": t.iteration_id or "none",
         "notes": t.notes,
         "issue": t.issue_link,
         "pr": t.pr_link,
@@ -360,6 +413,13 @@ impl BoardPage.openEdit(t: TaskView) -> None {
     };
     fAssignees = t.assignee_ids;
     dialogOpen = True;
+}
+
+# A write from inside the dialog (the checklist) reports the task's fresh
+# view; swap it into whichever list holds the card so the card updates.
+impl BoardPage.replaceRow(view: TaskView) -> None {
+    tasks = [view if t.id == view.id else t for t in tasks];
+    olderDone = [view if t.id == view.id else t for t in olderDone];
 }
 
 impl BoardPage.openTaskById(tid: str) -> None {
@@ -377,8 +437,12 @@ impl BoardPage.saveTask -> None {
     if not title {
         return;
     }
+    project = form["project"];
+    if not project {
+        toast("Pick a project for this task");
+        return;
+    }
     saving = True;
-    project = form["project"] if form["project"] != "none" else "";
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
     tagList = [
         s.strip()
@@ -417,6 +481,8 @@ impl BoardPage.saveTask -> None {
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
+                start_date=form["start_date"],
+                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 pr_link=form["pr"].strip(),
@@ -435,6 +501,8 @@ impl BoardPage.saveTask -> None {
                 status=mappedStatus(form["status"]),
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
+                start_date=form["start_date"],
+                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 assignee_ids=fAssignees,

@@ -4,7 +4,7 @@ set on the People tab, so there is one place a person's roles are edited and
 this stays about the roles themselves."""
 
 import from ...models { MemberView, RoleView }
-import from ...walkers.roster { ListMembers, ListRoles, SaveRole, DeleteRole }
+import from ...services.roster.roster { ListMembers, ListRoles, SaveRole, DeleteRole }
 import from ..flowlines.kinds { DOT_FILL, colorKey }
 import from ..ui.card { Card, CardContent }
 import from ..ui.badge { Badge }

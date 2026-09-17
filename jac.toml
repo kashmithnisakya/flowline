@@ -1,8 +1,9 @@
 [project]
 name = "flowline"
-entry-point = "main.jac"
+# A dotted module name, the only spelling jac 0.37.12+ loads.
+entry-point = "main"
 kind = "web-app"
-jac-version = "==0.36.1"
+jac-version = "==0.37.18"
 
 [jac-shadcn]
 style = "nova"
@@ -57,51 +58,110 @@ default_model = "${LLM_MODEL:-gpt-4o-mini}"
 temperature = 0.2
 max_output_retries = 3
 
-[serve]
-base_route_app = "app"
+# Two worker processes per app pod (matches the 2000m cpu_limit below); the
+# gateway pod gets the same count. Dev mode is single-process: run
+# `jac run -w 1 main.jac`, or keep JAC_SERVE_WORKERS=1 in .env.
+[serve.workers]
+count = "2"
 
 [scale.sso]
 host = "${HOST:-http://localhost:8000}"
 client_auth_callback_url = "${HOST:-http://localhost:8000}/auth/callback"
 
+# SSO is optional, so an unset pair defaults to empty (the provider reads as not
+# configured). Since jac 0.37.18 a deploy refuses a bare ${VAR} the pods will not
+# get; the webhook secret and Grafana password stay bare on purpose.
 [scale.sso.google]
-client_id = "${GOOGLE_CLIENT_ID}"
-client_secret = "${GOOGLE_CLIENT_SECRET}"
+client_id = "${GOOGLE_CLIENT_ID:-}"
+client_secret = "${GOOGLE_CLIENT_SECRET:-}"
 
 [scale.sso.github]
-client_id = "${GITHUB_CLIENT_ID}"
-client_secret = "${GITHUB_CLIENT_SECRET}"
+client_id = "${GITHUB_CLIENT_ID:-}"
+client_secret = "${GITHUB_CLIENT_SECRET:-}"
 
+# /metrics, walker metrics and one Prometheus + Grafana pair in the namespace.
+# k8s_metrics_enabled defaults to true and adds kube-state-metrics plus a
+# node-exporter DaemonSet (one pod on EVERY node of the shared cluster);
+# `jachammer top` already reports pod CPU and memory from metrics-server.
 [scale.monitoring]
 enabled = true
 endpoint = "/metrics"
 namespace = "flowline"
 walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
+k8s_metrics_enabled = false
 
 [scale.kubernetes]
 app_name = "flowline"
-# Sized from a load test against flowline-dev (2026-09-02). Under load an app pod
-# pegs at ~1000m and goes no higher: `jac start` is one process, so the GIL caps
-# pure-Python work at one core however many the node has. Capacity is therefore
-# pods, not cores per pod -- hence the higher ceiling and the honest request.
-cpu_request = "500m"
-memory_request = "1Gi"
-memory_limit = "4Gi"
+# App pod sizing. Only [apps.flowline.scale] can set workers = "auto", but on
+# jac 0.37.7 an [apps] table makes the deploy skip the client bundle (API-only
+# pods, / is a JSON 404), so the app stays under [project] and the worker
+# count is fixed in [serve.workers] instead.
+cpu_request = "1000m"
+cpu_limit = "2000m"
+# Every HPA jac-scale renders also scales on memory (80% of the request), and
+# memory does not spread across replicas, so a request below the idle working
+# set pins max_replicas with no load. 2.37Gi was measured idle at ONE worker;
+# two workers sit above the 2.4Gi threshold the old 3Gi request gave.
+memory_request = "4Gi"
+memory_limit = "6Gi"
+# jac-scale hands these bounds to EVERY service, the gateway included, unless
+# [scale.gateway.hpa] overrides them (it does, below).
 min_replicas = 2
-max_replicas = 10
-# 70% of a 500m request leaves real headroom under the ~1000m ceiling. Against the
-# 50m default request the HPA sat at 1811%/50%, permanently pinned at max.
+max_replicas = 6
 cpu_utilization_target = 70
 autoscaler_scale_up_max_pods = 4
 
-[scale.microservices]
-enabled = true
+[scale.gateway]
 http_forward_timeout = 120.0
+cpu_request = "100m"
+# [serve.workers] reaches the gateway pod too, so two gateway processes sit
+# above the 512Mi that was sized for one, and the HPA memory metric scaled the
+# gateway out. jac-scale's own gateway default is 2Gi.
+memory_request = "1Gi"
+memory_limit = "2Gi"
 
-[scale.microservices.logs]
-enabled = true
+# The gateway only proxies (~1m CPU at 25 req/s on dev). Without this table it
+# inherits the app's 2 -> 6 bounds above, which ran four gateway pods on dev.
+[scale.gateway.hpa]
+min = 1
+max = 2
+
+# Loki plus an Alloy DaemonSet (one pod per node). Alloy reads pods cluster-wide
+# and Grafana's logs view queries every namespace, so on the shared jachammer
+# cluster it exposes other tenants' logs as well as costing a pod per node.
+[scale.gateway.logs]
+enabled = false
 
 [jacpack]
 name = 'flowline'
 description = 'Jac IDE snapshot for flowline'
+
+# GitHub App deliveries land on /webhook/GithubEvent. The runtime verifies
+# X-Hub-Signature-256 against this secret before the walker runs, so an
+# empty or wrong value means every delivery is refused, never applied.
+[scale.webhook]
+github_secret = "${GITHUB_APP_WEBHOOK_SECRET}"
+max_body_bytes = 2097152
+
+[placement]
+default = "server"
+
+[placement.pins]
+"lib.utils.fmtEstimate" = "client"
+"lib.utils.normalizeRepoInput" = "client"
+"lib.utils.parseEstimate" = "client"
+models = "server"
+"services.assistant.assistant" = "server"
+"services.board.board" = "server"
+"services.flowlines.flowlines" = "server"
+"services.github.events" = "server"
+"services.github.github" = "server"
+"services.github.util" = "server"
+"services.insights.insights" = "server"
+"services.iterations.iterations" = "server"
+"services.log.log" = "server"
+"services.projects.projects" = "server"
+"services.roster.roster" = "server"
+"services.tasks.tasks" = "server"
+"services.util" = "server"

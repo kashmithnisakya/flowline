@@ -6,8 +6,17 @@ self-contained section, so the page stays a thin shell."""
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
 import from ...models { Project, MemberView }
-import from ...walkers.roster { ListMembers, SaveMember, ListRoles, ArchiveMember }
-import from ...walkers.projects { ListProjects, AssignToProject, UnassignFromProject }
+import from ...services.roster.roster {
+    ListMembers,
+    SaveMember,
+    ListRoles,
+    ArchiveMember
+}
+import from ...services.projects.projects {
+    ListProjects,
+    AssignToProject,
+    UnassignFromProject
+}
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
@@ -19,7 +28,8 @@ import from ...components.ui.tabs { Tabs, TabsList, TabsTrigger, TabsContent }
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
-         "name": "",
+         "first_name": "",
+         "last_name": "",
          "email": "",
          "github": "",
          "color": "",
@@ -70,8 +80,8 @@ def:pub WorkspacePage -> JsxPage {
             return;
         }
         known: list[str] = [];
-        for entry in TABS {
-            known.append(entry[0]);
+        for item in TABS {
+            known.append(item[0]);
         }
         if wanted in known {
             tab = wanted;
@@ -150,27 +160,27 @@ def:pub WorkspacePage -> JsxPage {
                 <div
                     className="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border/70 bg-muted p-0.5 sm:hidden"
                 >
-                    {for entry in TABS {
+                    {for item in TABS {
                         <button
-                            key={"m-" + entry[0]}
+                            key={"m-" + item[0]}
                             type="button"
                             className={"flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium "
                                 + (
                                     "bg-background text-foreground shadow-sm"
-                                        if tab == entry[0]
+                                        if tab == item[0]
                                         else "text-muted-foreground transition-colors hover:text-foreground"
                                 )}
-                            onClick={lambda { selectTab(entry[0]); }}
+                            onClick={lambda { selectTab(item[0]); }}
                         >
-                            {entry[1]}
+                            {item[1]}
                         </button>
                     }}
                 </div>
                 <div className="hidden w-44 shrink-0 sm:block">
                     <TabsList variant="line">
-                        {for entry in TABS {
-                            <TabsTrigger key={entry[0]} value={entry[0]}>
-                                {entry[1]}
+                        {for item in TABS {
+                            <TabsTrigger key={item[0]} value={item[0]}>
+                                {item[1]}
                             </TabsTrigger>
                         }}
                     </TabsList>

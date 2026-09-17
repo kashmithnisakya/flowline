@@ -6,14 +6,6 @@ the six links collapse into a dropdown menu.
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
 import from "react" { useEffect }
-# jac 0.34.x compiler pin, not a nav dependency: the last-scanned page must
-# import constants directly or the client copy is emitted empty once a
-# component in a later page's closure imports it (see CLAUDE.md gotchas).
-import from ..constants { STATUSES }
-# kinds.jac and models.jac need the same pin: their exports drop the same way
-# (CARRY_LABEL / WIRE_TINT killed FlowCanvas, the tally objs killed _entry).
-import from ..components.flowlines.kinds { CARRY_LABEL, WIRE_TINT }
-import from ..models { LogTotals, MemberDays, ProjectTally, TaskTotals }
 import from ..lib.session { fetchProfile }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..components.ui.button { Button }
@@ -45,6 +37,7 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
          {"to": "/flowlines", "label": "Flow line"},
          {"to": "/board", "label": "Board"},
          {"to": "/tasks", "label": "Tasks"},
+         {"to": "/roadmap", "label": "Roadmap"},
          {"to": "/overview", "label": "Overview"},
          {"to": "/log", "label": "Log"},
          {"to": "/github", "label": "GitHub"},
@@ -55,13 +48,7 @@ glob PUBLIC_PATHS: list[str] = ["/", "/login", "/auth/callback"],
 # and the palette button; the text row is pages only.
 def:pub Shell -> JsxLayout {
     has loggedIn: bool = False,
-        # Only referenced so the pins above count as client code. len() on a
-        # dict is broken client-side, so the kinds pin indexes instead.
-        vocabPin: int = len(STATUSES),
-        kindsPin: str = CARRY_LABEL["issue"] + WIRE_TINT["sky"],
-        modelsPin: list[any] = [LogTotals, MemberDays, ProjectTally, TaskTotals],
         orgName: str = "",
-        fullName: str = "",
         # Mirrors the html.dark class for the toggle icon. Read after
         # applyTheme so "system" resolves to what is actually showing.
         themeDark: bool = False,
@@ -268,14 +255,6 @@ def:pub Shell -> JsxLayout {
                                         >
                                             {orgName or "Your workspace"}
                                         </span>
-                                        {if fullName {
-                                            <span
-                                                key="who"
-                                                className="truncate text-xs font-normal text-muted-foreground"
-                                            >
-                                                {fullName}
-                                            </span>
-                                        }}
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator/>
                                     <DropdownMenuItem asChild={True}>

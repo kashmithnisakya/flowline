@@ -36,9 +36,9 @@ def:pub LoginPage -> JsxPage {
         }
         # A 401 wipes the token and hard-reloads; this marker is what tells
         # us the visitor was signed in a moment ago rather than arriving cold.
-        if localStorage.getItem("standup_session") {
+        if localStorage.getItem("flowline_session") {
             expired = True;
-            localStorage.removeItem("standup_session");
+            localStorage.removeItem("flowline_session");
         }
     }
 

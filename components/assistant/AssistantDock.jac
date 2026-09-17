@@ -4,10 +4,14 @@ root layout with its own state and walker calls. A turn is a plain dict with a
 `state`): typing it as an obj would create a models <-> walkers import cycle."""
 
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
-import from ...walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
-import from ...walkers.tasks { ListTasks, CreateTask, MoveTask }
-import from ...walkers.roster { ListMembers }
-import from ...walkers.projects { ListProjects }
+import from ...services.assistant.assistant {
+    AskAssistant,
+    WriteStandup,
+    ProposeAction
+}
+import from ...services.tasks.tasks { ListTasks, CreateTask, MoveTask }
+import from ...services.roster.roster { ListMembers }
+import from ...services.projects.projects { ListProjects }
 import from ..ui.badge { Badge }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
@@ -49,7 +53,7 @@ def isoDaysAgo(back: int) -> str {
 # dispatchEvent and CustomEvent are absent from the checker's DOM typings.
 def announceRefresh {
     w: any = window;
-    w.dispatchEvent(new(w.CustomEvent, "standup:refresh"));
+    w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
 }
 
 
@@ -70,7 +74,7 @@ def noteSection(title: str, items: any) -> list[str] {
 
 def:pub AssistantDock -> JsxElement {
     has open: bool = False,
-        turns: list[dict] = [],
+        turns: list[dict[str, any]] = [],
         draft: str = "",
         mode: str = "ask",
         busy: bool = False,
@@ -101,7 +105,7 @@ def:pub AssistantDock -> JsxElement {
     canListen = hasVoice();
 
     # The index travels with the row so the JSX never needs tuple unpacking.
-    rows: list[dict] = [];
+    rows: list[dict[str, any]] = [];
     at = 0;
     for t in turns {
         rows.append({** t, "at": at});

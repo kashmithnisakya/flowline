@@ -14,9 +14,18 @@ glob STATUSES: list[str] = [
      ],
      PRIORITIES: list[str] = ["High", "Medium", "Low"];
 
-import from ...models { Project, MemberView, RepoView, StepView, RoleView, TaskView }
+import from ...models {
+    Project,
+    MemberView,
+    RepoView,
+    StepView,
+    RoleView,
+    TaskView,
+    IterationView
+}
 import from ..common.Markdown { Markdown }
 import from .MiniLanes { MiniLanes }
+import from .Checklist { ChecklistEditor }
 import from ..log.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.badge { Badge }
@@ -46,6 +55,7 @@ import from ..ui.dropdown_menu {
     DropdownMenuCheckboxItem
 }
 import from ..common.glyphs { Spinner }
+import from ...lib.dates { prettyDay }
 
 # Every control fills its cell, so the labels above them line up as a
 # grid instead of a ragged row of chips.
@@ -130,7 +140,15 @@ def:pub TaskDialog(
     familyDone: int = 0,
     parentTaskId: str = "",
     parentLabel: str = "",
-    onOpenTask: Callable[[str], None] = None
+    onOpenTask: Callable[[str], None] = None,
+    # The open task's checklist. Edits write at once, not on Save, and each
+    # reports the task view to `onChecklist`; no `taskId` hides the section.
+    taskId: str = "",
+    checklist: list[dict[str, any]] = [],
+    onChecklist: Callable[[TaskView], None] = None,
+    # The workspace's iterations; the form's "iteration" is a jid or "none".
+    # With none defined the field stays out of the way.
+    iterations: list[IterationView] = []
 ) -> JsxElement {
     # Which repo a new issue goes in when the project tracks several: local.
     # Notes open rendered (the markdown is the point); Edit flips to a textarea.
@@ -143,10 +161,13 @@ def:pub TaskDialog(
     hasNotes = bool(form["notes"] and form["notes"].strip());
 
     selectedProject = form["project"];
+    # Every task belongs to a project; Save waits for one. The unpicked
+    # state is "", the one value the Select renders as its placeholder.
+    hasProject = bool(selectedProject);
     inProject = [
         m
         for m in members
-        if selectedProject != "none" and selectedProject in m.project_ids
+        if hasProject and selectedProject in m.project_ids
     ];
     outsiders = [
         m
@@ -155,14 +176,14 @@ def:pub TaskDialog(
     ];
     outsideSelected = False;
     for m in outsiders {
-        if m.id in assignees and selectedProject != "none" {
+        if m.id in assignees and hasProject {
             outsideSelected = True;
         }
     }
     projectRepos = [
         r
         for r in repos
-        if selectedProject != "none" and r.project_id == selectedProject
+        if hasProject and r.project_id == selectedProject
     ];
     chosenRepo = "";
     if len(projectRepos) == 1 {
@@ -200,7 +221,7 @@ def:pub TaskDialog(
         hereOwner = (hereStep[0].owner or "").strip();
         held: list[str] = [];
         # Scoped to the project when there is one, like the hand-off rule.
-        pool = inProject if selectedProject != "none" else members;
+        pool = inProject if hasProject else members;
         for m in pool {
             if hereOwner and hereOwner in m.roles {
                 held.append(m.name);
@@ -308,9 +329,7 @@ def:pub TaskDialog(
                                     }}
                                     {if len(outsiders) > 0 {
                                         <DropdownMenuLabel key="ol">
-                                            {"Other people"
-                                                if selectedProject != "none"
-                                                else "People"}
+                                            {"Other people" if hasProject else "People"}
                                         </DropdownMenuLabel>
                                     }}
                                     {for m in outsiders {
@@ -342,10 +361,9 @@ def:pub TaskDialog(
                                 ); }}
                             >
                                 <SelectTrigger className={FIELD}>
-                                    <SelectValue placeholder="No project"/>
+                                    <SelectValue placeholder="Pick a project"/>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none">No project</SelectItem>
                                     {for p in projects {
                                         <SelectItem key={jid(p)} value={jid(p)}>
                                             {p.name}
@@ -396,7 +414,7 @@ def:pub TaskDialog(
                             <Label htmlFor="task-category">Category</Label>
                             <Input
                                 id="task-category"
-                                list="standup-categories"
+                                list="flowline-categories"
                                 className={FIELD}
                                 placeholder="Type or pick"
                                 value={form["category"]}
@@ -404,7 +422,7 @@ def:pub TaskDialog(
                                     "category", e.target.value
                                 ); }}
                             />
-                            <datalist id="standup-categories">
+                            <datalist id="flowline-categories">
                                 {for c in categories {
                                     <option key={c} value={c}/>
                                 }}
@@ -438,6 +456,15 @@ def:pub TaskDialog(
                             />
                         </div>
                         <div className="grid content-start gap-2">
+                            <Label>Start date</Label>
+                            <DatePicker
+                                value={form["start_date"]}
+                                clearable={True}
+                                className="w-full justify-between"
+                                onChange={lambda (d: str) { onField("start_date", d); }}
+                            />
+                        </div>
+                        <div className="grid content-start gap-2">
                             <Label>Due date</Label>
                             <DatePicker
                                 value={form["due_date"]}
@@ -445,7 +472,43 @@ def:pub TaskDialog(
                                 className="w-full justify-between"
                                 onChange={lambda (d: str) { onField("due_date", d); }}
                             />
+                            {if form["start_date"]
+                                and form["due_date"]
+                                and form["start_date"] > form["due_date"] {
+                                <span key="order" className="text-xs text-destructive">
+                                    Due before it starts.
+                                </span>
+                            }}
                         </div>
+                        {if len(iterations) > 0 or form["iteration"] != "none" {
+                            <div key="iteration" className={WIDE}>
+                                <Label>Iteration</Label>
+                                <Select
+                                    value={form["iteration"]}
+                                    onValueChange={lambda (v: str) { onField(
+                                        "iteration", v
+                                    ); }}
+                                >
+                                    <SelectTrigger className={FIELD}>
+                                        <SelectValue placeholder="No iteration"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">
+                                            No iteration
+                                        </SelectItem>
+                                        {for it in iterations {
+                                            <SelectItem key={it.id} value={it.id}>
+                                                {it.name
+                                                    + " · "
+                                                    + prettyDay(it.start_date)
+                                                    + " – "
+                                                    + prettyDay(it.end_date)}
+                                            </SelectItem>
+                                        }}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        }}
                         <div className={WIDE}>
                             <Label>GitHub issue (optional)</Label>
                             <div className="flex items-center gap-2">
@@ -591,9 +654,7 @@ def:pub TaskDialog(
                             <MiniLanes
                                 steps={steps}
                                 roles={roles}
-                                members={inProject
-                                    if selectedProject != "none"
-                                    else members}
+                                members={inProject if hasProject else members}
                                 currentKey={form["status"]}
                             />
                         </div>
@@ -672,6 +733,14 @@ def:pub TaskDialog(
                             </span>
                         </button>
                     }}
+                    {if editing and taskId {
+                        <ChecklistEditor
+                            key={"checklist-" + taskId}
+                            taskId={taskId}
+                            items={checklist}
+                            onChange={onChecklist}
+                        />
+                    }}
                     <div className="grid gap-2">
                         <div className="flex items-center justify-between">
                             <Label>Notes / blockers</Label>
@@ -747,7 +816,9 @@ def:pub TaskDialog(
                                 pendingAction = "save";
                                 onSave();
                             }}
-                            disabled={saving or not form["title"].strip()}
+                            disabled={saving
+                                or not form["title"].strip()
+                                or not hasProject}
                         >
                             {if saving and pendingAction == "save" {
                                 <Spinner key="sp"/>

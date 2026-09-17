@@ -1,0 +1,69 @@
+{% extends "main.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <meta property="og:title" content="flowline documentation">
+  <meta property="og:description" content="{{ config.site_description }}">
+{% endblock %}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="fl-hero" aria-labelledby="fl-hero-title">
+    <div class="md-grid fl-hero__inner">
+      <div class="fl-hero__copy">
+        <p class="fl-eyebrow">Documentation &middot; Jac {{ config.extra.jac_version }}</p>
+        <h1 class="fl-hero__title" id="fl-hero-title">
+          Everything a standup does,<br><em>none of the 9:45.</em>
+        </h1>
+        <p class="fl-hero__lede">
+          flowline is a kanban board that follows the flow line your team
+          actually uses, and a daily log it writes for you. Built entirely in
+          Jac. Run it locally, learn the graph it stores, call every walker,
+          and ship it to jachammer.
+        </p>
+        <div class="fl-hero__actions">
+          <a href="{{ 'get-started/' | url }}" class="md-button md-button--primary">Get started</a>
+          <a href="{{ 'api/' | url }}" class="md-button">API reference</a>
+          <a href="{{ 'deploy/jachammer/' | url }}" class="md-button">Deploy</a>
+        </div>
+        <pre class="fl-hero__cmd" aria-label="Install and run"><span>$</span><code>jac install &amp;&amp; jac run --no-dev main.jac</code></pre>
+      </div>
+      <div class="fl-hero__art" aria-hidden="true">
+        <div class="fl-board">
+          <div class="fl-lane fl-lane--sky">
+            <div class="fl-lane__head">Specify</div>
+            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+          </div>
+          <div class="fl-lane fl-lane--indigo">
+            <div class="fl-lane__head">Triage</div>
+            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+          </div>
+          <div class="fl-lane fl-lane--amber">
+            <div class="fl-lane__head">Implement</div>
+            <div class="fl-card fl-card--hot"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+          </div>
+          <div class="fl-lane fl-lane--rose">
+            <div class="fl-lane__head">Review &amp; merge</div>
+            <div class="fl-card"><i></i><i></i></div>
+          </div>
+          <div class="fl-lane fl-lane--emerald">
+            <div class="fl-lane__head">Done</div>
+            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-card"><i></i><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block container %}
+  <div class="fl-home">
+    {{ super() }}
+  </div>
+{% endblock %}

@@ -3,7 +3,9 @@
 mount and the Settings page changes it.
 """
 
-glob THEME_KEY: str = "standup-theme",
+glob THEME_KEY: str = "flowline-theme",
+     # Pre-rename key, read once so an old browser keeps its choice.
+     THEME_KEY_OLD: str = "standup-theme",
      THEME_PREFS: list[str] = ["light", "dark", "system"];
 
 # Paint the theme at module-import time, before React mounts anything, so a
@@ -15,7 +17,9 @@ with entry {
 
 
 def:pub getThemePref -> str {
-    saved = localStorage.getItem(THEME_KEY) or "";
+    saved = localStorage.getItem(THEME_KEY)
+        or localStorage.getItem(THEME_KEY_OLD)
+        or "";
     return saved if saved in THEME_PREFS else "system";
 }
 

@@ -6,8 +6,8 @@ per step for the entrance animation; `finishing` gives Finish its own spinner.""
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
 import from ...models { MemberView }
-import from ...walkers.projects { ListProjects, SaveProject }
-import from ...walkers.roster { SaveMember }
+import from ...services.projects.projects { ListProjects, SaveProject }
+import from ...services.roster.roster { SaveMember }
 import from ...lib.session { fetchProfile, patchProfile }
 import from ...components.common.KineticGrid { KineticGrid }
 import from ...components.ui.card {
@@ -29,9 +29,9 @@ import from ...components.common.ErrorNote { ErrorNote }
 def:pub SetupPage -> JsxPage {
     has step: int = 0,
         orgName: str = "",
-        fullName: str = "",
         projectName: str = "",
-        mName: str = "",
+        mFirst: str = "",
+        mLast: str = "",
         added: list[MemberView] = [],
         saveError: str = "",
         busy: bool = False,
@@ -126,7 +126,7 @@ def:pub SetupPage -> JsxPage {
                                 Name your workspace
                             </CardTitle>
                             <CardDescription>
-                                The organization name heads every page, and your name is who the daily log is written by. Both stay editable on the Workspace tab.
+                                The organization name heads every page. It stays editable on the Workspace tab.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
@@ -139,14 +139,6 @@ def:pub SetupPage -> JsxPage {
                                     autoFocus={True}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label>Your name</Label>
-                                <Input
-                                    value={fullName}
-                                    onChange={lambda (e: ChangeEvent) { fullName = e.target.value; }}
-                                    placeholder="Priya Raman"
-                                />
-                            </div>
                             {if saveError {
                                 <ErrorNote key="err" message={saveError}/>
                             }}
@@ -154,9 +146,7 @@ def:pub SetupPage -> JsxPage {
                         <CardFooter className="justify-end">
                             <Button
                                 onClick={saveProfile}
-                                disabled={busy
-                                    or not orgName.strip()
-                                    or not fullName.strip()}
+                                disabled={busy or not orgName.strip()}
                             >
                                 {if busy {
                                     <Spinner key="sp"/>
@@ -228,15 +218,20 @@ def:pub SetupPage -> JsxPage {
                         <CardContent className="grid gap-4">
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <Input
-                                    placeholder="Name"
-                                    value={mName}
-                                    onChange={lambda (e: ChangeEvent) { mName = e.target.value; }}
+                                    placeholder="First name"
+                                    value={mFirst}
+                                    onChange={lambda (e: ChangeEvent) { mFirst = e.target.value; }}
                                     autoFocus={True}
+                                />
+                                <Input
+                                    placeholder="Last name"
+                                    value={mLast}
+                                    onChange={lambda (e: ChangeEvent) { mLast = e.target.value; }}
                                 />
                                 <Button
                                     variant="outline"
                                     onClick={addPerson}
-                                    disabled={busy or not mName.strip()}
+                                    disabled={busy or not mFirst.strip()}
                                 >
                                     {if busy {
                                         <Spinner key="sp"/>

@@ -10,11 +10,11 @@ impl OverviewPage.loadAll -> None {
         result = root spawn OverviewSnapshot(
             monday=monday, from_date=shiftDay(monday, -14), attention_size=8
         );
-        # Untyped on purpose: typing the report would pull walkers.insights
+        # Untyped on purpose: typing the report would pull services.insights.insights
         # objs into the client bundle for the queue lists.
         data: any = result.reports[0] if result.reports else None;
-        counts = data["counts"] if data else TaskTotals();
-        logs = data["logs"] if data else LogTotals();
+        counts = data["counts"] if data else None;
+        logs = data["logs"] if data else None;
         attention = data["attention"] if data else [];
         attentionTotal = data["attention_total"] if data else 0;
         members = data["members"] if data else [];
@@ -22,14 +22,14 @@ impl OverviewPage.loadAll -> None {
         reviewQueue = data["review_queue"] if data else [];
         # Blocked and Review rows already sit in the other two panels, so the
         # quiet list keeps only the rest of the snapshot's aging entries.
-        stale: list[dict] = [];
+        stale: list[dict[str, any]] = [];
         for r in (data["aging"] if data else []) {
             if r["status"] != "Blocked" and r["status"] != "Review" {
                 stale.append(r);
             }
         }
         quiet = stale;
-        info: dict[str, dict] = {};
+        info: dict[str, dict[str, any]] = {};
         for b in (data["blocked"] if data else []) {
             info[b["task_id"]] = b;
         }
@@ -39,4 +39,20 @@ impl OverviewPage.loadAll -> None {
         failed = True;
     }
     loading = False;
+}
+
+impl OverviewPage.loadHistory -> None {
+    historyLoading = True;
+    try {
+        result = root spawn TaskHistory(
+            project_id="" if historyProject == "all" else historyProject,
+            monday=mondayOf(localIso(new(Date))),
+            weeks=int(historyWeeks)
+        );
+        history = result.reports[0] if result.reports else None;
+        historyFailed = False;
+    } except Exception as e {
+        historyFailed = True;
+    }
+    historyLoading = False;
 }

@@ -1,0 +1,672 @@
+"""Server-only GitHub App plumbing: app JWTs, installation tokens, HTTP. Every
+Python import the feature needs is quarantined HERE (models.jac must stay
+Python-free). Nothing returns a credential: `gh_request` hands back an
+envelope and `safe_error` keeps only the status and GitHub's own message."""
+
+import os;
+import time;
+import base64;
+import secrets;
+import requests;
+import jwt;
+import json;
+import logging;
+
+# Re-exported so callers get the guard and the request helpers from one
+# place; the definition itself is Python-free and lives in models.jac.
+import from models { valid_full_name, Task, Repo, GithubConnection }
+import from jaclang.server.shared_store { open_docs_store }
+
+# The two bases are overridable so the smoke suite can point the app at
+# tests/smoke/github_stub.py; a deployment never sets them.
+glob log: logging.Logger = logging.getLogger("flowline.github"),
+     GITHUB_API: str = os.environ.get("GITHUB_API_BASE") or "https://api.github.com",
+     GITHUB_WEB: str = os.environ.get("GITHUB_WEB_BASE") or "https://github.com",
+     TOKEN_CACHE: dict[str, dict[str, any]] = {},
+     INSTALL_INDEX: str = "gh_installations",
+     DELIVERIES: str = "gh_deliveries",
+     log: logging.Logger = logging.getLogger("flowline.github");
+
+
+# Installation tokens live ~1h. Cache them in process memory rather than on
+# the connection node: a short-lived credential written to Mongo is still a
+# credential at rest, and re-minting after a restart costs one request.
+# ------------------------------------------------------------------- config
+
+def app_id -> str {
+    return os.environ.get("GITHUB_APP_ID") or "";
+}
+
+
+def app_slug -> str {
+    return os.environ.get("GITHUB_APP_SLUG") or "";
+}
+
+
+def oauth_client -> list[str] {
+    return [
+        os.environ.get("GITHUB_APP_CLIENT_ID") or "",
+        os.environ.get("GITHUB_APP_CLIENT_SECRET") or ""
+    ];
+}
+
+
+# The PEM is awkward in a .env file, so accept either a base64 blob (one
+# line, what most secret stores hand you) or the raw PEM with escaped
+# newlines. Both normalize to a real multi-line key here.
+def private_key -> str {
+    raw = os.environ.get("GITHUB_APP_PRIVATE_KEY") or "";
+    if not raw {
+        return "";
+    }
+    if "BEGIN" not in raw {
+        try {
+            raw = base64.b64decode(raw).decode("utf-8");
+        } except Exception {
+            return "";
+        }
+    }
+    return raw.replace("\\n", "\n");
+}
+
+
+# Which half of the setup is missing, so the UI can say so instead of
+# failing with a bare 500. Empty list means the app is fully configured.
+def missing_config -> list[str] {
+    gaps: list[str] = [];
+    if not app_id() {
+        gaps.append("GITHUB_APP_ID");
+    }
+    if not private_key() {
+        gaps.append("GITHUB_APP_PRIVATE_KEY");
+    }
+    if not app_slug() {
+        gaps.append("GITHUB_APP_SLUG");
+    }
+    pair = oauth_client();
+    if not pair[0] {
+        gaps.append("GITHUB_APP_CLIENT_ID");
+    }
+    if not pair[1] {
+        gaps.append("GITHUB_APP_CLIENT_SECRET");
+    }
+    return gaps;
+}
+
+
+def install_url(state: str) -> str {
+    slug = app_slug();
+    if not slug {
+        return "";
+    }
+    return GITHUB_WEB + "/apps/" + slug + "/installations/new?state=" + state;
+}
+
+
+def new_state -> str {
+    return secrets.token_urlsafe(24) as str;
+}
+
+
+# --------------------------------------------------------------- app tokens
+
+# RS256 JWT signed with the app's private key, the credential that proves
+# "I am this GitHub App". Max lifetime is 10 minutes; 9 leaves clock slack.
+def app_jwt -> str {
+    key = private_key();
+    if not key or not app_id() {
+        return "";
+    }
+    now = int(time.time());
+    payload: dict[str, any] = {"iat": now - 60, "exp": now + 540, "iss": app_id()};
+    try {
+        return jwt.encode(payload, key, algorithm="RS256") as str;
+    } except Exception {
+        return "";
+    }
+}
+
+
+# Mint (or reuse) the 1-hour token that acts on one installation.
+def installation_token(installation_id: int) -> str {
+    key = str(installation_id);
+    now = time.time();
+    cached = TOKEN_CACHE.get(key);
+    if cached {
+        expiry = cached["exp"] as float;
+        if expiry > now + 60.0 {
+            return cached["token"] as str;
+        }
+    }
+    signed = app_jwt();
+    if not signed {
+        return "";
+    }
+    try {
+        resp = requests.post(
+            GITHUB_API + "/app/installations/" + key + "/access_tokens",
+            headers={
+                "Authorization": "Bearer " + signed,
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28"
+            },
+            timeout=10
+        );
+    } except Exception {
+        return "";
+    }
+    if (resp.status_code as int) != 201 {
+        return "";
+    }
+    body = resp.json() as dict;
+    token = str(body.get("token") or "");
+    if not token {
+        return "";
+    }
+    # Trust our own clock over parsing GitHub's expires_at: 55 minutes is
+    # inside the 60-minute lifetime with room for a slow request.
+    TOKEN_CACHE[key] = {"token": token, "exp": now + 3300.0};
+    return token;
+}
+
+
+def forget_installation(installation_id: int) {
+    key = str(installation_id);
+    if key in TOKEN_CACHE {
+        TOKEN_CACHE.pop(key);
+    }
+}
+
+
+# ------------------------------------------------------ installation index
+
+# A GitHub App has one webhook URL for every installation, and a delivery
+# names its tenant only by installation id. Walkers run on the caller's
+# root, so this shared table is the one map from an id back to the
+# workspace that connected it: id = installation id, doc = the root jid.
+def bind_installation(installation_id: int, root_jid: str) -> bool {
+    if installation_id <= 0 or not root_jid {
+        return False;
+    }
+    doc = {
+        "root_jid": root_jid,
+        "bound_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    };
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        db.rows(
+            "INSERT INTO jac_docs (collection, id, doc) "
+                + "VALUES (:c, :i, CAST(:d AS jsonb)) "
+                + "ON CONFLICT (collection, id) DO UPDATE SET doc = EXCLUDED.doc",
+            {"c": INSTALL_INDEX, "i": str(installation_id), "d": json.dumps(doc)}
+        );
+        return True;
+    } except Exception as e {
+        log.warning("installation index: bind failed: " + str(e));
+        return False;
+    }
+}
+
+
+def unbind_installation(installation_id: int) -> bool {
+    if installation_id <= 0 {
+        return False;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        drop_deliveries(installation_id);
+        return True;
+    } except Exception as e {
+        log.warning("installation index: unbind failed: " + str(e));
+        return False;
+    }
+}
+
+
+# The root jid bound to an installation, or "" when none is. Never raises:
+# a store hiccup reads as unknown, and callers treat unknown as ignore.
+def root_for_installation(installation_id: int) -> str {
+    if installation_id <= 0 {
+        return "";
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "";
+        }
+        rows = db.rows(
+            "SELECT doc FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        if not rows {
+            return "";
+        }
+        raw = rows[0][0];
+        doc = raw if isinstance(raw, dict) else json.loads(str(raw));
+        return str(doc.get("root_jid") or "");
+    } except Exception as e {
+        log.warning("installation index: lookup failed: " + str(e));
+        return "";
+    }
+}
+
+
+# The login GitHub stamps on this app's own writes, so a delivery echoing
+# them can be told apart from a person's change.
+def bot_login -> str {
+    slug = app_slug();
+    return slug + "[bot]" if slug else "";
+}
+
+
+# ------------------------------------------------------------- deliveries
+
+# Verified deliveries wait here until the workspace's own session applies
+# them: the receiver runs as the system identity, which must never write a
+# tenant's graph. The row id is GitHub's delivery id, so a redelivery is
+# refused by the primary key rather than by anything remembered.
+def utc_stamp -> str {
+    now = time.time();
+    frac = int((now - int(now)) * 1000000);
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now))
+        + "."
+        + str(frac).rjust(6, "0")
+        + "Z";
+}
+
+
+def enqueue_delivery(
+    installation_id: int, delivery_id: str, payload: dict[str, any]
+) -> str {
+    key = delivery_id or "local-" + secrets.token_hex(12);
+    doc = {
+        "installation_id": str(installation_id),
+        "received_at": utc_stamp(),
+        "applied_at": "",
+        "outcome": "",
+        "payload": payload
+    };
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "unavailable";
+        }
+        rows = db.rows(
+            "INSERT INTO jac_docs (collection, id, doc) "
+                + "VALUES (:c, :i, CAST(:d AS jsonb)) "
+                + "ON CONFLICT (collection, id) DO NOTHING RETURNING id",
+            {"c": DELIVERIES, "i": key, "d": json.dumps(doc)}
+        );
+        return "queued" if rows else "duplicate";
+    } except Exception as e {
+        log.warning("deliveries: enqueue failed: " + str(e));
+        return "unavailable";
+    }
+}
+
+
+def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]] {
+    found: list[dict[str, any]] = [];
+    try {
+        db = open_docs_store();
+        if db is None {
+            return found;
+        }
+        rows = db.rows(
+            "SELECT id, doc FROM jac_docs WHERE collection = :c "
+                + "AND doc->>'installation_id' = :i AND doc->>'applied_at' = '' "
+                + "ORDER BY doc->>'received_at', id LIMIT "
+                + str(int(limit)),
+            {"c": DELIVERIES, "i": str(installation_id)}
+        );
+        for (rid, raw) in rows {
+            doc = raw if isinstance(raw, dict) else json.loads(str(raw));
+            doc["id"] = str(rid);
+            found.append(doc);
+        }
+    } except Exception as e {
+        log.warning("deliveries: read failed: " + str(e));
+    }
+    return found;
+}
+
+
+def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps({"applied_at": applied_at, "outcome": outcome}),
+                "c": DELIVERIES,
+                "i": delivery_id
+            }
+        );
+    } except Exception as e {
+        log.warning("deliveries: mark failed: " + str(e));
+    }
+}
+
+
+# Applied rows stay a week as the delivery log, then go.
+def purge_deliveries(installation_id: int, before: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c "
+                + "AND doc->>'installation_id' = :i "
+                + "AND doc->>'applied_at' <> '' AND doc->>'applied_at' < :b",
+            {"c": DELIVERIES, "i": str(installation_id), "b": before}
+        );
+    } except Exception as e {
+        log.warning("deliveries: purge failed: " + str(e));
+    }
+}
+
+
+def drop_deliveries(installation_id: int) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND doc->>'installation_id' = :i",
+            {"c": DELIVERIES, "i": str(installation_id)}
+        );
+    } except Exception as e {
+        log.warning("deliveries: drop failed: " + str(e));
+    }
+}
+
+
+# The newest verified delivery for an installation, which is what "live"
+# means on the GitHub tab even while the deliveries wait in the queue.
+def touch_installation(installation_id: int, seen_at: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps({"webhook_seen_at": seen_at}),
+                "c": INSTALL_INDEX,
+                "i": str(installation_id)
+            }
+        );
+    } except Exception as e {
+        log.warning("installation index: touch failed: " + str(e));
+    }
+}
+
+
+def installation_seen_at(installation_id: int) -> str {
+    if installation_id <= 0 {
+        return "";
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return "";
+        }
+        rows = db.rows(
+            "SELECT doc->>'webhook_seen_at' FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": INSTALL_INDEX, "i": str(installation_id)}
+        );
+        return str(rows[0][0] or "") if rows else "";
+    } except Exception as e {
+        log.warning("installation index: seen lookup failed: " + str(e));
+        return "";
+    }
+}
+
+
+# Monotonic seconds for a walker's time budget; kept here with the other
+# Python imports so models.jac and the client bundle never see `time`.
+def clock -> float {
+    return time.monotonic() as float;
+}
+
+
+# ----------------------------------------------------------------- requests
+
+# GitHub's error bodies can echo request context, so only the status code and
+# the `message` field ever cross back to the client. Exception text never
+# does: a requests traceback can carry the full URL and headers.
+def safe_error(status: int, body: any) -> dict[str, any] {
+    code = "request_failed";
+    if status == 401 {
+        code = "unauthorized";
+    } elif status == 403 {
+        code = "forbidden";
+    } elif status == 404 {
+        code = "not_found";
+    } elif status == 422 {
+        code = "invalid";
+    }
+    message = "";
+    if isinstance(body, dict) {
+        message = str(body.get("message") or "");
+    }
+    return {"ok": False, "status": status, "error": code, "message": message};
+}
+
+
+# One GitHub REST call, normalized to {"ok", "status", "data"}. Callers
+# never see a raw response, an exception, or the token.
+def gh_request(
+    token: str,
+    method: str,
+    path: str,
+    params: dict[str, any] | None = None,
+    payload: dict[str, any] | None = None
+) -> dict[str, any] {
+    query: dict[str, any] = {};
+    body_out: dict[str, any] = {};
+    if params {
+        query = params;
+    }
+    if payload {
+        body_out = payload;
+    }
+    if not token {
+        return {
+            "ok": False,
+            "status": 0,
+            "error": "not_connected",
+            "message": "GitHub is not connected."
+        };
+    }
+    headers = {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    };
+    try {
+        if method == "POST" {
+            resp = requests.post(
+                GITHUB_API + path, headers=headers, json=body_out, timeout=10
+            );
+        } elif method == "PATCH" {
+            resp = requests.patch(
+                GITHUB_API + path, headers=headers, json=body_out, timeout=10
+            );
+        } else {
+            resp = requests.get(
+                GITHUB_API + path, headers=headers, params=query, timeout=10
+            );
+        }
+    } except Exception {
+        return {
+            "ok": False,
+            "status": 0,
+            "error": "network",
+            "message": "Could not reach GitHub."
+        };
+    }
+    status = resp.status_code as int;
+    parsed: any = None;
+    try {
+        parsed = resp.json();
+    } except Exception {
+        parsed = None;
+    }
+    # A rate-limited response is a 403 with the remaining counter at zero.
+    # Naming it separately keeps "you are throttled" out of "token revoked".
+    if status == 403 {
+        remaining = str(resp.headers.get("X-RateLimit-Remaining") or "");
+        if remaining == "0" {
+            return {
+                "ok": False,
+                "status": 403,
+                "error": "rate_limited",
+                "message": "GitHub rate limit reached. Try again shortly."
+            };
+        }
+    }
+    if status < 200 or status >= 300 {
+        return safe_error(status, parsed);
+    }
+    return {"ok": True, "status": status, "data": parsed};
+}
+
+
+# ------------------------------------------------------- install completion
+
+# Trade the install-time OAuth code for a USER token. Used once, to prove the
+# person completing the install is the person who owns the installation.
+# Never stored.
+def exchange_code(code: str) -> str {
+    pair = oauth_client();
+    if not pair[0] or not pair[1] or not code {
+        return "";
+    }
+    try {
+        resp = requests.post(
+            GITHUB_WEB + "/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={"client_id": pair[0], "client_secret": pair[1], "code": code},
+            timeout=10
+        );
+    } except Exception {
+        return "";
+    }
+    if (resp.status_code as int) != 200 {
+        return "";
+    }
+    body = resp.json() as dict;
+    return str(body.get("access_token") or "");
+}
+
+
+# Is this installation one the calling GitHub user can actually see?
+# Installation ids are small integers, so without this a victim's workspace
+# could be bound to an attacker's installation. {} on any failure = refuse.
+def user_owns_installation(user_token: str, installation_id: int) -> dict[str, any] {
+    nothing: dict[str, any] = {};
+    if not user_token {
+        return nothing;
+    }
+    result = gh_request(user_token, "GET", "/user/installations", {"per_page": 100});
+    if not result["ok"] {
+        return nothing;
+    }
+    data = result["data"];
+    if not isinstance(data, dict) {
+        return nothing;
+    }
+    rows = data.get("installations") or [];
+    for row in rows {
+        if not isinstance(row, dict) {
+            continue;
+        }
+        if int(row.get("id") or 0) == installation_id {
+            return row;
+        }
+    }
+    return nothing;
+}
+
+
+# ------------------------------------------------------------- write-back
+
+# Keep the linked issue's state with its card, for repos that opted in:
+# `closed` closes an open issue (the card reached Done), otherwise a closed
+# issue reopens (the card left Done). Returns the log-line suffix, or "" when
+# nothing was written; a failure is logged, never raised.
+def sync_issue_state(holder: Root, t: Task, closed: bool, stamp: str) -> str {
+    if t.gh_issue_number <= 0
+        or not valid_full_name(t.gh_repo)
+        or (t.gh_issue_state == "closed") == closed {
+        return "";
+    }
+    opted = False;
+    for r in [holder-->[?:Repo]] {
+        if r.full_name == t.gh_repo and r.auto_close {
+            opted = True;
+        }
+    }
+    if not opted {
+        return "";
+    }
+    conns = [holder-->[?:GithubConnection]];
+    c = conns[0] if conns else None;
+    if not isinstance(c, GithubConnection)
+        or c.installation_id == 0
+        or c.status == "invalid" {
+        return "";
+    }
+    token = installation_token(c.installation_id);
+    if not token {
+        return "";
+    }
+    where = t.gh_repo + " #" + str(t.gh_issue_number);
+    want = "closed" if closed else "open";
+    result = gh_request(
+        token,
+        "PATCH",
+        "/repos/" + t.gh_repo + "/issues/" + str(t.gh_issue_number),
+        {},
+        {"state": want}
+    );
+    if not result["ok"] {
+        if result.get("error") == "unauthorized" {
+            c.status = "invalid";
+        }
+        log.warning(
+            "issue state write-back skipped for "
+                + where
+                + ": "
+                + str(result.get("message") or result.get("error"))
+        );
+        return "";
+    }
+    item = result["data"];
+    updated = str(item.get("updated_at") or "") if isinstance(item, dict) else "";
+    t.gh_issue_state = want;
+    if updated > t.gh_updated_at {
+        t.gh_updated_at = updated;
+    }
+    t.gh_synced_at = stamp;
+    return ("closed " if closed else "reopened ") + where;
+}

@@ -33,7 +33,7 @@ def:pub SsoCallbackPage -> JsxPage {
             jacSetToken(token);
             # Same marker a password login sets, so a later 401 can tell
             # this apart from a cold arrival at /login.
-            localStorage.setItem("standup_session", "1");
+            localStorage.setItem("flowline_session", "1");
             window.location.href = "/board";
         } else {
             failure = problem or "Sign-in was cancelled or failed.";

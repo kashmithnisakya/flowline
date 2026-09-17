@@ -1,9 +1,8 @@
 """The task table: a flat, sortable list of TaskView rows. Sortable columns
-are node fields (Title, Status, Priority, Est, Category, Due, Updated);
-Project and Assignees render but do not sort (they are edge hops, ordered
-server-side only by node field). A row deep-links to the board dialog."""
+are node fields (Title, Step, Priority, Est, Category, Due, Updated); Project
+and Assignees render but do not sort (edge hops). The page places each row on
+its board column (`stepNames`, `stepTints`); clicking a row calls `onOpen`."""
 
-import from "@jac/runtime" { Link }
 import from ...models { TaskView }
 import from ..flowlines.kinds { statusChip }
 import from ..common.Avatar { AvatarStack }
@@ -19,7 +18,7 @@ glob PRIORITY_TINT: dict[str, str] = {
      },
      SORT_COLS: list[list[str]] = [
          ["title", "Task"],
-         ["status", "Status"],
+         ["step", "Status"],
          ["priority", "Priority"],
          ["estimate", "Est"],
          ["category", "Category"],
@@ -40,6 +39,10 @@ def:pub TaskTable(
     sort: str,
     sortDir: str,
     onSort: Callable[[str], None],
+    onOpen: Callable[[str], None],
+    stepHeader: str = "Status",
+    stepNames: dict[str, str] = {},
+    stepTints: dict[str, str] = {},
     emptyLabel: str = "No tasks match these filters."
 ) -> JsxElement {
     today = todayIso();
@@ -65,7 +68,9 @@ def:pub TaskTable(
                                     className="cursor-pointer select-none whitespace-nowrap text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
                                     onClick={lambda { onSort(col[0]); }}
                                 >
-                                    {col[1] + " " + sortCaret(sort == col[0], sortDir)}
+                                    {(stepHeader if col[0] == "step" else col[1])
+                                        + " "
+                                        + sortCaret(sort == col[0], sortDir)}
                                 </TableHead>
                             }}
                             <TableHead
@@ -82,22 +87,32 @@ def:pub TaskTable(
                     </TableHeader>
                     <TableBody>
                         {for t in rows {
-                            <TableRow key={t.id} className="hover:bg-accent/50">
+                            <TableRow
+                                key={t.id}
+                                className="cursor-pointer hover:bg-accent/50"
+                                onClick={lambda { onOpen(t.id); }}
+                            >
                                 <TableCell className="max-w-72">
-                                    <Link
-                                        to={"/board?task=" + t.id}
-                                        className="block truncate font-medium hover:underline"
+                                    <button
+                                        type="button"
+                                        className="block max-w-full truncate text-left font-medium hover:underline"
                                         title={t.title}
                                     >
                                         {t.title}
-                                    </Link>
+                                    </button>
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                     <span
                                         className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium "
-                                            + statusChip(t.status)}
+                                            + (
+                                                stepTints[t.id]
+                                                    if t.id in stepTints
+                                                    else statusChip(t.status)
+                                            )}
                                     >
-                                        {t.status}
+                                        {stepNames[t.id]
+                                            if t.id in stepNames
+                                            else t.status}
                                     </span>
                                 </TableCell>
                                 <TableCell

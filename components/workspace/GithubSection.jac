@@ -12,7 +12,7 @@ import from ...models {
     GhIssueRow,
     GhPrRow
 }
-import from ...walkers.github {
+import from ...services.github.github {
     GithubStatus,
     StartGithubInstall,
     CompleteGithubInstall,
@@ -23,12 +23,13 @@ import from ...walkers.github {
     SearchRepoItems,
     ImportIssues,
     SetRepoAutoSync,
-    SetRepoAutoDone
+    SetRepoAutoDone,
+    SetRepoAutoClose
 }
 import from ...components.ui.input { Input }
-import from ...walkers.flowlines { GetFlowLine }
-import from ...walkers.projects { ListProjects }
-import from ...walkers.roster { ListRepos, AddRepo }
+import from ...services.flowlines.flowlines { GetFlowLine }
+import from ...services.projects.projects { ListProjects }
+import from ...services.roster.roster { ListRepos, AddRepo }
 import from ...components.github.ConnectCard { ConnectCard }
 import from ...components.github.ReconnectBanner { ReconnectBanner }
 import from ...components.github.RepoPicker { RepoPicker }
@@ -47,6 +48,12 @@ import from ...components.ui.skeleton { Skeleton }
 import from ...components.ui.checkbox { Checkbox }
 import from "sonner" { toast }
 import from "react" { useEffect }
+
+# GitHub's redirect is finished once per page load. The page mounts twice on
+# a full load and both mounts run `boot`, so the in-flight callback lives in
+# module state: the first mount starts it, every mount awaits it before it
+# reads status (issue #187). A dict cell, so a function never rebinds a glob.
+glob INSTALL_ONCE: dict[str, any] = {"pending": None};
 
 # "2026-08-03T14:20:05" -> "2026-08-03 14:20". Empty in, empty out.
 def shortStamp(iso: str) -> str {
@@ -112,7 +119,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         pickerRef: Ref[any] = Ref(),
         pickerMore: bool = False,
         pickerLoadingMore: bool = False,
-        pickerProject: str = "none",
+        pickerProject: str = "",
         attaching: str = "",
         issues: list[GhIssueRow] = [],
         issueState: str = "open",
@@ -168,6 +175,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     }
 
     async def boot -> None;
+    async def finishInstall(code: str, installId: int, state: str) -> None;
     async def loadStatus -> None;
     async def loadWorkspace -> None;
     async def startInstall -> None;
@@ -178,6 +186,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def attachRepo(fullName: str) -> None;
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def toggleAutoDone(rid: str, enabled: bool) -> None;
+    async def toggleAutoClose(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool) -> None;
     async def loadPulls(reset: bool) -> None;
     async def importSelected -> None;
@@ -210,8 +219,10 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     avatar = "";
     connectedAt = "";
     lastSync = "";
+    lastEvent = "";
     connectedAgo = "";
     lastSyncAgo = "";
+    lastEventAgo = "";
     if conn {
         connected = conn.connected;
         invalid = conn.status == "invalid";
@@ -219,13 +230,21 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         avatar = conn.account_avatar;
         connectedAt = shortStamp(conn.connected_at);
         lastSync = shortStamp(conn.last_sync_at);
+        lastEvent = shortStamp(conn.webhook_seen_at);
         connectedAgo = timeAgo(conn.connected_at);
         lastSyncAgo = timeAgo(conn.last_sync_at);
+        lastEventAgo = timeAgo(conn.webhook_seen_at);
     }
     exactStamps = connectedAt;
     if lastSync {
         exactStamps = exactStamps + " · last sync " + lastSync;
     }
+    if lastEvent {
+        exactStamps = exactStamps + " · last event " + lastEvent;
+    }
+    # Where the App's webhook must point; the receiver is served on the same
+    # origin as the app, so the page can spell it out.
+    webhookUrl = window.location.origin + "/webhook/GithubEvent";
 
     # The import destination is the repo's own project, chosen when the repo
     # was attached; the import bar shows it instead of asking every time.
@@ -299,6 +318,31 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 if lastSyncAgo
                                                 else " · not synced yet"}
                                         </p>
+                                        {if lastEventAgo {
+                                            <p
+                                                key="live"
+                                                className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                                            >
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+                                                />
+                                                {"Live · last event " + lastEventAgo}
+                                            </p>
+                                        } else {
+                                            <p
+                                                key="quiet"
+                                                className="mt-1 text-xs text-muted-foreground"
+                                            >
+                                                {"No events yet. In the GitHub App's settings, point the webhook at "}
+                                                <code
+                                                    className="rounded bg-muted px-1 py-0.5 text-[11px]"
+                                                >
+                                                    {webhookUrl}
+                                                </code>
+                                                {" and give it the secret from GITHUB_APP_WEBHOOK_SECRET."}
+                                            </p>
+                                        } }
                                     </div>
                                     <div className="ml-auto flex items-center gap-3">
                                         <span
@@ -377,6 +421,25 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                             ); }}
                                         />
                                         Done on merge &amp; close
+                                    </label>
+                                }}
+                                {for r in [
+                                    x
+                                    for x in repos
+                                    if x.id == repoId
+                                ] {
+                                    <label
+                                        key={"close-" + r.id}
+                                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+                                        title="Moving a card to your done step closes its GitHub issue, and moving it back out reopens it"
+                                    >
+                                        <Checkbox
+                                            checked={r.auto_close}
+                                            onCheckedChange={lambda { toggleAutoClose(
+                                                r.id, not r.auto_close
+                                            ); }}
+                                        />
+                                        Close &amp; reopen issue
                                     </label>
                                 }}
                                 {for r in [

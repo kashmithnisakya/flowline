@@ -35,6 +35,6 @@ impl SsoButtons.start(platform: str) -> None {
         return;
     }
     # Marker so a later 401 can tell a timeout from a cold arrival.
-    localStorage.setItem("standup_session", "1");
+    localStorage.setItem("flowline_session", "1");
     window.location.href = url;
 }

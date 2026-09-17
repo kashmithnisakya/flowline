@@ -11,10 +11,11 @@ writing `.jac`** — the syntax looks like Python/JSX but is neither.
 ```bash
 jac check <file>                    # type-check + lint; run on every file you touch
 jac fmt --lintfix <file>            # format + auto-fix lint; CI enforces this (see Verification)
-jac start main.jac                  # production mode — app and API share one origin
-jac start --dev main.jac            # dev mode with HMR (see caveats below)
+jac run --no-dev main.jac           # production mode — app and API share one origin (:8000)
+jac run -w 1 main.jac               # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
 jac run brand/logo.jac              # regenerate the logo into assets/brand/
 jac install --shadcn <name>         # add a UI primitive (writes components/ui/<name>.jac)
+jac scale deploy --dry-run --show-yaml main.jac   # render the k8s manifests (see Deploy sizing)
 ```
 
 There is no test runner. Verification is a **hand-written API gate suite** plus
@@ -28,17 +29,23 @@ There is no test runner. Verification is a **hand-written API gate suite** plus
 ```bash
 set -a; . ./.env; set +a
 unset DATABASE_HOST MONGODB_URI     # a stale mongo URI in the shell env aborts startup
-jac start main.jac
+jac run --no-dev main.jac
 ```
+
+`jac start` and `jac dev` were removed in jac 0.37: both hard-error with the
+`jac run` spelling. Serve flags go before the file (`jac run --port 3000 main.jac`).
+`[serve.workers] count = "2"` sizes the deployed pods, and dev mode (HMR) is
+single-process, so it refuses to start without `-w 1` or `JAC_SERVE_WORKERS=1`
+(`.env.example` carries it; CLI beats env beats jac.toml).
 
 ### Server hygiene — do this before every restart
 
-A lingering `_bun/bun` child holds the API port, `jac start` then silently
+A lingering `_bun/bun` child holds the API port, `jac run` then silently
 **drifts to the next port pair** (8002/8001 → 8005/8004 …), and every walker
 call from the browser hangs. Always:
 
 ```bash
-pkill -f "jac start"; pkill -f "runtimelib/client/_bun/bun"; sleep 3
+pkill -f "jac run"; pkill -f "_bun/bun"; sleep 3
 for p in 8000 8001 8002 8003 8004 8005; do lsof -ti :$p | xargs kill -9 2>/dev/null; done
 ```
 
@@ -47,40 +54,90 @@ Then read the actual port out of the startup log rather than assuming 8000.
 ## Architecture
 
 Multi-tenant kanban + daily-log tracker. **The account is the organization** —
-there is no `Organization` node. Org details (`org_name`, `full_name`) live in
-the account profile at `GET`/`PATCH /user/me`, written at signup through
-`jacSignup`'s third `profile` argument.
+there is no `Organization` node. The organization's name (`org_name`) lives in
+the account profile at `GET`/`PATCH /user/me`: signup sends an empty profile
+and the setup wizard writes the name. The app asks for no personal name; the
+people it tracks are roster members.
 
 ### Server
 
 - **`models.jac`** — every `node`/`edge`/`obj` archetype **and nothing else**.
   Archetype identity includes the module path, so **moving a declaration
   orphans persisted data**. It must also stay free of Python imports (see
-  gotchas). Everything hangs off the caller's `root`: `root ++> Project /
-  Member / Repo / Task / LogDay / WorkflowStep`, with typed edges
-  `AssignedTo`, `ForProject`, `OnProject`, `Logged`, `By`, `FlowsTo`.
-  `Milestone`, `VocabTerm` and their edges remain declared although the
-  roadmap and vocabulary features were removed: deleting an archetype
-  orphans whatever production still has.
-- **`walkers/`** — the API, one module per domain (`projects`, `roster`,
-  `tasks`, `log`, `flowlines`) plus `util.jac` for server-only helpers.
-  Walkers are **bare (JWT-required)**; there are no `:pub` walkers.
+  gotchas). The graph is boxed: `root ++> Projects ++> Project ++> Task`,
+  `root ++> Members ++> Member`, `root ++> Roles ++> Role` and
+  `root ++> WorkflowSteps ++> WorkflowStep` (that box also carries the flow
+  line's name and template key) and `root ++> Logs ++> LogDay ++> LogEntry`
+  (an entry hangs under its day; `days_between(root, since, until)` reads
+  the days in a date range, filtered in the store's query) and
+  `root ++> Iterations ++> Iteration` (time boxes; a task points at one
+  through its `iteration_id` field, like `step_id`, and `DeleteIteration`
+  clears it); `Repo` and `GithubConnection` hang off the root directly.
+  Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
+  edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
+  `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
+  its member).
+  There is no edge between steps: a step keeps its outgoing transitions in
+  its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
+  strips the removed step's id from every other step's list, and
+  `step_view(s, steps)` reads incoming ids off the whole flow line and
+  drops a transition to a step that is gone. **A task's project is its
+  container** (no project edge), so every task has exactly one project and `CreateTask` refuses to create
+  without an owned, active one; `AddRepo` needs a project for the same
+  reason (the sync files issues under the repo's project). A box is made
+  on first write by its get-or-create helper (`projects_box(root)` and
+  friends); the cross-kind readers `projects_of`, `members_of`, `roles_of`,
+  `steps_of`, `all_tasks` and `project_tasks` serve the walkers that
+  aggregate from the root. A `Member` stores `first_name` and `last_name`;
+  `full_name()` is the display name.
+- **`services/`** — the API, one folder per section (`projects`, `roster`,
+  `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
+  `iterations` (iteration CRUD and `RoadmapSnapshot`), and
+  `github` with `github.jac`, `events.jac` and `util.jac`) plus
+  `services/util.jac` for shared server-only helpers. Walkers are **bare
+  (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
+  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.18: the endpoint
+  effect pass does not follow an ability body into an annex, so an annexed
+  walker is classified as a pure read, the client caches it, and a save no
+  longer invalidates anything (every write-then-refetch shows stale data;
+  `jac run` gives no error, only the browser gate catches it). Compare the
+  `endpointEffects` in the `/board` shell's `__jac_init__` to verify.
+  Filed as jaseci-labs/jac#9189; annex the bodies once a release carries
+  the fix and the pin moves.
+  **A box-scoped walker visits, it does not read from the root.** Its
+  `Root entry` ability only decides where to go: `visit [here-->[?:Members]]
+  else { report []; }` for a read (a GET never makes a box), `visit
+  members_box(here)` for a write, `visit [target]` after `resolve` +
+  `owned` for a jid-addressed row (the `find_task` / `find_step` /
+  `find_project` / `find_member` lookup bases). The work happens in a
+  `with <Box> entry` or `with <Row> entry` ability, where the traversal from
+  the caller's root is the isolation and `root` is the caller's root when a
+  sibling box is needed. Only the aggregators that page or sort across
+  kinds (`BoardSnapshot`, `OverviewSnapshot`, `TaskCounts`, `ListTasks`
+  without a project, `SyncGithub`) stay on the root with the `*_of`
+  readers: carrying rows between abilities means walker `has` fields, and
+  those ship in the response. The one
+  exception is `services/github/events.jac`: `GithubEvent` is a webhook-protocol
+  walker (`/webhook/GithubEvent`, never `/walker/`) whose caller is GitHub,
+  authenticated by the runtime's signature check before the walker exists.
+  It runs as the system identity and only queues the delivery in the shared
+  docs store; `DrainGithubEvents` (and every `SyncGithub`) applies the queue
+  in the workspace's own session, so no walker ever writes a foreign root.
 - **A per-task edge hop is a separate traversal; one traversal yielding many
-  edges is not.** `Task.to_view()` hops three times (assignees, project,
-  milestone), and at 2,000 tasks on the pinned runtime that measured ~113ms
+  edges is not.** `Task.to_view()` hops twice (assignees, project), and
+  at 2,000 tasks on the pinned runtime the three-hop version measured ~113ms
   PER ROW: a 500-row page took 56s. Walking IN from each Member and Project
   once costs a handful of traversals no matter how long the page is, and the
   same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
   is that path and is what every list walker uses; `to_view()` is for a
-  single task. `walkers/insights.jac` does the same thing for the snapshot
+  single task. `services/insights/insights.jac` does the same thing for the snapshot
   (`_hydrate`). Never build a list by calling `to_view()` in a loop.
 - **List walkers page, and build their rows in a local.** A walker's public
-  `has` fields are serialised into the response beside `reports`, so an
-  accumulator field (`has results`) ships every row a second time; the
-  runtime already ships `walker.reports` a third. Rows go in a local and
-  are reported once. Anything that grows with history (`ListTasks`,
+  `has` fields are serialised into the response (`data.result`) beside
+  `data.reports`, so an accumulator field (`has results`) ships every row a
+  second time. Rows go in a local and are reported once. Anything that grows with history (`ListTasks`,
   `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
-  `page_size` (1-based, clamped by `page_bounds` in `walkers/util.jac`) and
+  `page_size` (1-based, clamped by `page_bounds` in `services/util.jac`) and
   reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
   `rows`, `has_more` and `total`. Filter and sort on node fields first, run
   `to_view()` (three edge hops) for the page alone. Roster-sized lists
@@ -97,17 +154,17 @@ the account profile at `GET`/`PATCH /user/me`, written at signup through
   client dropdowns and server validation.
 - **`main.jac`** — entry point. **A walker missing from its import list 404s**,
   and the entry module cannot use relative imports (`import from models {…}`,
-  not `.models`); modules under `walkers/` likewise import bare.
+  not `.models`); modules under `services/` likewise import bare, by the
+  full dotted path (`import from services.tasks.tasks {…}`).
 
 ### The flow line drives the board
 
-An org designs its own steps on `/flowlines` (`WorkflowStep` nodes, `FlowsTo`
-edges, cycles allowed on purpose). **The board's columns ARE those steps**, in
-`sort_order`, so the two views cannot disagree. The feature was called
-"workflow" until Aug 2026; `WorkflowStep` / `WorkflowMeta` keep that name
-because renaming an archetype orphans persisted data, and `GetFlowLineMeta`
-reads the old default name `"Workflow"` as `"Flow line"` for the same reason.
-`/workflow` redirects to `/flowlines` for old links.
+An org designs its own steps on `/flowlines` (`WorkflowStep` nodes under the
+`WorkflowSteps` box, transitions stored on each step, cycles allowed on
+purpose). **The
+board's columns ARE those steps**, in `sort_order`, so the two views cannot
+disagree. The feature was called "workflow" until Aug 2026; the archetypes
+keep that name. `/workflow` redirects to `/flowlines` for old links.
 
 Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 `blocked` / `done`) behind the user's chosen name. **Roughly thirty places key
@@ -117,6 +174,15 @@ the mapped legacy `status` via `KIND_STATUS`. Insights, GitHub sync, the
 assistant and the log therefore never learn what a step is — keep it that way
 rather than teaching them.
 
+**Write `status` through `Task.set_status(status, stamp)`, never by
+assignment** (a constructor passes `done_at` itself). It stamps `done_at`
+when a task enters Done and clears it when it leaves; `done_day(t)` and
+`moved_to_done(t)` in `services/util.jac` are the done date (falling back to
+`updated_at` on older rows) and the rule that a task created already Done (a
+GitHub backfill) is history, not throughput. The Overview's weekly Done
+count, `TaskHistory` (burn-up, throughput) and the snapshot's done-in-period
+all read those two, so they agree.
+
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
 of that kind; an org with no flow line at all falls back to `STATUSES`. Both
@@ -125,23 +191,50 @@ fallbacks are load-bearing — do not assume a task has a step.
 ### Security model — the one thing not to regress
 
 Isolation is structural: authenticated walkers run on the caller's own root, so
-`[root --> …]` cannot reach another tenant. **But `jobj(id)` resolves any node
-id regardless of owner — resolution is not authorization.** Every jid-addressed
+`[root --> …]` cannot reach another tenant. `jobj(id)` is owner-gated on
+0.37.7 (a foreign root or node resolves to `None`, even for the system
+identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task` /
-`find_log_entry` lookup bases) before touching anything.
+`find_log_entry` lookup bases) before touching anything. `owned` climbs
+container edges (at most three hops: task, project, box; or log entry, day,
+box) and compares each
+parent's jid with the caller's root. `Root` is not a runtime name in
+`models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
+the webhook receiver cannot apply a delivery itself: it queues, the tenant
+drains (see `services/github/events.jac`).
 
-**An uncaught walker exception is returned to the browser with its Python
-traceback** (the runtime sets `include_traceback` unconditionally, no config
-switch). Anything that can fail outside our control (the LLM, GitHub) is
+**An uncaught walker exception returns its message to the browser** as a 500
+`EXECUTION_ERROR` (since jac 0.37.18 the traceback goes to the server log
+only), and a message can still carry a URL or a config hint. Anything that can fail outside our control (the LLM, GitHub) is
 caught inside the walker, logged server-side with the operator hint, and
 reported as an empty or `{"ok": False, ...}` result; the client shows a plain
-"not available right now". See `_llm_failed` in `walkers/assistant.jac` and
-`gh_request` in `walkers/ghutil.jac`.
+"not available right now". See `_llm_failed` in `services/assistant/assistant.jac`
+and `gh_request` in `services/github/util.jac`.
 
 Watch the container variable inside abilities: in a `Task`/`LogDay` entry
-ability `here` is the *task or day*, not the root, so ownership checks use the
-holder reached via `[here<--]`. Getting this wrong silently drops assignee and
-project links rather than erroring.
+ability `here` is the *task or day*, not the root; the caller's root is
+`root`. Getting this wrong silently drops assignee and project links rather
+than erroring.
+
+**Webhook deliveries never touch a tenant graph from the receiver.**
+`GithubEvent` (system identity) checks the `installation.id` against the
+`gh_installations` index that `CompleteGithubInstall` writes, drops the App's
+own echoes, and inserts the delivery into `gh_deliveries` keyed by GitHub's
+delivery id, so a redelivery is a primary-key no-op. `drain_deliveries` runs
+in the tenant's session (from `DrainGithubEvents` or the start of
+`SyncGithub`), reads only its own installation's rows and only when the index
+binds that installation to this root (the workspace that last connected it),
+drops items older than the task's last applied `updated_at`, stamps the log
+with the event's own time, and applies through the helpers the poll uses.
+Neither side calls GitHub. The one write-back is the issue's state for a repo
+with `auto_close`: a move that crosses Done closes the issue (landing) or
+reopens it (leaving). It runs inside `MoveTask` / `UpdateTask` through
+`sync_issue_state` in `services/github/util.jac` (not in
+`services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
+it back); it rides on the move's own log line, and the receiver drops the
+App's echo by sender login so neither is applied a second time. An issue
+reopened on GitHub does not move its card; titles, assignees and labels are
+never written back.
 
 ### Client
 
@@ -152,7 +245,7 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
@@ -184,15 +277,62 @@ File-based routing with route groups:
 - **The flow line page's step panel opens the board's dialog.** Clicking a step
   in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
   and a row opens `components/board/TaskDialog` on the same form dict and the
-  same `UpdateTask` / `DeleteTask` walkers the board drives it with.
+  same `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
+  does the same for its rows, and keeps scope, filters, sort and page in the
+  URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
+  `sort="step"` follow the board's column order and placement rule. `/roadmap`
+  opens it from a bar. **`UpdateTask` overwrites every field**, so each page
+  that opens the dialog must carry `start_date` and `iteration` (a jid or
+  `"none"`) in its form and pass them on save, or a save clears them.
+- **A task's checklist is not part of the form.** `Task.checklist` is written
+  only by `AddChecklistItem` / `SetChecklistItem` / `RemoveChecklistItem`,
+  each applied at once from `components/board/Checklist.jac`, so a dialog
+  save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
+  page that opens `TaskDialog` passes `taskId`, `checklist` and an
+  `onChecklist` that swaps the reported view into its rows.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
-  create dialog; an already mounted board listens for `standup:open-task` /
-  `standup:new-task` instead (the palette uses both paths).
+  create dialog; an already mounted board listens for `flowline:open-task` /
+  `flowline:new-task` instead (the palette uses both paths).
 - **A log entry's `member_name` is every assignee comma-joined**, so split
   it before comparing to a member.
 - **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
   the generator, not the SVGs. Reference brand assets as **`/static/...`**, not
   `/assets/...` — Vite owns `/assets/*` at build time.
+
+### Deploy sizing
+
+The app stays declared as `[project] kind/entry-point`, and the app pod is
+sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`, `memory_request`,
+`memory_limit` are all honoured there; the gateway pod is sized in
+`[scale.gateway]`). **Do not move it to `[apps.flowline]`.** On jac 0.37.7 an
+`[apps]` table makes `jac scale deploy` skip the client bundle build (the
+dry run's third line says "The served app has no client target"), so the
+pods come up API-only and `/` is a JSON 404 while `jac run` still serves
+the app locally (this took flowline-dev down on 2026-09-08, PR #176). That
+table is also the only home of `workers = "auto"`, so the worker count is
+fixed instead: `[serve.workers] count = "2"` becomes `JAC_SERVE_WORKERS=2`
+on the app pod (and on the gateway pod, which has no override of its own);
+keep it equal to the cores in `cpu_limit` (#140). Never write `"auto"`
+there: the manifest builder resolves it on the deploying machine, not in
+the pod (this Mac renders 10). The HPA scales on memory too (80% of the
+request), so a request below the idle footprint pins the deployment at
+`max_replicas`. **The gateway gets an HPA of its own** with the same
+`[scale.kubernetes]` bounds unless `[scale.gateway.hpa]` sets them (it does:
+1 to 2); four gateway pods on dev (2026-09-14) were that inheritance plus a
+512Mi request sized for one worker while `[serve.workers]` gives the gateway
+two. `[scale.monitoring] k8s_metrics_enabled` and `[scale.gateway.logs]`
+each add a per-node DaemonSet (node-exporter, Alloy) to the namespace on the
+shared cluster, so both stay off; the deploy gate checks the gateway range.
+The dry-run command above renders the manifests locally
+once `bundle_storage_class` is set to any name (a placeholder for the RWX
+check that a real deploy satisfies on the platform); `tests/smoke/
+deploy_gate.py` asserts its transcript in CI.
+
+**`[project] entry-point` is the dotted module name, `main`.** jac 0.37.12+
+refuses `"main.jac"` on load. The jachammer deploy manager used to check the
+key as a file path, so between the pin bump and the platform's 2026-09-14
+release the line had to be omitted entirely (jaseci-labs/jacBuilder#1806,
+fixed by its #1808); the platform now resolves either spelling to the file.
 
 ## Jac gotchas that have already cost real debugging time
 
@@ -204,7 +344,7 @@ File-based routing with route groups:
   React mount loop that pinned the main thread. It lives in `toaster.jac`.
 - **No Python imports in modules the client imports types from.** A stray
   `import datetime` in `models.jac` dragged `@jac/wasm_host` into the browser
-  bundle and broke the build; that helper lives in `walkers/util.jac`.
+  bundle and broke the build; that helper lives in `services/util.jac`.
 - **Elements directly inside `{if …}` slots need explicit `key` props.**
 - **`xs and xs[0].field` is not a safe guard.** A bare `and` compiles to a
   JS `&&`, and an empty array is truthy in JS, so the guard passes and the
@@ -220,7 +360,7 @@ File-based routing with route groups:
   only comments outside the JSX tree; inside it they become a text node and
   ship to the page. Keep notes in the docstring or above the `return`.
 - **A page method named `set<Field>` collides with the state setter.** A
-  `has zoom: float` compiles to `const [zoom, setZoom] = useState(...)`, so a
+  `has zoom: float` compiles to a state cell plus a `setZoom` binding, so a
   `def setZoom` in the same component is a duplicate declaration and the
   whole Vite build fails with a 503 at request time (`jac check` passes —
   the clash only exists in the emitted JS). Name the method something else.
@@ -234,19 +374,35 @@ File-based routing with route groups:
   layout's `loggedIn` resolves, then again inside the chrome. Anything a
   page consumes in `can with entry` (a URL param, a one-shot flag) is gone
   for the second mount. Read it in entry, but consume it in the effect that
-  acts on it (see `pendingTaskId` on the board).
+  acts on it (see `pendingTaskId` on the board). The inverse trap is a
+  one-shot param that must reach the server exactly once: both mounts read
+  the URL, so strip it and start the call BEFORE the first await, keep the
+  in-flight promise in module state, and have every mount await that same
+  promise before it reads the result. A flag alone is not enough: the bare
+  mount that made the call is discarded, and the surviving mount would read
+  status while the call is still in flight. The GitHub install callback
+  fired twice that way, and the two concurrent `CompleteGithubInstall`
+  calls raced the single-use OAuth code and left the connection blank
+  (#187); a `Ref` is no guard, since each mount is its own instance.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
-- **A `has` list read after `await` is stale, and so is a `has` read inside a
-  `setInterval` callback**: re-arm a `setTimeout` from an effect keyed on the
-  value instead (see `HeroBoard`).
-- **On jac 0.34.x a pure module imported by both sides can compile to an
-  empty client file** (`"KIND_COLORS" is not exported by compiled/constants.js`).
-  Each page's pre-scan reloads `constants.jac` when a component in its
-  closure imports it, dropping the client stamps; only a page importing it
-  directly re-stamps. `pages/layout.jac` is scanned last and imports
-  `constants` for exactly that reason (`vocabPin`); before it existed the
-  build only survived because `workflow.jac` sorted after `log.jac`.
+- **Placement is inferred and pinned in `jac.toml`, never in source.** Since
+  jac 0.35 the `cl`/`sv` markers are syntax errors; `[placement.pins]` is the
+  override. `models` and every `services` module carry a module-level
+  `"server"` pin, keyed by the dotted path (`"services.github.events"`):
+  without it a page's plain import of a walker pulls the whole module
+  (abilities included) into the browser bundle and the build dies with
+  "Client pathway failed to lower this edge reference shape". **A new
+  service module needs its own pin line.** The three `lib/utils`
+  helpers are pinned `"client"` because an evidence-free `def:pub` in a
+  web-app is otherwise a server endpoint. `jac check <page> --placements`
+  prints every verdict with its evidence.
+- **`[placement] default = "server"` is load-bearing for deploys.** At the
+  `"native"` default, `jac build --as client` (the path a jachammer deploy
+  runs) compiles pure `constants.jac` to wasm and the browser reads
+  `STATUSES` through lazy stubs: the board dies with "X is not iterable"
+  on the deployed bundle only. `jac run` never reproduces it, so verify a
+  placement change with `jac build --as client main.jac` too.
 - **`.jac/cache` can serve a stale build after editing an `.impl.jac`.** If a
   fix does not appear under `/compiled/…`, delete `.jac/cache` and
   `.jac/client/compiled`, then restart.
@@ -275,20 +431,21 @@ File-based routing with route groups:
   only because its own returns are bare; a `return None` added anywhere in a
   function an effect calls turns into that effect's cleanup, with no `return`
   visible at the effect at all.
-- **A `has` you just assigned is still the OLD value for the rest of that
-  handler.** Under the pinned 0.34.14 runtime `has fProject` compiles to
-  `const [fProject, setFProject] = useState(...)`, so `fProject = v;
-  refreshOlder();` sends the PREVIOUS filter — this is not only an
-  after-`await` problem. Pass the new value as an argument, or keep it on a
-  `Ref` (refs are live). Worth knowing: the 0.36.x dev build compiles `has`
-  to a live external-store cell instead, so the same code behaves
-  differently on the two binaries; write for the pinned one.
+- **`has` state is a live cell on jac 0.37.** `has fProject` compiles to
+  `useJacState(...)` read through `.val`, so a write is visible to the next
+  statement, inside helpers and after `await`. Most handlers were written
+  for the 0.34.x runtime, where the same field was a `useState` snapshot
+  that stayed stale for the rest of the handler; they pass the new value as
+  an argument or keep it on a `Ref`, which is still correct and stays.
+  Keep the habit of building a new list in a local and assigning once
+  rather than appending twice around a walker call.
+- **A Radix `Select` shows its placeholder only for the value `""`.** A
+  sentinel such as `"none"` with no matching item renders an empty
+  trigger and no muted styling. Seed `""` for "nothing picked" (project on
+  the task dialog and the repo picker); keep a sentinel only where an item
+  carries it (the reviewer's "No reviewer").
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
-  rebind state rather than mutating; a `has` read after `await` is a stale
-  render-time snapshot. That last one bites hardest when a handler appends to
-  a list twice around a walker call: the second `xs = xs + [...]` re-reads the
-  pre-call value and silently drops the first append. Build the new list in a
-  local and assign once.
+  rebind state rather than mutating.
 
 ## Verification
 
@@ -308,23 +465,45 @@ tracker ignores, making working inputs look broken). Use `agent-browser
 keyboard type` for real key events. Assert on rendered text, not just
 coordinates — a stale `@eN` ref can produce a phantom pass.
 
+**Docs site** (`docs/`, MkDocs Material, published to GitHub Pages by
+`.github/workflows/docs.yml`). The API and data graph reference is generated
+from the `.jac` sources by `docs/hooks/jac_docs.py`: a new or renamed walker
+needs a `::: walker <Name>` line on its `docs/content/api/` page, or the
+strict build fails. Build with `mkdocs build -f docs/mkdocs.yml --strict`.
+
 **CI** (`.github/workflows/ci.yml`) runs on every PR and on pushes to
-`main`/`dev`: `jac fmt --check --lintfix` over every tracked `.jac` except
+`main`/`dev`. The `serve` job installs the pinned jac, runs `jac install`,
+asserts the deploy dry run would build the client bundle with two workers
+(`tests/smoke/deploy_gate.py`), boots `jac run --no-dev` and drives it:
+`tests/smoke/api_gate.py` (shell, bundle, register, login, walkers, a
+concurrent burst), `tests/smoke/webhook_gate.py` (the GitHub integration end
+to end against `tests/smoke/github_stub.py`, a local stand-in for the few
+GitHub endpoints the app calls: the connect round trip binds the
+installation, the poll back-fills, signed deliveries are queued by the
+receiver and applied by the drain, three workspaces stay isolated; the App
+env and `GITHUB_API_BASE` / `GITHUB_WEB_BASE` come from the workflow, no
+secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, create a
+task from the board, see the card, then land on GitHub's install redirect
+against the stub and check the page finishes it with exactly one
+`CompleteGithubInstall` request). The `jac` job runs
+`jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release
 pinned in `jac.toml`. **Format with that exact version.** Release lines
-disagree on line breaking (0.34.x and 0.36.x differ on 39 files here), so a
-dev-build `jac` on PATH can produce output CI rejects. Get the pinned binary
+disagree on line breaking, so a dev-build `jac` on PATH can produce output CI
+rejects. Get the pinned binary
 with `curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash -s -- --version <pin>`
 (lands in `~/.local/bin/jac`), then `~/.local/bin/jac fmt --lintfix <paths>`.
 `jac check main.jac` does not surface errors in imported modules, which is why
-CI checks each file; the type-check step runs twice on purpose (0.34.x reports
-cold-cache E5082 false positives that a seeded `.jac/cache` clears; the
-workflow comment explains).
+CI checks each file; the type-check step runs twice on purpose (0.34.x reported
+cold-cache E5082 false positives that a seeded `.jac/cache` cleared; the
+warm-up is kept as cheap insurance). `jac check` cannot see client codegen
+failures either: only `jac run` (the bundle build) reports a walker module
+that lowered into the client, so boot the app after touching imports or pins.
 
-**SSO** — `jac start --dev` does **not** proxy `/sso` to the API (only
-`/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`, `/assets`,
-`/docs`, `/introspect`), so exercise SSO with a plain `jac start`. The initiate
+**SSO** — the HMR dev server (`jac run main.jac`) has not proxied `/sso` to
+the API (only `/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`,
+`/assets`, `/docs`, `/introspect`), so exercise SSO with `jac run --no-dev`. The initiate
 endpoint requires a `client_callback` query param, which `jacSsoLogin` does not
 send — `components/auth/SsoButtons.jac` builds the URL itself.
 

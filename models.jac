@@ -1,6 +1,12 @@
 """flowline - persisted graph model and shared helpers. EVERY node/edge/obj
 archetype lives HERE and must not move: archetype identity includes the module
 path, so relocating a declaration orphans persisted data.
+
+Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
+root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
+root ++> Logs ++> LogDay ++> LogEntry and root ++> Iterations ++> Iteration;
+repos and the GitHub connection hang off the root directly. `owned()` climbs
+those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -42,15 +48,41 @@ def valid_full_name(full_name: str) -> bool {
     return True;
 }
 
-# Parentage check: does this node hang directly off the caller's root?
-# jobj/jid resolution is NOT authorization — every jid-addressed mutation
-# calls this first, or a guessed/leaked jid from another account would be
-# mutable. The account IS the organization, so "my root" is the tenant line.
+# The nodes a row may sit under on its way to the root: the three boxes
+# and, for a task, its project. Anything else hangs off the root.
+def is_container(owner: any) -> bool {
+    return (
+        isinstance(owner, Projects)
+        or isinstance(owner, Project)
+        or isinstance(owner, Members)
+        or isinstance(owner, Roles)
+        or isinstance(owner, WorkflowSteps)
+        or isinstance(owner, Logs)
+        or isinstance(owner, LogDay)
+        or isinstance(owner, Iterations)
+    );
+}
+
+
+# Does this node belong to the caller's root? Climbs container edges, at
+# most three hops (task, project, Projects box); typed in-edges never lead
+# to a container, so they drop out. jobj/jid resolution is NOT authorization:
+# every jid-addressed mutation calls this first. "My root" is the tenant line.
 def owned(holder: any, target: any) -> bool {
-    for owner in [target<--] {
-        if jid(owner) == jid(holder) {
-            return True;
+    frontier: list[any] = [target];
+    for hop in range(3) {
+        higher: list[any] = [];
+        for node_ in frontier {
+            for owner in [node_<--] {
+                if jid(owner) == jid(holder) {
+                    return True;
+                }
+                if is_container(owner) {
+                    higher.append(owner);
+                }
+            }
         }
+        frontier = higher;
     }
     return False;
 }
@@ -63,9 +95,10 @@ node Project {
         active: bool = True;
 }
 
+# Roles are HasRole edges to Role nodes, never names on the member.
 node Member {
-    has name: str,
-        roles: list[str] = [],
+    has first_name: str = "",
+        last_name: str = "",
         email: str = "",
         github_username: str = "",
         tags: list[str] = [],
@@ -74,6 +107,11 @@ node Member {
         # the colour they already show.
         color: str = "",
         active: bool = True;
+
+    # The display name; the log and every view show this.
+    def full_name -> str {
+        return (self.first_name + " " + self.last_name).strip();
+    }
 }
 
 node Repo {
@@ -84,7 +122,10 @@ node Repo {
         auto_sync: bool = False,
         issue_cursor: str = "",
         # Merged PR moves the linked card to the done step on sync.
-        auto_done: bool = False;
+        auto_done: bool = False,
+        # The reverse direction: a card landing on Done closes its issue,
+        # and one leaving Done reopens it.
+        auto_close: bool = False;
 }
 
 node Task {
@@ -124,6 +165,11 @@ node Task {
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
         gh_synced_at: str = "",
+        # GitHub's updated_at of the newest issue item applied here, kept
+        # monotonic so an older event can never roll a newer one back. The
+        # linked PR is a different object with its own clock, hence two.
+        gh_updated_at: str = "",
+        pr_updated_at: str = "",
         # GitHub sub-issue family, stamped by the sync. A parent carries its
         # summary counts; a child carries its parent's identity. Fields, not
         # edges: an edge would cost a traversal per row in every list.
@@ -132,7 +178,38 @@ node Task {
         gh_sub_total: int = 0,
         gh_sub_done: int = 0,
         pr_number: int = 0,
-        pr_state: str = "";
+        pr_state: str = "",
+        # GitHub's own assignees on the issue, refreshed by every issue
+        # event. The card's assignees are the roster's and stay the
+        # workspace's to set; these say what GitHub thinks.
+        gh_assignees: list[str] = [],
+        # The linked PR's review conversation: "requested" from a review
+        # request, then the verdict a review submits. Its own clock, because
+        # the PR's updated_at does not move when someone reviews it.
+        pr_review_state: str = "",
+        pr_review_at: str = "",
+        # When the task last entered Done, "" while it is open. Written only
+        # by set_status; rows from before it read updated_at (done_day).
+        done_at: str = "",
+        # The card's own breakdown: {"id", "text", "done"} in display order.
+        # Written only by the checklist walkers, never by UpdateTask.
+        checklist: list[dict[str, any]] = [],
+        # The Iteration this task is planned into, by jid ("" for none), and
+        # when work on it starts. Fields, not edges, so list rows stay
+        # hop-free; the roadmap falls back to the iteration's dates.
+        iteration_id: str = "",
+        start_date: str = "";
+
+    # Every status write goes through here, so `done_at` stays true to the
+    # move into Done: kept while the task stays Done, cleared when it leaves.
+    def set_status(status: str, stamp: str) {
+        if status == "Done" and self.status != "Done" {
+            self.done_at = stamp;
+        } elif status != "Done" {
+            self.done_at = "";
+        }
+        self.status = status;
+    }
 
     # One task's view, hopping its own edges. Fine for a single task; for a
     # list use hydrate_views, which gets the same links in a few traversals
@@ -142,30 +219,16 @@ node Task {
         assignee_names: list[str] = [];
         for a in [self->:AssignedTo:->] {
             assignee_ids.append(jid(a));
-            assignee_names.append(a.name);
+            assignee_names.append(a.full_name());
         }
         project_id = "";
         project_name = "";
-        projects = [self->:ForProject:->];
+        projects = [self<--[?:Project]];
         if projects {
             project_id = jid(projects[0]);
             project_name = projects[0].name;
         }
-        milestone_id = "";
-        milestone_name = "";
-        stones = [self->:InMilestone:->];
-        if stones {
-            milestone_id = jid(stones[0]);
-            milestone_name = stones[0].title;
-        }
-        return self.view_with(
-            assignee_ids,
-            assignee_names,
-            project_id,
-            project_name,
-            milestone_id,
-            milestone_name
-        );
+        return self.view_with(assignee_ids, assignee_names, project_id, project_name);
     }
 
     # The view given links the caller already has. The field list lives here
@@ -174,9 +237,7 @@ node Task {
         assignee_ids: list[str],
         assignee_names: list[str],
         project_id: str,
-        project_name: str,
-        milestone_id: str,
-        milestone_name: str
+        project_name: str
     ) -> TaskView {
         return TaskView(
             id=jid(self),
@@ -201,8 +262,6 @@ node Task {
             review_due=self.review_due,
             project_id=project_id,
             project_name=project_name,
-            milestone_id=milestone_id,
-            milestone_name=milestone_name,
             gh_repo=self.gh_repo,
             gh_issue_number=self.gh_issue_number,
             gh_issue_state=self.gh_issue_state,
@@ -212,11 +271,17 @@ node Task {
             gh_sub_total=self.gh_sub_total,
             gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
-            pr_state=self.pr_state
+            pr_state=self.pr_state,
+            gh_assignees=self.gh_assignees,
+            pr_review_state=self.pr_review_state,
+            checklist=self.checklist,
+            iteration_id=self.iteration_id,
+            start_date=self.start_date
         );
     }
 }
 
+# One day of the log under the Logs box; its entries hang off it.
 node LogDay {
     has date: str;
 }
@@ -238,27 +303,6 @@ node LogEntry {
         project_name: str = "";
 }
 
-# An org-defined vocabulary term (kind: "category" or "tag"), seeded in
-# the setup wizard and managed on the Workspace tab.
-node VocabTerm {
-    has kind: str,
-        value: str;
-}
-
-# A phase on a project's roadmap. Dates are optional: an undated milestone
-# is a named bucket of work that has not been scheduled yet, and the
-# timeline lists those separately rather than guessing a position.
-node Milestone {
-    has title: str,
-        description: str = "",
-        start_date: str = "",
-        due_date: str = "",
-        status: str = "Planned",
-        color: str = "",
-        sort_order: float = 0.0,
-        created_at: str = "",
-        updated_at: str = "";
-}
 
 # The org's GitHub App installation, singleton per root. It stores an
 # installation id, NOT a credential: tokens are minted on demand in ghutil.
@@ -276,17 +320,14 @@ node GithubConnection {
 }
 
 # An org-level role definition, seeded by ApplyTemplate and editable on the
-# Roles tab. Members and step owners hold role NAMES, so rename/delete
-# walkers propagate by name rather than anything holding a jid to this node.
+# Roles tab. A member holds it through a HasRole edge, so a rename or delete
+# reaches members on its own; a step's `owner` still holds the NAME.
 node Role {
     has name: str,
         blurb: str = "",
         color: str = "",
         sort_order: float = 0.0;
 }
-
-# `WorkflowStep` and `WorkflowMeta` keep their pre-rename names: an
-# archetype's name is its identity, so renaming them orphans persisted data.
 
 # One step of the org's flow line: a named column with a semantic `kind`
 # behind the user's label. The kind, not the name, is what the app keys
@@ -304,43 +345,48 @@ node WorkflowStep {
         x: float = 0.0,
         y: float = 0.0,
         sort_order: float = 0.0,
+        # Outgoing transitions in draw order, one per target step:
+        # {"to": step jid, "label": what has to be true to cross, "carries":
+        # "issue" | "pr" | ""}. Cycles are allowed; self-loops are refused.
+        transitions: list[dict[str, str]] = [],
         created_at: str = "",
         updated_at: str = "";
 }
 
-# The flow line's own record: singleton per root, get-or-created. Steps stay
-# flat off the root; this carries only what the graph itself cannot — the
-# display name.
-node WorkflowMeta {
+# Boxes, one of each per root, made on first write by the *_box helpers.
+# Every project, member, role and step hangs off its box, never off the root.
+node Projects {}
+
+node Members {}
+
+node Roles {}
+
+# The steps' box is also the flow line's own record: its display name and
+# which template seeded it ("" means drawn from scratch). The Roles tab keys
+# on the template: one with a `roles` list brings fixed roles.
+node WorkflowSteps {
     has name: str = "Flow line",
-        # Which template seeded this flow line; "" means drawn from scratch
-        # (or seeded before this field existed). The Roles tab keys on it: a
-        # template with a `roles` list brings fixed roles, "" means
-        # free-text roles.
         template_key: str = "";
 }
 
+node Logs {}
+
+# A time box the team plans in: a name and an inclusive ISO date span. Tasks
+# point at one through Task.iteration_id.
+node Iteration {
+    has name: str,
+        start_date: str,
+        end_date: str,
+        created_at: str = "";
+}
+
+node Iterations {}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
-edge Logged: LogDay --> LogEntry {}
 edge By: LogEntry --> Member {}
-edge ForProject: Task --> Project {}
 edge OnProject: Member --> Project {}
-edge OnRoadmap: Milestone --> Project {}
-edge InMilestone: Task --> Milestone {}
-# The arrow on the roadmap: this step leads to that one. The graph must stay
-# acyclic (LinkSteps refuses anything that would close a loop), because both
-# the layout and the "ready to start" signal are derived from depth.
-edge LeadsTo: Milestone --> Milestone {}
-# A flow line transition. Cycles are ALLOWED by design (review looping back
-# to development is the point); only self-loops are refused, at link time.
-# `label` is what has to be true to cross; empty on older transitions.
-# `carries` is what moves across it, "issue" or "pr" (see CARRY_KINDS);
-# empty means untagged and is what every pre-existing transition reads as.
-edge FlowsTo: WorkflowStep --> WorkflowStep {
-    has label: str = "",
-        carries: str = "";
-}
+edge HasRole: Member --> Role {}
 
 obj TaskView {
     has id: str,
@@ -365,8 +411,6 @@ obj TaskView {
         step_id: str = "",
         tags: list[str] = [],
         estimate: float = 0.0,
-        milestone_id: str = "",
-        milestone_name: str = "",
         gh_repo: str = "",
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
@@ -376,7 +420,23 @@ obj TaskView {
         gh_sub_total: int = 0,
         gh_sub_done: int = 0,
         pr_number: int = 0,
-        pr_state: str = "";
+        pr_state: str = "",
+        gh_assignees: list[str] = [],
+        pr_review_state: str = "",
+        checklist: list[dict[str, any]] = [],
+        iteration_id: str = "",
+        start_date: str = "";
+}
+
+# The Overview's charts over time, one entry per week oldest first: `weeks`
+# holds each Monday, `added` / `finished` count that week, `scope` / `done`
+# are running totals at the week's end.
+obj WeeklyHistory {
+    has weeks: list[str] = [],
+        added: list[int] = [],
+        finished: list[int] = [],
+        scope: list[int] = [],
+        done: list[int] = [];
 }
 
 # One page of tasks. `total` counts every row that matched the filters, not
@@ -447,6 +507,8 @@ obj LogTotals {
 obj MemberView {
     has id: str,
         name: str,
+        first_name: str,
+        last_name: str,
         roles: list[str],
         email: str,
         github_username: str,
@@ -463,7 +525,8 @@ obj RepoView {
         project_id: str,
         project_name: str,
         auto_sync: bool = False,
-        auto_done: bool = False;
+        auto_done: bool = False,
+        auto_close: bool = False;
 }
 
 obj RoleView {
@@ -472,6 +535,19 @@ obj RoleView {
         blurb: str,
         color: str,
         sort_order: float;
+}
+
+obj IterationView {
+    has id: str,
+        name: str,
+        start_date: str,
+        end_date: str;
+}
+
+def iteration_view(it: Iteration) -> IterationView {
+    return IterationView(
+        id=jid(it), name=it.name, start_date=it.start_date, end_date=it.end_date
+    );
 }
 
 def role_view(r: Role) -> RoleView {
@@ -493,7 +569,7 @@ obj StepView {
         blurb: str = "",
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids: one FlowsTo traversal builds all three.
+        # Index-aligned with next_ids, all three read off the step's field.
         next_labels: list[str] = [],
         next_carries: list[str] = [],
         # How much work is sitting here, counted per request in GetFlowLine
@@ -511,6 +587,7 @@ obj GithubConnectionView {
         status: str = "",
         connected_at: str = "",
         last_sync_at: str = "",
+        webhook_seen_at: str = "",
         configured: bool = False,
         missing_config: list[str] = [];
 }
@@ -558,21 +635,179 @@ def repo_view(r: Repo) -> RepoView {
         project_id=project_id,
         project_name=project_name,
         auto_sync=r.auto_sync,
-        auto_done=r.auto_done
+        auto_done=r.auto_done,
+        auto_close=r.auto_close
     );
 }
 
 
-# Task links gathered by walking IN from each Member, Project and Milestone
-# once. A per-task hop is a separate traversal and dominates at list sizes;
+# ------------------------------------------------------------------ layout
+# One box per kind under the root; the box is the one traversal that yields
+# every row of that kind. These readers serve the walkers that aggregate
+# across kinds from the root; a box-scoped walker visits its box instead.
+# Two overlapping first writes can leave two boxes, so readers merge every
+# box and writers take the first.
+
+def projects_of(holder: Root) -> list[Project] {
+    out: list[Project] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]]);
+    }
+    return out;
+}
+
+
+def members_of(holder: Root) -> list[Member] {
+    out: list[Member] = [];
+    for box in [holder-->[?:Members]] {
+        out.extend([box-->[?:Member]]);
+    }
+    return out;
+}
+
+
+def roles_of(holder: Root) -> list[Role] {
+    out: list[Role] = [];
+    for box in [holder-->[?:Roles]] {
+        out.extend([box-->[?:Role]]);
+    }
+    return out;
+}
+
+
+def iterations_of(holder: Root) -> list[Iteration] {
+    out: list[Iteration] = [];
+    for box in [holder-->[?:Iterations]] {
+        out.extend([box-->[?:Iteration]]);
+    }
+    return out;
+}
+
+
+def steps_of(holder: Root) -> list[WorkflowStep] {
+    out: list[WorkflowStep] = [];
+    for box in [holder-->[?:WorkflowSteps]] {
+        out.extend([box-->[?:WorkflowStep]]);
+    }
+    return out;
+}
+
+
+# Log days with `date` in [since, until], ISO strings. The date filter runs
+# in the store's query, so a week costs the same however long the history.
+def days_between(holder: Root, since: str, until: str) -> list[LogDay] {
+    out: list[LogDay] = [];
+    for box in [holder-->[?:Logs]] {
+        out.extend([box-->[?:LogDay, date>=since, date<=until]]);
+    }
+    return out;
+}
+
+
+# Every task: one traversal per project.
+def all_tasks(holder: Root) -> list[Task] {
+    out: list[Task] = [];
+    for p in projects_of(holder) {
+        out.extend([p-->[?:Task]]);
+    }
+    return out;
+}
+
+
+# One project's tasks. Empty for a foreign or unknown id.
+def project_tasks(holder: Root, project_id: str) -> list[Task] {
+    p = resolve(project_id);
+    if not isinstance(p, Project) or not owned(holder, p) {
+        return [];
+    }
+    return [p-->[?:Task]];
+}
+
+
+# Move a task under another project: the container edge IS the project link.
+def rehome_task(task: Task, target: Project) {
+    for e in [edge task<--] {
+        del e;
+    }
+    target ++> task;
+}
+
+
+# Get-or-create, one per kind. A writer visits the box it returns and works
+# there; a read looks the box up itself so a GET never writes.
+def projects_box(holder: Root) -> Projects {
+    found = [holder-->[?:Projects]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Projects();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def members_box(holder: Root) -> Members {
+    found = [holder-->[?:Members]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Members();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def roles_box(holder: Root) -> Roles {
+    found = [holder-->[?:Roles]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Roles();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def iterations_box(holder: Root) -> Iterations {
+    found = [holder-->[?:Iterations]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Iterations();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def steps_box(holder: Root) -> WorkflowSteps {
+    found = [holder-->[?:WorkflowSteps]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> WorkflowSteps();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def logs_box(holder: Root) -> Logs {
+    found = [holder-->[?:Logs]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Logs();
+    on_attached(holder, box);
+    return box;
+}
+
+
+# Task links gathered by walking IN from each Member and Project once. A per-task hop is a separate traversal and dominates at list sizes;
 # this costs one walk per holder no matter how many tasks are involved.
 obj TaskLinks {
     has assignee_ids: dict[str, list[str]] = {},
         assignee_names: dict[str, list[str]] = {},
         project_id: dict[str, str] = {},
-        project_name: dict[str, str] = {},
-        milestone_id: dict[str, str] = {},
-        milestone_name: dict[str, str] = {};
+        project_name: dict[str, str] = {};
 
     # Comma-joined assignee names for one task, "" when unassigned.
     def named(task_id: str) -> str {
@@ -587,11 +822,11 @@ obj TaskLinks {
     }
 }
 
-# One walk IN from every Member, Project and Milestone. Callers that need both
-# views and tallies gather this once and pass it around.
+# One walk IN from every Member and Project. Callers that need both views
+# and tallies gather this once and pass it around.
 def task_links(holder: Root) -> TaskLinks {
     links = TaskLinks();
-    for m in [holder-->[?:Member]] {
+    for m in members_of(holder) {
         who = jid(m);
         for t in [m<-:AssignedTo:<-] {
             key = jid(t);
@@ -600,23 +835,15 @@ def task_links(holder: Root) -> TaskLinks {
                 links.assignee_names[key] = [];
             }
             links.assignee_ids[key].append(who);
-            links.assignee_names[key].append(m.name);
+            links.assignee_names[key].append(m.full_name());
         }
     }
-    for p in [holder-->[?:Project]] {
+    for p in projects_of(holder) {
         pid = jid(p);
-        for t in [p<-:ForProject:<-] {
+        for t in [p-->[?:Task]] {
             key = jid(t);
             links.project_id[key] = pid;
             links.project_name[key] = p.name;
-        }
-    }
-    for ms in [holder-->[?:Milestone]] {
-        sid = jid(ms);
-        for t in [ms<-:InMilestone:<-] {
-            key = jid(t);
-            links.milestone_id[key] = sid;
-            links.milestone_name[key] = ms.title;
         }
     }
     return links;
@@ -633,9 +860,7 @@ def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
                 links.assignee_ids[key] if key in links.assignee_ids else [],
                 links.assignee_names[key] if key in links.assignee_names else [],
                 links.project_id[key] if key in links.project_id else "",
-                links.project_name[key] if key in links.project_name else "",
-                links.milestone_id[key] if key in links.milestone_id else "",
-                links.milestone_name[key] if key in links.milestone_name else ""
+                links.project_name[key] if key in links.project_name else ""
             )
         );
     }
@@ -650,21 +875,30 @@ def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
 }
 
 
-def step_view(s: WorkflowStep) -> StepView {
+# One step's view. `steps` is the whole flow line: incoming ids are read off
+# the other steps' transitions, and a transition to a step that no longer
+# exists is left out.
+def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
+    me = jid(s);
+    known: list[str] = [];
     prev_ids: list[str] = [];
-    for p in [s<-:FlowsTo:<-] {
-        prev_ids.append(jid(p));
+    for o in steps {
+        known.append(jid(o));
+        for t in o.transitions {
+            if t["to"] == me and jid(o) not in prev_ids {
+                prev_ids.append(jid(o));
+            }
+        }
     }
     next_ids: list[str] = [];
-    for n in [s->:FlowsTo:->] {
-        next_ids.append(jid(n));
-    }
-    # `[edge ...]` is how an edge's own fields are read.
     next_labels: list[str] = [];
     next_carries: list[str] = [];
-    for e in [edge s->:FlowsTo:->] {
-        next_labels.append(e.label);
-        next_carries.append(e.carries);
+    for t in s.transitions {
+        if t["to"] in known {
+            next_ids.append(t["to"]);
+            next_labels.append(t["label"]);
+            next_carries.append(t["carries"]);
+        }
     }
     return StepView(
         id=jid(s),
@@ -684,6 +918,14 @@ def step_view(s: WorkflowStep) -> StepView {
 }
 
 
+# A member's role names, in the roles' own order.
+def member_roles(m: Member) -> list[str] {
+    held = [m->:HasRole:->];
+    held.sort(key=lambda (r: Role) { r.sort_order; });
+    return [r.name for r in held];
+}
+
+
 def member_view(m: Member) -> MemberView {
     ids: list[str] = [];
     names: list[str] = [];
@@ -693,8 +935,10 @@ def member_view(m: Member) -> MemberView {
     }
     return MemberView(
         id=jid(m),
-        name=m.name,
-        roles=m.roles,
+        name=m.full_name(),
+        first_name=m.first_name,
+        last_name=m.last_name,
+        roles=member_roles(m),
         email=m.email,
         github_username=m.github_username,
         tags=m.tags,

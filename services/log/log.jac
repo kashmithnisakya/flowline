@@ -1,0 +1,337 @@
+"""Daily-log walkers: day buckets under the Logs box and their entries."""
+
+import from models {
+    Project,
+    Member,
+    Task,
+    LogDay,
+    LogEntry,
+    LogPage,
+    LogTotals,
+    MemberDays,
+    Logs,
+    By,
+    AssignedTo,
+    resolve,
+    on_attached,
+    owned,
+    logs_box,
+    days_between
+}
+import from services.util { today_iso, shift_day, page_bounds, now_iso }
+
+# ---------------------------------------------------------------- daily log
+
+walker ListLogEntries {
+    """One page of entries whose LogDay date falls in [from_date, to_date],
+    ISO strings, newest day first. `total` counts the whole range so a page
+    can say how much of the week it is."""
+    has from_date: str,
+        to_date: str,
+        page: int = 1,
+        page_size: int = 0,
+        reports: list[LogPage] = [];
+
+    # A read never makes the box: no box, an empty page. The FIRST box only,
+    # so a second box a racing first write left cannot report twice.
+    can start with Root entry {
+        boxes = [here-->[?:Logs]];
+        if boxes {
+            visit [boxes[0]];
+        } else {
+            (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
+            report LogPage(rows=[], page=p, page_size=size, has_more=False, total=0);
+        }
+    }
+
+    can gather with Logs entry {
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
+        found: list[LogEntry] = [];
+        for day in days_between(root, self.from_date, self.to_date) {
+            for row in [day-->[?:LogEntry]] {
+                found.append(row);
+            }
+        }
+        # Newest day first so page 1 is the end of the week; the jid pass
+        # underneath keeps rows that tie on day and name in one order
+        # across pages (sorts are stable).
+        found.sort(key=lambda (r: LogEntry) { jid(r); });
+        found.sort(key=lambda (r: LogEntry) { r.member_name; });
+        found.sort(key=lambda (r: LogEntry) { r.date; }, reverse=True);
+        report LogPage(
+            rows=found[start:end],
+            page=p,
+            page_size=size,
+            has_more=len(found) > end,
+            total=len(found)
+        );
+    }
+}
+
+# The Overview's log numbers: entries per week for the four weeks ending in
+# `monday`'s week (oldest first), per weekday of that week, and which days each
+# person logged on. Reads node fields only, so row volume does not change cost.
+def log_totals(holder: Root, monday: str) -> LogTotals {
+    week0 = monday if len(monday) >= 10 else today_iso();
+    starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
+    since = starts[0];
+    until = shift_day(week0, 6);
+    week_days = [shift_day(week0, i) for i in range(7)];
+    # Week bounds up front, for the same reason as task_totals.
+    ends = [shift_day(starts[i], 7) for i in range(4)];
+    by_week = [0, 0, 0, 0];
+    by_day = [0, 0, 0, 0, 0, 0, 0];
+    per_person: dict[str, list[int]] = {};
+    for day in days_between(holder, since, until) {
+        for row in [day-->[?:LogEntry]] {
+            for i in range(4) {
+                if row.date >= starts[i] and row.date < ends[i] {
+                    by_week[i] = by_week[i] + 1;
+                }
+            }
+            if row.date < week0 {
+                continue;
+            }
+            slot = -1;
+            for i in range(7) {
+                if row.date == week_days[i] {
+                    slot = i;
+                }
+            }
+            if slot < 0 {
+                continue;
+            }
+            by_day[slot] = by_day[slot] + 1;
+            for who in row.member_name.split(",") {
+                name = who.strip();
+                if not name {
+                    continue;
+                }
+                if name not in per_person {
+                    per_person[name] = [0, 0, 0, 0, 0, 0, 0];
+                }
+                per_person[name][slot] = per_person[name][slot] + 1;
+            }
+        }
+    }
+    people: list[MemberDays] = [];
+    for name in per_person {
+        counts = per_person[name];
+        people.append(MemberDays(name=name, by_day=counts, total=sum(counts)));
+    }
+    return LogTotals(by_week=by_week, by_day=by_day, members=people);
+}
+
+
+walker LogCounts {
+    """The Overview's log numbers over the four weeks ending in `monday`'s
+    week."""
+    has monday: str = "",
+        reports: list[LogTotals] = [];
+
+    can count with Root entry {
+        report log_totals(here, self.monday);
+    }
+}
+
+
+walker LogActivity {
+    """Visit the Logs box, get-or-create the day in it, then append one
+    denormalized row under the day. Refuses writes no view could fetch
+    (empty date) or that would produce a blank authorless row (bad member)."""
+    has date: str,
+        member_id: str,
+        activity: str,
+        project_id: str = "",
+        category: str = "",
+        repo: str = "",
+        issue_link: str = "",
+        pr_link: str = "",
+        status: str = "",
+        notes: str = "",
+        reports: list[LogEntry] = [];
+
+    can start with Root entry {
+        if not self.date {
+            disengage;
+        }
+        probe = resolve(self.member_id);
+        if not isinstance(probe, Member) or not owned(here, probe) {
+            disengage;
+        }
+        visit logs_box(here);
+    }
+
+    # One day per date: an existing one anywhere in the log, else a new one
+    # in this box.
+    can open_day with Logs entry {
+        days = days_between(root, self.date, self.date);
+        if days {
+            visit [days[0]];
+        } else {
+            fresh = here ++> LogDay(date=self.date);
+            on_attached(root, fresh);
+            visit fresh;
+        }
+    }
+
+    can add with LogDay entry {
+        # `here` is the LogDay; `root` is the caller's own root.
+        holder = root;
+        member_name = "";
+        tags_snap = "";
+        m = resolve(self.member_id);
+        if isinstance(m, Member) {
+            member_name = m.full_name();
+            tags_snap = ", ".join(m.tags);
+        }
+        project_name = "";
+        p = resolve(self.project_id);
+        if isinstance(p, Project) and owned(holder, p) {
+            project_name = p.name;
+        }
+        # Stamped like the automatic rows, so the time column and the
+        # digest's ordering treat manual entries the same way.
+        row = here ++> LogEntry(
+            date=here.date,
+            at=now_iso(),
+            activity=self.activity,
+            category=self.category,
+            repo=self.repo,
+            issue_link=self.issue_link,
+            pr_link=self.pr_link,
+            status=self.status,
+            notes=self.notes,
+            member_name=member_name,
+            tags=tags_snap,
+            project_name=project_name
+        );
+        if isinstance(m, Member) {
+            row +>:By():+> m;
+        }
+        report row;
+        disengage;
+    }
+}
+
+# Board moves write the log now: append one denormalized row describing a
+# task event to today's bucket. Called from the task walkers.
+def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> None {
+    today = stamp[:10];
+    if not today {
+        return;
+    }
+    days = days_between(holder, today, today);
+    if days {
+        day = days[0];
+    } else {
+        day = logs_box(holder) ++> LogDay(date=today);
+        on_attached(holder, day);
+    }
+    names: list[str] = [];
+    tag_pool: list[str] = [];
+    for a in [task->:AssignedTo:->] {
+        names.append(a.full_name());
+        for t in a.tags {
+            if t not in tag_pool {
+                tag_pool.append(t);
+            }
+        }
+    }
+    projects = [task<--[?:Project]];
+    day ++> LogEntry(
+        date=today,
+        at=stamp,
+        task_id=jid(task),
+        task_title=task.title,
+        activity=activity,
+        category=task.category,
+        repo="",
+        issue_link=task.issue_link,
+        pr_link=task.pr_link,
+        status=task.status,
+        notes="",
+        member_name=", ".join(names),
+        tags=", ".join(tag_pool),
+        project_name=projects[0].name if projects else ""
+    );
+}
+
+# The move handoff arrives after the move row was written; refresh the
+# latest row for this task today so its links and note show in the feed.
+def sync_task_links(holder: Root, task: Task, note: str) -> None {
+    today = task.updated_at[:10];
+    days = days_between(holder, today, today);
+    if not days {
+        return;
+    }
+    matches = [
+        r
+        for r in [days[0]-->[?:LogEntry]]
+        if r.task_id == jid(task)
+    ];
+    if not matches {
+        return;
+    }
+    matches.sort(key=lambda (r: LogEntry) { r.at; });
+    target = matches[-1];
+    target.issue_link = task.issue_link;
+    target.pr_link = task.pr_link;
+    if note {
+        target.notes = note;
+    }
+}
+
+walker find_log_entry {
+    """Lookup base for log-entry mutations: resolve the jid, check it is ours
+    (LogEntry <- LogDay <- Logs <- root, the owned() climb), then visit."""
+    has entry_id: str = "";
+
+    can locate with Root entry {
+        target = resolve(self.entry_id);
+        if isinstance(target, LogEntry) and owned(here, target) {
+            visit [target];
+        }
+    }
+}
+
+walker UpdateLogEntry(find_log_entry) {
+    has activity: str = "",
+        category: str = "",
+        repo: str = "",
+        issue_link: str = "",
+        pr_link: str = "",
+        status: str = "",
+        notes: str = "",
+        reports: list[LogEntry] = [];
+
+    can apply with LogEntry entry {
+        here.activity = self.activity;
+        here.category = self.category;
+        here.repo = self.repo;
+        here.issue_link = self.issue_link;
+        here.pr_link = self.pr_link;
+        here.status = self.status;
+        here.notes = self.notes;
+        report here;
+        disengage;
+    }
+}
+
+walker DeleteLogEntries {
+    """Bulk delete: every id is ownership-checked before removal, the same
+    rule as the single-entry lookup base."""
+    has entry_ids: list[str] = [];
+
+    can remove with Root entry {
+        gone: list[str] = [];
+        for eid in self.entry_ids {
+            target = resolve(eid);
+            if isinstance(target, LogEntry) and owned(here, target) {
+                gone.append(jid(target));
+                del target;
+            }
+        }
+        report {"deleted": gone};
+    }
+}

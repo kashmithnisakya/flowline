@@ -1,5 +1,5 @@
 """The disconnected state: what connecting buys, and the button that starts it.
-No token field anywhere: standup connects through a GitHub App installation,
+No token field anywhere: Flowline connects through a GitHub App installation,
 so the credential is minted per request server-side and never typed or stored.
 """
 
@@ -102,7 +102,7 @@ def:pub ConnectCard(
                     </li>
                 </ul>
                 <p>
-                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, nothing is polled in the background, and the one write is an issue somebody explicitly asks for.
+                    You choose the repositories on GitHub's install screen. Flowline reads only what you grant, and it writes to GitHub only when asked: an issue opened from a task, or, per repo and off by default, the issue closed when its card reaches done.
                 </p>
                 {if len(missing) > 0 {
                     <p

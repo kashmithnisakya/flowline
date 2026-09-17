@@ -15,17 +15,17 @@ import from models {
     MemberView,
     GithubConnectionView,
     WorkflowStep,
-    WorkflowMeta,
+    WorkflowSteps,
     StepView
 }
-import from walkers.projects {
+import from services.projects.projects {
     ListProjects,
     SaveProject,
     ArchiveProject,
     AssignToProject,
     UnassignFromProject
 }
-import from walkers.roster {
+import from services.roster.roster {
     ListMembers,
     SaveMember,
     SetMemberRoles,
@@ -37,24 +37,28 @@ import from walkers.roster {
     AddRepo,
     RemoveRepo
 }
-import from walkers.tasks {
+import from services.tasks.tasks {
     ListTasks,
     TaskCounts,
+    TaskHistory,
     GetTask,
+    AddChecklistItem,
+    SetChecklistItem,
+    RemoveChecklistItem,
     CreateTask,
     UpdateTask,
     MoveTask,
     SetMoveInfo,
     DeleteTask
 }
-import from walkers.log {
+import from services.log.log {
     ListLogEntries,
     LogCounts,
     LogActivity,
     UpdateLogEntry,
     DeleteLogEntries
 }
-import from walkers.flowlines {
+import from services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
     SaveStep,
@@ -68,7 +72,7 @@ import from walkers.flowlines {
     RenameFlowLine,
     ListStepTasks
 }
-import from walkers.github {
+import from services.github.github {
     GithubStatus,
     StartGithubInstall,
     CompleteGithubInstall,
@@ -81,11 +85,19 @@ import from walkers.github {
     CreateIssueFromTask,
     SyncGithub,
     SetRepoAutoSync,
-    SetRepoAutoDone
+    SetRepoAutoDone,
+    SetRepoAutoClose
 }
-import from walkers.board { BoardSnapshot }
-import from walkers.insights { Digest, OverviewSnapshot }
-import from walkers.assistant { AskAssistant, WriteStandup, ProposeAction }
+import from services.github.events { GithubEvent, DrainGithubEvents }
+import from services.board.board { BoardSnapshot }
+import from services.iterations.iterations {
+    ListIterations,
+    SaveIteration,
+    DeleteIteration,
+    RoadmapSnapshot
+}
+import from services.insights.insights { Digest, OverviewSnapshot }
+import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
 
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;

@@ -8,12 +8,16 @@ impl FlowLinePage.boot -> None {
     # The board persists its project filter under the same key, so the two
     # tabs stay on the same project rather than each keeping a private idea
     # of what you are looking at.
-    stored = localStorage.getItem("standup_project") or "";
+    stored = localStorage.getItem("flowline_project")
+        or localStorage.getItem("standup_project")
+        or "";
     picked = stored or "all";
     projectId = picked;
     # The viewer projection survives reloads the same way the project
     # filter does. Anything but the exact "lanes" token means flow.
-    storedView = localStorage.getItem("standup_wf_view") or "";
+    storedView = localStorage.getItem("flowline_wf_view")
+        or localStorage.getItem("standup_wf_view")
+        or "";
     if storedView == "lanes" {
         lineView = "lanes";
     }
@@ -30,6 +34,8 @@ impl FlowLinePage.boot -> None {
         roleRows = roleResult.reports[0] if roleResult.reports else [];
         memResult = root spawn ListMembers();
         roleMembers = memResult.reports[0] if memResult.reports else [];
+        itResult = root spawn ListIterations();
+        iterations = itResult.reports[0] if itResult.reports else [];
     } except Exception as e {
         roleRows = [];
     }
@@ -187,10 +193,12 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "category": picked.category,
         "tags": ", ".join(picked.tags),
         "estimate": fmtEstimate(picked.estimate) if picked.estimate > 0.0 else "",
-        "project": picked.project_id or "none",
+        "project": picked.project_id,
         "priority": picked.priority,
         "status": key,
         "due_date": picked.due_date,
+        "start_date": picked.start_date,
+        "iteration": picked.iteration_id or "none",
         "notes": picked.notes,
         "issue": picked.issue_link,
         "pr": picked.pr_link,
@@ -199,6 +207,11 @@ impl FlowLinePage.openTask(tid: str) -> None {
     };
     taskAssignees = picked.assignee_ids;
     taskOpen = True;
+}
+
+# A checklist write reports the task's fresh view; the panel row takes it.
+impl FlowLinePage.replacePeekRow(view: TaskView) -> None {
+    peekTasks = [view if t.id == view.id else t for t in peekTasks];
 }
 
 impl FlowLinePage.setTaskField(key: str, value: str) -> None {
@@ -226,8 +239,12 @@ impl FlowLinePage.saveTask -> None {
     if not title or not editTaskId {
         return;
     }
+    project = taskForm["project"];
+    if not project {
+        toast("Pick a project for this task");
+        return;
+    }
     taskSaving = True;
-    project = taskForm["project"] if taskForm["project"] != "none" else "";
     reviewer = taskForm["reviewer"] if taskForm["reviewer"] != "none" else "";
     landing = taskForm["status"];
     # Read before any await: where the task was, and where it is going.
@@ -267,6 +284,10 @@ impl FlowLinePage.saveTask -> None {
             status=mappedStatus(landing),
             step_id=landing,
             due_date=taskForm["due_date"],
+            start_date=taskForm["start_date"],
+            iteration_id=taskForm["iteration"]
+                if taskForm["iteration"] != "none"
+                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),
@@ -310,7 +331,7 @@ impl FlowLinePage.deleteTask -> None {
 impl FlowLinePage.selectProject(v: str) -> None {
     openStep = peekId;
     projectId = v;
-    localStorage.setItem("standup_project", v);
+    localStorage.setItem("flowline_project", v);
     await reload(v);
     # The panel obeys the filter too, so it reloads with the diagram.
     await refreshPeek(openStep, v);
@@ -331,7 +352,7 @@ impl FlowLinePage.loadMeta -> None {
 impl FlowLinePage.switchView(v: str) -> None {
     chosen = "lanes" if v == "lanes" else "flow";
     lineView = chosen;
-    localStorage.setItem("standup_wf_view", chosen);
+    localStorage.setItem("flowline_wf_view", chosen);
 }
 
 impl FlowLinePage.lanePlan -> dict[str, any] {

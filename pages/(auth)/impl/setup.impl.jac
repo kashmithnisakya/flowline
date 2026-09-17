@@ -7,9 +7,7 @@ impl SetupPage.boot -> None {
     try {
         profile = await fetchProfile();
         existingOrg = str(profile["org_name"]) if profile["org_name"] else "";
-        existingWho = str(profile["full_name"]) if profile["full_name"] else "";
         orgName = existingOrg;
-        fullName = existingWho;
         if not existingOrg.strip() {
             step = 1;
             return;
@@ -28,21 +26,20 @@ impl SetupPage.boot -> None {
 
 impl SetupPage.saveProfile -> None {
     org = orgName.strip();
-    who = fullName.strip();
-    if not org or not who {
+    if not org {
         return;
     }
     saveError = "";
     busy = True;
     try {
-        ok = await patchProfile({"org_name": org, "full_name": who});
+        ok = await patchProfile({"org_name": org});
         if ok {
             step = 2;
         } else {
-            saveError = "Could not save those names. Try again.";
+            saveError = "Could not save that name. Try again.";
         }
     } except Exception as e {
-        saveError = "Could not save those names. Try again.";
+        saveError = "Could not save that name. Try again.";
     }
     busy = False;
 }
@@ -68,19 +65,20 @@ impl SetupPage.createProject -> None {
 impl SetupPage.addPerson -> None {
     # Names only: roles are assigned on the Workspace tab once a flow line
     # exists to define them, so the wizard never invents role vocabulary.
-    captured = mName.strip();
-    if not captured {
+    first = mFirst.strip();
+    if not first {
         return;
     }
     saveError = "";
     busy = True;
     try {
-        result = root spawn SaveMember(name=captured);
+        result = root spawn SaveMember(first_name=first, last_name=mLast.strip());
         fresh = result.reports[0] if result.reports else None;
         if fresh {
             added = added + [fresh];
         }
-        mName = "";
+        mFirst = "";
+        mLast = "";
     } except Exception as e {
         saveError = "Could not add that person. Try again.";
     }
@@ -92,7 +90,7 @@ impl SetupPage.finish -> None {
     # silently discard a typed member. `finishing` stays True through the
     # hard navigation so the button keeps its spinner until the page swaps.
     finishing = True;
-    if mName.strip() {
+    if mFirst.strip() {
         await addPerson();
     }
     # New orgs land on the flow line picker: choosing how work moves is the
