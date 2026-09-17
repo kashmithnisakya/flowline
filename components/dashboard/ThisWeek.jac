@@ -22,8 +22,9 @@ def:pub ThisWeek(
     note: str = "",
     onRetry: any = None,
     # The first load: the ledger with its labels and skeleton figures, and
-    # the day chart's box.
-    placeholder: bool = False
+    # the day chart's box when the last visit drew one (else its note line).
+    placeholder: bool = False,
+    placeholderChart: bool = True
 ) -> JsxElement {
     return
         <section
@@ -53,10 +54,12 @@ def:pub ThisWeek(
                         }}
                     </dl>
                     <div className="px-3.5 pt-1 pb-3">
-                        <Skeleton className="mt-4 h-[118px] w-full"/>
-                        <p className="mt-2 text-xs text-subtle">
-                            Tasks moved to Done per day. Days still ahead are outlined.
-                        </p>
+                        {if placeholderChart {
+                            <Skeleton key="chart" className="mt-4 h-[118px] w-full"/>
+                        }}
+                        <div className="mt-2 flex h-4 items-center">
+                            <Skeleton className="h-3 w-72 max-w-full"/>
+                        </div>
                     </div>
                 </div>
             } elif len(figures) == 0 {

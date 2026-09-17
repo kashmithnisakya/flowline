@@ -52,13 +52,24 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
          ["26", "Last 26 weeks"]
      ];
 
-# Reads in flight, by name. A full load mounts the page twice; the second
-# mount awaits the first one's request instead of sending its own. A dict
-# cell, so a function never rebinds a glob.
-glob LOADS: dict[str, any] = {};
+# Reads in flight, by name. A remount (the page used to mount twice on a
+# full load) awaits the first mount's request instead of sending its own. A
+# dict cell, so a function never rebinds a glob.
+glob LOADS: dict[str, any] = {},
+     # Whether the last visit drew the day chart, so the first-load frame
+     # reserves its box only when the loaded panel will have one.
+     CHART_KEY: str = "flowline-overview-chart";
 
 def inflight(key: str) -> any {
     return LOADS[key] if key in LOADS else None;
+}
+
+def chartCached -> bool {
+    try {
+        return localStorage.getItem(CHART_KEY) != "0";
+    } except Exception as e {
+        return True;
+    }
 }
 
 def localIso(d: any) -> str {
@@ -283,6 +294,23 @@ def:pub OverviewPage -> JsxPage {
     async can with (historyProject, historyWeeks) entry {
         loadHistory();
     }
+
+    # Remember whether the day chart drew, for the next first-load frame.
+    useEffect(
+        lambda {
+            if movesLoaded {
+                try {
+                    localStorage.setItem(
+                        CHART_KEY, "1" if chartState == "chart" else "0"
+                    );
+                } except Exception as e {
+                    movesLoaded = movesLoaded;
+                }
+            }
+            return lambda { movesLoaded = movesLoaded; };
+        },
+        [movesLoaded, chartState]
+    );
 
     async def fetchSnapshot(monday: str) -> any;
     async def fetchDue -> any;
@@ -954,7 +982,12 @@ def:pub OverviewPage -> JsxPage {
                     </div>
                     <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
                         <div className="min-w-0 @max-[52rem]:order-3">
-                            <ThisWeek figures={[]} days={[]} placeholder={True}/>
+                            <ThisWeek
+                                figures={[]}
+                                days={[]}
+                                placeholder={True}
+                                placeholderChart={chartCached()}
+                            />
                         </div>
                         <div className="min-w-0 @max-[52rem]:order-4">
                             <ProjectBars rows={[]} placeholder={True}/>

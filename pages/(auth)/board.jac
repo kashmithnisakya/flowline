@@ -710,7 +710,7 @@ def:pub BoardPage -> JsxPage {
         <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-h-9 flex-wrap items-center gap-3">
                 <h1 className="page-title">Board</h1>
-                {if not noFlowLine and not nothingLoaded {
+                {if loading or (not noFlowLine and not nothingLoaded) {
                     <div key="actions" className="ml-auto flex items-center gap-2">
                         {if ghConnected {
                             <Button
