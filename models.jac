@@ -252,6 +252,7 @@ node Task {
             notes=self.notes,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            done_at=self.done_at,
             sort_order=self.sort_order,
             assignee_ids=assignee_ids,
             assignee_names=assignee_names,
@@ -425,7 +426,8 @@ obj TaskView {
         pr_review_state: str = "",
         checklist: list[dict[str, any]] = [],
         iteration_id: str = "",
-        start_date: str = "";
+        start_date: str = "",
+        done_at: str = "";
 }
 
 # The Overview's charts over time, one entry per week oldest first: `weeks`

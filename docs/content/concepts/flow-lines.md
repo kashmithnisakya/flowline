@@ -60,10 +60,12 @@ back to `active`.
 Every status write goes through `Task.set_status(status, stamp)`, never a plain
 assignment. It stamps `done_at` when a task enters Done and clears it when the
 task leaves. The done day is `done_at` (falling back to `updated_at` on rows
-written before the stamp existed), and a task created already Done, such as a
-closed issue from a GitHub back-fill, is history rather than throughput. The
-Overview's weekly counts, the burn-up charts and the assistant's snapshot all
-read that one rule, so they agree.
+written before the stamp existed), and a task created straight into Done is
+history rather than throughput. A closed issue from a GitHub import carries the
+issue's own created and closed dates, so it counts in the week it was really
+closed. The Overview's weekly counts, the burn-up charts, the assistant's
+snapshot and the board's recent-done window all read that one rule, so they
+agree.
 
 ## Transitions
 
