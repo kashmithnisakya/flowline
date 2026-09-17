@@ -40,6 +40,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
 import from ...lib.session { LANES_KEY }
+import from ...lib.workspace { rememberWorkspace, forgetWorkspace }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }

@@ -11,6 +11,7 @@ import from ...services.projects.projects { ListProjects, SaveProject, AssignToP
 import from ...services.roster.roster { ListMembers, SaveMember }
 import from ...services.flowlines.flowlines { ApplyTemplate, GetFlowLine }
 import from ...lib.session { fetchProfile, patchProfile }
+import from ...lib.workspace { forgetWorkspace }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.label { Label }

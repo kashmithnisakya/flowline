@@ -698,6 +698,7 @@ impl TasksPage.saveTask -> None {
             if not onProject {
                 root spawn AssignToProject(member_id=aid, project_id=project);
                 added = added + 1;
+                forgetWorkspace();
             }
         }
         if added > 0 {

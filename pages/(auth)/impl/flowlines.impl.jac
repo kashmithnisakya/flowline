@@ -345,6 +345,7 @@ impl FlowLinePage.saveTask -> None {
                 if not onProject {
                     root spawn AssignToProject(member_id=aid, project_id=project);
                     added = added + 1;
+                    forgetWorkspace();
                 }
             }
             if added > 0 {
@@ -472,6 +473,7 @@ impl FlowLinePage.pickTemplate(key: str) -> None {
         result = root spawn ApplyTemplate(template_key=key);
         fresh = result.reports[0] if result.reports else [];
         if len(fresh) > 0 {
+            forgetWorkspace();
             steps = fresh;
             editing = True;
             toast.success("Your flow line is in. Drag anything to make it yours.");
@@ -504,6 +506,7 @@ impl FlowLinePage.saveRename -> None {
         result = root spawn RenameFlowLine(name=value);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["name"] {
+            forgetWorkspace();
             lineName = payload["name"];
         }
     } except Exception as e {
@@ -552,6 +555,7 @@ impl FlowLinePage.commitName -> None {
                 y=ny
             );
             made = result.reports[0] if result.reports else None;
+            forgetWorkspace();
             await reload(projectId);
             creatingStep = False;
             if made {
@@ -597,6 +601,7 @@ impl FlowLinePage.commitName -> None {
         root spawn SaveStep(
             step_id=selectedId, name=name, owner=owner or " ", blurb=blurb or " "
         );
+        forgetWorkspace();
         await reload(projectId);
     } except Exception as e {
         toast.error("Failed to update the step");
@@ -619,6 +624,7 @@ impl FlowLinePage.commitField(key: str, value: str) -> None {
                 step_id=selectedId, owner=value if value.strip() else " "
             );
         }
+        forgetWorkspace();
         await reload(projectId);
     } except Exception as e {
         toast.error("Failed to update the step");
@@ -645,6 +651,7 @@ impl FlowLinePage.deleteStep -> None {
             toast.error(payload["message"] or "That step cannot be deleted.");
             return;
         }
+        forgetWorkspace();
         selectedId = "";
         selectedEdge = "";
         confirmDelete = False;
@@ -669,6 +676,7 @@ impl FlowLinePage.deleteFlowLine -> None {
             wiping = False;
             return;
         }
+        forgetWorkspace();
         steps = [];
         scratch = False;
         editing = False;
@@ -693,6 +701,7 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
         result = root spawn LinkTransition(from_id=fromId, to_id=toId);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
+            forgetWorkspace();
             await reload(projectId);
             if not payload["duplicate"] {
                 toast.success(
@@ -732,6 +741,7 @@ impl FlowLinePage.commitEdgeLabel(
         );
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
+            forgetWorkspace();
             edgeDraft = payload["label"];
             edgeCarry = payload["carries"];
             selectedEdge = "";
@@ -753,6 +763,7 @@ impl FlowLinePage.deleteEdge(fromId: str, toId: str) -> None {
     selectedEdge = "";
     try {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
+        forgetWorkspace();
         await reload(projectId);
     } except Exception as e {
         toast.error("Could not remove that transition");
@@ -1619,6 +1630,7 @@ impl FlowLinePage.endDrag(e: any) -> None {
     ny = float(drag["ly"]);
     try {
         root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
+        forgetWorkspace();
         await reload(projectId);
     } except Exception as err {
         toast.error("Failed to save the position");

@@ -167,6 +167,7 @@ impl WorkspacePage.saveMember -> None {
                 }
             }
         }
+        forgetWorkspace();
         dialogOpen = False;
         await loadAll();
     } except Exception as e {
@@ -184,6 +185,7 @@ impl WorkspacePage.archiveMember -> None {
     archiving = True;
     try {
         root spawn ArchiveMember(member_id=target);
+        forgetWorkspace();
         archiveId = "";
         await loadAll();
         toast.success(name + " archived");
@@ -206,6 +208,7 @@ impl WorkspacePage.applyRoles(memberId: str, next: list[str], undoable: bool) ->
     }
     try {
         result = root spawn SetMemberRoles(member_id=memberId, roles=next);
+        forgetWorkspace();
         saved = result.reports[0] if result.reports else None;
         if saved {
             members = [saved if m.id == memberId else m for m in members];
@@ -253,6 +256,7 @@ impl WorkspacePage.applyProjects(
                 root spawn UnassignFromProject(member_id=memberId, project_id=pid);
             }
         }
+        forgetWorkspace();
         mResult = root spawn ListMembers();
         members = mResult.reports[0] if mResult.reports else members;
         if undoable {

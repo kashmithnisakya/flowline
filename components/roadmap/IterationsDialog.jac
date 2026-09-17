@@ -4,6 +4,7 @@ with the same length (two weeks for the first). Every write goes straight to
 its walker; `onChanged` reloads whatever the page shows."""
 
 import from "sonner" { toast }
+import from ...lib.workspace { forgetWorkspace }
 import from ...models { IterationView }
 import from ...services.iterations.iterations { SaveIteration, DeleteIteration }
 import from ..ui.button { Button }
@@ -92,6 +93,7 @@ def:pub IterationsDialog(
             );
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
+                forgetWorkspace();
                 onChanged();
             } else {
                 toast.error(
@@ -112,6 +114,7 @@ def:pub IterationsDialog(
             );
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
+                forgetWorkspace();
                 onChanged();
             } else {
                 toast.error("Could not add an iteration");
@@ -133,6 +136,7 @@ def:pub IterationsDialog(
             result = root spawn DeleteIteration(iteration_id=it.id);
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
+                forgetWorkspace();
                 cleared = int(payload["cleared"]);
                 toast.success(
                     "Deleted "

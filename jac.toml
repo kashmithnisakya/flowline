@@ -162,8 +162,9 @@ default = "server"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
-"lib.workspace.emptyWorkspace" = "client"
-"lib.workspace.loadWorkspace" = "client"
+# The whole module: rememberWorkspace/forgetWorkspace have no browser
+# evidence, and a server def:pub here would shadow the effects table.
+"lib.workspace" = "client"
 models = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"

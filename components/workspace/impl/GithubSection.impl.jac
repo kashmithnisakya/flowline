@@ -56,6 +56,7 @@ impl GithubSection.finishInstall(code: str, installId: int, state: str) -> None 
         );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
+            forgetWorkspace();
             toast.success("GitHub connected");
         } else {
             toast.error(payload["message"] or "That install could not be finished.");
@@ -177,6 +178,7 @@ impl GithubSection.disconnect -> None {
     disconnecting = True;
     try {
         root spawn DisconnectGithub();
+        forgetWorkspace();
         confirmDisconnect = False;
         repoId = "";
         issues = [];
@@ -217,6 +219,7 @@ impl GithubSection.runSync(full: bool) -> None {
         while more and rounds < SYNC_ROUNDS {
             rounds = rounds + 1;
             result = root spawn SyncGithub(full=(full and rounds == 1));
+            forgetWorkspace();
             payload = result.reports[0] if result.reports else None;
             if not payload or not payload["ok"] {
                 failure = str(payload["message"]) if payload else "Sync failed";
@@ -326,6 +329,7 @@ impl GithubSection.toggleAutoSync(rid: str, enabled: bool) -> None {
         result = root spawn SetRepoAutoSync(repo_id=rid, enabled=enabled);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
+            forgetWorkspace();
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
             toast.success(
@@ -346,6 +350,7 @@ impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
         result = root spawn SetRepoAutoDone(repo_id=rid, enabled=enabled);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
+            forgetWorkspace();
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
             toast.success(
@@ -366,6 +371,7 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
         result = root spawn SetRepoAutoClose(repo_id=rid, enabled=enabled);
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
+            forgetWorkspace();
             rResult = root spawn ListRepos();
             repos = rResult.reports[0] if rResult.reports else [];
             toast.success(
@@ -394,6 +400,7 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     try {
         result = root spawn AddRepo(full_name=fullName, project_id=project);
         added = result.reports[0] if result.reports else None;
+        forgetWorkspace();
         await loadShared();
         await searchRepos();
         # Land on the repository that was just added, so the panes show it

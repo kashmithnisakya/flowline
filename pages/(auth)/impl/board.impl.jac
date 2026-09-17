@@ -38,6 +38,8 @@ impl BoardPage.autoSyncGithub(connected: bool) -> None {
             rounds = rounds + 1;
             # Only the first increment is the cooldown-guarded auto pass; a
             # follow-up continues work the server just said is pending.
+            # No forgetWorkspace: a sync writes no roster data, and one that
+            # added cards reloads the board below, which re-primes the cache.
             result = root spawn SyncGithub(auto=(rounds == 1), page_budget=2);
             payload = result.reports[0] if result.reports else None;
             if not payload or not payload["ok"] {
@@ -173,6 +175,8 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                     connected = data.github_connected;
                     live = data.webhook_live;
                     projectCount = len(data.projects);
+                    # The next page mounts on this view without a request.
+                    rememberWorkspace(data);
                 }
             }
             pageNo = pageNo + 1;
@@ -611,6 +615,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 if not onProject {
                     root spawn AssignToProject(member_id=aid, project_id=project);
                     added = added + 1;
+                    forgetWorkspace();
                 }
             }
             if added > 0 {
@@ -1064,6 +1069,7 @@ impl BoardPage.syncGithub -> None {
         while more and rounds < SYNC_ROUNDS {
             rounds = rounds + 1;
             result = root spawn SyncGithub();
+            forgetWorkspace();
             payload = result.reports[0] if result.reports else None;
             if not payload or not payload["ok"] {
                 failure = str(payload["message"]) if payload else "Sync failed";

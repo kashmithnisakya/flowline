@@ -8,6 +8,8 @@ the workspace rail and the Organization form paint them before /user/me
 answers on the next load.
 """
 
+import from .workspace { forgetWorkspace }
+
 glob ORG_KEY: str = "flowline-org",
      ACCOUNT_KEY: str = "flowline-account";
 
@@ -80,6 +82,7 @@ def:pub forgetMe {
 # caches, so another account's name or page shapes never show first.
 def:pub forgetSession -> None {
     forgetMe();
+    forgetWorkspace();
     try {
         for key in SESSION_KEYS {
             localStorage.removeItem(key);
@@ -147,8 +150,10 @@ async def:pub patchProfile(changes: dict[str, any]) -> bool {
         );
         # The setup wizard and the Organization form both land here, so the
         # cache follows a rename without either page knowing about it, and
-        # the memoised profile is dropped for the next reader.
+        # the memoised profile is dropped for the next reader, with the
+        # workspace view (the org rename path).
         forgetMe();
+        forgetWorkspace();
         if response.ok and "org_name" in changes and changes["org_name"] {
             rememberOrgName(str(changes["org_name"]));
         }

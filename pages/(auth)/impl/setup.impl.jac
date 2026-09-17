@@ -73,6 +73,7 @@ impl SetupPage.saveWorkspace(e: FormEvent) -> None {
         if not projectId or project != savedProject {
             result = root spawn SaveProject(project_id=projectId, name=project);
             made = result.reports[0] if result.reports else None;
+            forgetWorkspace();
             if not made {
                 saveError = "Could not create the project. Try again.";
                 busy = False;
@@ -113,6 +114,7 @@ impl SetupPage.addPerson -> bool {
             if projectId {
                 root spawn AssignToProject(member_id=fresh.id, project_id=projectId);
             }
+            forgetWorkspace();
             added = added + [fresh];
             mFirst = "";
             mLast = "";
@@ -224,6 +226,7 @@ impl SetupPage.finish -> None {
         result = root spawn ApplyTemplate(template_key=choice);
         fresh = result.reports[0] if result.reports else [];
         if len(fresh) > 0 {
+            forgetWorkspace();
             navigate("/board?new=1");
             return;
         }

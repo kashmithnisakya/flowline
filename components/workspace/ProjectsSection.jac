@@ -4,6 +4,7 @@ much work is still standing without loading a single task.
 """
 
 import from ...models { Project, RepoView, MemberView, TaskTotals }
+import from ...lib.workspace { forgetWorkspace }
 import from ...services.projects.projects { ListProjects, SaveProject, ArchiveProject }
 import from ...services.roster.roster { ListRepos, AddRepo, RemoveRepo }
 import from ...services.tasks.tasks { TaskCounts }

@@ -30,7 +30,7 @@ import from ...services.github.github {
     SyncGithub
 }
 import from ...services.roster.roster { ListRepos, AddRepo }
-import from ...lib.workspace { loadWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.github.ConnectCard { ConnectCard }
 import from ...components.github.ReconnectBanner { ReconnectBanner }
 import from ...components.github.RepoPicker { RepoPicker }
