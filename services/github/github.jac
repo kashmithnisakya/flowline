@@ -706,9 +706,11 @@ def pull_rows(holder: Root, full_name: str, raw: list[any]) -> list[GhPrRow] {
 
 
 # Keep one fetched page as the repo's stored page for that kind and state.
+# GitHub answers at most PAGE_SIZE items; the slice holds a stand-in that
+# answers more to the same size.
 def keep_repo_list(repo_id: str, kind: str, state: str, raw: list[any], stamp: str) {
     items: list[dict[str, any]] = [];
-    for item in raw {
+    for item in raw[:PAGE_SIZE] {
         if not isinstance(item, dict) {
             continue;
         }
