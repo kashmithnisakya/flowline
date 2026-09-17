@@ -92,7 +92,15 @@ def owned(holder: any, target: any) -> bool {
 node Project {
     has name: str,
         description: str = "",
-        active: bool = True;
+        active: bool = True,
+        # All-time tallies kept on every task write, so no count loads the
+        # history. `seeded_done_total` is the Done tasks created already
+        # Done (history, not throughput). An empty `tallies_at` means never
+        # set: ensure_tallies fills them from one full load and stamps it.
+        task_total: int = 0,
+        done_total: int = 0,
+        seeded_done_total: int = 0,
+        tallies_at: str = "";
 }
 
 # Roles are HasRole edges to Role nodes, never names on the member.
@@ -198,22 +206,42 @@ node Task {
         # when work on it starts. Fields, not edges, so list rows stay
         # hop-free; the roadmap falls back to the iteration's dates.
         iteration_id: str = "",
-        start_date: str = "";
+        start_date: str = "",
+        # The container project's jid and the assignees' jids, kept in step
+        # with the edges at every write point so a list row needs no hop.
+        # The edges stay the truth: `owned` climbs the container edge.
+        project_id: str = "",
+        assignee_ids: list[str] = [];
 
     # Every status write goes through here, so `done_at` stays true to the
-    # move into Done: kept while the task stays Done, cleared when it leaves.
+    # move into Done (kept while the task stays Done, cleared when it
+    # leaves) and the project's Done tallies move with it.
     def set_status(status: str, stamp: str) {
-        if status == "Done" and self.status != "Done" {
+        was_done = self.status == "Done";
+        was_seeded = seeded_done(self);
+        if status == "Done" and not was_done {
             self.done_at = stamp;
         } elif status != "Done" {
             self.done_at = "";
         }
         self.status = status;
+        now_done = status == "Done";
+        now_seeded = seeded_done(self);
+        if was_done == now_done and was_seeded == now_seeded {
+            return;
+        }
+        for p in task_project(self) {
+            if was_done != now_done {
+                p.done_total = p.done_total + (1 if now_done else -1);
+            }
+            if was_seeded != now_seeded {
+                p.seeded_done_total = p.seeded_done_total + (1 if now_seeded else -1);
+            }
+        }
     }
 
-    # One task's view, hopping its own edges. Fine for a single task; for a
-    # list use hydrate_views, which gets the same links in a few traversals
-    # instead of three per row.
+    # One task's view, hopping its own edges (the structural truth). Fine
+    # for a single task; a list reads the link fields through hydrate_views.
     def to_view -> TaskView {
         assignee_ids: list[str] = [];
         assignee_names: list[str] = [];
@@ -231,7 +259,7 @@ node Task {
         return self.view_with(assignee_ids, assignee_names, project_id, project_name);
     }
 
-    # The view given links the caller already has. The field list lives here
+    # The view given names the caller already has. The field list lives here
     # once, so to_view and hydrate_views cannot drift apart.
     def view_with(
         assignee_ids: list[str],
@@ -356,7 +384,11 @@ node WorkflowStep {
 
 # Boxes, one of each per root, made on first write by the *_box helpers.
 # Every project, member, role and step hangs off its box, never off the root.
-node Projects {}
+# The projects' box also lists every category a task carries, kept exact
+# on write (note_category / forget_category), so no list scans for them.
+node Projects {
+    has categories: list[str] = [];
+}
 
 node Members {}
 
@@ -706,7 +738,15 @@ def days_between(holder: Root, since: str, until: str) -> list[LogDay] {
 }
 
 
-# Every task: one traversal per project.
+# ------------------------------------------------------------- task readers
+# Every predicate below is pushed into the store's query, so a reader loads
+# only the rows it returns. The working set (open plus recently Done) is what
+# the pages render; the whole history is loaded only by the explicit history
+# scopes of ListTasks (all_tasks, done_tasks, done_before) and by the
+# one-off ensure_tallies. `since` and `cutoff` are ISO days compared as
+# text against the full stamp, which is the same test as done_day >= day.
+
+# Every task, the whole history: one traversal per project.
 def all_tasks(holder: Root) -> list[Task] {
     out: list[Task] = [];
     for p in projects_of(holder) {
@@ -716,22 +756,574 @@ def all_tasks(holder: Root) -> list[Task] {
 }
 
 
-# One project's tasks. Empty for a foreign or unknown id.
-def project_tasks(holder: Root, project_id: str) -> list[Task] {
-    p = resolve(project_id);
-    if not isinstance(p, Project) or not owned(holder, p) {
-        return [];
+def all_tasks_in(holder: Root, said: str) -> list[Task] {
+    out: list[Task] = [];
+    for p in projects_of(holder) {
+        out.extend([p-->[?:Task, category == said]]);
     }
-    return [p-->[?:Task]];
+    return out;
 }
 
 
-# Move a task under another project: the container edge IS the project link.
+# Every open (non-Done) task of every project, one query.
+def open_tasks(holder: Root) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, status != "Done"]]);
+    }
+    return out;
+}
+
+
+# Done tasks that reached Done on or after `since`.
+def done_since(holder: Root, since: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, status == "Done", done_at >= since]]
+        );
+    }
+    return out;
+}
+
+
+# Done tasks that reached Done before `cutoff`: the board's "+N older"
+# history. Nothing is older when history is not being trimmed.
+def done_before(holder: Root, cutoff: str) -> list[Task] {
+    out: list[Task] = [];
+    if not cutoff {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, status == "Done", done_at < cutoff]]
+        );
+    }
+    return out;
+}
+
+
+def done_before_in(holder: Root, cutoff: str, said: str) -> list[Task] {
+    out: list[Task] = [];
+    if not cutoff {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == "Done", done_at < cutoff, category == said]
+            ]
+        );
+    }
+    return out;
+}
+
+
+def done_tasks(holder: Root) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, status == "Done"]]);
+    }
+    return out;
+}
+
+
+def done_tasks_in(holder: Root, said: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, status == "Done", category == said]]
+        );
+    }
+    return out;
+}
+
+
+# The working set the board renders: open tasks plus the Done tasks that
+# reached Done since `cutoff` (every Done task when the cutoff is empty).
+def working_tasks(holder: Root, cutoff: str) -> list[Task] {
+    out = open_tasks(holder);
+    out.extend(done_since(holder, cutoff) if cutoff else done_tasks(holder));
+    return out;
+}
+
+
+# Tasks created on or after `since`, any status: the burn-up's additions.
+def created_since(holder: Root, since: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, created_at >= since]]);
+    }
+    return out;
+}
+
+
+# The same readers for one project, which a project-scoped walker visits.
+def project_tasks_in(p: Project, said: str) -> list[Task] {
+    return [p-->[?:Task, category == said]];
+}
+
+
+def project_open(p: Project) -> list[Task] {
+    return [p-->[?:Task, status != "Done"]];
+}
+
+
+def project_done(p: Project) -> list[Task] {
+    return [p-->[?:Task, status == "Done"]];
+}
+
+
+def project_done_in(p: Project, said: str) -> list[Task] {
+    return [p-->[?:Task, status == "Done", category == said]];
+}
+
+
+def project_done_since(p: Project, since: str) -> list[Task] {
+    return [p-->[?:Task, status == "Done", done_at >= since]];
+}
+
+
+def project_done_before(p: Project, cutoff: str) -> list[Task] {
+    if not cutoff {
+        return [];
+    }
+    return [p-->[?:Task, status == "Done", done_at < cutoff]];
+}
+
+
+def project_done_before_in(p: Project, cutoff: str, said: str) -> list[Task] {
+    if not cutoff {
+        return [];
+    }
+    return [p-->[?:Task, status == "Done", done_at < cutoff, category == said]];
+}
+
+
+def project_working(p: Project, cutoff: str) -> list[Task] {
+    out = project_open(p);
+    out.extend(project_done_since(p, cutoff) if cutoff else project_done(p));
+    return out;
+}
+
+
+def project_created_since(p: Project, since: str) -> list[Task] {
+    return [p-->[?:Task, created_at >= since]];
+}
+
+
+# Rows the flow line walkers rewrite: every task on one step, on any of a
+# list of steps, or on a step with a status other than the one it maps to.
+def tasks_on_step(holder: Root, step: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, step_id == step]]);
+    }
+    return out;
+}
+
+
+def tasks_on_steps(holder: Root, step_ids: list[str]) -> list[Task] {
+    out: list[Task] = [];
+    if not step_ids {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, step_id in step_ids]]);
+    }
+    return out;
+}
+
+
+def mismatched_on_step(holder: Root, step: str, landing: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, step_id == step, status != landing]]
+        );
+    }
+    return out;
+}
+
+
+def tasks_in_iteration(holder: Root, it_id: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, iteration_id == it_id]]);
+    }
+    return out;
+}
+
+
+# The Done tasks whose span (task_span in the iterations service) can
+# overlap [lo, hi]: due or start inside the window, one on each side of it,
+# or an iteration touching it. A superset on purpose: the caller applies
+# the exact span test, so these only have to be cheap and complete.
+def done_in_window(
+    holder: Root,
+    lo: str,
+    hi: str,
+    window_ids: list[str],
+    after_ids: list[str],
+    before_ids: list[str]
+) -> list[Task] {
+    seen: dict[str, bool] = {};
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        found: list[Task] = [];
+        found.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == "Done", due_date >= lo, due_date <= hi]
+            ]
+        );
+        found.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == "Done", start_date >= lo, start_date <= hi]
+            ]
+        );
+        found.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == "Done", start_date != "", start_date < lo, due_date > hi]
+            ]
+        );
+        found.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == "Done", due_date != "", due_date < lo, start_date > hi]
+            ]
+        );
+        if window_ids {
+            found.extend(
+                [
+                    box-->[?:Project]-->[?:Task, status == "Done", iteration_id in window_ids]
+                ]
+            );
+        }
+        if after_ids {
+            found.extend(
+                [
+                    box-->[?:Project]-->[?:Task, status == "Done", start_date != "", start_date < lo, iteration_id in after_ids]
+                ]
+            );
+        }
+        if before_ids {
+            found.extend(
+                [
+                    box-->[?:Project]-->[?:Task, status == "Done", due_date != "", due_date > hi, iteration_id in before_ids]
+                ]
+            );
+        }
+        for t in found {
+            if jid(t) not in seen {
+                seen[jid(t)] = True;
+                out.append(t);
+            }
+        }
+    }
+    return out;
+}
+
+
+# GitHub lookups by the machine key, per page of items rather than per
+# workspace: `numbers` are the issue or PR numbers on the page.
+def tasks_by_issue(holder: Root, full_name: str, numbers: list[int]) -> list[Task] {
+    out: list[Task] = [];
+    if not numbers {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, gh_repo == full_name, gh_issue_number in numbers]
+            ]
+        );
+    }
+    return out;
+}
+
+
+def tasks_by_pr(holder: Root, full_name: str, numbers: list[int]) -> list[Task] {
+    out: list[Task] = [];
+    if not numbers {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, gh_repo == full_name, pr_number in numbers]]
+        );
+    }
+    return out;
+}
+
+
+def tasks_by_pr_link(holder: Root, links: list[str]) -> list[Task] {
+    out: list[Task] = [];
+    if not links {
+        return out;
+    }
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, pr_link in links]]);
+    }
+    return out;
+}
+
+
+# Hand-pasted PR links not yet adopted by the sync: pr_link set, no number.
+# Self-shrinking, since adoption writes the number.
+def unnumbered_pr_links(holder: Root) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, pr_number == 0, pr_link != ""]]);
+    }
+    return out;
+}
+
+
+# The children stamped under one GitHub parent issue.
+def children_of(holder: Root, full_name: str, number: int) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, gh_parent_repo == full_name, gh_parent_number == number]
+            ]
+        );
+    }
+    return out;
+}
+
+
+# The linked task of a repo synced longest ago, one row: where a sync
+# without a cursor starts for a repo that only holds imported tasks.
+def earliest_synced(holder: Root, full_name: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, gh_repo == full_name, gh_issue_number > 0, gh_synced_at != "", gh_synced_at]
+            ][:1]
+        );
+    }
+    out.sort(key=lambda (t: Task) { t.gh_synced_at; });
+    return out[:1];
+}
+
+
+# Board columns for the drag order, each one bounded query: the top cards
+# of a column (two, so a caller can skip the card being moved), the cards
+# just below or above a sort position, and the whole column for the rare
+# re-spread. A step column is `step_id`; the legacy column (no flow line)
+# is a status with no step.
+def step_column_peak(holder: Root, step: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, step_id == step, -sort_order]][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { -t.sort_order; });
+    return out[:2];
+}
+
+
+def step_column_below(holder: Root, step: str, bound: float) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, step_id == step, sort_order < bound, -sort_order]
+            ][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { -t.sort_order; });
+    return out[:2];
+}
+
+
+def step_column_above(holder: Root, step: str, bound: float) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, step_id == step, sort_order > bound, sort_order]
+            ][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { t.sort_order; });
+    return out[:2];
+}
+
+
+def step_column(holder: Root, step: str) -> list[Task] {
+    return tasks_on_step(holder, step);
+}
+
+
+def status_column_peak(holder: Root, col: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == col, step_id == "", -sort_order]
+            ][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { -t.sort_order; });
+    return out[:2];
+}
+
+
+def status_column_below(holder: Root, col: str, bound: float) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == col, step_id == "", sort_order < bound, -sort_order]
+            ][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { -t.sort_order; });
+    return out[:2];
+}
+
+
+def status_column_above(holder: Root, col: str, bound: float) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [
+                box-->[?:Project]-->[?:Task, status == col, step_id == "", sort_order > bound, sort_order]
+            ][:2]
+        );
+    }
+    out.sort(key=lambda (t: Task) { t.sort_order; });
+    return out[:2];
+}
+
+
+def status_column(holder: Root, col: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, status == col, step_id == ""]]);
+    }
+    return out;
+}
+
+
+# The highest sort_order among tasks of one status, step or not: where the
+# GitHub sync appends a filed or auto-moved card.
+def status_peak(holder: Root, col: str) -> float {
+    peak = 0.0;
+    for box in [holder-->[?:Projects]] {
+        for t in [box-->[?:Project]-->[?:Task, status == col, -sort_order]][:1] {
+            if t.sort_order > peak {
+                peak = t.sort_order;
+            }
+        }
+    }
+    return peak;
+}
+
+
+# ------------------------------------------------------------ task tallies
+
+# A Done task created already Done (a closed issue filed by a back-fill, a
+# task created straight into Done): history, not throughput.
+def seeded_done(t: Task) -> bool {
+    return t.status == "Done" and bool(t.done_at) and t.done_at == t.created_at;
+}
+
+
+# The project a task hangs under: the link field when it is filled, else
+# the container edge (a row ensure_tallies has not touched yet).
+def task_project(t: Task) -> list[Project] {
+    if t.project_id {
+        p = resolve(t.project_id);
+        if isinstance(p, Project) {
+            return [p];
+        }
+    }
+    return [t<--[?:Project]];
+}
+
+
+# A task joining (+1) or leaving (-1) a project's tallies, as it stands now.
+def count_task(p: Project, t: Task, delta: int) {
+    p.task_total = p.task_total + delta;
+    if t.status == "Done" {
+        p.done_total = p.done_total + delta;
+        if seeded_done(t) {
+            p.seeded_done_total = p.seeded_done_total + delta;
+        }
+    }
+}
+
+
+# Sums over every project, as [tasks, done, seeded done].
+def tally_totals(holder: Root) -> list[int] {
+    total = 0;
+    done = 0;
+    seeded = 0;
+    for p in projects_of(holder) {
+        total = total + p.task_total;
+        done = done + p.done_total;
+        seeded = seeded + p.seeded_done_total;
+    }
+    return [total, done, seeded];
+}
+
+
+# The category list on the first Projects box; sorted for the client.
+def categories_of(holder: Root) -> list[str] {
+    boxes = [holder-->[?:Projects]];
+    cats = list(boxes[0].categories) if boxes else [];
+    cats.sort();
+    return cats;
+}
+
+
+def note_category(holder: Root, said: str) {
+    boxes = [holder-->[?:Projects]];
+    if said and boxes and said not in boxes[0].categories {
+        boxes[0].categories = boxes[0].categories + [said];
+    }
+}
+
+
+# Drop `said` from the box unless a task other than `except_id` still
+# carries it: two rows at most are read, never the history.
+def forget_category(holder: Root, said: str, except_id: str) {
+    boxes = [holder-->[?:Projects]];
+    if not said or not boxes or said not in boxes[0].categories {
+        return;
+    }
+    others = 0;
+    for t in [boxes[0]-->[?:Project]-->[?:Task, category == said, created_at]][:2] {
+        if jid(t) != except_id {
+            others = others + 1;
+        }
+    }
+    if others == 0 {
+        boxes[0].categories = [
+            c
+            for c in boxes[0].categories
+            if c != said
+        ];
+    }
+}
+
+
+# Move a task under another project: the container edge IS the project
+# link, so the link field and both projects' tallies follow it.
 def rehome_task(task: Task, target: Project) {
+    for p in [task<--[?:Project]] {
+        count_task(p, task, -1);
+    }
     for e in [edge task<--] {
         del e;
     }
     target ++> task;
+    task.project_id = jid(target);
+    count_task(target, task, 1);
 }
 
 
@@ -803,66 +1395,55 @@ def logs_box(holder: Root) -> Logs {
 }
 
 
-# Task links gathered by walking IN from each Member and Project once. A per-task hop is a separate traversal and dominates at list sizes;
-# this costs one walk per holder no matter how many tasks are involved.
-obj TaskLinks {
-    has assignee_ids: dict[str, list[str]] = {},
-        assignee_names: dict[str, list[str]] = {},
-        project_id: dict[str, str] = {},
-        project_name: dict[str, str] = {};
+# The names a task row shows for its link fields: member and project names
+# by jid, read once from the two roster-sized lists. No task is loaded.
+obj TaskNames {
+    has members: dict[str, str] = {},
+        projects: dict[str, str] = {};
+
+    # The assignee ids the roster still knows, in the task's own order.
+    def ids_of(t: Task) -> list[str] {
+        return [
+            who
+            for who in t.assignee_ids
+            if who in self.members
+        ];
+    }
+
+    def names_of(t: Task) -> list[str] {
+        return [self.members[who] for who in self.ids_of(t)];
+    }
 
     # Comma-joined assignee names for one task, "" when unassigned.
-    def named(task_id: str) -> str {
-        return ", ".join(self.assignee_names[task_id])
-            if task_id in self.assignee_names
-            else "";
+    def named(t: Task) -> str {
+        return ", ".join(self.names_of(t));
     }
 
     # Project name for one task, "" when the task is unfiled.
-    def project_of(task_id: str) -> str {
-        return self.project_name[task_id] if task_id in self.project_name else "";
+    def project_of(t: Task) -> str {
+        return self.projects[t.project_id] if t.project_id in self.projects else "";
     }
 }
 
-# One walk IN from every Member and Project. Callers that need both views
-# and tallies gather this once and pass it around.
-def task_links(holder: Root) -> TaskLinks {
-    links = TaskLinks();
+def task_names(holder: Root) -> TaskNames {
+    names = TaskNames();
     for m in members_of(holder) {
-        who = jid(m);
-        for t in [m<-:AssignedTo:<-] {
-            key = jid(t);
-            if key not in links.assignee_ids {
-                links.assignee_ids[key] = [];
-                links.assignee_names[key] = [];
-            }
-            links.assignee_ids[key].append(who);
-            links.assignee_names[key].append(m.full_name());
-        }
+        names.members[jid(m)] = m.full_name();
     }
     for p in projects_of(holder) {
-        pid = jid(p);
-        for t in [p-->[?:Task]] {
-            key = jid(t);
-            links.project_id[key] = pid;
-            links.project_name[key] = p.name;
-        }
+        names.projects[jid(p)] = p.name;
     }
-    return links;
+    return names;
 }
 
 
-# Views for a page of tasks from links already gathered.
-def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
+# Views for a page of tasks from names already gathered.
+def views_from(names: TaskNames, rows: list[Task]) -> list[TaskView] {
     views: list[TaskView] = [];
     for t in rows {
-        key = jid(t);
         views.append(
             t.view_with(
-                links.assignee_ids[key] if key in links.assignee_ids else [],
-                links.assignee_names[key] if key in links.assignee_names else [],
-                links.project_id[key] if key in links.project_id else "",
-                links.project_name[key] if key in links.project_name else ""
+                names.ids_of(t), names.names_of(t), t.project_id, names.project_of(t)
             )
         );
     }
@@ -870,10 +1451,10 @@ def views_from(links: TaskLinks, rows: list[Task]) -> list[TaskView] {
 }
 
 
-# Views for a page of tasks, gathering the links itself. Use `views_from` when
-# the caller already holds a TaskLinks.
+# Views for a page of tasks, gathering the names itself. Use `views_from`
+# when the caller already holds a TaskNames.
 def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
-    return views_from(task_links(holder), rows);
+    return views_from(task_names(holder), rows);
 }
 
 
