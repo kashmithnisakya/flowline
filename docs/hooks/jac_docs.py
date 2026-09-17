@@ -475,6 +475,9 @@ class Registry:
                 self.by_file[rel] = decls
                 for d in decls:
                     self.decls.setdefault((d.kind, d.name), d)
+        # main.jac also imports the scheduled sync function, which has no
+        # route; only the walkers need a page.
+        self.routed = {n: m for n, m in self.routed.items() if ("walker", n) in self.decls}
 
     def get(self, kind: str, name: str) -> Decl:
         found = self.decls.get((kind, name))

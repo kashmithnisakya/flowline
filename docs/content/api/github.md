@@ -94,16 +94,20 @@ be short. `attached` marks repos already added to a project.
 
 ::: walker ListRepoIssues h3
 
-**Reports** `{"ok": true, "rows": [GhIssueRow], "page": n, "has_more": bool}`,
-50 per page. `state` is `open`, `closed` or `all`. Pull requests are dropped
+**Reports** `{"ok": true, "rows": [GhIssueRow], "page": n, "has_more": bool,
+"synced_at": "...", "stale": bool}`, 50 per page. `state` is `open`, `closed`
+or `all`. Page 1 is the page the [scheduled sync](../concepts/github-sync.md#what-the-github-page-reads)
+stored for that state (`synced_at` is empty when none is stored yet, `stale`
+past 20 minutes) and makes no GitHub call; `refresh: true` or `page > 1` reads
+GitHub, and page 1 then replaces the stored one. Pull requests are dropped
 from GitHub's issues list, so pages can be short. `already_imported` and
 `imported_task_id` point at the task that holds the issue. A foreign `repo_id`
 reports an empty page without calling GitHub.
 
 ::: walker ListRepoPulls h3
 
-**Reports** `{"ok": true, "rows": [GhPrRow], "page": n, "has_more": bool}`, 50
-per page. `state` on each row is `open`, `draft`, `closed` or `merged`, and
+**Reports** the same shape with `[GhPrRow]` rows and the same stored-page
+rule. `state` on each row is `open`, `draft`, `closed` or `merged`, and
 `linked_task_id` finds a task by PR number or by a pasted PR link.
 
 ::: walker SearchRepoItems h3
@@ -181,14 +185,18 @@ the card leaves Done.
 ::: walker SyncGithub h3
 
 One bounded increment of the reconcile poll: drain the webhook queue, then read
-each tracked repo's issues and pull requests updated since its cursor.
+each tracked repo's issues and pull requests updated since its cursor. The
+server [schedule](../deploy/operations.md#the-scheduled-github-sync) runs it
+with `auto: true` every 5 minutes per connected workspace; the Sync buttons run
+it by hand, which also holds the workspace's sync lease for 4 minutes so the
+schedule stays out of the way.
 
 **Reports** `not_connected`, or:
 
 ```json
 {
   "ok": true, "linked": 12, "refreshed": 3, "auto_added": 1, "auto_done": 1,
-  "scanned": 140, "pages": 2, "drained": 4, "unfiled": 0,
+  "scanned": 140, "pages": 2, "drained": 4, "unfiled": 0, "lists": 2,
   "cooldown_minutes": 15.0, "has_more": false, "failure": "",
   "last_sync_at": "2026-09-15T08:12:33.123456Z"
 }
@@ -203,9 +211,12 @@ each tracked repo's issues and pull requests updated since its cursor.
 | `scanned`, `pages` | GitHub items read and list requests made |
 | `drained` | Queued webhook deliveries applied |
 | `unfiled` | New issues on `auto_sync` repos that have no project |
+| `lists` | Tracked repos whose stored open issue and pull request pages were rewritten (a pass that reached the end of every stream) |
 | `cooldown_minutes` | 15 while deliveries are flowing, otherwise 1 |
 | `has_more` | The page budget (5 by default, `page_budget` lowers it) or the 8 second clock ran out: call again |
 | `failure` | GitHub's message when a request failed, else empty |
 
 With `auto: true`, a call inside the cooldown reports all zeros and the
-previous `last_sync_at`. A manual sync (`auto: false`) ignores the cooldown.
+previous `last_sync_at`, and mints no token. A manual sync (`auto: false`)
+ignores the cooldown. An invalid connection reports `{"ok": false, "error":
+"invalid"}`.

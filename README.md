@@ -157,19 +157,21 @@ the board.
 
 ### What the reconcile pass still does
 
-Opening the board still runs the GitHub poll, on a cooldown: every 15 minutes
-while deliveries are flowing, every minute otherwise. It catches history from
-before the webhook existed and anything delivered while the app was being
-deployed. GitHub does not retry a failed delivery on its own; the App's
-Advanced tab lists every delivery with its response and a Redeliver button.
+The GitHub poll runs on a server schedule, every 5 minutes per connected
+workspace, on a cooldown: every 15 minutes while deliveries are flowing, every
+tick otherwise. No page load waits on GitHub: the board and the GitHub page
+read what the last pass stored, and Sync now runs a pass by hand. It catches
+history from before the webhook existed and anything delivered while the app
+was being deployed. GitHub does not retry a failed delivery on its own; the
+App's Advanced tab lists every delivery with its response and a Redeliver
+button.
 
 Flowline writes to GitHub in two cases: an issue you explicitly create from a
 task, and, per repo and off by default ("Close the issue when its card moves
 to Done"), the issue's state: closing it when its card reaches your done step,
 and reopening it when the card moves back out. The receiver drops the App's own echo of either, so
 the card is not moved or logged twice. Titles, assignees and labels are never
-written back. Nothing runs on a schedule: a workspace nobody opens stays as it
-was.
+written back.
 
 ## License
 
