@@ -295,23 +295,6 @@ def:pub OverviewPage -> JsxPage {
         loadHistory();
     }
 
-    # Remember whether the day chart drew, for the next first-load frame.
-    useEffect(
-        lambda {
-            if movesLoaded {
-                try {
-                    localStorage.setItem(
-                        CHART_KEY, "1" if chartState == "chart" else "0"
-                    );
-                } except Exception as e {
-                    movesLoaded = movesLoaded;
-                }
-            }
-            return lambda { movesLoaded = movesLoaded; };
-        },
-        [movesLoaded, chartState]
-    );
-
     async def fetchSnapshot(monday: str) -> any;
     async def fetchDue -> any;
     async def fetchWeekLog(monday: str) -> any;
@@ -659,6 +642,24 @@ def:pub OverviewPage -> JsxPage {
                 if movesFailed
                 else "Nothing has moved to Done in four weeks, so there is no day chart yet."
         );
+
+    # Remember whether the day chart drew, for the next first-load frame.
+    # Placed after chartState: an effect's deps are read where it is called.
+    useEffect(
+        lambda {
+            if movesLoaded {
+                try {
+                    localStorage.setItem(
+                        CHART_KEY, "1" if chartState == "chart" else "0"
+                    );
+                } except Exception as e {
+                    movesLoaded = movesLoaded;
+                }
+            }
+            return lambda { movesLoaded = movesLoaded; };
+        },
+        [movesLoaded, chartState]
+    );
 
     # ---- Projects and people.
     projRows: list[dict] = [];
