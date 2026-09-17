@@ -61,6 +61,12 @@ twitter_image = "${HOST:-http://localhost:8000}/static/brand/og-image.png"
 # the saved theme on <html>, a preload of the Archivo file the header uses,
 # then a header and page placeholder that pages/layout.jac removes on its
 # first paint.
+# The theme first, as one line of inline text (no newline, so the deploy
+# runner can rewrite jac.toml): a dark user never sees a light frame while
+# /static/boot.js is fetched on a cold cache.
+[[client.app_meta_data.scripts]]
+content = "(function(){try{var t=localStorage.getItem('flowline-theme')||localStorage.getItem('standup-theme');var d=t=='dark'||t!='light'&&matchMedia('(prefers-color-scheme:dark)').matches;var h=document.documentElement;if(d){h.classList.add('dark')}h.style.backgroundColor=d?'#111413':'#F2F3F1';h.style.colorScheme=d?'dark':'light'}catch(e){}})()"
+
 [[client.app_meta_data.scripts]]
 src = "/static/boot.js"
 
