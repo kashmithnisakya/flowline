@@ -240,7 +240,10 @@ people it tracks are roster members.
   an unfiltered page only), `older`, `done`, `all`; `q` is a server-side
   title search ranked exact, prefix, contains. `GetFlowLine` counts and
   `ListStepTasks` lists the same working set (`done_days`), so a done step
-  shows recent Done the way the board's column does.
+  shows recent Done the way the board's column does; the count's pass over
+  that set also keeps each step's first two titles (`StepView.task_titles`,
+  the panel's order), so the flow line page's close zoom reads them off
+  the line and makes no request.
   The Overview adds up history through `TaskCounts` / `LogCounts` rather
   than loading it. Every ordering ends in the jid, so a row cannot swap
   pages between two requests (sorts are stable, so a `jid` pass first and
@@ -363,8 +366,12 @@ File-based routing with route groups:
   and Sign out.
 - **`/workspace` is every setting**: Organization, People, Projects, Roles and
   Preferences (the theme) as `?tab=` sections from `components/workspace/`.
-  GitHub lives at `/github`; `?tab=github` and install round trips forward
-  there with the query intact.
+  The page loads one `GetWorkspace` and hands the Projects and Roles
+  sections their lists as props (open counts are the projects' own
+  tallies), so a tab switch is a render, not a request; a section's write
+  calls `forgetWorkspace()` and awaits the page's `loadAll` (`onChanged`)
+  rather than refetching a list of its own. GitHub lives at `/github`;
+  `?tab=github` and install round trips forward there with the query intact.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
   components from `components/<area>/` (`board`, `tasks`, `roadmap`, `log`,
