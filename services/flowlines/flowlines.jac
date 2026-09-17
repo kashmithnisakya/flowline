@@ -155,6 +155,9 @@ def read_flow_line(
     if not with_counts {
         return views;
     }
+    # The one-time tally fill lives here, not in the walker: a call the
+    # effect pass cannot classify would cost the reader its cache verdict.
+    ensure_tallies(holder);
     # Count into a plain map first, then stamp the views: mutating a
     # view through a dict lookup is more than the checker can follow.
     counts: dict[str, int] = {};
@@ -193,9 +196,6 @@ walker GetFlowLine {
         reports: list[list[StepView]] = [];
 
     can start with Root entry {
-        if self.with_counts {
-            ensure_tallies(here);
-        }
         visit [here-->[?:WorkflowSteps]] else {
             report [];
         }
