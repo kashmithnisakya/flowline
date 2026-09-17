@@ -414,19 +414,24 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   one route change away.
 - **The first paint is a placeholder, not a blank page.** `lib/boot.js`
   (inlined into `<head>` from jac.toml, before the bundle) paints the saved
-  theme on `<html>` and, on app paths with a session, draws `#flowline-boot`
-  before `#root`; the layout removes it in a `useLayoutEffect` on its first
-  render. The header reads the cached workspace name and account from
-  `lib/session.jac` (`flowline-org`, `flowline-account`, written when
-  `/user/me` resolves, cleared when a session starts or ends), so it never
-  shows the wordmark and then the name. A page renders its loaded frame with
+  theme on `<html>`, preloads `/archivo-latin-wdth-normal.woff2` (the Vite
+  build keeps asset names, so the CSS asks for that exact URL and the nav
+  paints in its final width on a cold cache) and, on app paths with a
+  session, draws `#flowline-boot` before `#root`; the layout removes it in a
+  `useLayoutEffect` on its first render. The header reads the cached
+  workspace name and account from `lib/session.jac` (`flowline-org`,
+  `flowline-account`, written when `/user/me` resolves), so it never shows
+  the wordmark and then the name. A page renders its loaded frame with
   skeleton rows on the first data load only, sized by per-browser caches of
-  the last visit (`flowline-lanes`, `flowline-overview-shape`,
-  `flowline-log-shape`, `flowline-roadmap-shape`, `flowline-github`), swaps
-  to the content through `components/common/Reveal` (a 150ms cross-fade in
-  one grid cell, so no frame in between is blank) and never re-skeletons: a
-  refetch keeps the rows under `aria-busy` and shows `components/common/Busy`
-  after 300ms.
+  the last visit (the `*_KEY` globs in `lib/session.jac`: lanes, overview,
+  log, roadmap, GitHub; the log writes today's view and the roadmap the
+  unfiltered one). `forgetSession` clears every cache when a session starts
+  or ends, so another account never inherits a name or a shape. The swap to
+  the content goes through `components/common/Reveal` (a 150ms cross-fade in
+  one grid cell, so no frame in between is blank; the frame comes back if
+  `ready` drops with nothing on screen, a retry after a failed first load)
+  and a page never re-skeletons: a refetch keeps the rows under `aria-busy`
+  and shows `components/common/Busy` after 300ms.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since

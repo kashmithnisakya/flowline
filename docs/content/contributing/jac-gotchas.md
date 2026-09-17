@@ -108,14 +108,17 @@ clean and only fail at runtime, in the browser, or on the deployed build.
 ??? note "The first paint is a placeholder"
 
     `lib/boot.js` is inlined into `<head>` from `jac.toml` and runs before
-    the bundle: it paints the saved theme on `<html>` and, on app paths with
-    a session, draws `#flowline-boot` before `#root`. The layout removes it in
-    a `useLayoutEffect` on its first render. The header paints the workspace
-    name and account from the cache `lib/session.jac` keeps, and a page
-    renders its loaded frame with skeleton rows on the first data load only,
-    sized by per-browser caches of the last visit, then cross-fades to the
-    content through `components/common/Reveal`; a refetch keeps the rows and
-    shows `components/common/Busy` after 300ms.
+    the bundle: it paints the saved theme on `<html>`, preloads the Archivo
+    file the header uses (the build keeps asset names) and, on app paths
+    with a session, draws `#flowline-boot` before `#root`. The layout removes
+    it in a `useLayoutEffect` on its first render. The header paints the
+    workspace name and account from the cache `lib/session.jac` keeps, and a
+    page renders its loaded frame with skeleton rows on the first data load
+    only, sized by per-browser caches of the last visit (session-scoped: the
+    keys live in `lib/session.jac` and `forgetSession` clears them), then
+    cross-fades to the content through `components/common/Reveal`, which
+    shows the frame again if `ready` drops with nothing on screen; a refetch
+    keeps the rows and shows `components/common/Busy` after 300ms.
 
 ??? note "`has` state is a live cell on 0.37"
 
