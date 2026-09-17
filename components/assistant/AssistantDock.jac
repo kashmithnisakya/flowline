@@ -122,7 +122,7 @@ def:pub AssistantDock(
     docked: bool = False,
     narrow: bool = False
 ) -> JsxElement {
-    has turns: list[dict] = [],
+    has turns: list[dict[str, any]] = [],
         draft: str = "",
         mode: str = "ask",
         busy: bool = False,
@@ -256,7 +256,7 @@ def:pub AssistantDock(
     canListen = hasVoice();
 
     # The index travels with the row so the JSX never needs tuple unpacking.
-    rows: list[dict] = [];
+    rows: list[dict[str, any]] = [];
     at = 0;
     for t in turns {
         rows.append({** t, "at": at});

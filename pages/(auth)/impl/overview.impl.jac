@@ -35,15 +35,15 @@ impl OverviewPage.loadAll -> None {
         reviewQueue = data["review_queue"] if data else [];
         # Blocked and Review rows already sit in their own groups, so the
         # quiet list keeps only the rest of the snapshot's aging entries.
-        stale: list[dict] = [];
+        stale: list[dict[str, any]] = [];
         for r in (data["aging"] if data else []) {
             if r["status"] != "Blocked" and r["status"] != "Review" {
                 stale.append(r);
             }
         }
         quiet = stale;
-        info: dict[str, dict] = {};
-        every: list[dict] = [];
+        info: dict[str, dict[str, any]] = {};
+        every: list[dict[str, any]] = [];
         for b in (data["blocked"] if data else []) {
             info[b["task_id"]] = b;
             every.append(b);

@@ -275,10 +275,10 @@ def:pub OverviewPage -> JsxPage {
         taskTotal: int = 0,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
         # objs would pull services.insights.insights types into the client bundle.
-        reviewQueue: list[dict] = [],
-        quiet: list[dict] = [],
-        blockedInfo: dict[str, dict] = {},
-        blockedList: list[dict] = [],
+        reviewQueue: list[dict[str, any]] = [],
+        quiet: list[dict[str, any]] = [],
+        blockedInfo: dict[str, dict[str, any]] = {},
+        blockedList: list[dict[str, any]] = [],
         loading: bool = True,
         failed: bool = False,
         # Open work sorted by due date, for due this week and per-project overdue.

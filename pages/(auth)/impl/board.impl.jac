@@ -102,7 +102,7 @@ impl BoardPage.refreshTasks -> None {
 }
 
 
-impl BoardPage.loadBoard(withWorkspace: bool) -> dict {
+impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     # While a move is in flight its optimistic state is newer than anything
     # a concurrent fetch started earlier could return, skip.
     if movesRef.current {

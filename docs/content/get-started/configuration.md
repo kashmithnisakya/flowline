@@ -17,7 +17,7 @@ environment when it loads the file:
 | `${VAR}` | its value | the literal text `${VAR}` stays in place |
 | `${VAR:-fallback}` | its value | `fallback` |
 
-Two consequences worth remembering:
+Three consequences worth remembering:
 
 - The `.env` file is **not** read by the runtime. Export it first:
   `set -a; . ./.env; set +a`. On jachammer, the project's environment
@@ -25,6 +25,9 @@ Two consequences worth remembering:
 - An exported empty value really is empty. That is what makes the webhook
   secret [refuse to boot](run-locally.md#load-the-environment) when the
   template is sourced unchanged.
+- A deploy refuses a bare `${VAR}` that the pods will not receive (Jac
+  0.37.18+). On jachammer every key in the project's environment reaches the
+  pods, so set it there; optional values such as the SSO pairs use `${VAR:-}`.
 
 ## Environment variables
 
