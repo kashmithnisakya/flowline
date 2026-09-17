@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Playwright smoke against a running server: sign up, finish the setup
-wizard, apply the flow line template, create a task from the board's
-New task button and see its card survive a reload, then land on GitHub's
-install redirect and check the page finishes it with exactly one callback.
-Every step is a real click or keystroke, so a dead button fails here.
+"""Playwright smoke against a running server: sign up, finish the three-step
+setup wizard on the Simple template, land on the board with the create dialog
+open, create a task from the board's New task button and see its card survive
+a reload, then land on GitHub's install redirect and check the page finishes it
+with exactly one callback. Every step is a real click or keystroke, so a dead
+button fails here.
 Usage: browser_gate.py [base_url] [stub_url]"""
 import json
 import re
@@ -74,32 +75,55 @@ def run(page, tag: str) -> list[str]:
     page.get_by_placeholder("••••••••••").fill(password)
     page.get_by_role("button", name="Create workspace", exact=True).click()
 
-    step("setup wizard: organization")
+    step("setup wizard: workspace and first project, Enter submits")
     settle(page, "/setup", "Name your workspace")
     act(page, lambda: page.get_by_placeholder("Acme Robotics").fill("CI Org"))
     expect(page.get_by_text("Your name", exact=True)).to_have_count(0)
-    page.get_by_role("button", name="Continue", exact=True).click()
-
-    step("setup wizard: first project")
-    expect(page.get_by_text("Create your first project").first).to_be_visible()
     page.get_by_placeholder("Website redesign").fill("CI Project")
-    page.get_by_role("button", name="Continue", exact=True).click()
+    page.get_by_placeholder("Website redesign").press("Enter")
 
     step("setup wizard: add a person by first and last name")
-    expect(page.get_by_text("Add your people").first).to_be_visible()
+    expect(page.get_by_role("heading", name="Who works on CI Project?")).to_be_visible()
     page.get_by_placeholder("First name").fill("Priya")
     page.get_by_placeholder("Last name").fill("Raman")
     page.get_by_role("button", name="Add", exact=True).click()
     expect(page.get_by_text("Priya Raman", exact=True)).to_be_visible()
+    page.get_by_role("button", name="Continue", exact=True).click()
 
-    step("setup wizard: finish")
-    page.get_by_role("button", name="Design your flow line", exact=True).click()
-    settle(page, "/flowlines", "How does your team move work?")
+    step("setup wizard: how work moves, Simple preselected")
+    expect(page.get_by_role("heading", name="How does work move?")).to_be_visible()
+    expect(page.get_by_role("radio", name="Simple")).to_have_attribute("aria-checked", "true")
+    page.get_by_role("button", name="Open the board", exact=True).click()
 
-    step("flow line: apply the template")
-    act(page, lambda: page.get_by_role("button", name="Use template", exact=True).click())
-    expect(page.get_by_text("Your flow line is in")).to_be_visible()
-    page.get_by_role("button", name="Done editing", exact=True).click()
+    step("board: opens with the create dialog on the template's columns")
+    settle(page, "/board", "Board")
+    dialog = page.locator("[role=dialog][data-state=open]")
+    expect(dialog).to_be_visible()
+    expect(dialog.get_by_text("New task", exact=True)).to_be_visible()
+    dialog.get_by_role("button", name="Cancel", exact=True).click()
+    expect(dialog).to_be_hidden()
+    columns = ["To do", "Doing", "Review", "Done"]
+    for column in columns:
+        expect(page.get_by_text(column, exact=True).filter(visible=True).first).to_be_visible()
+    # Visible text alone could match a word elsewhere on the page, so the
+    # flow line the wizard applied is checked exactly as well.
+    steps = page.evaluate(
+        """async (base) => {
+            const r = await fetch(base + "/walker/GetFlowLine", {
+                method: "POST",
+                headers: {"Content-Type": "application/json",
+                          "Authorization": "Bearer " + localStorage.getItem("jac_token")},
+                body: JSON.stringify({with_counts: false}),
+            });
+            const d = await r.json();
+            const reports = d.reports || (d.data && (d.data.reports
+                || (d.data.result && d.data.result.reports))) || [];
+            return (reports[0] || []).map((s) => [s.name, s.kind]);
+        }""",
+        BASE,
+    )
+    expected = [[n, k] for n, k in zip(columns, ["start", "active", "handoff", "done"])]
+    assert steps == expected, f"setup applied {steps}, expected {expected}"
 
     step("board: open via the nav")
     page.get_by_role("link", name="Board", exact=True).click()

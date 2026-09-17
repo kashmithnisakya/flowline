@@ -1,10 +1,6 @@
-"""flowline - Overview: org-wide summary, progress and activity metrics.
-Every number here is counted server-side over the whole history (TaskCounts
-and LogCounts); the one list, needs-attention, is a page of eight from
-ListTasks(scope="attention") with the full count beside it. The page never
-loads the workspace to add it up. Charts are plain marks: Done (pine) and
-Active (ember) fills over a muted Backlog track, counts labelled so nothing
-is colour-alone."""
+"""flowline - Overview: what needs someone now, then how the week is going.
+A workspace with nothing to count gets a first-run checklist instead of the
+figures and charts; the impl annex documents each read."""
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
@@ -13,14 +9,20 @@ import from ...models {
     MemberView,
     TaskView,
     TaskTotals,
-    ProjectTally,
     LogTotals,
-    MemberDays,
     WeeklyHistory
 }
+import from ...constants { FLOW_LINE_TEMPLATES, STATUS_KIND }
 import from ...services.insights.insights { OverviewSnapshot }
-import from ...services.tasks.tasks { TaskHistory }
+import from ...services.tasks.tasks { TaskHistory, ListTasks }
+import from ...services.log.log { ListLogEntries }
+import from ...services.flowlines.flowlines { GetFlowLine, GetFlowLineMeta }
+import from ...services.github.github { GithubStatus }
 import from ...components.dashboard.HistoryCharts { BurnUpChart, ThroughputChart }
+import from ...components.dashboard.NeedsYou { NeedsYou }
+import from ...components.dashboard.ThisWeek { ThisWeek }
+import from ...components.dashboard.Breakdown { ProjectBars, PeopleTable }
+import from ...components.dashboard.FirstRun { FirstRun }
 import from ...components.ui.select {
     Select,
     SelectTrigger,
@@ -28,47 +30,80 @@ import from ...components.ui.select {
     SelectContent,
     SelectItem
 }
-import from ...components.dashboard.StatTile { StatTile }
-import from ...components.dashboard.QueueCards { ReviewQueueCard, GoneQuietCard }
-import from ...components.ui.card {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent
-}
-import from ...components.ui.badge { Badge }
-import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
-import from "@jac/runtime" { Link }
+import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
-import from ...components.common.Avatar { Avatar, AvatarStack }
-import from ...lib.dates { todayIso, dueTone, dueLabel, prettyDay }
+import from ...components.common.Busy { Busy }
+import from ...lib.dates { todayIso, daysUntil, prettyDay }
+import from ...lib.session { fetchOrgName, cachedOrgName, OVERVIEW_SHAPE_KEY }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-     ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
-     MONTHS: list[str] = [
-         "Jan",
-         "Feb",
-         "Mar",
-         "Apr",
-         "May",
-         "Jun",
-         "Jul",
-         "Aug",
-         "Sep",
-         "Oct",
-         "Nov",
-         "Dec"
+     DAY_NAMES: list[str] = [
+         "Monday",
+         "Tuesday",
+         "Wednesday",
+         "Thursday",
+         "Friday",
+         "Saturday",
+         "Sunday"
      ],
-     SK_BARS: list[str] = ["h-16", "h-24", "h-12", "h-32", "h-20", "h-10", "h-28"],
      HISTORY_RANGES: list[list[str]] = [
          ["8", "Last 8 weeks"],
          ["12", "Last 12 weeks"],
          ["26", "Last 26 weeks"]
      ];
 
-# Fixed bar-stub heights for the loading chart skeleton (literal classes).
+# Reads in flight, by name. A remount (the page used to mount twice on a
+# full load) awaits the first mount's request instead of sending its own. A
+# dict cell, so a function never rebinds a glob.
+glob LOADS: dict[str, any] = {},
+     NEEDS_CAP: int = 6;
+
+def inflight(key: str) -> any {
+    return LOADS[key] if key in LOADS else None;
+}
+
+def clampInt(v: any, low: int, high: int, fallback: int) -> int {
+    n = int(v) if v else 0;
+    if not n {
+        return fallback;
+    }
+    return low if n < low else (high if n > high else n);
+}
+
+# The panels' shape on the last visit (the day chart, rows per worklist
+# group, project and people rows), so the first-load frame reserves the
+# same space the loaded page will take.
+def cachedShape -> dict[str, any] {
+    fallback: dict[str, any] = {
+        "chart": False,
+        "groups": [4],
+        "projects": 3,
+        "people": 5
+    };
+    try {
+        raw = localStorage.getItem(OVERVIEW_SHAPE_KEY) or "";
+        if not raw {
+            return fallback;
+        }
+        parsed: any = JSON.parse(raw);
+        groups: list[int] = [];
+        for n in (parsed["groups"] or []) {
+            if len(groups) < 5 {
+                groups.append(clampInt(n, 1, NEEDS_CAP, 1));
+            }
+        }
+        return {
+            "chart": bool(parsed["chart"]),
+            "groups": groups if len(groups) > 0 else [4],
+            "projects": clampInt(parsed["projects"], 1, 8, 3),
+            "people": clampInt(parsed["people"], 1, 12, 5)
+        };
+    } except Exception as e {
+        return fallback;
+    }
+}
+
 def localIso(d: any) -> str {
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
     return shifted.toISOString()[:10];
@@ -86,29 +121,145 @@ def mondayOf(iso: str) -> str {
     return shiftDay(iso, -offset);
 }
 
-# Short human label for an ISO day, e.g. "Aug 4".
-def fmtDay(iso: str) -> str {
-    d = new(Date, iso + "T00:00:00");
-    mi = int(d.getMonth());
-    return MONTHS[mi] + " " + str(d.getDate());
+# The local day of a log row's UTC stamp ("2026-09-15T20:39:12.123456Z"),
+# else the server's date for it.
+def localDayOf(at: str, fallback: str) -> str {
+    base = at.replace("Z", "");
+    if len(base) < 19 or base[10] != "T" or base[13] != ":" {
+        return fallback[:10];
+    }
+    return localIso(new(Date, base[:23] + "Z"));
 }
 
-
-# An entry's member_name is every assignee, comma-joined, so a plain
-# equality misses shared tasks.
-def pct(part: int, whole: int) -> str {
-    if whole == 0 {
-        return "0%";
+# A due date as the worklist reads it: "today", "tomorrow", a weekday later
+# this week, a date after that, or how many days it is late.
+def relDay(iso: str, today: str) -> str {
+    diff = daysUntil(iso, today);
+    if diff < 0 {
+        late = 0 - diff;
+        return str(late) + (" day" if late == 1 else " days");
     }
-    return str(part * 100.0 / whole) + "%";
+    if diff == 0 {
+        return "today";
+    }
+    if diff == 1 {
+        return "tomorrow";
+    }
+    d = new(Date, iso[:10] + "T00:00:00");
+    t = new(Date, today[:10] + "T00:00:00");
+    dayIdx = int((d.getDay() + 6) % 7);
+    if diff < 7 and dayIdx > int((t.getDay() + 6) % 7) {
+        return DAY_LABELS[dayIdx];
+    }
+    return prettyDay(iso);
 }
 
-# Like pct but capped: the largest value maps to cap% of the track.
-def scaled(part: int, whole: int, cap: int) -> str {
-    if whole == 0 {
-        return "0%";
+# When a blocked task stopped: "since today", "since yesterday", else a date.
+def sinceDay(iso: str, today: str) -> str {
+    if len(iso) < 10 {
+        return "";
     }
-    return str(part * cap * 1.0 / whole) + "%";
+    ago = daysUntil(today, iso);
+    if ago <= 0 {
+        return "since today";
+    }
+    return "since yesterday" if ago == 1 else "since " + prettyDay(iso);
+}
+
+# A blocked reason's first line as plain text: move notes arrive as markdown
+# with a "**2026-09-15:**" stamp in front.
+def plainLine(text: str) -> str {
+    line = text.strip().split("\n")[0].replace("**", "").strip();
+    if len(line) > 11 and line[4] == "-" and line[7] == "-" and line[10] == ":" {
+        line = line[11:].strip();
+    }
+    return line;
+}
+
+def plural(n: int, one: str, many: str) -> str {
+    return str(n) + " " + (one if n == 1 else many);
+}
+
+def countAll(xs: list[int]) -> int {
+    n = 0;
+    for x in xs {
+        n = n + x;
+    }
+    return n;
+}
+
+def splitNames(joined: str) -> list[str] {
+    return [
+        n.strip()
+        for n in joined.split(",")
+        if n.strip()
+    ];
+}
+
+# One worklist row; the note, kind and flags are filled in by the caller.
+def workRow(
+    id: str, title: str, meta: str, names: list[str], time: str, late: bool
+) -> dict[str, any] {
+    return {
+        "id": id,
+        "title": title,
+        "meta": meta,
+        "note": "",
+        "noteWarn": False,
+        "names": names,
+        "time": time,
+        "late": late,
+        "kind": "",
+        "kindLabel": ""
+    };
+}
+
+def dueRow(t: TaskView, today: str) -> dict[str, any] {
+    return workRow(
+        t.id,
+        t.title,
+        t.project_name,
+        t.assignee_names,
+        relDay(t.due_date, today),
+        t.due_date < today
+    );
+}
+
+# Fills in a blocked row: its reason from the snapshot's blocked list
+# (`info`), then a red due date when late, else the day it stopped.
+def withBlocked(
+    row: dict[str, any], due: str, today: str, info: dict[str, any], since: str
+) -> dict[str, any] {
+    late = len(due) >= 10 and due < today;
+    row["late"] = late;
+    row["time"] = relDay(due, today) if late else sinceDay(since, today);
+    row["note"] = plainLine(info["reason"]) if "reason" in info else "";
+    return row;
+}
+
+# A review queue entry's context (reviewer note, PR, avatars) on a row, so a
+# review that turns late keeps it in Overdue. `held` is the task, if read.
+def withReview(row: dict[str, any], r: dict[str, any], held: any) -> dict[str, any] {
+    reviewer = r["reviewer"];
+    pr = "PR linked" if r["pr_link"] else "";
+    if held and held.pr_number > 0 {
+        pr = "PR #" + str(held.pr_number);
+    }
+    if reviewer {
+        row["names"] = [reviewer];
+    }
+    row["meta"] = " · ".join(
+        [
+            part
+            for part in [row["meta"], pr]
+            if part
+        ]
+    );
+    row["note"] = (reviewer.split(" ")[0] + " reviewing")
+        if reviewer
+        else "no reviewer";
+    row["noteWarn"] = not reviewer;
+    return row;
 }
 
 def:pub OverviewPage -> JsxPage {
@@ -121,13 +272,42 @@ def:pub OverviewPage -> JsxPage {
         # (it crosses the wire as plain data), so the render guards the reads.
         counts: TaskTotals | None = None,
         logs: LogTotals | None = None,
+        taskTotal: int = 0,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
         # objs would pull services.insights.insights types into the client bundle.
         reviewQueue: list[dict[str, any]] = [],
         quiet: list[dict[str, any]] = [],
         blockedInfo: dict[str, dict[str, any]] = {},
+        blockedList: list[dict[str, any]] = [],
         loading: bool = True,
         failed: bool = False,
+        # Open work sorted by due date, for due this week and per-project overdue.
+        dueRows: list[TaskView] = [],
+        dueLoaded: bool = False,
+        dueHasMore: bool = False,
+        dueFailed: bool = False,
+        # This week off the log, by local day: tasks that entered Done per
+        # weekday, hand-written lines, and when each blocked task stopped.
+        doneMoves: list[int] = [0, 0, 0, 0, 0, 0, 0],
+        handEntries: int = 0,
+        blockedSince: dict[str, str] = {},
+        # The week's entries by the same local day rule, per roster name, for
+        # the People strip and the entries figure. -1 until a complete read.
+        weekPeople: dict[str, list[int]] = {},
+        weekEntries: int = -1,
+        movesLoaded: bool = False,
+        movesFailed: bool = False,
+        weekAdded: int = -1,
+        addedFailed: bool = False,
+        orgName: str = cachedOrgName(),
+        # First-run state, read only while no card has reached Done.
+        setupLoaded: bool = False,
+        stepCount: int = 0,
+        firstStepName: str = "",
+        templateName: str = "",
+        ghConfigured: bool = False,
+        ghConnected: bool = False,
+        ghLogin: str = "",
         # The charts over time, scoped by their own filter row. A refetch
         # keeps the last render on screen, dimmed, instead of a skeleton.
         history: WeeklyHistory | None = None,
@@ -138,17 +318,34 @@ def:pub OverviewPage -> JsxPage {
 
     async can with entry {
         loadAll();
+        loadDue();
+        loadMoves();
+        orgName = await fetchOrgName();
     }
 
     async can with (historyProject, historyWeeks) entry {
         loadHistory();
     }
 
+    async def fetchSnapshot(monday: str) -> any;
+    async def fetchDue -> any;
+    async def fetchWeekLog(monday: str) -> any;
+    async def fetchSetup -> any;
+    async def fetchHistory(projectId: str, weeks: int) -> any;
     async def loadAll -> None;
+    async def loadDue -> None;
+    async def loadMoves -> None;
+    async def loadSetup -> None;
     async def loadHistory -> None;
+    async def loadWeekAdded -> None;
 
-    monday = mondayOf(localIso(new(Date)));
-    weekDays = [shiftDay(monday, i) for i in range(7)];
+    today = todayIso();
+    # The snapshot flags overdue by the server's UTC day; this is that day,
+    # so the page can tell which of its rows the snapshot already counted.
+    serverToday = new(Date).toISOString()[:10];
+    monday = mondayOf(today);
+    todayIdx = daysUntil(today, monday);
+    sunday = shiftDay(monday, 6);
     activeMembers = [
         m
         for m in members
@@ -165,917 +362,812 @@ def:pub OverviewPage -> JsxPage {
         if counts and len(counts.done_by_week) == 4
         else [0, 0, 0, 0];
     entrySpark = logs.by_week if logs and len(logs.by_week) == 4 else [0, 0, 0, 0];
-    doneWeekCount = doneSpark[3];
-    doneLastWeekCount = doneSpark[2];
-    entriesWeekCount = entrySpark[3];
-    entriesLastWeekCount = entrySpark[2];
-    dayCounts = logs.by_day
-        if logs and len(logs.by_day) == 7
-        else [0, 0, 0, 0, 0, 0, 0];
     openCount = counts.open if counts else 0;
-    overdueCount = counts.overdue if counts else 0;
-    blockedCount = counts.blocked if counts else 0;
-    # Per project over the whole history (server), and over the working set
-    # for the two states that only open work can be in.
-    projTotal: dict[str, int] = {};
-    projDone: dict[str, int] = {};
-    for tally in (counts.projects if counts else []) {
-        projTotal[tally.project_id] = tally.total;
-        projDone[tally.project_id] = tally.done;
+    # Early means nothing to count: no task and no log row in four weeks. The
+    # checklist then stands in for the body; later it joins the rail while no
+    # card has reached Done (loadAll reads the setup on the same rule).
+    doneEver = countAll(doneSpark);
+    for pt in (counts.projects if counts else []) {
+        doneEver = doneEver + pt.done;
     }
-    projBlocked: dict[str, int] = {};
-    projActive: dict[str, int] = {};
-    for tally in (counts.projects if counts else []) {
-        projBlocked[tally.project_id] = tally.blocked;
-        projActive[tally.project_id] = tally.active;
+    early = (True if counts else False)
+        and taskTotal == 0
+        and countAll(entrySpark) == 0;
+
+    # ---- Needs you: each task sits in the first group it qualifies for, and
+    # `flagged` collects the ids the snapshot's attention_total counts.
+    shown: list[str] = [];
+    flagged: list[str] = [];
+    overdueRows: list[dict[str, any]] = [];
+    blockedRows: list[dict[str, any]] = [];
+    earlyDue: list[dict[str, any]] = [];
+    byId: dict[str, TaskView] = {};
+    for t in attention {
+        byId[t.id] = t;
     }
-    # Per person, by member jid, over the whole history.
+    for t in dueRows {
+        byId[t.id] = t;
+    }
+    reviewOf: dict[str, dict[str, any]] = {};
+    for r in reviewQueue {
+        reviewOf[r["task_id"]] = r;
+    }
+    for t in attention {
+        flagged.append(t.id);
+        if t.status == "Blocked" {
+            shown.append(t.id);
+            info: dict[str, any] = blockedInfo[t.id] if t.id in blockedInfo else {};
+            since = blockedSince[t.id]
+                if t.id in blockedSince
+                else (info["since"] if "since" in info else t.updated_at[:10]);
+            blockedRows.append(
+                withBlocked(
+                    workRow(t.id, t.title, t.project_name, t.assignee_names, "", False),
+                    t.due_date,
+                    today,
+                    info,
+                    since
+                )
+            );
+        } elif t.due_date < today {
+            shown.append(t.id);
+            overdueRows.append(
+                withReview(dueRow(t, today), reviewOf[t.id], t)
+                    if t.id in reviewOf
+                    else dueRow(t, today)
+            );
+        } elif t.id not in reviewOf {
+            # Late by the server's day, due today by the viewer's. A review
+            # due today stays in Waiting on review.
+            shown.append(t.id);
+            earlyDue.append(dueRow(t, today));
+        }
+    }
+    # The snapshot's blocked list is complete; its attention page is not.
+    for b in blockedList {
+        bid = b["task_id"];
+        if bid not in flagged {
+            flagged.append(bid);
+        }
+        if bid in shown {
+            continue;
+        }
+        shown.append(bid);
+        held = byId[bid] if bid in byId else None;
+        blockedRows.append(
+            withBlocked(
+                workRow(
+                    bid, b["title"], b["project"], splitNames(b["assignees"]), "", False
+                ),
+                held.due_date if held else "",
+                today,
+                b,
+                blockedSince[bid] if bid in blockedSince else b["since"]
+            )
+        );
+    }
+    # Everything late past the attention page, most overdue first, before
+    # any other group can claim it.
+    overdueByProject: dict[str, int] = {};
+    for t in dueRows {
+        if t.status == "Done" or len(t.due_date) < 10 {
+            continue;
+        }
+        if t.due_date < serverToday and t.id not in flagged {
+            flagged.append(t.id);
+        }
+        if t.status == "Blocked" {
+            continue;
+        }
+        if t.due_date < today and t.project_id {
+            overdueByProject[t.project_id] = (
+                overdueByProject[t.project_id]
+                    if t.project_id in overdueByProject
+                    else 0
+            )
+                + 1;
+        }
+        if t.id not in shown and t.due_date < today {
+            shown.append(t.id);
+            overdueRows.append(
+                withReview(dueRow(t, today), reviewOf[t.id], t)
+                    if t.id in reviewOf
+                    else dueRow(t, today)
+            );
+        }
+    }
+    reviewRows: list[dict[str, any]] = [];
+    for r in reviewQueue {
+        if r["task_id"] in shown {
+            continue;
+        }
+        shown.append(r["task_id"]);
+        waited = r["waiting_days"];
+        # The review's own due date, else the task's; the reviewer's avatar,
+        # else whoever holds the card while it waits.
+        held = byId[r["task_id"]] if r["task_id"] in byId else None;
+        due = r["review_due"];
+        if len(due) < 10 and held {
+            due = held.due_date;
+        }
+        dated = len(due) >= 10;
+        reviewRow = withReview(
+            workRow(
+                r["task_id"],
+                r["title"],
+                r["project"],
+                held.assignee_names if held else [],
+                relDay(due, today)
+                    if dated
+                    else (
+                        "waiting " + plural(waited, "day", "days") if waited > 0 else ""
+                    ),
+                dated and due < today
+            ),
+            r,
+            held
+        );
+        # Soonest due first, undated last; the sort is stable, so ties keep
+        # the snapshot's longest wait first.
+        reviewRow["sortDue"] = due[:10] if dated else "9999-12-31";
+        reviewRows.append(reviewRow);
+    }
+    reviewRows.sort(key=lambda (x: dict[str, any]) { x["sortDue"]; });
+    weekDueRows: list[dict[str, any]] = earlyDue;
+    for t in dueRows {
+        if t.status == "Done"
+            or t.status == "Blocked"
+            or len(t.due_date) < 10
+            or t.id in shown
+            or t.due_date > sunday {
+            continue;
+        }
+        shown.append(t.id);
+        weekDueRows.append(dueRow(t, today));
+    }
+    # A page that ends inside this week may have left some due tasks out.
+    lastDue = dueRows[len(dueRows) - 1].due_date if len(dueRows) > 0 else "";
+    dueCut = dueHasMore and len(lastDue) >= 10 and lastDue <= sunday;
+    quietRows: list[dict[str, any]] = [];
+    for q in quiet {
+        if q["task_id"] in shown {
+            continue;
+        }
+        shown.append(q["task_id"]);
+        row = workRow(
+            q["task_id"],
+            q["title"],
+            q["project"],
+            splitNames(q["assignees"]),
+            plural(q["idle_days"], "day", "days") + " idle",
+            False
+        );
+        row["kind"] = STATUS_KIND[q["status"]]
+            if q["status"] in STATUS_KIND
+            else "active";
+        row["kindLabel"] = q["status"];
+        quietRows.append(row);
+    }
+    # Flagged tasks the page holds no row for: overdue past both reads.
+    hiddenAttention = attentionTotal - len(flagged);
+    if hiddenAttention < 0 {
+        hiddenAttention = 0;
+    }
+    groups: list[dict[str, any]] = [];
+    if len(overdueRows) > 0 or hiddenAttention > 0 {
+        groups.append(
+            {
+                "key": "overdue",
+                "label": "Overdue",
+                "glyph": "blocked",
+                "alarm": True,
+                "rows": overdueRows,
+                "more": hiddenAttention,
+                "moreLabel": "overdue "
+            }
+        );
+    }
+    if len(blockedRows) > 0 {
+        groups.append(
+            {
+                "key": "blocked",
+                "label": "Blocked",
+                "glyph": "blocked",
+                "alarm": True,
+                "rows": blockedRows,
+                "more": 0,
+                "moreLabel": "blocked "
+            }
+        );
+    }
+    if len(reviewRows) > 0 {
+        groups.append(
+            {
+                "key": "review",
+                "label": "Waiting on review",
+                "glyph": "handoff",
+                "alarm": False,
+                "rows": reviewRows,
+                "more": 0,
+                "moreLabel": "waiting on review "
+            }
+        );
+    }
+    if len(weekDueRows) > 0 {
+        groups.append(
+            {
+                "key": "due",
+                "label": "Due this week",
+                "glyph": "calendar",
+                "alarm": False,
+                "rows": weekDueRows,
+                "more": -1 if dueCut else 0,
+                "moreLabel": "due this week "
+            }
+        );
+    }
+    if len(quietRows) > 0 {
+        groups.append(
+            {
+                "key": "quiet",
+                "label": "Gone quiet",
+                "glyph": "quiet",
+                "alarm": False,
+                "rows": quietRows,
+                "more": 0,
+                "moreLabel": "gone quiet "
+            }
+        );
+    }
+    needsTotal = len(shown) + hiddenAttention;
+
+    # ---- This week: four figures and tasks that entered Done per day. Log
+    # counts come from the page's own week read once it lands, so every day
+    # on the page follows one rule; the snapshot's UTC days are the fallback.
+    useWeekLog = movesLoaded and not movesFailed and weekEntries >= 0;
+    figures = [
+        {"label": "moved to Done", "value": str(doneSpark[3])},
+        {
+            "label": "tasks added",
+            "value": str(weekAdded) if weekAdded >= 0 else ("-" if addedFailed else "…")
+        },
+        {
+            "label": "log entries",
+            "value": str(weekEntries)
+                if useWeekLog
+                else ("…" if not movesLoaded else str(entrySpark[3]))
+        },
+        {"label": "open tasks", "value": str(openCount)}
+    ];
+    anyDone = False;
+    for v in doneMoves {
+        if v > 0 {
+            anyDone = True;
+        }
+    }
+    for v in doneSpark {
+        if v > 0 {
+            anyDone = True;
+        }
+    }
+    dayRows: list[dict[str, any]] = [];
+    for i in range(7) {
+        if i < 5 or doneMoves[i] > 0 or todayIdx >= 5 {
+            dayRows.append(
+                {
+                    "name": DAY_NAMES[i],
+                    "label": DAY_LABELS[i],
+                    "value": doneMoves[i],
+                    "future": i > todayIdx,
+                    "today": i == todayIdx
+                }
+            );
+        }
+    }
+    chartState = "loading"
+        if not movesLoaded
+        else ("chart" if anyDone and not movesFailed else "none");
+    chartNote = "Tasks moved to Done per day. Days still ahead are outlined."
+        if chartState != "none"
+        else (
+            "The day chart could not load."
+                if movesFailed
+                else "Nothing has moved to Done in four weeks, so there is no day chart yet."
+        );
+
+    # ---- Projects and people.
+    projRows: list[dict[str, any]] = [];
+    for p in activeProjects {
+        pid = jid(p);
+        tally: dict[str, int] = {"total": 0, "done": 0, "blocked": 0};
+        for pt in (counts.projects if counts else []) {
+            if pt.project_id == pid {
+                tally = {"total": pt.total, "done": pt.done, "blocked": pt.blocked};
+            }
+        }
+        openN = tally["total"] - tally["done"];
+        alarm = tally["blocked"]
+            + (overdueByProject[pid] if pid in overdueByProject else 0);
+        if alarm > openN {
+            alarm = openN;
+        }
+        projRows.append(
+            {
+                "id": pid,
+                "name": p.name,
+                "done": tally["done"],
+                "open": openN - alarm,
+                "alarm": alarm,
+                "total": tally["total"]
+            }
+        );
+    }
     personOpen: dict[str, int] = {};
     personDone: dict[str, int] = {};
     for mt in (counts.members if counts else []) {
         personOpen[mt.member_id] = mt.open;
         personDone[mt.member_id] = mt.done_in_week;
     }
-    # Per person this week: a count per weekday and the total, by name.
-    personDays: dict[str, list[int]] = {};
-    personTotal: dict[str, int] = {};
-    for md in (logs.members if logs else []) {
-        personDays[md.name] = md.by_day;
-        personTotal[md.name] = md.total;
+    personDays: dict[str, list[int]] = weekPeople if useWeekLog else {};
+    if not useWeekLog {
+        for md in (logs.members if logs else []) {
+            personDays[md.name] = md.by_day;
+        }
     }
+    peopleRows = [
+        {
+            "id": m.id,
+            "name": m.name,
+            "color": m.color,
+            "open": personOpen[m.id] if m.id in personOpen else 0,
+            "done": personDone[m.id] if m.id in personDone else 0,
+            "byDay": personDays[m.name]
+                if m.name in personDays and len(personDays[m.name]) == 7
+                else [0, 0, 0, 0, 0, 0, 0],
+            "total": countAll(personDays[m.name]) if m.name in personDays else 0
+        } for m in activeMembers
+    ];
+
+    # Remember the panels' shape once every read has landed, for the next
+    # first-load frame. Placed after those locals: an effect's deps are read
+    # where it is called.
+    shapeReady = not loading and not failed and dueLoaded and movesLoaded;
+    groupRows: list[int] = [];
+    for g in groups {
+        groupRows.append(len(g["rows"]) if len(g["rows"]) < NEEDS_CAP else NEEDS_CAP);
+    }
+    shapeStamp = str(chartState == "chart")
+        + "|"
+        + ",".join([str(n) for n in groupRows])
+        + "|"
+        + str(len(activeProjects))
+        + "|"
+        + str(len(activeMembers));
+    useEffect(
+        lambda {
+            if shapeReady {
+                try {
+                    localStorage.setItem(
+                        OVERVIEW_SHAPE_KEY,
+                        JSON.stringify(
+                            {
+                                "chart": chartState == "chart",
+                                "groups": groupRows,
+                                "projects": len(activeProjects),
+                                "people": len(activeMembers)
+                            }
+                        )
+                    );
+                } except Exception as e {
+                    groupRows = groupRows;
+                }
+            }
+            return lambda { groupRows = groupRows; };
+        },
+        [shapeReady, shapeStamp]
+    );
+
+    # ---- First run: every item from state the page already read. A
+    # hand-written line this week ticks the log item (task events are log
+    # rows too), so a working team does not get it back each morning.
+    noPeople = len(activeMembers) == 0;
+    noProject = len(activeProjects) == 0;
+    logKnown = movesLoaded and not movesFailed;
+    loggedWeek = logKnown and handEntries > 0;
+    steps: list[dict[str, any]] = [];
+    steps.append(
+        {
+            "key": "flow",
+            "title": "Pick how work moves",
+            "detail": (
+                (templateName + " template, " if templateName else "")
+                + plural(stepCount, "step", "steps")
+                + ("." if templateName else " on your flow line.")
+            )
+                if stepCount > 0
+                else "Start from a template or draw your own steps.",
+            "done": stepCount > 0,
+            "action": "Redraw" if stepCount > 0 else "Pick a flow line",
+            "to": "/flowlines",
+            "primary": False
+        }
+    );
+    # CreateTask needs an active project, and the board sends a workspace
+    # without one to /setup, so the item asks for a project first.
+    steps.append(
+        {
+            "key": "task",
+            "title": "Add your first task",
+            "detail": "Tasks live in a project, so add one first."
+                if noProject and taskTotal == 0
+                else (
+                    ("It lands in " + firstStepName + ".")
+                        if firstStepName
+                        else "It lands in the first column of the board."
+                ),
+            "done": taskTotal > 0,
+            "action": "Add a project" if noProject else "New task",
+            "to": "/workspace?tab=projects" if noProject else "/board?new=1",
+            "primary": False
+        }
+    );
+    steps.append(
+        {
+            "key": "log",
+            "title": "Write today's first log line",
+            "detail": "Add a person first, then log what they worked on."
+                if noPeople and not loggedWeek
+                else (
+                    "Logged this week."
+                        if loggedWeek
+                        else "One sentence about what you worked on."
+                ),
+            "done": loggedWeek,
+            "action": "Add a person" if noPeople else "Open log",
+            "to": "/workspace?tab=people" if noPeople else "/log",
+            "primary": False
+        }
+    );
+    if ghConfigured {
+        steps.append(
+            {
+                "key": "github",
+                "title": "Connect GitHub",
+                "detail": ("Connected as @" + ghLogin + ".")
+                    if ghConnected and ghLogin
+                    else "Optional. Import issues and let a merged pull request move its card.",
+                "done": ghConnected,
+                "action": "" if ghConnected else "Connect",
+                "to": "/github",
+                "primary": False
+            }
+        );
+    }
+    requiredOpen = 0;
+    for s in steps {
+        if not s["done"] and s["key"] != "github" {
+            if requiredOpen == 0 {
+                s["primary"] = True;
+            }
+            requiredOpen = requiredOpen + 1;
+        }
+    }
+    # Past the early page the checklist is an extra rail panel, shown once
+    # both reads land (so no item flips on arrival) and only while a
+    # required item is open and no card has reached Done.
+    checklistReady = setupLoaded and movesLoaded;
+    railChecklist = not early
+        and doneEver == 0
+        and checklistReady
+        and logKnown
+        and requiredOpen > 0;
+    earlyNote = "Figures and charts appear once there is a task or a log line. Until then there is nothing to count, so nothing is shown.";
+
     histWeeks = history.weeks if history else [];
-    histLabels = [fmtDay(w) for w in histWeeks];
-    histAny = False;
-    for v in (history.scope if history else []) {
-        if v > 0 {
-            histAny = True;
-        }
+    histLabels = [prettyDay(w) for w in histWeeks];
+    histAny = countAll(history.scope if history else []) > 0;
+    histFinished = countAll(history.finished if history else []) > 0;
+    # Layout follows the width the page is given (Ask docks beside it at
+    # 1280px), not the viewport: two zones from 52rem, and from 90rem (what
+    # 2xl gives the page without Ask) three columns: Needs you, the week, People.
+    # People keeps 37rem so its own 36rem column query holds behind the border.
+    shape = cachedShape();
+    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(37rem,5fr)]";
+
+    # The charts section, in both the first-load frame and the loaded page,
+    # so its heading and selects sit in the same place from the first paint;
+    # `history` is None until the first read lands and draws the chart boxes.
+    def overTime -> JsxElement {
+        return
+            <section
+                className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2 @min-[90rem]:col-span-3"
+                aria-labelledby="over-time"
+            >
+                <div className="flex flex-wrap items-center gap-2">
+                    <h2 id="over-time" className="section-title mr-auto max-sm:w-full">
+                        Over time
+                    </h2>
+                    <Busy active={historyLoading and bool(history)}/>
+                    <Select
+                        value={historyProject}
+                        onValueChange={lambda (v: str) { historyProject = v; }}
+                    >
+                        <SelectTrigger
+                            className="h-8 w-44 max-sm:w-auto max-sm:flex-1"
+                            size="sm"
+                            aria-label="Chart project"
+                        >
+                            <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All projects</SelectItem>
+                            {for p in activeProjects {
+                                <SelectItem key={jid(p)} value={jid(p)}>
+                                    {p.name}
+                                </SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={historyWeeks}
+                        onValueChange={lambda (v: str) { historyWeeks = v; }}
+                    >
+                        <SelectTrigger
+                            className="h-8 w-40 max-sm:w-auto max-sm:flex-1"
+                            size="sm"
+                            aria-label="Chart range"
+                        >
+                            <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {for r in HISTORY_RANGES {
+                                <SelectItem key={r[0]} value={r[0]}>{r[1]}</SelectItem>
+                            }}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {if historyFailed and not history {
+                    <LoadFailed
+                        key="hfail"
+                        title="Could not load the charts"
+                        onRetry={loadHistory}
+                    />
+                } elif not history {
+                    <div key="hsk" className="grid gap-4 @min-[52rem]:grid-cols-2">
+                        <Skeleton className="h-64 w-full"/>
+                        <Skeleton className="h-64 w-full"/>
+                    </div>
+                } elif not histAny {
+                    <p
+                        key="hempty"
+                        className="surface px-3.5 py-6 text-[13.5px] text-muted-foreground"
+                    >
+                        No tasks in this range yet.
+                    </p>
+                } else {
+                    <div key="hcharts" className="space-y-3" aria-busy={historyLoading}>
+                        <div
+                            className="grid gap-4 @min-[52rem]:grid-cols-2 @min-[52rem]:items-start"
+                        >
+                            <BurnUpChart
+                                labels={histLabels}
+                                scope={history.scope}
+                                done={history.done}
+                            />
+                            {if histFinished {
+                                <ThroughputChart
+                                    key="tp"
+                                    labels={histLabels}
+                                    finished={history.finished}
+                                    added={history.added}
+                                />
+                            } else {
+                                <section
+                                    key="tpnone"
+                                    className="surface min-w-0 px-3.5 pt-3 pb-4"
+                                    aria-label="Throughput"
+                                >
+                                    <h3 className="section-title text-[15px]">
+                                        Throughput
+                                    </h3>
+                                    <p
+                                        className="mt-1.5 text-[13.5px] text-muted-foreground"
+                                    >
+                                        Nothing moved to Done in these weeks, so there are no bars to draw.
+                                    </p>
+                                </section>
+                            } }
+                        </div>
+                        <details className="text-[13px]">
+                            <summary
+                                className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
+                            >
+                                View as table
+                            </summary>
+                            <div className="surface mt-2 overflow-x-auto">
+                                <table className="data-table w-full">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-left">Week of</th>
+                                            <th className="text-right!">Added</th>
+                                            <th className="text-right!">Done</th>
+                                            <th className="text-right!">Scope</th>
+                                            <th className="text-right!">Done total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {for (i, w) in enumerate(histWeeks) {
+                                            <tr key={w}>
+                                                <td className="num">{histLabels[i]}</td>
+                                                <td className="num text-right">
+                                                    {str(history.added[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.finished[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.scope[i])}
+                                                </td>
+                                                <td className="num text-right">
+                                                    {str(history.done[i])}
+                                                </td>
+                                            </tr>
+                                        }}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+                    </div>
+                }   }
+            </section>;
     }
-    today = todayIso();
-    # NOTE: max(list) compiles to JS Math.max(array) which is NaN; loop instead.
-    maxDay = 1;
-    for c in dayCounts {
-        if c > maxDay {
-            maxDay = c;
-        }
+
+    def loadFrame -> JsxElement {
+        return
+            <div key="sk" className={zones} aria-busy="true">
+                <div className="min-w-0 @max-[52rem]:order-1">
+                    <NeedsYou
+                        groups={[]}
+                        total={0}
+                        placeholder={True}
+                        placeholderRows={shape["groups"]}
+                    />
+                </div>
+                <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
+                    <div className="min-w-0 @max-[52rem]:order-3">
+                        <ThisWeek
+                            figures={[]}
+                            days={[]}
+                            placeholder={True}
+                            placeholderChart={shape["chart"]}
+                        />
+                    </div>
+                    <div className="min-w-0 @max-[52rem]:order-4">
+                        <ProjectBars
+                            rows={[]}
+                            placeholder={True}
+                            placeholderRows={shape["projects"]}
+                        />
+                    </div>
+                </div>
+                <div
+                    className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
+                >
+                    <PeopleTable
+                        rows={[]}
+                        dayNames={DAY_LABELS}
+                        todayIndex={todayIdx}
+                        placeholder={True}
+                        placeholderRows={shape["people"]}
+                    />
+                </div>
+                {overTime()}
+            </div>;
     }
 
     return
-        <div className="space-y-8">
-            <div className="anim-fade-up">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <h1 className="page-title">Overview</h1>
-                    <span
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
-                    >
-                        <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M8 2v4"/>
-                            <path d="M16 2v4"/>
-                            <rect width={18} height={18} x={3} y={4} rx={2}/>
-                            <path d="M3 10h18"/>
-                        </svg>
-                        {fmtDay(monday) + " – " + fmtDay(weekDays[6])}
-                    </span>
-                </div>
-                <p className="page-subtitle">
-                    Where the work stands across projects and people.
-                    {if not loading and not failed {
-                        <span key="counts" className="text-muted-foreground/70">
-                            {" · "
-                                + str(len(activeMembers))
-                                + (" person" if len(activeMembers) == 1 else " people")
-                                + " · "
-                                + str(len(activeProjects))
-                                + (
-                                    " project"
-                                        if len(activeProjects) == 1
-                                        else " projects"
-                                )}
-                        </span>
-                    }}
-                </p>
+        <div className="@container space-y-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h1 className="page-title">Overview</h1>
+                <span className="num text-[12.5px] text-subtle">
+                    {"Week of " + prettyDay(monday)}
+                </span>
             </div>
-            {if loading {
-                <div key="sk" className="space-y-8">
-                    <div
-                        className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
-                    >
-                        {for i in range(5) {
-                            <Card key={str(i)} className="gap-0 py-4">
-                                <CardContent className="px-4">
-                                    <Skeleton className="h-3 w-16"/>
-                                    <Skeleton className="mt-2 h-8 w-12"/>
-                                    <Skeleton className="mt-2 h-3 w-14"/>
-                                </CardContent>
-                            </Card>
+            <Reveal ready={not loading} frame={loadFrame()}>
+                {if failed {
+                    <LoadFailed
+                        key="failed"
+                        title="Could not load the overview"
+                        onRetry={lambda {
+                            loadAll();
+                            if dueFailed {
+                                loadDue();
+                            }
+                            if movesFailed {
+                                loadMoves();
+                            }
+                            if historyFailed {
+                                loadHistory();
+                            }
                         }}
-                    </div>
-                    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-                        <Card>
-                            <CardHeader>
-                                <Skeleton className="h-4 w-36"/>
-                                <Skeleton className="h-3 w-44"/>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex h-40 items-end gap-3">
-                                    {for i in range(7) {
-                                        <div
-                                            key={DAY_LABELS[i]}
-                                            className="flex h-full flex-1 flex-col items-center justify-end gap-1"
-                                        >
-                                            <Skeleton
-                                                className={"w-full " + SK_BARS[i]}
-                                            />
-                                            <Skeleton className="h-3 w-6"/>
-                                        </div>
-                                    }}
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <Skeleton className="h-4 w-32"/>
-                                <Skeleton className="h-3 w-52"/>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {for i in range(3) {
-                                    <div key={str(i)} className="space-y-1.5">
-                                        <div
-                                            className="flex items-center justify-between"
-                                        >
-                                            <Skeleton className="h-4 w-28"/>
-                                            <Skeleton className="h-3 w-16"/>
-                                        </div>
-                                        <Skeleton
-                                            className="h-2.5 w-full rounded-full"
-                                        />
-                                    </div>
-                                }}
-                            </CardContent>
-                        </Card>
-                    </div>
-                    <Card>
-                        <CardHeader>
-                            <Skeleton className="h-4 w-20"/>
-                            <Skeleton className="h-3 w-56"/>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {for i in range(3) {
-                                <div key={str(i)} className="flex items-center gap-3">
-                                    <Skeleton
-                                        className="h-8 w-8 shrink-0 rounded-full"
-                                    />
-                                    <div className="w-40 space-y-1.5">
-                                        <Skeleton className="h-4 w-24"/>
-                                        <Skeleton className="h-3 w-32"/>
-                                    </div>
-                                    <Skeleton className="h-2.5 flex-1 rounded-full"/>
-                                    <Skeleton className="h-3 w-14 shrink-0"/>
-                                </div>
-                            }}
-                        </CardContent>
-                    </Card>
-                </div>
-            } elif failed {
-                <LoadFailed
-                    key="failed"
-                    title="Could not load the overview"
-                    onRetry={loadAll}
-                />
-            } else {
-                <div key="body" className="space-y-8">
-                    <div
-                        className="anim-fade-up anim-d1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
-                    >
-                        <StatTile label="Open" value={str(openCount)}/>
-                        <StatTile
-                            label="Done this week"
-                            value={str(doneWeekCount)}
-                            accent="text-success"
-                            delta={doneWeekCount - doneLastWeekCount}
-                            showDelta={True}
-                            spark={doneSpark}
-                        />
-                        <StatTile
-                            label="Overdue"
-                            value={str(overdueCount)}
-                            accent={"text-destructive" if overdueCount > 0 else ""}
-                            hint={"all clear"
-                                if overdueCount == 0
-                                else "past due, still open"}
-                        />
-                        <StatTile
-                            label="Blocked"
-                            value={str(blockedCount)}
-                            accent={"text-destructive" if blockedCount > 0 else ""}
-                            hint={"all clear"
-                                if blockedCount == 0
-                                else "needs a decision"}
-                        />
-                        <StatTile
-                            label="Log entries"
-                            value={str(entriesWeekCount)}
-                            delta={entriesWeekCount - entriesLastWeekCount}
-                            showDelta={True}
-                            spark={entrySpark}
-                        />
-                    </div>
-                    <Card className="anim-fade-up anim-d2">
-                        <CardHeader>
-                            <CardTitle className="text-base">Needs attention</CardTitle>
-                            <CardDescription>
-                                Blocked and overdue work, most urgent first. Open a row to work on it.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-1">
-                            {for t in attention {
-                                <Link
-                                    key={t.id}
-                                    to={"/board?task=" + t.id}
-                                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
-                                >
-                                    <span
-                                        className={"shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide "
-                                            + ("bg-destructive/10 text-destructive")}
-                                    >
-                                        {"Blocked"
-                                            if t.status == "Blocked"
-                                            else "Overdue"}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                        <span
-                                            className="block truncate text-sm font-medium"
-                                        >
-                                            {t.title}
-                                        </span>
-                                        {if t.status == "Blocked"
-                                            and t.id in blockedInfo
-                                            and len(blockedInfo[t.id]["reason"]) > 0 {
-                                            <span
-                                                key="why"
-                                                className="block truncate text-xs text-muted-foreground"
-                                            >
-                                                {blockedInfo[t.id]["reason"]}
-                                            </span>
-                                        }}
-                                    </span>
-                                    {if len(t.assignee_names) > 0 {
-                                        <AvatarStack
-                                            key="who"
-                                            names={t.assignee_names}
-                                        />
-                                    }}
-                                    <span
-                                        className="hidden shrink-0 text-xs text-muted-foreground sm:inline"
-                                    >
-                                        {(t.project_name + " · ")
-                                            if t.project_name
-                                            else ""}{(
-                                            ("since " + prettyDay(t.updated_at[:10]))
-                                                if t.status == "Blocked"
-                                                    and len(t.updated_at) >= 10
-                                                else dueLabel(
-                                                    t.due_date, t.status, today
-                                                )
-                                        )}
-                                    </span>
-                                </Link>
-                            }}
-                            {if attentionTotal > len(attention) {
-                                <Link
-                                    key="more"
-                                    to="/board"
-                                    className="block px-2 pt-2 text-xs font-medium text-primary hover:underline"
-                                >
-                                    {"+"
-                                        + str(attentionTotal - len(attention))
-                                        + " more on the board"}
-                                </Link>
-                            }}
-                            {if len(attention) == 0 {
-                                <div
-                                    key="clear"
-                                    className="flex items-center gap-2 px-2 py-3 text-sm text-success"
-                                >
-                                    <svg
-                                        width={16}
-                                        height={16}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        aria-hidden="true"
-                                    >
-                                        <circle cx={12} cy={12} r={10}/>
-                                        <path d="m9 12 2 2 4-4"/>
-                                    </svg>
-                                    Nothing needs attention. Nothing is blocked or past due.
-                                </div>
-                            }}
-                        </CardContent>
-                    </Card>
-                    <div
-                        className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
-                    >
-                        <ReviewQueueCard rows={reviewQueue}/>
-                        <GoneQuietCard rows={quiet}/>
-                    </div>
-                    <div
-                        className="anim-fade-up anim-d2 grid gap-6 lg:grid-cols-2 lg:items-start"
-                    >
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">
-                                    Activity this week
-                                </CardTitle>
-                                <CardDescription>
-                                    Log entries per weekday.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex h-40 items-end gap-3">
-                                    {for i in range(7) {
-                                        <div
-                                            key={DAY_LABELS[i]}
-                                            className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
-                                            title={DAY_LABELS[i]
-                                                + ": "
-                                                + str(dayCounts[i])
-                                                + " entries"}
-                                        >
-                                            <span
-                                                className={"h-4 text-xs tabular-nums "
-                                                    + (
-                                                        "text-muted-foreground"
-                                                            if dayCounts[i] > 0
-                                                            else "text-muted-foreground/70 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                                                    )}
-                                            >
-                                                {str(dayCounts[i])}
-                                            </span>
-                                            <div
-                                                className="w-full rounded-t-sm transition-[height] duration-500 ease-out"
-                                                style={{
-                                                    "height": scaled(
-                                                        dayCounts[i], maxDay, 85
-                                                    )
-                                                        if dayCounts[i] > 0
-                                                        else "2px",
-                                                    "background": "var(--primary)"
-                                                        if dayCounts[i] > 0
-                                                        else "var(--border)"
-                                                }}
-                                            />
-                                            <span
-                                                className="text-xs font-medium text-muted-foreground"
-                                            >
-                                                {DAY_LABELS[i]}
-                                            </span>
-                                        </div>
-                                    }}
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">
-                                    Project progress
-                                </CardTitle>
-                                <CardDescription
-                                    className="flex flex-wrap items-center gap-3"
-                                >
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <span
-                                            className="h-2 w-2 rounded-full"
-                                            style={{"background": "var(--success)"}}
-                                        />{" "}
-                                        Done
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <span
-                                            className="h-2 w-2 rounded-full"
-                                            style={{"background": "var(--primary)"}}
-                                        />{" "}
-                                        Active
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <span
-                                            className="h-2 w-2 rounded-full"
-                                            style={{"background": "var(--chart-4)"}}
-                                        />{" "}
-                                        Backlog
-                                    </span>
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {for p in activeProjects {
-                                    <div key={jid(p)} className="space-y-1.5">
-                                        <div
-                                            className="flex items-center justify-between gap-2 text-sm"
-                                        >
-                                            <span className="truncate font-medium">
-                                                {p.name}
-                                            </span>
-                                            <span
-                                                className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground"
-                                            >
-                                                <span>
-                                                    {str(
-                                                        (
-                                                            projDone[jid(p)]
-                                                                if jid(p) in projDone
-                                                                else 0
-                                                        )
-                                                    )}/{str(
-                                                        (
-                                                            projTotal[jid(p)]
-                                                                if jid(p) in projTotal
-                                                                else 0
-                                                        )
-                                                    )} done
-                                                </span>
-                                                {if (
-                                                    projBlocked[jid(p)]
-                                                        if jid(p) in projBlocked
-                                                        else 0
-                                                )
-                                                    > 0 {
-                                                    <Badge
-                                                        key="blocked"
-                                                        variant="destructive"
-                                                    >
-                                                        {(
-                                                            projBlocked[jid(p)]
-                                                                if jid(p) in projBlocked
-                                                                else 0
-                                                        )} blocked
-                                                    </Badge>
-                                                }}
-                                            </span>
-                                        </div>
-                                        <div
-                                            className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted"
-                                            title={p.name}
-                                        >
-                                            {if (
-                                                projDone[jid(p)]
-                                                    if jid(p) in projDone
-                                                    else 0
-                                            )
-                                                > 0 {
-                                                <div
-                                                    key="done"
-                                                    className="transition-[width] duration-500 ease-out"
-                                                    style={{
-                                                        "width": pct(
-                                                            (
-                                                                projDone[jid(p)]
-                                                                    if jid(p)
-                                                                        in projDone
-                                                                    else 0
-                                                            ),
-                                                            (
-                                                                projTotal[jid(p)]
-                                                                    if jid(p)
-                                                                        in projTotal
-                                                                    else 0
-                                                            )
-                                                        ),
-                                                        "background": "var(--success)"
-                                                    }}
-                                                />
-                                            }}
-                                            {if (
-                                                projActive[jid(p)]
-                                                    if jid(p) in projActive
-                                                    else 0
-                                            )
-                                                > 0 {
-                                                <div
-                                                    key="active"
-                                                    className="transition-[width] duration-500 ease-out"
-                                                    style={{
-                                                        "width": pct(
-                                                            (
-                                                                projActive[jid(p)]
-                                                                    if jid(p)
-                                                                        in projActive
-                                                                    else 0
-                                                            ),
-                                                            (
-                                                                projTotal[jid(p)]
-                                                                    if jid(p)
-                                                                        in projTotal
-                                                                    else 0
-                                                            )
-                                                        ),
-                                                        "background": "var(--primary)"
-                                                    }}
-                                                />
-                                            }}
-                                        </div>
-                                    </div>
-                                }}
-                                {if len(activeProjects) == 0 {
-                                    <div key="none" className="py-10 text-center">
-                                        <svg
-                                            className="mx-auto text-muted-foreground/50"
-                                            width={28}
-                                            height={28}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <path
-                                                d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
-                                            />
-                                        </svg>
-                                        <p className="mt-3 text-sm font-semibold">
-                                            No projects yet
-                                        </p>
-                                        <p
-                                            className="mt-1 text-sm text-muted-foreground"
-                                        >
-                                            Progress lands here once a project has tasks.
-                                        </p>
-                                        <Link
-                                            to="/workspace"
-                                            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                                        >
-                                            Add a project
-                                            <svg
-                                                width={14}
-                                                height={14}
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            >
-                                                <path d="M5 12h14"/>
-                                                <path d="m12 5 7 7-7 7"/>
-                                            </svg>
-                                        </Link>
-                                    </div>
-                                }}
-                            </CardContent>
-                        </Card>
-                    </div>
-                    <section className="space-y-4" aria-labelledby="over-time">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h2
-                                id="over-time"
-                                className="mr-auto font-display text-lg font-semibold tracking-tight"
-                            >
-                                Over time
-                            </h2>
-                            <Select
-                                value={historyProject}
-                                onValueChange={lambda (v: str) { historyProject = v; }}
-                            >
-                                <SelectTrigger
-                                    className="h-8 w-44"
-                                    size="sm"
-                                    aria-label="Chart project"
-                                >
-                                    <SelectValue/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All projects</SelectItem>
-                                    {for p in activeProjects {
-                                        <SelectItem key={jid(p)} value={jid(p)}>
-                                            {p.name}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={historyWeeks}
-                                onValueChange={lambda (v: str) { historyWeeks = v; }}
-                            >
-                                <SelectTrigger
-                                    className="h-8 w-40"
-                                    size="sm"
-                                    aria-label="Chart range"
-                                >
-                                    <SelectValue/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {for r in HISTORY_RANGES {
-                                        <SelectItem key={r[0]} value={r[0]}>
-                                            {r[1]}
-                                        </SelectItem>
-                                    }}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {if historyFailed and not history {
-                            <LoadFailed
-                                key="hfail"
-                                title="Could not load the charts"
-                                onRetry={loadHistory}
+                    />
+                } elif early {
+                    <div key="first" className={zones}>
+                        {if checklistReady {
+                            <FirstRun
+                                key="list"
+                                title={"Get "
+                                    + (orgName or "your workspace")
+                                    + " moving"}
+                                items={steps}
                             />
-                        } elif not history {
-                            <div key="hsk" className="grid gap-6 lg:grid-cols-2">
-                                <Skeleton className="h-72 w-full rounded-xl"/>
-                                <Skeleton className="h-72 w-full rounded-xl"/>
-                            </div>
-                        } elif not histAny {
-                            <Card key="hempty">
-                                <CardContent
-                                    className="py-10 text-center text-sm text-muted-foreground"
-                                >
-                                    No tasks in this range yet.
-                                </CardContent>
-                            </Card>
                         } else {
-                            <div
-                                key="hcharts"
-                                className={"space-y-3 transition-opacity "
-                                    + ("opacity-60" if historyLoading else "")}
-                            >
-                                <div
-                                    className="grid gap-6 lg:grid-cols-2 lg:items-start"
-                                >
-                                    <BurnUpChart
-                                        labels={histLabels}
-                                        scope={history.scope}
-                                        done={history.done}
-                                    />
-                                    <ThroughputChart
-                                        labels={histLabels}
-                                        finished={history.finished}
-                                        added={history.added}
-                                    />
-                                </div>
-                                <details className="group rounded-lg text-sm">
-                                    <summary
-                                        className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
-                                    >
-                                        View as table
-                                    </summary>
-                                    <div
-                                        className="mt-2 overflow-x-auto rounded-lg border bg-card"
-                                    >
-                                        <table className="w-full text-sm tabular-nums">
-                                            <thead>
-                                                <tr
-                                                    className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"
-                                                >
-                                                    <th
-                                                        className="px-3 py-2 font-medium"
-                                                    >
-                                                        Week of
-                                                    </th>
-                                                    <th
-                                                        className="px-3 py-2 text-right font-medium"
-                                                    >
-                                                        Added
-                                                    </th>
-                                                    <th
-                                                        className="px-3 py-2 text-right font-medium"
-                                                    >
-                                                        Done
-                                                    </th>
-                                                    <th
-                                                        className="px-3 py-2 text-right font-medium"
-                                                    >
-                                                        Scope
-                                                    </th>
-                                                    <th
-                                                        className="px-3 py-2 text-right font-medium"
-                                                    >
-                                                        Done total
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {for (i, w) in enumerate(histWeeks) {
-                                                    <tr
-                                                        key={w}
-                                                        className="border-b last:border-0"
-                                                    >
-                                                        <td className="px-3 py-1.5">
-                                                            {histLabels[i]}
-                                                        </td>
-                                                        <td
-                                                            className="px-3 py-1.5 text-right"
-                                                        >
-                                                            {str(history.added[i])}
-                                                        </td>
-                                                        <td
-                                                            className="px-3 py-1.5 text-right"
-                                                        >
-                                                            {str(history.finished[i])}
-                                                        </td>
-                                                        <td
-                                                            className="px-3 py-1.5 text-right"
-                                                        >
-                                                            {str(history.scope[i])}
-                                                        </td>
-                                                        <td
-                                                            className="px-3 py-1.5 text-right"
-                                                        >
-                                                            {str(history.done[i])}
-                                                        </td>
-                                                    </tr>
-                                                }}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </details>
+                            <div key="listsk" className="surface space-y-3 p-3.5">
+                                <Skeleton className="h-4 w-48"/>
+                                {for i in range(4) {
+                                    <Skeleton key={str(i)} className="h-10 w-full"/>
+                                }}
                             </div>
-                        }   }
-                    </section>
-                    <Card className="anim-fade-up anim-d3">
-                        <CardHeader>
-                            <CardTitle className="text-base">People</CardTitle>
-                            <CardDescription>
-                                Open work and this week's logged activity per person.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {for m in activeMembers {
+                        } }
+                        <div key="note" className="min-w-0 @min-[90rem]:col-span-2">
+                            <ThisWeek figures={[]} days={[]} note={earlyNote}/>
+                        </div>
+                    </div>
+                } else {
+                    <div key="body" className={zones + ""}>
+                        <div className="min-w-0 @max-[52rem]:order-1">
+                            <NeedsYou
+                                groups={groups}
+                                total={needsTotal}
+                                totalPlus={dueCut}
+                                pending={not dueLoaded}
+                                failNote={"Could not check what is due this week."
+                                    if dueFailed
+                                    else ""}
+                                onRetry={loadDue}
+                            />
+                        </div>
+                        <div
+                            className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents"
+                        >
+                            {if railChecklist {
                                 <div
-                                    key={m.id}
-                                    className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+                                    key="list"
+                                    className="min-w-0 @max-[52rem]:order-2"
                                 >
-                                    <div
-                                        className="flex min-w-0 items-center gap-3 sm:w-52 sm:shrink-0"
-                                    >
-                                        <Avatar
-                                            name={m.name}
-                                            size="md"
-                                            color={m.color}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div
-                                                className="truncate text-sm font-medium"
-                                            >
-                                                {m.name}
-                                            </div>
-                                            <div
-                                                className="text-xs tabular-nums text-muted-foreground"
-                                            >
-                                                {str(
-                                                    personOpen[m.id]
-                                                        if m.id in personOpen
-                                                        else 0
-                                                )} open ·{" "
-                                                    + str(
-                                                        personDone[m.id]
-                                                            if m.id in personDone
-                                                            else 0
-                                                    )} done this week
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div
-                                        className="flex w-full flex-1 items-center justify-end gap-3"
-                                    >
-                                        <span
-                                            className="inline-grid grid-cols-7 gap-1"
-                                            role="img"
-                                            aria-label={m.name
-                                                + ": logged on "
-                                                + str(
-                                                    len(
-                                                        [
-                                                            c
-                                                            for c in (
-                                                                personDays[m.name]
-                                                                    if m.name
-                                                                        in personDays
-                                                                    else []
-                                                            )
-                                                            if c > 0
-                                                        ]
-                                                    )
-                                                )
-                                                + " of 7 days"}
-                                        >
-                                            {for (di, d) in enumerate(weekDays) {
-                                                <span
-                                                    key={d}
-                                                    title={DAY_LABELS[di]
-                                                        + ": "
-                                                        + str(
-                                                            (
-                                                                personDays[m.name][di]
-                                                                    if m.name
-                                                                        in personDays
-                                                                    else 0
-                                                            )
-                                                        )
-                                                        + " entries"}
-                                                    className={"h-3.5 w-3.5 rounded-[4px] "
-                                                        + (
-                                                            "bg-primary"
-                                                                if (
-                                                                    personDays[m.name][
-                                                                        di
-                                                                    ]
-                                                                        if m.name
-                                                                            in personDays
-                                                                        else 0
-                                                                )
-                                                                    > 0
-                                                                else "bg-muted"
-                                                        )
-                                                        + (
-                                                            " ring-1 ring-foreground/60 ring-offset-1 ring-offset-card"
-                                                                if d == today
-                                                                else ""
-                                                        )}
-                                                />
-                                            }}
-                                        </span>
-                                        <span
-                                            className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
-                                        >
-                                            {str(
-                                                (
-                                                    personTotal[m.name]
-                                                        if m.name in personTotal
-                                                        else 0
-                                                )
-                                            )}{" entry"
-                                                if (
-                                                    personTotal[m.name]
-                                                        if m.name in personTotal
-                                                        else 0
-                                                )
-                                                    == 1
-                                                else " entries"}
-                                        </span>
-                                    </div>
+                                    <FirstRun
+                                        title={"Get "
+                                            + (orgName or "your workspace")
+                                            + " moving"}
+                                        items={steps}
+                                    />
                                 </div>
                             }}
-                            {if len(activeMembers) == 0 {
-                                <div key="none" className="py-10 text-center">
-                                    <svg
-                                        className="mx-auto text-muted-foreground/50"
-                                        width={28}
-                                        height={28}
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path
-                                            d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
-                                        />
-                                        <circle cx={9} cy={7} r={4}/>
-                                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                                    </svg>
-                                    <p className="mt-3 text-sm font-semibold">
-                                        No members yet
-                                    </p>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Invite your team so activity shows up here.
-                                    </p>
-                                    <Link
-                                        to="/workspace"
-                                        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                                    >
-                                        Invite people
-                                        <svg
-                                            width={14}
-                                            height={14}
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <path d="M5 12h14"/>
-                                            <path d="m12 5 7 7-7 7"/>
-                                        </svg>
-                                    </Link>
-                                </div>
-                            }}
-                        </CardContent>
-                    </Card>
-                </div>
-            }  }
+                            <div className="min-w-0 @max-[52rem]:order-3">
+                                <ThisWeek
+                                    figures={figures}
+                                    days={dayRows}
+                                    chartState={chartState}
+                                    chartNote={chartNote}
+                                    onRetry={loadMoves if movesFailed else None}
+                                />
+                            </div>
+                            <div className="min-w-0 @max-[52rem]:order-4">
+                                <ProjectBars rows={projRows}/>
+                            </div>
+                        </div>
+                        <div
+                            className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
+                        >
+                            <PeopleTable
+                                rows={peopleRows}
+                                dayNames={DAY_LABELS}
+                                todayIndex={todayIdx}
+                            />
+                        </div>
+                        {overTime()}
+                    </div>
+                }  }
+            </Reveal>
         </div>;
 }

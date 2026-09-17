@@ -1,9 +1,21 @@
-"""flowline - Projects page: create, rename, archive."""
+"""flowline - Projects section of the workspace: create, rename, link a repo,
+archive. Open counts come from TaskCounts (total minus done), so a row says how
+much work is still standing without loading a single task.
+"""
 
-import from ...models { Project, RepoView }
+import from ...models { Project, RepoView, MemberView, TaskTotals }
 import from ...services.projects.projects { ListProjects, SaveProject, ArchiveProject }
 import from ...services.roster.roster { ListRepos, AddRepo, RemoveRepo }
+import from ...services.tasks.tasks { TaskCounts }
 import from ...components.projects.ProjectTable { ProjectTable }
+import from ...components.projects.ProjectDialog { ProjectDialog }
+import from ...components.ui.button { Button }
+import from ...components.ui.skeleton { Skeleton }
+import from ..common.Reveal { Reveal }
+import from .SectionHeader { SectionHeader }
+import from .ConfirmDialog { ConfirmDialog }
+import from .icons { IconPlus }
+import from "sonner" { toast }
 
 def normalizeRepoInput(raw: str) -> str {
     cleaned = raw.strip();
@@ -26,96 +38,105 @@ def normalizeRepoInput(raw: str) -> str {
     return cleaned;
 }
 
-import from ...components.projects.ProjectDialog { ProjectDialog }
-import from ...components.ui.button { Button }
-import from ...components.ui.skeleton { Skeleton }
-import from "sonner" { toast }
-import from "react" { useEffect }
-
-def:pub ProjectsSection(openNonce: int = 0) -> JsxElement {
+def:pub ProjectsSection(
+    members: list[MemberView] = [], onChanged: Callable[[], None] = None
+) -> JsxElement {
     has projects: list[Project] = [],
         repos: list[RepoView] = [],
+        openCounts: dict[str, int] = {},
+        # len() on a dict is `.length` in the browser, which is undefined, so
+        # the "counts have arrived" flag is its own bool.
+        countsReady: bool = False,
         loading: bool = True,
         dialogOpen: bool = False,
         editingId: str = "",
         fName: str = "",
         fDescription: str = "",
         fRepoDraft: str = "",
-        saving: bool = False,
-        handled: Ref[any] = Ref();
+        archiveId: str = "",
+        archiveName: str = "",
+        busy: bool = False,
+        saving: bool = False;
 
     async can with entry {
         loadProjects();
     }
 
     async def loadProjects -> None;
+    async def loadCounts -> None;
     async def removeRepo(repoId: str) -> None;
     async def saveProject -> None;
-    async def archiveProject(projectId: str) -> None;
+    async def archiveProject -> None;
     def openCreate -> None;
     def openEdit(p: Project) -> None;
-
-    # The page header owns this tab's primary action and signals it by bumping
-    # a counter. Switching tabs UNMOUNTS this panel, so the effect re-runs on
-    # remount; `handled` stores (nonce + 1) so a fresh ref reads as 0 and a
-    # remount records the current value instead of firing the action again.
-    if not handled.current {
-        handled.current = openNonce + 1;
-    }
-
-    useEffect(
-        lambda { if openNonce + 1 != handled.current {
-            handled.current = openNonce + 1;
-            openCreate();
-        }},
-        [openNonce]
-    );
+    def askArchive(p: Project) -> None;
 
     active = [
         p
         for p in projects
         if p.active
     ];
+    # The GitHub sync never checks `active`, so an archived project with a
+    # linked repository still receives issues; the confirm says so.
+    linkedRepos: list[str] = [];
+    autoRepos: list[str] = [];
+    for r in repos {
+        if archiveId and r.project_id == archiveId {
+            linkedRepos.append(r.full_name);
+            if r.auto_sync {
+                autoRepos.append(r.full_name);
+            }
+        }
+    }
+    archiveBody = "It leaves the project pickers, so no one can pick it for a new task. Its tasks, log entries and repositories keep pointing at it.";
+    if len(autoRepos) > 0 {
+        archiveBody = archiveBody
+            + " Import issues is on for "
+            + ", ".join(autoRepos)
+            + ", so GitHub keeps adding new issues to it until you turn that off.";
+    } elif len(linkedRepos) > 0 {
+        archiveBody = archiveBody
+            + " Issues you import from "
+            + ", ".join(linkedRepos)
+            + " still land in it.";
+    }
+
+    def loadFrame -> JsxElement {
+        return
+            <ProjectTable
+                projects={[]}
+                repos={[]}
+                members={[]}
+                openCounts={{}}
+                countsReady={False}
+                onEdit={openEdit}
+                onArchive={askArchive}
+                placeholder={3}
+            />;
+    }
 
     return
-        <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-                <span className="tabular-nums">{str(len(active))}</span>
-                {" active. Tasks, logs and repos are scoped to these."}
-            </p>
-            {if loading {
-                <div
-                    key="sk"
-                    className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                >
-                    {for i in [0, 1, 2, 3] {
-                        <div
-                            key={"c" + str(i)}
-                            className="flex flex-col gap-3 rounded-xl border bg-card p-5"
-                        >
-                            <div className="flex items-center gap-2">
-                                <Skeleton className="h-2 w-2 rounded-full"/>
-                                <Skeleton className="h-4 w-28"/>
-                            </div>
-                            <Skeleton className="h-3 w-full"/>
-                            <Skeleton className="h-3 w-2/3"/>
-                            <div className="mt-2 flex gap-1.5">
-                                <Skeleton className="h-5 w-16 rounded-full"/>
-                                <Skeleton className="h-5 w-12 rounded-full"/>
-                            </div>
-                        </div>
-                    }}
+        <div className="flex flex-col gap-4">
+            <SectionHeader title="Projects" count={"" if loading else str(len(active))}>
+                <Button size="sm" onClick={openCreate}>
+                    <IconPlus/>
+                    New project
+                </Button>
+            </SectionHeader>
+            <Reveal ready={not loading} frame={loadFrame()}>
+                <div key="rows">
+                    <ProjectTable
+                        projects={active}
+                        repos={repos}
+                        members={members}
+                        openCounts={openCounts}
+                        countsReady={countsReady}
+                        onEdit={openEdit}
+                        onArchive={askArchive}
+                        onCreate={openCreate}
+                    />
                 </div>
-            } else {
-                <ProjectTable
-                    key="table"
-                    projects={active}
-                    repos={repos}
-                    onEdit={openEdit}
-                    onArchive={archiveProject}
-                    onCreate={openCreate}
-                />
-            } }
+            </Reveal>
             <ProjectDialog
                 open={dialogOpen}
                 editing={bool(editingId)}
@@ -134,6 +155,15 @@ def:pub ProjectsSection(openNonce: int = 0) -> JsxElement {
                 repoDraft={fRepoDraft}
                 onRepoDraft={lambda (v: str) { fRepoDraft = v; }}
                 onRemoveRepo={removeRepo}
+            />
+            <ConfirmDialog
+                open={bool(archiveId)}
+                title={"Archive " + archiveName + "?"}
+                body={archiveBody}
+                confirmLabel="Archive project"
+                busy={busy}
+                onConfirm={archiveProject}
+                onOpenChange={lambda (o: bool) { if not o { archiveId = ""; }}}
             />
         </div>;
 }

@@ -1,20 +1,17 @@
 """Implementations for the Flow line page. Loaders and mutations reload through
 GetFlowLine rather than patching local state: the walker is the only place the
-prev/next truth lives. Locals are read before any await (stale-snapshot rule).
-"""
+prev/next truth lives. Zoom and pan go through zoomTo/applyPan, which keep a
+piece of the drawing in view whatever the gesture."""
 
 impl FlowLinePage.boot -> None {
     loadMeta();
     # The board persists its project filter under the same key, so the two
-    # tabs stay on the same project rather than each keeping a private idea
-    # of what you are looking at.
+    # tabs stay on the same project.
     stored = localStorage.getItem("flowline_project")
         or localStorage.getItem("standup_project")
         or "";
     picked = stored or "all";
     projectId = picked;
-    # The viewer projection survives reloads the same way the project
-    # filter does. Anything but the exact "lanes" token means flow.
     storedView = localStorage.getItem("flowline_wf_view")
         or localStorage.getItem("standup_wf_view")
         or "";
@@ -27,8 +24,8 @@ impl FlowLinePage.boot -> None {
     } except Exception as e {
         projects = [];
     }
-    # Roles and roster feed the who-does-what strip; the diagram loads
-    # fine without them, so failure here stays quiet.
+    # Roles and roster feed the lane labels and the task dialog; the diagram
+    # loads fine without them, so failure here stays quiet.
     try {
         roleResult = root spawn ListRoles();
         roleRows = roleResult.reports[0] if roleResult.reports else [];
@@ -46,17 +43,36 @@ impl FlowLinePage.reload(pid: str) -> None {
     try {
         result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
+        failed = False;
     } except Exception as e {
-        toast("Failed to load your flow line");
+        # With a line on screen a toast is enough; with nothing, the page
+        # shows its own failed card and retry.
+        failed = True;
+        if len(steps) > 0 {
+            toast.error("Failed to load your flow line");
+        }
     }
     loading = False;
-    # Open showing the whole graph rather than a corner of it.
-    fitZoom();
+    # Counts moved, so the task titles a close zoom shows are stale too.
+    flowVersion = flowVersion + 1;
+}
+
+# Everything again, projects and roster included: the first read failed
+# with them, and the card stays up (Reveal keeps its content) meanwhile.
+impl FlowLinePage.retryLoad -> None {
+    if retrying {
+        return;
+    }
+    retrying = True;
+    await boot();
+    retrying = False;
 }
 
 impl FlowLinePage.peekStep(stepId: str) -> None {
-    # Clicking the open step again closes the panel, so one control both
-    # opens and dismisses it.
+    if swallowed() {
+        return;
+    }
+    # Clicking the open step again closes the panel.
     if peekId == stepId {
         closePeek();
         return;
@@ -64,21 +80,17 @@ impl FlowLinePage.peekStep(stepId: str) -> None {
     peekId = stepId;
     peekTasks = [];
     peekLoading = True;
+    revealStep(stepId);
     await refreshPeek(stepId, projectId);
     peekLoading = False;
 }
 
 impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
-    # Fetching per click rather than holding every task in page state: the
-    # server already owns the placement rule, and a workspace can have far
-    # more tasks than the panel will ever show, so it comes a page at a
-    # time. Quiet on purpose: a save refetches through here without
-    # flashing the skeletons again.
+    # A page at a time from the server, which owns the placement rule. Quiet
+    # on purpose: a save refetches through here without flashing skeletons.
     if not stepId {
         return;
     }
-    # Reload as many pages as were open, so a save does not collapse rows
-    # the user had already paged through.
     wanted = peekPage if peekPage > 1 else 1;
     rows: list[TaskView] = [];
     try {
@@ -105,13 +117,11 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
         }
         peekTasks = rows;
     } except Exception as e {
-        toast("Could not load the work on that step");
+        toast.error("Could not load the work on that step");
     }
 }
 
 impl FlowLinePage.morePeek -> None {
-    # The next page appends; the id and project are read before the await
-    # so a step change mid-flight cannot mix two steps' rows.
     stepId = peekId;
     pid = projectId;
     wanted = peekPage + 1;
@@ -135,18 +145,94 @@ impl FlowLinePage.morePeek -> None {
             peekPage = wanted;
         }
     } except Exception as e {
-        toast("Could not load more of that step");
+        toast.error("Could not load more of that step");
     }
     peekLoadingMore = False;
 }
 
+impl FlowLinePage.loadTitles(wanted: str) -> None {
+    # Two titles per step with work on it, every step's request at once; the
+    # count on the node says the rest.
+    titlesFor = wanted;
+    pid = projectId;
+    ids: list[str] = [];
+    jobs: list[any] = [];
+    for s in steps {
+        if s.task_count > 0 {
+            ids.append(s.id);
+            jobs.append(firstTitles(s.id, pid));
+        }
+    }
+    try {
+        w: any = window;
+        lists: list[any] = await w.Promise.all(jobs);
+        got: dict[str, list[str]] = {};
+        for (i, sid) in enumerate(ids) {
+            got[sid] = lists[i];
+        }
+        if titlesFor == wanted {
+            stepTitles = got;
+        }
+    } except Exception as e {
+        titlesFor = "";
+    }
+}
+
+impl FlowLinePage.firstTitles(stepId: str, pid: str) -> list[str] {
+    result = root spawn ListStepTasks(
+        step_id=stepId,
+        project_id=pid if pid and pid != "all" else "",
+        page=1,
+        page_size=2
+    );
+    page = result.reports[0] if result.reports else None;
+    names: list[str] = [];
+    if page {
+        for t in page.rows {
+            names.append(t.title);
+        }
+    }
+    return names;
+}
+
 impl FlowLinePage.closePeek -> None {
+    if swallowed() {
+        return;
+    }
     peekId = "";
     peekTasks = [];
     peekLoading = False;
     peekTotal = 0;
     peekMore = False;
     peekPage = 0;
+}
+
+impl FlowLinePage.revealStep(stepId: str) -> None {
+    # The panel floats over the right of the canvas; slide the diagram just
+    # enough that the step it describes stays in view beside it.
+    view: any = viewportRef.current;
+    if not view or narrow {
+        return;
+    }
+    rects = drawnRects();
+    if stepId not in rects {
+        return;
+    }
+    r = rects[stepId];
+    lanes = lineView == "lanes" and not editing;
+    pan: list[float] = panRef.current or [panX, panY];
+    nx = pan[0];
+    right = float(view.clientWidth) - PANEL_W - 28.0;
+    left = (laneLabelW() + 16.0) if lanes else 16.0;
+    if nx + r[0] + r[2] > right {
+        nx = right - r[0] - r[2];
+    }
+    if nx + r[0] < left {
+        nx = left - r[0];
+    }
+    if nx != pan[0] {
+        applyPan(nx, pan[1]);
+    }
 }
 
 impl FlowLinePage.stepName(key: str) -> str {
@@ -215,8 +301,7 @@ impl FlowLinePage.replacePeekRow(view: TaskView) -> None {
 }
 
 impl FlowLinePage.setTaskField(key: str, value: str) -> None {
-    # A computed key does not survive a dict-literal spread: `{**taskForm,
-    # key: value}` writes a literal "key" property and the input freezes.
+    # A computed key does not survive a dict-literal spread.
     updated = {** taskForm};
     updated[key] = value;
     taskForm = updated;
@@ -241,13 +326,12 @@ impl FlowLinePage.saveTask -> None {
     }
     project = taskForm["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     taskSaving = True;
     reviewer = taskForm["reviewer"] if taskForm["reviewer"] != "none" else "";
     landing = taskForm["status"];
-    # Read before any await: where the task was, and where it is going.
     fromStep = peekId;
     landedName = stepName(landing);
     pid = projectId;
@@ -267,7 +351,7 @@ impl FlowLinePage.saveTask -> None {
                 }
             }
             if added > 0 {
-                toast("Added " + str(added) + " assignee(s) to the project");
+                toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
         root spawn UpdateTask(
@@ -297,15 +381,15 @@ impl FlowLinePage.saveTask -> None {
             project_id=project
         );
         taskOpen = False;
-        # The counts on the cards come from GetFlowLine, the panel from
+        # The counts on the nodes come from GetFlowLine, the panel from
         # ListStepTasks, so a save has to refresh both.
         await reload(pid);
         await refreshPeek(fromStep, pid);
         if landing != fromStep and landedName {
-            toast("Saved · moved to " + landedName);
+            toast.success("Saved · moved to " + landedName);
         }
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Failed to save task");
     }
     taskSaving = False;
 }
@@ -323,7 +407,7 @@ impl FlowLinePage.deleteTask -> None {
         await reload(pid);
         await refreshPeek(fromStep, pid);
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Failed to delete task");
     }
     taskSaving = False;
 }
@@ -333,7 +417,6 @@ impl FlowLinePage.selectProject(v: str) -> None {
     projectId = v;
     localStorage.setItem("flowline_project", v);
     await reload(v);
-    # The panel obeys the filter too, so it reloads with the diagram.
     await refreshPeek(openStep, v);
 }
 
@@ -355,14 +438,47 @@ impl FlowLinePage.switchView(v: str) -> None {
     localStorage.setItem("flowline_wf_view", chosen);
 }
 
-impl FlowLinePage.lanePlan -> dict[str, any] {
-    # The Lane view projection, recomputed on demand so the fit math and
-    # the render can never disagree. Editing always measures the freeform
-    # drawing, so the plan is empty there.
-    if lineView != "lanes" or editing or len(steps) == 0 {
-        return {"positions": {}, "lanes": []};
+impl FlowLinePage.switchMode(v: str) -> None {
+    if v == "edit" {
+        if not editing {
+            peekId = "";
+            peekTasks = [];
+            editing = True;
+        }
+        return;
     }
-    return laneLayout(steps, roleRows, roleMembers, boxW, boxH);
+    finishEditing();
+}
+
+impl FlowLinePage.finishEditing -> None {
+    editing = False;
+    renaming = False;
+    connectFrom = "";
+    selectedId = "";
+    selectedEdge = "";
+    confirmDelete = False;
+    creatingStep = False;
+}
+
+impl FlowLinePage.lanePlan -> dict[str, any] {
+    # The Lane view projection, recomputed on demand so the fit math and the
+    # render can never disagree. Editing and the phone list draw no lanes.
+    if (
+        lineView != "lanes"
+        or editing
+        or len(steps) == 0
+        or (narrow and phoneView == "list")
+    ) {
+        return {"positions": {}, "lanes": [], "laneOf": {}, "colOf": {}};
+    }
+    hint = float(laneFitRef.current) if laneFitRef.current else 0.0;
+    return laneLayout(
+        steps, roleRows, roleMembers, boxW, boxH, laneLabelW() + 40.0, hint
+    );
+}
+
+impl FlowLinePage.laneLabelW -> float {
+    return LANE_LABEL_NARROW if narrow else LANE_LABEL_W;
 }
 
 impl FlowLinePage.pickTemplate(key: str) -> None {
@@ -373,12 +489,12 @@ impl FlowLinePage.pickTemplate(key: str) -> None {
         if len(fresh) > 0 {
             steps = fresh;
             editing = True;
-            toast("Your flow line is in, drag anything to make it yours");
+            toast.success("Your flow line is in. Drag anything to make it yours.");
         } else {
-            toast("That template could not be applied");
+            toast.error("That template could not be applied");
         }
     } except Exception as e {
-        toast("Failed to set up the flow line");
+        toast.error("Failed to set up the flow line");
     }
     applying = "";
 }
@@ -406,13 +522,13 @@ impl FlowLinePage.saveRename -> None {
             lineName = payload["name"];
         }
     } except Exception as e {
-        toast("Failed to rename the flow line");
+        toast.error("Failed to rename the flow line");
     }
 }
 
 impl FlowLinePage.addStep -> None {
     # Open the naming panel; nothing is created until the user commits a
-    # name of their own. No placeholder steps.
+    # name of their own.
     creatingStep = True;
     selectedId = "";
     selectedEdge = "";
@@ -425,20 +541,18 @@ impl FlowLinePage.commitName -> None {
     if not name {
         return;
     }
-    # Enter auto-repeat fires this faster than the walker round-trips, and a
-    # `saving` read here would be a stale render-time snapshot, so the
+    # Enter auto-repeat fires faster than the walker round-trips, so the
     # in-flight latch lives on a ref.
     if busyRef.current {
         return;
     }
     busyRef.current = True;
     if creatingStep {
-        # Drop the new card at the left edge, under the lowest existing one
-        # (104 = node height + a row of breathing room).
+        # Drop the new card at the left edge, under the lowest existing one.
         ny = 40.0;
         for s in steps {
-            if s.y + 104.0 > ny {
-                ny = s.y + 104.0;
+            if s.y + 124.0 > ny {
+                ny = s.y + 124.0;
             }
         }
         saving = True;
@@ -466,7 +580,7 @@ impl FlowLinePage.commitName -> None {
                 };
             }
         } except Exception as e {
-            toast("Failed to add the step");
+            toast.error("Failed to add the step");
         }
         saving = False;
         busyRef.current = False;
@@ -476,7 +590,6 @@ impl FlowLinePage.commitName -> None {
         busyRef.current = False;
         return;
     }
-    # Skip the walker when the blur changed nothing.
     current = [
         s
         for s in steps
@@ -485,7 +598,7 @@ impl FlowLinePage.commitName -> None {
     owner = (form["owner"] or "").strip();
     blurb = (form["blurb"] or "").strip();
     if (
-        current
+        len(current) > 0
         and current[0].name == name
         and current[0].owner == owner
         and current[0].blurb == blurb
@@ -501,7 +614,7 @@ impl FlowLinePage.commitName -> None {
         );
         await reload(projectId);
     } except Exception as e {
-        toast("Failed to update the step");
+        toast.error("Failed to update the step");
     }
     saving = False;
     busyRef.current = False;
@@ -517,14 +630,13 @@ impl FlowLinePage.commitField(key: str, value: str) -> None {
         } elif key == "color" {
             root spawn SaveStep(step_id=selectedId, color=value);
         } elif key == "owner" {
-            # SaveStep reads empty as "keep", so a lone space clears.
             root spawn SaveStep(
                 step_id=selectedId, owner=value if value.strip() else " "
             );
         }
         await reload(projectId);
     } except Exception as e {
-        toast("Failed to update the step");
+        toast.error("Failed to update the step");
     }
 }
 
@@ -532,8 +644,7 @@ impl FlowLinePage.deleteStep -> None {
     if not selectedId {
         return;
     }
-    # First click arms, the second one deletes. The transitions touching the
-    # step die with it.
+    # First click arms, the second one deletes.
     if not confirmDelete {
         confirmDelete = True;
         return;
@@ -546,7 +657,7 @@ impl FlowLinePage.deleteStep -> None {
         if payload and not payload["ok"] {
             confirmDelete = False;
             saving = False;
-            toast(payload["message"] or "That step cannot be deleted.");
+            toast.error(payload["message"] or "That step cannot be deleted.");
             return;
         }
         selectedId = "";
@@ -556,9 +667,9 @@ impl FlowLinePage.deleteStep -> None {
             connectFrom = "";
         }
         await reload(projectId);
-        toast("Step deleted");
+        toast.success("Step deleted");
     } except Exception as e {
-        toast("Failed to delete the step");
+        toast.error("Failed to delete the step");
     }
     saving = False;
 }
@@ -569,12 +680,10 @@ impl FlowLinePage.deleteFlowLine -> None {
         result = root spawn DeleteFlowLine();
         payload = result.reports[0] if result.reports else None;
         if not payload or not payload["ok"] {
-            toast("The flow line could not be deleted");
+            toast.error("The flow line could not be deleted");
             wiping = False;
             return;
         }
-        # Back to the empty state the picker guards: nothing selected or
-        # half-drawn, not scratch, not editing.
         steps = [];
         scratch = False;
         editing = False;
@@ -587,9 +696,9 @@ impl FlowLinePage.deleteFlowLine -> None {
         peekId = "";
         confirmWipe = False;
         await reload(projectId);
-        toast("Flow line deleted, pick a template or start from scratch");
+        toast.success("Flow line deleted. Pick a template or start from scratch.");
     } except Exception as e {
-        toast("Failed to delete the flow line");
+        toast.error("Failed to delete the flow line");
     }
     wiping = False;
 }
@@ -601,7 +710,7 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
         if payload and payload["ok"] {
             await reload(projectId);
             if not payload["duplicate"] {
-                toast(
+                toast.success(
                     "Connected",
                     {
                         "action": {
@@ -612,17 +721,16 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
                 );
             }
         } elif payload {
-            toast(payload["message"] or "That transition is not allowed.");
+            toast.error(payload["message"] or "That transition is not allowed.");
         }
     } except Exception as e {
-        toast("Could not connect those steps");
+        toast.error("Could not connect those steps");
     }
 }
 
 impl FlowLinePage.selectEdge(key: str, said: str, carried: str) -> None {
-    # Seeding the draft from the edge itself is what makes the editor an
-    # edit rather than a retype, and it is why nothing has to clear the
-    # draft when the selection moves.
+    # Seeding the draft from the edge is what makes the editor an edit
+    # rather than a retype.
     selectedEdge = key;
     edgeDraft = said;
     edgeCarry = carried;
@@ -631,9 +739,8 @@ impl FlowLinePage.selectEdge(key: str, said: str, carried: str) -> None {
 impl FlowLinePage.commitEdgeLabel(
     fromId: str, toId: str, said: str, carried: str
 ) -> None {
-    # An empty `said` is a clear, not a no-op, which is why this goes
-    # through LabelTransition rather than re-drawing the arrow. The tag
-    # rides along: the editor saves both fields at once.
+    # An empty `said` is a clear, not a no-op, which is why this goes through
+    # LabelTransition rather than re-drawing the arrow.
     try {
         result = root spawn LabelTransition(
             from_id=fromId, to_id=toId, label=said, carries=carried
@@ -644,16 +751,16 @@ impl FlowLinePage.commitEdgeLabel(
             edgeCarry = payload["carries"];
             selectedEdge = "";
             await reload(projectId);
-            toast(
+            toast.success(
                 "Label removed"
                     if not payload["label"] and not payload["carries"]
                     else "Label saved"
             );
         } else {
-            toast("Could not update that label");
+            toast.error("Could not update that label");
         }
     } except Exception as e {
-        toast("Could not update that label");
+        toast.error("Could not update that label");
     }
 }
 
@@ -663,16 +770,14 @@ impl FlowLinePage.deleteEdge(fromId: str, toId: str) -> None {
         root spawn UnlinkTransition(from_id=fromId, to_id=toId);
         await reload(projectId);
     } except Exception as e {
-        toast("Could not remove that transition");
+        toast.error("Could not remove that transition");
     }
 }
 
 impl FlowLinePage.selectStep(stepId: str) -> None {
-    # A drag ends with a click on the node it started from, so the drag marks
-    # that one click to be ignored; without this, moving a step also selects
-    # it and finishing a wire also re-fires the connect.
-    if swallowRef.current {
-        swallowRef.current = False;
+    # A drag ends with a click on the node it started from; the drag stamps
+    # that click to be ignored.
+    if swallowed() {
         return;
     }
     # A click while armed means "flow into this one"; otherwise it selects.
@@ -691,7 +796,7 @@ impl FlowLinePage.selectStep(stepId: str) -> None {
         for s in steps
         if s.id == stepId
     ];
-    if picked {
+    if len(picked) > 0 {
         form = {
             "name": picked[0].name,
             "kind": picked[0].kind,
@@ -710,11 +815,9 @@ impl FlowLinePage.armConnect -> None {
 }
 
 impl FlowLinePage.clearCanvas -> None {
-    # A drag whose mousedown and mouseup land on different elements fires the
-    # click on their common ancestor, the canvas, so the swallow flag must be
-    # consumable here too or finishing a wire wipes the selection it just made.
-    if swallowRef.current {
-        swallowRef.current = False;
+    # A drag whose press and release land on different elements clicks
+    # their common ancestor, the canvas, so the stamp is honoured here too.
+    if swallowed() {
         return;
     }
     connectFrom = "";
@@ -725,22 +828,17 @@ impl FlowLinePage.clearCanvas -> None {
 }
 
 impl FlowLinePage.setField(key: str, value: str) -> None {
-    # NOTE: `{**form, key: value}` compiles to a JS object literal with a
-    # LITERAL "key" property, which freezes every bound input. Copy, then
-    # subscript.
+    # Copy, then subscript: a dict-literal spread freezes bound inputs.
     updated = {** form};
     updated[key] = value;
     form = updated;
-    # Kind, color and owner are pick-once fields: commit immediately. The
-    # name keeps typing local and commits on blur or Enter instead.
+    # Kind, color and owner commit on pick; the name commits on blur.
     if key == "kind" or key == "color" or key == "owner" {
         commitField(key, value);
     }
 }
 
-# The diagram's true bounding box in canvas px: [minX, minY, maxX, maxY].
-# canvasSize measures from the ORIGIN plus the drag margin, so fitting against
-# it would shrink a diagram that starts away from the corner.
+# The diagram's footprint in canvas px: [minX, minY, maxX, maxY].
 def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[float] {
     minX = 0.0;
     minY = 0.0;
@@ -766,51 +864,268 @@ def contentBounds(steps: list[StepView], live: dict[str, list[float]]) -> list[f
     return [minX, minY, maxX, maxY];
 }
 
-
-# Far enough out to see a sprawling flow, far enough in to read a card.
-def clampZoom(v: float) -> float {
-    if v < 0.3 {
-        return 0.3;
-    }
-    if v > 2.0 {
-        return 2.0;
-    }
-    return v;
+# Width of the lane columns at zoom z, with the text widths for its detail.
+def laneTotal(
+    steps: list[StepView],
+    pose: dict[str, list[float]],
+    colOf: dict[str, int],
+    z: float,
+    stepTitles: dict[str, list[str]],
+    low: dict[str, float],
+    mid: dict[str, float]
+) -> float {
+    need = low if detailOf(z) == "low" else mid;
+    return float(laneRects(steps, pose, colOf, z, stepTitles, need, 0.0)["total"]);
 }
 
-impl FlowLinePage.zoomBy(delta: float) -> None {
-    current = float(zoomRef.current) if zoomRef.current else zoom;
-    z = clampZoom(current + delta);
-    zoomRef.current = z;
-    zoom = z;
-    recenterPan();
+# The largest lane zoom whose columns fit `availW`. Column width only grows
+# with the zoom, so a bisection finds it.
+def laneWidthZoom(
+    steps: list[StepView],
+    pose: dict[str, list[float]],
+    colOf: dict[str, int],
+    stepTitles: dict[str, list[str]],
+    low: dict[str, float],
+    mid: dict[str, float],
+    availW: float
+) -> float {
+    if laneTotal(steps, pose, colOf, LANE_ZOOM_CAP, stepTitles, low, mid) <= availW {
+        return LANE_ZOOM_CAP;
+    }
+    lo = LANE_ZOOM_MIN;
+    hi = LANE_ZOOM_CAP;
+    k = 0;
+    while k < 16 {
+        m = (lo + hi) / 2.0;
+        if laneTotal(steps, pose, colOf, m, stepTitles, low, mid) <= availW {
+            lo = m;
+        } else {
+            hi = m;
+        }
+        k = k + 1;
+    }
+    return lo;
 }
 
-impl FlowLinePage.viewBounds -> list[float] {
-    # What the fit and the centering measure: the drawn diagram in Flow view,
-    # the computed lane layout in Lane view. Lane mode includes the label
-    # gutter and the last band, or the fit centers the labels off-screen.
-    plan = lanePlan();
-    laneBands: list[dict[str, any]] = plan["lanes"];
-    laneFit = len(laneBands) > 0;
-    lanePose: dict[str, list[float]] = plan["positions"];
-    bounds = contentBounds(steps, lanePose if laneFit else live);
-    if laneFit {
-        bounds[0] = 0.0;
-        bounds[1] = 0.0;
-        # The band stack IS the vertical extent: a lane card is shorter than
-        # NODE_H, so contentBounds would measure it too tall and the fit
-        # would leave a margin the layout already grew to fill.
-        deepest = 0.0;
-        for b in laneBands {
-            bandEdge = float(b["y"]) + float(b["h"]);
-            if bandEdge > deepest {
-                deepest = bandEdge;
+impl FlowLinePage.drawnRects -> dict[str, list[float]] {
+    # What the canvas drew last render; before the first one, the plain layout.
+    laid: any = layoutRef.current;
+    if laid {
+        return laid["rects"];
+    }
+    z = float(zoomRef.current) if zoomRef.current else zoom;
+    return nodeRects(
+        stepsRef.current or [], liveRef.current or {}, z, stepTitles, 0.0, NODE_H
+    );
+}
+
+impl FlowLinePage.panRects(z: float) -> dict[str, list[float]] {
+    # The node rects the canvas draws at zoom z, in pan-origin screen px, with
+    # the text widths it measured last.
+    laid: any = layoutRef.current;
+    need: dict[str, float] = {};
+    if laid {
+        need = laid["needLow"] if detailOf(z) == "low" else laid["needMid"];
+    }
+    if lineView == "lanes" and not editing {
+        if laid and detailOf(z) != "low" {
+            need = laid["needLane"];
+        }
+        plan = lanePlan();
+        return laneRects(
+            steps,
+            plan["positions"],
+            plan["colOf"],
+            z,
+            stepTitles,
+            need,
+            laneLabelW() + 16.0
+        )["rects"];
+    }
+    return nodeRects(steps, live, z, stepTitles, 0.0, NODE_H, need);
+}
+
+impl FlowLinePage.contentBox(z: float) -> list[float] {
+    # The drawn nodes at zoom z, in pan-origin screen px: [x0, y0, x1, y1].
+    lanes = lineView == "lanes" and not editing;
+    bands: list[dict[str, any]] = lanePlan()["lanes"] if lanes else [];
+    rects = panRects(z);
+    x0 = 0.0;
+    y0 = 0.0;
+    x1 = 0.0;
+    y1 = 0.0;
+    first = True;
+    for s in steps {
+        if s.id not in rects {
+            continue;
+        }
+        r = rects[s.id];
+        if first or r[0] < x0 {
+            x0 = r[0];
+        }
+        if first or r[1] < y0 {
+            y0 = r[1];
+        }
+        if first or r[0] + r[2] > x1 {
+            x1 = r[0] + r[2];
+        }
+        if first or r[1] + r[3] > y1 {
+            y1 = r[1] + r[3];
+        }
+        first = False;
+    }
+    if lanes and len(bands) > 0 {
+        y0 = 0.0;
+        for b in bands {
+            bandEnd = (float(b["y"]) + float(b["h"])) * z;
+            if bandEnd > y1 {
+                y1 = bandEnd;
             }
         }
-        bounds[3] = deepest;
     }
-    return bounds;
+    return [x0, y0, x1, y1];
+}
+
+impl FlowLinePage.applyPan(x: float, y: float) -> None {
+    # Keep a strip of the drawing's box inside the viewport on both axes, then
+    # make sure part of a step is in it too: a box can be in view while every
+    # step sits beyond one of its corners.
+    view: any = viewportRef.current;
+    nx = x;
+    ny = y;
+    if view {
+        z = float(zoomRef.current) if zoomRef.current else zoom;
+        lanes = lineView == "lanes" and not editing;
+        box = contentBox(z);
+        w = float(view.clientWidth);
+        h = float(view.clientHeight);
+        vx0 = laneLabelW() if lanes else 0.0;
+        keep = 72.0;
+        loX = vx0 + keep - box[2];
+        hiX = w - keep - box[0];
+        loY = keep - box[3];
+        hiY = h - keep - box[1];
+        if nx < loX {
+            nx = loX;
+        }
+        if nx > hiX {
+            nx = hiX;
+        }
+        if ny < loY {
+            ny = loY;
+        }
+        if ny > hiY {
+            ny = hiY;
+        }
+        rects = panRects(z);
+        bestDx = 0.0;
+        bestDy = 0.0;
+        bestCost = -1.0;
+        for s in steps {
+            if s.id not in rects {
+                continue;
+            }
+            r = rects[s.id];
+            kx = 72.0 if r[2] > 72.0 else r[2];
+            ky = 48.0 if r[3] > 48.0 else r[3];
+            dx = 0.0;
+            dy = 0.0;
+            if r[0] + r[2] + nx < vx0 + kx {
+                dx = vx0 + kx - (r[0] + r[2] + nx);
+            } elif r[0] + nx > w - kx {
+                dx = w - kx - (r[0] + nx);
+            }
+            if r[1] + r[3] + ny < ky {
+                dy = ky - (r[1] + r[3] + ny);
+            } elif r[1] + ny > h - ky {
+                dy = h - ky - (r[1] + ny);
+            }
+            cost = abs(dx) + abs(dy);
+            if bestCost < 0.0 or cost < bestCost {
+                bestCost = cost;
+                bestDx = dx;
+                bestDy = dy;
+            }
+        }
+        if bestCost > 0.0 {
+            nx = nx + bestDx;
+            ny = ny + bestDy;
+        }
+    }
+    panRef.current = [nx, ny];
+    panX = nx;
+    panY = ny;
+}
+
+impl FlowLinePage.zoomTo(z: float, sx: float, sy: float) -> None {
+    lanes = lineView == "lanes" and not editing;
+    target = clampZoom(z);
+    # Below this the lane bands get shorter than a card.
+    if lanes and target < LANE_ZOOM_MIN {
+        target = LANE_ZOOM_MIN;
+    }
+    z1 = float(zoomRef.current) if zoomRef.current else zoom;
+    if z1 <= 0.0 {
+        z1 = 1.0;
+    }
+    pan: list[float] = panRef.current or [panX, panY];
+    # The canvas point under (sx, sy) stays put. The lane label gutter is
+    # fixed px, so it stays out of the scaling.
+    g = (laneLabelW() + 16.0) if lanes else 0.0;
+    nx = sx - g - (sx - pan[0] - g) * target / z1;
+    ny = sy - (sy - pan[1]) * target / z1;
+    if lanes {
+        # Lane columns widen to fit their names, so they do not scale evenly:
+        # anchor on the step nearest the pointer instead of the origin.
+        before = panRects(z1);
+        after = panRects(target);
+        px = sx - pan[0];
+        py = sy - pan[1];
+        best = "";
+        bestD = -1.0;
+        for s in steps {
+            if s.id in before and s.id in after {
+                r = before[s.id];
+                ddx = px - (r[0] + r[2] / 2.0);
+                ddy = py - (r[1] + r[3] / 2.0);
+                d = ddx * ddx + ddy * ddy;
+                if bestD < 0.0 or d < bestD {
+                    bestD = d;
+                    best = s.id;
+                }
+            }
+        }
+        if best {
+            o = before[best];
+            n = after[best];
+            nx = sx - (n[0] + n[2] / 2.0) - (px - o[0] - o[2] / 2.0) * target / z1;
+            ny = sy - (n[1] + n[3] / 2.0) - (py - o[1] - o[3] / 2.0) * target / z1;
+        }
+    }
+    zoomRef.current = target;
+    zoom = target;
+    applyPan(nx, ny);
+}
+
+impl FlowLinePage.zoomStep(dirn: int) -> None {
+    view: any = viewportRef.current;
+    if not view {
+        return;
+    }
+    z1 = float(zoomRef.current) if zoomRef.current else zoom;
+    zoomTo(
+        nextStop(z1, dirn),
+        float(view.clientWidth) / 2.0,
+        float(view.clientHeight) / 2.0
+    );
+}
+
+impl FlowLinePage.zoomActual -> None {
+    view: any = viewportRef.current;
+    if not view {
+        return;
+    }
+    zoomTo(1.0, float(view.clientWidth) / 2.0, float(view.clientHeight) / 2.0);
 }
 
 impl FlowLinePage.measureBox -> None {
@@ -818,11 +1133,10 @@ impl FlowLinePage.measureBox -> None {
     if not view {
         return;
     }
-    # The fit's inner box, the same margin fitZoom takes off. Assigned only
-    # on a real change: this runs in a layout effect keyed on these two, so
-    # an unconditional write would never settle.
-    w = float(view.clientWidth) - 48.0;
-    h = float(view.clientHeight) - 48.0;
+    # Assigned only on a real change: the fit's layout effect is keyed on
+    # these two, so an unconditional write would never settle.
+    w = float(view.clientWidth);
+    h = float(view.clientHeight);
     if w != boxW {
         boxW = w;
     }
@@ -833,89 +1147,209 @@ impl FlowLinePage.measureBox -> None {
 
 impl FlowLinePage.fitZoom -> None {
     view: any = viewportRef.current;
-    if not view {
-        zoomRef.current = 1.0;
-        zoom = 1.0;
-        return;
-    }
-    bounds = viewBounds();
-    spanW = bounds[2] - bounds[0];
-    spanH = bounds[3] - bounds[1];
-    boxW = float(view.clientWidth) - 48.0;
-    boxH = float(view.clientHeight) - 48.0;
-    if spanW <= 0.0 or spanH <= 0.0 or boxW <= 0.0 or boxH <= 0.0 {
-        zoomRef.current = 1.0;
-        zoom = 1.0;
-        return;
-    }
-    byW = boxW / spanW;
-    byH = boxH / spanH;
-    best = byW if byW < byH else byH;
-    # The viewer fills the box. The lane view is generated for the box it is
-    # drawn in, so it scales all the way to the canvas clamp; the hand-drawn
-    # canvas stops at 1.25x, past which its cards look inflated rather than
-    # close. The editor stays at 1:1 so drawing coordinates match what the
-    # author placed.
-    cap = 1.25;
-    if editing {
-        cap = 1.0;
-    } elif lineView == "lanes" {
-        cap = LANE_ZOOM_CAP;
-    }
-    if best > cap {
-        best = cap;
-    }
-    zoomRef.current = clampZoom(best);
-    zoom = clampZoom(best);
-    recenterPan();
-    # Arm transitions on the NEXT frame, so this fit's own transform change
-    # can never animate: the first thing the user sees is the final position.
-    if not placed and len(steps) > 0 {
-        window.requestAnimationFrame(lambda { placed = True; });
-    }
-}
-
-impl FlowLinePage.recenterPan -> None {
-    # Center the diagram's bounding box in the visible part of the viewport.
-    # Screen-px offsets applied before the scale, so pointerXY (which reads
-    # the translated surface's own rect) needs no changes.
-    view: any = viewportRef.current;
     if not view or len(steps) == 0 {
+        zoomRef.current = 1.0;
+        zoom = 1.0;
+        panRef.current = [0.0, 0.0];
         panX = 0.0;
         panY = 0.0;
         return;
     }
-    z = float(zoomRef.current) if zoomRef.current else 1.0;
-    bounds = viewBounds();
-    minX = bounds[0];
-    minY = bounds[1];
-    maxX = bounds[2];
-    maxY = bounds[3];
-    availW = float(view.clientWidth);
-    availH = float(view.clientHeight);
-    # Clamp the content's visible EDGE, not the raw offset: the offset goes
-    # negative for content whose coordinates start away from the origin. Only
-    # a diagram larger than the box pins to the top-left padding.
-    edgeX = (availW - (maxX - minX) * z) / 2.0;
-    edgeY = (availH - (maxY - minY) * z) / 2.0;
-    if edgeX < 16.0 {
-        edgeX = 16.0;
+    lanes = lineView == "lanes" and not editing;
+    w = float(view.clientWidth);
+    h = float(view.clientHeight);
+    laid: any = layoutRef.current;
+    if lanes {
+        # Lanes: the widest zoom whose columns fit beside the label gutter,
+        # no taller than the bands at their natural height. The bands then
+        # grow to fill the box at exactly this zoom (lanePlan's hint).
+        natural = laneLayout(steps, roleRows, roleMembers);
+        low: dict[str, float] = laid["needLow"] if laid else {};
+        mid: dict[str, float] = laid["needLane"] if laid else {};
+        zw = laneWidthZoom(
+            steps,
+            natural["positions"],
+            natural["colOf"],
+            stepTitles,
+            low,
+            mid,
+            w - laneLabelW() - 40.0
+        );
+        naturalH = float(natural["naturalH"]);
+        zh = h / naturalH if naturalH > 0.0 else LANE_ZOOM_CAP;
+        best = zw if zw < zh else zh;
+        cap = laneFitCap(h, naturalH);
+        if best > cap {
+            best = cap;
+        }
+        if best < LANE_ZOOM_MIN {
+            best = LANE_ZOOM_MIN;
+        }
+        laneFitRef.current = best;
+        zoomRef.current = best;
+        zoom = best;
+        panRef.current = [0.0, 0.0];
+        panX = 0.0;
+        panY = 0.0;
+        lastFitRef.current = [best, 0.0, 0.0];
+    } else {
+        bounds = contentBounds(steps, live);
+        spanW = bounds[2] - bounds[0];
+        spanH = bounds[3] - bounds[1];
+        # Label chips hang past the outer nodes by roughly the same screen px
+        # at any zoom, so the last render's overhang is reserved around it.
+        mL = 0.0;
+        mT = 0.0;
+        mR = 0.0;
+        mB = 0.0;
+        if laid {
+            nb: list[float] = laid["nodes"];
+            eb: list[float] = laid["extent"];
+            mL = nb[0] - eb[0];
+            mT = nb[1] - eb[1];
+            mR = eb[2] - nb[2];
+            mB = eb[3] - nb[3];
+        }
+        availW = w - 48.0 - mL - mR;
+        availH = h - 48.0 - mT - mB;
+        if spanW <= 0.0 or spanH <= 0.0 or availW <= 0.0 or availH <= 0.0 {
+            return;
+        }
+        byW = availW / spanW;
+        byH = availH / spanH;
+        # The hand-drawn line stops at 100%, past which its nodes only grow
+        # emptier.
+        best = clampZoom(byW if byW < byH else byH);
+        if best > 1.0 {
+            best = 1.0;
+        }
+        zoomRef.current = best;
+        zoom = best;
+        box = contentBox(best);
+        cw = box[2] - box[0] + mL + mR;
+        ch = box[3] - box[1] + mT + mB;
+        # Centre what fits; a drawing wider or taller than the box starts at
+        # its first step instead of its middle.
+        px = (w - cw) / 2.0 - box[0] + mL if cw <= w - 24.0 else 12.0 - box[0] + mL;
+        py = (h - ch) / 2.0 - box[1] + mT if ch <= h - 24.0 else 12.0 - box[1] + mT;
+        panRef.current = [px, py];
+        panX = px;
+        panY = py;
+        lastFitRef.current = [best, px, py];
     }
-    if edgeY < 16.0 {
-        edgeY = 16.0;
+    fittedRef.current = True;
+    # The overhang at the new zoom is only known once it is drawn: fit once
+    # more on the next frame with those margins.
+    if not refitRef.current {
+        refitRef.current = True;
+        window.requestAnimationFrame(
+            lambda {
+                fitZoom();
+                refitRef.current = False;
+            }
+        );
     }
-    panX = edgeX - minX * z;
-    panY = edgeY - minY * z;
 }
 
-impl FlowLinePage.pointerXY(e: MouseEvent) -> list[float] {
+impl FlowLinePage.refitIfUntouched -> None {
+    last: any = lastFitRef.current;
+    pan: list[float] = panRef.current or [panX, panY];
+    z = float(zoomRef.current) if zoomRef.current else zoom;
+    if last and last[0] == z and last[1] == pan[0] and last[2] == pan[1] {
+        fitZoom();
+    }
+}
+
+impl FlowLinePage.onWheel(e: any) -> None {
+    view: any = viewportRef.current;
+    if not view {
+        return;
+    }
+    e.preventDefault();
+    box: any = view.getBoundingClientRect();
+    sx = float(e.clientX) - float(box.left);
+    sy = float(e.clientY) - float(box.top);
+    unit = 16.0 if e.deltaMode == 1 else 1.0;
+    dx = float(e.deltaX) * unit;
+    dy = float(e.deltaY) * unit;
+    if e.ctrlKey or e.metaKey {
+        # Trackpad pinch arrives as ctrl + small deltas; a mouse wheel notch
+        # is about 100, so both land on a sensible step.
+        step = 0.0 - dy * 0.01;
+        if step > 0.5 {
+            step = 0.5;
+        }
+        if step < -0.5 {
+            step = -0.5;
+        }
+        z1 = float(zoomRef.current) if zoomRef.current else zoom;
+        zoomTo(z1 * (2.0 ** step), sx, sy);
+        return;
+    }
+    if e.shiftKey and dx == 0.0 {
+        dx = dy;
+        dy = 0.0;
+    }
+    pan: list[float] = panRef.current or [panX, panY];
+    applyPan(pan[0] - dx, pan[1] - dy);
+}
+
+impl FlowLinePage.onKeyDown(e: any) -> None {
+    w: any = window;
+    dialogOpen = bool(
+        w.document.querySelector("[role=dialog][data-state=open], [role=menu]")
+    );
+    if e.key == "Escape" {
+        if peekRef.current and not dialogOpen {
+            closePeek();
+        }
+        return;
+    }
+    target: any = e.target;
+    tag = str(target.tagName if target and target.tagName else "").lower();
+    typing = tag == "input"
+        or tag == "textarea"
+        or tag == "select"
+        or bool(target and target.isContentEditable);
+    if typing or dialogOpen or e.ctrlKey or e.metaKey or e.altKey {
+        return;
+    }
+    if not viewportRef.current {
+        return;
+    }
+    k = str(e.key);
+    if k == "f" or k == "F" or k == "0" {
+        e.preventDefault();
+        fitZoom();
+    } elif k == "+" or k == "=" {
+        e.preventDefault();
+        zoomStep(1);
+    } elif k == "-" or k == "_" {
+        e.preventDefault();
+        zoomStep(-1);
+    } elif k == " " and tag != "button" and tag != "a" {
+        # Held Space turns any drag into a pan, even one that starts on a step.
+        e.preventDefault();
+        spaceRef.current = True;
+    }
+}
+
+impl FlowLinePage.swallowed -> bool {
+    stamp: any = swallowRef.current;
+    if not stamp {
+        return False;
+    }
+    swallowRef.current = 0;
+    return float(new(Date).getTime()) - float(stamp) < 500.0;
+}
+
+impl FlowLinePage.pointerXY(e: any) -> list[float] {
+    # Canvas px under the pointer: the surface sits at the pan offset and
+    # positions scale by the zoom.
     surface: any = canvasRef.current;
     if not surface or not surface.getBoundingClientRect {
         return [-1.0, -1.0];
     }
-    # The surface is CSS-scaled, so its rect is in screen px while every
-    # position we compare against is in canvas px. Undo the scale here and
-    # the whole hit-test/drag layer stays zoom-agnostic.
     box: any = surface.getBoundingClientRect();
     scale = float(zoomRef.current) if zoomRef.current else 1.0;
     return [
@@ -924,66 +1358,189 @@ impl FlowLinePage.pointerXY(e: MouseEvent) -> list[float] {
     ];
 }
 
-impl FlowLinePage.beginDrag(e: MouseEvent) -> None {
-    if connectFrom {
+impl FlowLinePage.surfaceXY(e: any) -> list[float] {
+    surface: any = canvasRef.current;
+    if not surface or not surface.getBoundingClientRect {
+        return [-99999.0, -99999.0];
+    }
+    box: any = surface.getBoundingClientRect();
+    return [float(e.clientX) - float(box.left), float(e.clientY) - float(box.top)];
+}
+
+def trackPointer(
+    pts: list[list[float]], pid: float, x: float, y: float
+) -> list[list[float]] {
+    out: list[list[float]] = [];
+    found = False;
+    for p in pts {
+        if p[0] == pid {
+            out.append([pid, x, y]);
+            found = True;
+        } else {
+            out.append(p);
+        }
+    }
+    if not found {
+        out.append([pid, x, y]);
+    }
+    return out;
+}
+
+impl FlowLinePage.beginDrag(e: any) -> None {
+    target: any = e.target;
+    # Floating controls over the canvas keep their own pointer.
+    if target
+        and target.closest
+        and target.closest("[data-panel], input, textarea, a") {
         return;
     }
-    pos = pointerXY(e);
-    hit = hitStep(stepsRef.current or [], liveRef.current or {}, pos[0], pos[1]);
-    if not hit {
+    if e.pointerType == "mouse" and e.button != 0 and e.button != 1 {
         return;
     }
-    e.preventDefault();
-    step = hit["step"] as StepView;
-    if hit["onEdge"] {
-        # The border is the port: dragging off it draws a transition.
-        # Grabbing a port also cancels an open New step panel, the panel and
-        # the inspector share `form`, so leaving it open would overwrite the
-        # half-typed name and let Add to canvas create a duplicate.
-        wireRef.current = step.id;
-        connectFrom = step.id;
-        selectedId = step.id;
-        selectedEdge = "";
-        confirmDelete = False;
-        creatingStep = False;
-        form = {
-            "name": step.name,
-            "kind": step.kind,
-            "color": step.color,
-            "owner": step.owner,
-            "blurb": step.blurb
+    pts: list[list[float]] = trackPointer(
+        pointersRef.current or [],
+        float(e.pointerId),
+        float(e.clientX),
+        float(e.clientY)
+    );
+    pointersRef.current = pts;
+    pan: list[float] = panRef.current or [panX, panY];
+    if len(pts) >= 2 {
+        # A second finger: whatever the first one started becomes a pinch.
+        a = pts[0];
+        b = pts[1];
+        d = ((a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2])) ** 0.5;
+        dragRef.current = None;
+        wireRef.current = None;
+        live = {};
+        dragId = "";
+        gestureRef.current = {
+            "kind": "pinch",
+            "d0": d if d > 1.0 else 1.0,
+            "z0": float(zoomRef.current) if zoomRef.current else zoom
         };
         return;
     }
-    at = stepXY(step, liveRef.current or {});
-    # lx/ly track the latest dragged position on the ref itself, seeded to
-    # the start so endDrag can always read them without touching `live`.
-    dragRef.current = {
-        "id": step.id,
-        "px": pos[0],
-        "py": pos[1],
-        "x": at[0],
-        "y": at[1],
-        "lx": at[0],
-        "ly": at[1],
+    panStart: dict[str, any] = {
+        "kind": "pan",
+        "x0": float(e.clientX),
+        "y0": float(e.clientY),
+        "px": pan[0],
+        "py": pan[1],
         "moved": False
     };
+    if e.button == 1 or spaceRef.current {
+        e.preventDefault();
+        gestureRef.current = panStart;
+        return;
+    }
+    if editing {
+        if connectFrom {
+            return;
+        }
+        pos = surfaceXY(e);
+        hit = hitRect(stepsRef.current or [], drawnRects(), pos[0], pos[1]);
+        if "id" in hit {
+            e.preventDefault();
+            found = [
+                s
+                for s in (stepsRef.current or [])
+                if s.id == hit["id"]
+            ];
+            if len(found) == 0 {
+                return;
+            }
+            step = found[0];
+            if hit["onEdge"] {
+                # The border is the port: dragging off it draws a transition.
+                # It also closes an open New step panel, which shares `form`.
+                wireRef.current = step.id;
+                connectFrom = step.id;
+                selectedId = step.id;
+                selectedEdge = "";
+                confirmDelete = False;
+                creatingStep = False;
+                form = {
+                    "name": step.name,
+                    "kind": step.kind,
+                    "color": step.color,
+                    "owner": step.owner,
+                    "blurb": step.blurb
+                };
+                return;
+            }
+            world = pointerXY(e);
+            atPos = stepXY(step, liveRef.current or {});
+            dragRef.current = {
+                "id": step.id,
+                "px": world[0],
+                "py": world[1],
+                "x": atPos[0],
+                "y": atPos[1],
+                "lx": atPos[0],
+                "ly": atPos[1],
+                "moved": False
+            };
+            return;
+        }
+    }
+    # Empty canvas, or any press in view mode: it becomes a pan once it moves,
+    # and stays a click (open a step, clear a selection) if it does not.
+    gestureRef.current = panStart;
 }
 
-impl FlowLinePage.moveDrag(e: MouseEvent) -> None {
+impl FlowLinePage.moveDrag(e: any) -> None {
+    pts: list[list[float]] = trackPointer(
+        pointersRef.current or [],
+        float(e.pointerId),
+        float(e.clientX),
+        float(e.clientY)
+    );
+    pointersRef.current = pts;
     surface: any = e.currentTarget;
-    drag = dragRef.current;
-    if surface {
+    g: any = gestureRef.current;
+    if g and g["kind"] == "pinch" and len(pts) >= 2 {
+        a = pts[0];
+        b = pts[1];
+        d = ((a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2])) ** 0.5;
+        box: any = surface.getBoundingClientRect();
+        zoomTo(
+            float(g["z0"]) * d / float(g["d0"]),
+            (a[1] + b[1]) / 2.0 - float(box.left),
+            (a[2] + b[2]) / 2.0 - float(box.top)
+        );
+        return;
+    }
+    if g and g["kind"] == "pan" {
+        dx = float(e.clientX) - float(g["x0"]);
+        dy = float(e.clientY) - float(g["y0"]);
+        if not g["moved"] {
+            if dx * dx + dy * dy < 16.0 {
+                return;
+            }
+            g["moved"] = True;
+            # Capture only once it is really a drag, so a plain click still
+            # reaches the step under it.
+            try {
+                surface.setPointerCapture(e.pointerId);
+            } except Exception as err {
+                g["moved"] = True;
+            }
+            surface.style.cursor = "grabbing";
+        }
+        applyPan(float(g["px"]) + dx, float(g["py"]) + dy);
+        return;
+    }
+    drag: any = dragRef.current;
+    if editing and surface {
         if drag {
             surface.style.cursor = "grabbing";
         } elif wireRef.current or connectFrom {
             surface.style.cursor = "crosshair";
         } else {
-            probe = pointerXY(e);
-            over = hitStep(
-                stepsRef.current or [], liveRef.current or {}, probe[0], probe[1]
-            );
-            if over {
+            probe = surfaceXY(e);
+            over = hitRect(stepsRef.current or [], drawnRects(), probe[0], probe[1]);
+            if "id" in over {
                 surface.style.cursor = "crosshair" if over["onEdge"] else "grab";
             } else {
                 surface.style.cursor = "";
@@ -1002,12 +1559,17 @@ impl FlowLinePage.moveDrag(e: MouseEvent) -> None {
     if ny < 0.0 {
         ny = 0.0;
     }
-    if abs(nx - drag["x"]) > 3.0 or abs(ny - drag["y"]) > 3.0 {
+    if not drag["moved"] and (abs(nx - drag["x"]) > 3.0 or abs(ny - drag["y"]) > 3.0) {
         drag["moved"] = True;
+        dragId = drag["id"];
+        try {
+            surface.setPointerCapture(e.pointerId);
+        } except Exception as err {
+            drag["moved"] = True;
+        }
     }
-    # The ref carries the authoritative position: `live` only drives the
-    # render, and a release can beat React's state flush, leaving liveRef
-    # without this id.
+    # The ref carries the authoritative position: a release can beat React's
+    # state flush.
     drag["lx"] = nx;
     drag["ly"] = ny;
     updated = {** live};
@@ -1015,49 +1577,66 @@ impl FlowLinePage.moveDrag(e: MouseEvent) -> None {
     live = updated;
 }
 
-impl FlowLinePage.endDrag(e: MouseEvent) -> None {
-    wiring = wireRef.current;
+impl FlowLinePage.endDrag(e: any) -> None {
+    remaining: list[list[float]] = [];
+    for p in (pointersRef.current or []) {
+        if p[0] != float(e.pointerId) {
+            remaining.append(p);
+        }
+    }
+    pointersRef.current = remaining;
+    surface: any = e.currentTarget;
+    g: any = gestureRef.current;
+    if g and g["kind"] == "pinch" {
+        if len(remaining) < 2 {
+            gestureRef.current = None;
+            swallowRef.current = new(Date).getTime();
+        }
+        return;
+    }
+    if g and g["kind"] == "pan" {
+        gestureRef.current = None;
+        if surface {
+            surface.style.cursor = "";
+        }
+        if g["moved"] {
+            swallowRef.current = new(Date).getTime();
+        }
+        return;
+    }
+    wiring: any = wireRef.current;
     if wiring {
         wireRef.current = None;
-        pos = pointerXY(e);
-        hit = hitStep(stepsRef.current or [], liveRef.current or {}, pos[0], pos[1]);
-        landed = (hit["step"] as StepView).id if hit else "";
+        pos = surfaceXY(e);
+        hit = hitRect(stepsRef.current or [], drawnRects(), pos[0], pos[1]);
+        landed = str(hit["id"]) if "id" in hit else "";
+        swallowRef.current = new(Date).getTime();
         if not landed or landed == wiring {
-            # Released on empty canvas: stay armed so the click path can
-            # finish the connection instead of silently losing the aim. The
-            # gesture still generates one click on the canvas, so swallow it
-            # or clearCanvas would disarm immediately.
-            swallowRef.current = True;
+            # Released on empty canvas: stay armed so a click can finish it.
             return;
         }
-        swallowRef.current = True;
         connectFrom = "";
         await linkSteps(wiring, landed);
         return;
     }
-    drag = dragRef.current;
+    drag: any = dragRef.current;
     if not drag {
         return;
     }
     dragRef.current = None;
+    dragId = "";
     if not drag["moved"] {
-        # Below the move threshold: drop the override so a later render
-        # cannot keep drawing the card at a position nothing persisted.
         live = {};
         return;
     }
-    swallowRef.current = True;
-    # Read the coordinates off the drag ref, not off `live`: a fast flick can
-    # release before React commits the state update, and the old
-    # `if not target` guard was dead anyway (an empty list is truthy in JS),
-    # so a miss used to send undefined and snap the card to the origin.
+    swallowRef.current = new(Date).getTime();
     nx = float(drag["lx"]);
     ny = float(drag["ly"]);
     try {
         root spawn MoveStep(step_id=drag["id"], x=nx, y=ny);
         await reload(projectId);
     } except Exception as err {
-        toast("Failed to save the position");
+        toast.error("Failed to save the position");
     }
     live = {};
 }

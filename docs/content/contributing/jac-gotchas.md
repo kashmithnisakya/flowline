@@ -92,15 +92,33 @@ clean and only fail at runtime, in the browser, or on the deployed build.
     `return None` anywhere in a function an effect calls becomes that effect's
     cleanup. Give early exits a real no-op cleanup.
 
-??? danger "On a full page load an app page mounts twice"
+??? danger "A page mounts once, but keep the double-mount defences"
 
-    Once bare, before the layout's login state resolves, then inside the
-    chrome. A one-shot URL parameter read in `can with entry` is gone for the
-    second mount: read it in entry, consume it in the effect that acts on it.
-    A call that must reach the server exactly once (the GitHub install
-    completion) must strip the parameter and start the call **before** the
-    first `await`, keep the in-flight promise in module state, and have every
-    mount await that same promise. A flag or a `Ref` is not enough.
+    The layout reads `jacIsLoggedIn()` at render time, so the first render
+    is the real chrome. It used to read it in an effect, which painted a bare
+    page first and remounted every page inside the chrome, and the pages
+    still carry the defences that made that safe: a one-shot URL parameter
+    is read in entry and consumed in the effect that acts on it, and a call
+    that must reach the server exactly once (the GitHub install completion)
+    strips the parameter and starts the call **before** the first `await`,
+    keeps the in-flight promise in module state, and awaits that same
+    promise from every mount. A flag or a `Ref` is per instance, so keep
+    those patterns.
+
+??? note "The first paint is a placeholder"
+
+    `lib/boot.js` is inlined into `<head>` from `jac.toml` and runs before
+    the bundle: it paints the saved theme on `<html>`, preloads the Archivo
+    file the header uses (the build keeps asset names) and, on app paths
+    with a session, draws `#flowline-boot` before `#root`. The layout removes
+    it in a `useLayoutEffect` on its first render. The header paints the
+    workspace name and account from the cache `lib/session.jac` keeps, and a
+    page renders its loaded frame with skeleton rows on the first data load
+    only, sized by per-browser caches of the last visit (session-scoped: the
+    keys live in `lib/session.jac` and `forgetSession` clears them), then
+    cross-fades to the content through `components/common/Reveal`, which
+    shows the frame again if `ready` drops with nothing on screen; a refetch
+    keeps the rows and shows `components/common/Busy` after 300ms.
 
 ??? note "`has` state is a live cell on 0.37"
 
@@ -149,12 +167,13 @@ clean and only fail at runtime, in the browser, or on the deployed build.
 
 ??? danger "`UpdateTask` overwrites every field it is sent"
 
-    Every page that opens `TaskDialog` must carry `start_date` and the
-    iteration (a jid or `"none"`) in its form and pass them on save, or a save
-    clears them. The checklist is deliberately **not** part of the form: only
-    `AddChecklistItem`, `SetChecklistItem` and `RemoveChecklistItem` write it,
-    each applied at once, and a page that opens the dialog passes `taskId`,
-    `checklist` and an `onChecklist` that swaps the reported view into its rows.
+    Every page that opens the task sheet (`components/board/TaskDialog.jac`)
+    must carry `start_date` and the iteration (a jid or `"none"`) in its form
+    and pass them on save, or a save clears them. The checklist is deliberately
+    **not** part of the form: only `AddChecklistItem`, `SetChecklistItem` and
+    `RemoveChecklistItem` write it, each applied at once, and a page that opens
+    the sheet passes `taskId`, `checklist` and an `onChecklist` that swaps the
+    reported view into its rows.
 
 ??? note "`Root` is not a runtime name in `models.jac`"
 

@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `AGENTS.md` covers the Jac CLI basics (`jac guide`, `jac check`, `jac browse`).
 This file covers what is specific to *this* app. **Read `jac guide <name>` before
-writing `.jac`** — the syntax looks like Python/JSX but is neither.
+writing `.jac`**: the syntax looks like Python/JSX but is neither.
 
 ## Commands
 
 ```bash
 jac check <file>                    # type-check + lint; run on every file you touch
 jac fmt --lintfix <file>            # format + auto-fix lint; CI enforces this (see Verification)
-jac run --no-dev main.jac           # production mode — app and API share one origin (:8000)
+jac run --no-dev main.jac           # production mode: app and API share one origin (:8000)
 jac run -w 1 main.jac               # dev mode with HMR: app on :8000, API on :8001 (see caveats below)
-jac run brand/logo.jac              # regenerate the logo into assets/brand/
+jac run --no-takeover brand/logo.jac     # regenerate the logo into assets/brand/ (plain `jac run` fails on 0.37.14)
+jac run --no-takeover brand/social.jac   # draw the link preview card, assets/brand/og-image.png
 jac install --shadcn <name>         # add a UI primitive (writes components/ui/<name>.jac)
 jac scale deploy --dry-run --show-yaml main.jac   # render the k8s manifests (see Deploy sizing)
 ```
@@ -38,7 +39,7 @@ jac run --no-dev main.jac
 single-process, so it refuses to start without `-w 1` or `JAC_SERVE_WORKERS=1`
 (`.env.example` carries it; CLI beats env beats jac.toml).
 
-### Server hygiene — do this before every restart
+### Server hygiene: do this before every restart
 
 A lingering `_bun/bun` child holds the API port, `jac run` then silently
 **drifts to the next port pair** (8002/8001 → 8005/8004 …), and every walker
@@ -53,7 +54,7 @@ Then read the actual port out of the startup log rather than assuming 8000.
 
 ## Architecture
 
-Multi-tenant kanban + daily-log tracker. **The account is the organization** —
+Multi-tenant kanban + daily-log tracker. **The account is the organization**:
 there is no `Organization` node. The organization's name (`org_name`) lives in
 the account profile at `GET`/`PATCH /user/me`: signup sends an empty profile
 and the setup wizard writes the name. The app asks for no personal name; the
@@ -61,7 +62,7 @@ people it tracks are roster members.
 
 ### Server
 
-- **`models.jac`** — every `node`/`edge`/`obj` archetype **and nothing else**.
+- **`models.jac`**: every `node`/`edge`/`obj` archetype **and nothing else**.
   Archetype identity includes the module path, so **moving a declaration
   orphans persisted data**. It must also stay free of Python imports (see
   gotchas). The graph is boxed: `root ++> Projects ++> Project ++> Task`,
@@ -90,7 +91,7 @@ people it tracks are roster members.
   `steps_of`, `all_tasks` and `project_tasks` serve the walkers that
   aggregate from the root. A `Member` stores `first_name` and `last_name`;
   `full_name()` is the display name.
-- **`services/`** — the API, one folder per section (`projects`, `roster`,
+- **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
   `iterations` (iteration CRUD and `RoadmapSnapshot`), and
   `github` with `github.jac`, `events.jac` and `util.jac`) plus
@@ -149,10 +150,10 @@ people it tracks are roster members.
   than loading it. Every ordering ends in the jid, so a row cannot swap
   pages between two requests (sorts are stable, so a `jid` pass first and
   the real key second gives a deterministic tiebreak).
-- **`constants.jac`** — `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
+- **`constants.jac`**: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
   `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
-- **`main.jac`** — entry point. **A walker missing from its import list 404s**,
+- **`main.jac`**: entry point. **A walker missing from its import list 404s**,
   and the entry module cannot use relative imports (`import from models {…}`,
   not `.models`); modules under `services/` likewise import bare, by the
   full dotted path (`import from services.tasks.tasks {…}`).
@@ -171,7 +172,7 @@ Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 behavior on what a status MEANS** (`Done` is terminal, `Blocked` needs
 attention, `Review` is a handoff), so every task write sets `step_id` *and*
 the mapped legacy `status` via `KIND_STATUS`. Insights, GitHub sync, the
-assistant and the log therefore never learn what a step is — keep it that way
+assistant and the log therefore never learn what a step is; keep it that way
 rather than teaching them.
 
 **Write `status` through `Task.set_status(status, stamp)`, never by
@@ -186,9 +187,9 @@ all read those two, so they agree.
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
 of that kind; an org with no flow line at all falls back to `STATUSES`. Both
-fallbacks are load-bearing — do not assume a task has a step.
+fallbacks are load-bearing: do not assume a task has a step.
 
-### Security model — the one thing not to regress
+### Security model: the one thing not to regress
 
 Isolation is structural: authenticated walkers run on the caller's own root, so
 `[root --> …]` cannot reach another tenant. `jobj(id)` is owner-gated on
@@ -245,18 +246,30 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/log`, `/workspace`, `/settings`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/board`, `/tasks`, `/roadmap`, `/log`, `/overview`, `/flowlines`, `/workspace`, `/github`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/settings`, `/projects`, `/roster`, `/workflow` | `pages/(auth)/…` | redirects only: `/settings` goes to `/workspace?tab=preferences` |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
-  would show two navs. Do not add a `layout.jac` inside `(auth)/` — it
-  collides with the root layout.
+  would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
+  collides with the root layout. The chrome is a top bar grouped into daily
+  views and setup pages (`NAV_PAGES` in `CommandPalette.jac`, shared with the
+  palette and the phone tab bar), an account menu with the signed-in identity
+  and the theme, and `components/assistant/AssistantDock` (Ask), mounted once:
+  a docked column at 1280px and up, a sheet below. `/setup` gets only the mark
+  and Sign out.
+- **`/workspace` is every setting**: Organization, People, Projects, Roles and
+  Preferences (the theme) as `?tab=` sections from `components/workspace/`.
+  GitHub lives at `/github`; `?tab=github` and install round trips forward
+  there with the query intact.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
-  components from `components/{flowlines,board,log,roster,projects,auth,landing}/`.
+  components from `components/<area>/` (`board`, `tasks`, `roadmap`, `log`,
+  `dashboard` for the Overview, `flowlines`, `workspace`, `github`, `roster`,
+  `projects`, `assistant`, `auth`, `landing`, `common`).
 - Form-heavy dialogs take a `dict` plus one `onField(key, value)` callback
   rather than a dozen props.
-- **`components/ui/`** is jac-shadcn — import only, never edit. When a
+- **`components/ui/`** is jac-shadcn: import only, never edit. When a
   registry component ships broken, keep the fixed copy under a name
   `jac install --shadcn <name>` cannot write to, or the next install
   silently restores the bug: `toaster.jac` (not `sonner.jac`). The
@@ -268,36 +281,53 @@ File-based routing with route groups:
   `dueTone`, `dueLabel`): the card, the lane header and the overview all
   derive "overdue" from it, so change it there or nowhere.
 - **`components/common/`** holds the shared bits: `Avatar.jac` (initials
-  avatars, hue hashed from the name, `AvatarStack` for assignees),
-  `CommandPalette.jac` (⌘K), `glyphs`, `Markdown`, `KineticGrid`.
+  avatars on eight fixed fills hashed from the name, `AvatarStack` for
+  assignees), `KindGlyph.jac` (a step kind as a glyph), `StepName.jac` (a
+  step's swatch plus name), `CommandPalette.jac` (⌘K), `ErrorNote`,
+  `LoadFailed`, `glyphs`, `Markdown`.
+- **The visual system lives in `styles/global.css`.** Archivo (the
+  `wdth.css` import, so `font-stretch` works) for UI and display, IBM Plex
+  Mono for data, shadcn token names on a neutral ground with one rust
+  primary. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
+  `.toolbar-filter`, `.data-table`, `.step-swatch` ...) are defined there;
+  the two that dress registry primitives sit outside `@layer` so they beat
+  the primitives' utilities. Nothing renders below 12px, labels are
+  sentence case, and only floating layers cast a shadow.
 - **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
   (opaque canvas fill) in `styles/global.css` for both palettes; the tables
   in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
-  colour key needs tokens in both palettes, and its key is what persists.
-- **The flow line page's step panel opens the board's dialog.** Clicking a step
-  in view mode docks `StepTasksPanel` in the slot the editor's inspector uses,
-  and a row opens `components/board/TaskDialog` on the same form dict and the
-  same `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
+  colour key needs tokens in both palettes, and its key is what persists
+  (`rose` renders orchid, clear of the andon red).
+- **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
+  sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
+  so far" from `ListLogEntries` with `task_id`); only the board passes `beside`
+  so it stays non-modal next to the lanes. Clicking a step in the flow line
+  page's view mode floats `StepTasksPanel` over the diagram (a bottom sheet on
+  phones), and a row opens the sheet on the same form dict and the same
+  `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
   does the same for its rows, and keeps scope, filters, sort and page in the
   URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
   `sort="step"` follow the board's column order and placement rule. `/roadmap`
   opens it from a bar. **`UpdateTask` overwrites every field**, so each page
-  that opens the dialog must carry `start_date` and `iteration` (a jid or
+  that opens the sheet must carry `start_date` and `iteration` (a jid or
   `"none"`) in its form and pass them on save, or a save clears them.
 - **A task's checklist is not part of the form.** `Task.checklist` is written
   only by `AddChecklistItem` / `SetChecklistItem` / `RemoveChecklistItem`,
-  each applied at once from `components/board/Checklist.jac`, so a dialog
+  each applied at once from `components/board/Checklist.jac`, so a sheet
   save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
   page that opens `TaskDialog` passes `taskId`, `checklist` and an
   `onChecklist` that swaps the reported view into its rows.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
-  create dialog; an already mounted board listens for `flowline:open-task` /
-  `flowline:new-task` instead (the palette uses both paths).
+  new-task sheet (setup lands there after applying a template); an already
+  mounted board listens for `flowline:open-task` / `flowline:new-task` instead
+  (the palette uses both paths).
 - **A log entry's `member_name` is every assignee comma-joined**, so split
   it before comparing to a member.
-- **`brand/logo.jac`** generates every logo variant into `assets/brand/`; edit
-  the generator, not the SVGs. Reference brand assets as **`/static/...`**, not
-  `/assets/...` — Vite owns `/assets/*` at build time.
+- **`brand/logo.jac`** generates every logo variant into `assets/brand/` and
+  **`brand/social.jac`** draws `og-image.png` (fonts from `node_modules`, so
+  `jac install` first); edit the generators, not their output. Reference brand
+  assets as **`/static/...`**, not `/assets/...`: Vite owns `/assets/*` at
+  build time.
 
 ### Deploy sizing
 
@@ -337,7 +367,7 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 ## Jac gotchas that have already cost real debugging time
 
 - **A computed key does not survive a dict-literal spread.** `{**form, key: v}`
-  compiles to JS `{...form, key: v}` — a *literal* `"key"` property — so bound
+  compiles to JS `{...form, key: v}`, a *literal* `"key"` property, so bound
   inputs freeze. Use `updated = {**form}; updated[key] = v; form = updated;`.
 - **Never name a module after an npm package it imports.**
   `components/ui/sonner.jac` importing `"sonner"` resolved to itself → infinite
@@ -362,28 +392,45 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 - **A page method named `set<Field>` collides with the state setter.** A
   `has zoom: float` compiles to a state cell plus a `setZoom` binding, so a
   `def setZoom` in the same component is a duplicate declaration and the
-  whole Vite build fails with a 503 at request time (`jac check` passes —
+  whole Vite build fails with a 503 at request time (`jac check` passes:
   the clash only exists in the emitted JS). Name the method something else.
   Worse, an **imported function** named `set<Field>` doesn't even fail the
   build: the generated setter shadows the import silently, so every call
   updates React state instead of doing its job (issue #131, `setThemePref`
   vs `has themePref`). Never declare a `has` whose setter name an import uses.
-- **A docstring as the first statement of a plain `def` is a parse error** —
+- **A docstring as the first statement of a plain `def` is a parse error**:
   use a `#` comment above the `def`.
-- **On a full page load an app page mounts twice**: once bare, before the
-  layout's `loggedIn` resolves, then again inside the chrome. Anything a
-  page consumes in `can with entry` (a URL param, a one-shot flag) is gone
-  for the second mount. Read it in entry, but consume it in the effect that
-  acts on it (see `pendingTaskId` on the board). The inverse trap is a
-  one-shot param that must reach the server exactly once: both mounts read
-  the URL, so strip it and start the call BEFORE the first await, keep the
-  in-flight promise in module state, and have every mount await that same
-  promise before it reads the result. A flag alone is not enough: the bare
-  mount that made the call is discarded, and the surviving mount would read
-  status while the call is still in flight. The GitHub install callback
-  fired twice that way, and the two concurrent `CompleteGithubInstall`
-  calls raced the single-use OAuth code and left the connection blank
-  (#187); a `Ref` is no guard, since each mount is its own instance.
+- **A page mounts once, because the layout reads `jacIsLoggedIn()` at render
+  time.** Until Sep 2026 it read it in `can with entry` (an effect), so every
+  full load painted a bare page first and then remounted it inside the
+  chrome, and the pages grew defences that must stay: a one-shot URL param
+  is read in entry but consumed in the effect that acts on it (see
+  `pendingTaskId` on the board), and a call that must reach the server
+  exactly once (the GitHub install completion, #187) strips the param and
+  starts the call BEFORE the first await, keeps the in-flight promise in
+  module state, and awaits that same promise from every mount. Keep those
+  patterns: a `has` flag or a `Ref` is per instance, and a remount is still
+  one route change away.
+- **The first paint is a placeholder, not a blank page.** `lib/boot.js`
+  (inlined into `<head>` from jac.toml, before the bundle) paints the saved
+  theme on `<html>`, preloads `/archivo-latin-wdth-normal.woff2` (the Vite
+  build keeps asset names, so the CSS asks for that exact URL and the nav
+  paints in its final width on a cold cache) and, on app paths with a
+  session, draws `#flowline-boot` before `#root`; the layout removes it in a
+  `useLayoutEffect` on its first render. The header reads the cached
+  workspace name and account from `lib/session.jac` (`flowline-org`,
+  `flowline-account`, written when `/user/me` resolves), so it never shows
+  the wordmark and then the name. A page renders its loaded frame with
+  skeleton rows on the first data load only, sized by per-browser caches of
+  the last visit (the `*_KEY` globs in `lib/session.jac`: lanes, overview,
+  log, roadmap, GitHub; the log writes today's view and the roadmap the
+  unfiltered one). `forgetSession` clears every cache when a session starts
+  or ends, so another account never inherits a name or a shape. The swap to
+  the content goes through `components/common/Reveal` (a 150ms cross-fade in
+  one grid cell, so no frame in between is blank; the frame comes back if
+  `ready` drops with nothing on screen, a retry after a failed first load)
+  and a page never re-skeletons: a refetch keeps the rows under `aria-busy`
+  and shows `components/common/Busy` after 300ms.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since
@@ -442,14 +489,14 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 - **A Radix `Select` shows its placeholder only for the value `""`.** A
   sentinel such as `"none"` with no matching item renders an empty
   trigger and no muted styling. Seed `""` for "nothing picked" (project on
-  the task dialog and the repo picker); keep a sentinel only where an item
+  the task sheet and the repo picker); keep a sentinel only where an item
   carries it (the reviewer's "No reviewer").
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating.
 
 ## Verification
 
-**API gates** — the suite lives in the scratchpad, not the repo; it signs up two
+**API gates**: the suite lives in the scratchpad, not the repo; it signs up two
 accounts and asserts CRUD plus tenant isolation: cross-account reads return
 nothing, and foreign-jid `UpdateTask` / `MoveTask` / `DeleteTask` /
 `AssignToProject` / `UpdateLogEntry` / `SaveProject` / `ArchiveMember` are all
@@ -459,11 +506,11 @@ the set with no repeats, `total` is stable across pages, a page past the end
 is empty, `page_size` clamps. Re-run something equivalent after touching
 walkers or `owned()`.
 
-**Browser QA** — use `agent-browser`, and note that **`agent-browser type` does
+**Browser QA**: use `agent-browser`, and note that **`agent-browser type` does
 not reliably trigger React onChange** (it sets the value in a way React's
 tracker ignores, making working inputs look broken). Use `agent-browser
 keyboard type` for real key events. Assert on rendered text, not just
-coordinates — a stale `@eN` ref can produce a phantom pass.
+coordinates: a stale `@eN` ref can produce a phantom pass.
 
 **Docs site** (`docs/`, MkDocs Material, published to GitHub Pages by
 `.github/workflows/docs.yml`). The API and data graph reference is generated
@@ -482,10 +529,11 @@ GitHub endpoints the app calls: the connect round trip binds the
 installation, the poll back-fills, signed deliveries are queued by the
 receiver and applied by the drain, three workspaces stay isolated; the App
 env and `GITHUB_API_BASE` / `GITHUB_WEB_BASE` come from the workflow, no
-secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, create a
-task from the board, see the card, then land on GitHub's install redirect
-against the stub and check the page finishes it with exactly one
-`CompleteGithubInstall` request). The `jac` job runs
+secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, finish the
+three-step setup on the Simple template, land on the board with the new-task
+sheet open and the template's steps applied, create a task and see the card
+survive a reload, then land on GitHub's install redirect against the stub and
+check the page finishes it with exactly one `CompleteGithubInstall` request). The `jac` job runs
 `jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),
 `jac check --lint`, then a per-file `jac check`, all with the jac release
@@ -501,11 +549,18 @@ warm-up is kept as cheap insurance). `jac check` cannot see client codegen
 failures either: only `jac run` (the bundle build) reports a walker module
 that lowered into the client, so boot the app after touching imports or pins.
 
-**SSO** — the HMR dev server (`jac run main.jac`) has not proxied `/sso` to
+**SSO**: the HMR dev server (`jac run main.jac`) has not proxied `/sso` to
 the API (only `/walker`, `/user`, `/function`, `/graph`, `/admin`, `/static`,
 `/assets`, `/docs`, `/introspect`), so exercise SSO with `jac run --no-dev`. The initiate
 endpoint requires a `client_callback` query param, which `jacSsoLogin` does not
-send — `components/auth/SsoButtons.jac` builds the URL itself.
+send, so `components/auth/SsoButtons.jac` builds the URL itself. It also finds
+the configured providers by following `GET /sso/{platform}/callback`, which
+redirects to `[scale.sso] client_auth_callback_url` with
+`?error=SSO_NOT_CONFIGURED` when a provider has no credentials (`${VAR:-}` in
+`jac.toml` keeps an unset pair empty). A missing `client_auth_callback_url`,
+or a `HOST` that does not match the served origin, therefore hides both
+buttons. The answer is cached (`flowline-sso` in localStorage) and probed
+again once per tab, so check a config fix in a new tab.
 
 ## Repo conventions
 
@@ -516,5 +571,5 @@ send — `components/auth/SsoButtons.jac` builds the URL itself.
   `plan-archive/`.
 - Product copy must describe what the app actually does. The source design mock
   carries invented testimonials, usage metrics, pricing and integrations
-  (Slack/Teams, blocker alerts, a 14-day trial) — none of that shipped, and the
+  (Slack/Teams, blocker alerts, a 14-day trial); none of that shipped, and the
   FAQ states the honest "not yet" answers instead.

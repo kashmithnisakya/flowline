@@ -43,7 +43,7 @@ GitHub call. Every GitHub-facing page opens with it.
   variables, and which are missing.
 - `status` is `ok` or `invalid` (a reconnect is needed).
 - `webhook_seen_at` is when a delivery for this installation last arrived;
-  the UI shows "Live" from it.
+  the `/github` connection strip shows "Live · last event N ago" from it.
 
 It also re-binds a valid connection whose `gh_installations` row is missing.
 
@@ -157,21 +157,22 @@ task gets the issue number, state and link, and the log records
 
 **Reports** `{"ok": true, "repo": RepoView}` or
 `{"ok": false, "error": "not_found", "message": "Unknown repo."}`.
-Turning auto-sync on clears the repo's cursor, so the next sync back-fills its
-issue history.
+Turning `auto_sync` on ("Import issues into *project*" on `/github`) clears the
+repo's cursor, so the next sync back-fills its issue history.
 
 ::: walker SetRepoAutoDone h3
 
-**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With auto-done, a
+**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With `auto_done`
+on ("Move a card to Done when its issue closes or its pull request merges"), a
 closed issue or a merged PR (on a card In Progress or in Review) moves the card
 to the done step.
 
 ::: walker SetRepoAutoClose h3
 
-**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With close and
-reopen on ("Close & reopen issue" in the UI), `MoveTask` and `UpdateTask`
-close the linked issue when a card lands on Done and reopen it when the card
-leaves Done.
+**Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With `auto_close`
+on ("Close the issue when its card moves to Done" on `/github`), `MoveTask` and
+`UpdateTask` close the linked issue when a card lands on Done and reopen it when
+the card leaves Done.
 
 ## Reconcile
 
@@ -195,11 +196,11 @@ each tracked repo's issues and pull requests updated since its cursor.
 | --- | --- |
 | `linked` | Tasks linked to an issue when the pass started |
 | `refreshed` | State, assignee and PR changes applied |
-| `auto_added` | Issues filed as new tasks (auto-sync repos) |
+| `auto_added` | Issues filed as new tasks (`auto_sync` repos) |
 | `auto_done` | Cards moved to done |
 | `scanned`, `pages` | GitHub items read and list requests made |
 | `drained` | Queued webhook deliveries applied |
-| `unfiled` | New issues on auto-sync repos that have no project |
+| `unfiled` | New issues on `auto_sync` repos that have no project |
 | `cooldown_minutes` | 15 while deliveries are flowing, otherwise 1 |
 | `has_more` | The page budget (5 by default, `page_budget` lowers it) or the 8 second clock ran out: call again |
 | `failure` | GitHub's message when a request failed, else empty |

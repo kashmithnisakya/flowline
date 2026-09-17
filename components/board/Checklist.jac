@@ -12,7 +12,6 @@ import from ...services.tasks.tasks {
 }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.input { Input }
-import from ..ui.label { Label }
 
 def:pub ChecklistEditor(
     taskId: str,
@@ -46,7 +45,7 @@ def:pub ChecklistEditor(
         try {
             absorb(root spawn AddChecklistItem(task_id=taskId, text=text));
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }
@@ -60,7 +59,7 @@ def:pub ChecklistEditor(
                 )
             );
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }
@@ -70,7 +69,7 @@ def:pub ChecklistEditor(
         try {
             absorb(root spawn RemoveChecklistItem(task_id=taskId, item_id=itemId));
         } except Exception as e {
-            toast("Could not update the checklist");
+            toast.error("Could not update the checklist");
         }
         busy = False;
     }
@@ -95,14 +94,11 @@ def:pub ChecklistEditor(
         }
     }
     return
-        <div className="grid gap-2">
+        <section className="grid gap-2" aria-label="Checklist">
             <div className="flex items-baseline justify-between gap-3">
-                <Label>Checklist</Label>
+                <h3 className="text-[13px] font-semibold">Checklist</h3>
                 {if total > 0 {
-                    <span
-                        key="count"
-                        className="text-xs tabular-nums text-muted-foreground"
-                    >
+                    <span key="count" className="num text-xs text-muted-foreground">
                         {str(ticked) + " of " + str(total) + " done"}
                     </span>
                 }}
@@ -116,11 +112,11 @@ def:pub ChecklistEditor(
                 </div>
             }}
             {if total > 0 {
-                <ul key="rows" className="divide-y rounded-lg border">
+                <ul key="rows" className="border-t">
                     {for item in rows {
                         <li
                             key={item["id"]}
-                            className="group flex items-center gap-2.5 px-3 py-1.5"
+                            className="group flex items-center gap-2.5 border-b py-1"
                         >
                             <Checkbox
                                 checked={bool(item["done"])}
@@ -133,7 +129,7 @@ def:pub ChecklistEditor(
                             {if editId == item["id"] {
                                 <Input
                                     key="edit"
-                                    className="h-7 flex-1"
+                                    className="h-7 flex-1 text-[13px] md:text-[13px]"
                                     value={editText}
                                     autoFocus={True}
                                     onChange={lambda (e: any) { editText = e.target.value; }}
@@ -149,7 +145,7 @@ def:pub ChecklistEditor(
                                     key="text"
                                     type="button"
                                     title="Rename"
-                                    className={"min-w-0 flex-1 truncate py-0.5 text-left text-sm "
+                                    className={"min-w-0 flex-1 truncate py-0.5 text-left text-[13px] "
                                         + (
                                             "text-muted-foreground line-through"
                                                 if item["done"]
@@ -167,7 +163,7 @@ def:pub ChecklistEditor(
                                 type="button"
                                 aria-label={"Remove " + str(item["text"])}
                                 disabled={busy}
-                                className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                                className="flex size-6 flex-none items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
                                 onClick={lambda { removeItem(item["id"]); }}
                             >
                                 <svg
@@ -189,7 +185,7 @@ def:pub ChecklistEditor(
                 </ul>
             }}
             <Input
-                className="h-8"
+                className="h-8 text-[13px] md:text-[13px]"
                 placeholder={"Add an item, Enter to save"
                     if total < 50
                     else "The checklist is full (50 items)"}
@@ -201,5 +197,5 @@ def:pub ChecklistEditor(
                     add();
                 }}}
             />
-        </div>;
+        </section>;
 }
