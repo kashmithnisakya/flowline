@@ -1,7 +1,9 @@
 """GitHub walkers: connect an installation, read issues and PRs, import issues
 as tasks, open an issue from a task. Auth is an App installation (tokens minted
 per call, never reported). Every walker but GithubStatus reports ONE envelope,
-{"ok": True, ...} or {"ok": False, "error", "message"}. Nothing polls."""
+{"ok": True, ...} or {"ok": False, "error", "message"}. The poll runs on the
+server schedule (services/github/schedule.jac) and by hand; no walker a page
+load calls reaches GitHub."""
 
 import from jaclang.lib.effects { effects }
 import from models {
@@ -56,6 +58,9 @@ import from services.github.util {
     pending_deliveries,
     mark_delivered,
     purge_deliveries,
+    acquire_sync_lease,
+    read_repo_list,
+    store_repo_list,
     log
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
@@ -70,14 +75,24 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      # the repo cursors carry the rest to the next call (has_more).
      SYNC_PAGE_BUDGET: int = 5,
      SYNC_SECONDS_BUDGET: float = 8.0,
-     # A board mounts twice on a full page load; the auto pass skips itself
-     # when a sync just ran so the double mount costs one GitHub call.
+     # The scheduled pass (auto=True) skips a workspace synced this recently;
+     # shorter than the schedule's interval, so a quiet workspace is polled
+     # on every tick.
      AUTO_SYNC_COOLDOWN_MINUTES: float = 1.0,
      # While deliveries are flowing the poll is only a catch-up, so the auto
-     # pass waits this long instead; a workspace goes back to the short
-     # cooldown once the newest delivery is older than the window.
+     # pass waits this long instead (every third tick); a workspace goes back
+     # to the short cooldown once the newest delivery is older than the window.
      LIVE_SYNC_COOLDOWN_MINUTES: float = 15.0,
      LIVE_WINDOW_MINUTES: float = 60.0,
+     # A stored issue or pull request page older than this reads as stale on
+     # the GitHub page (it offers a refresh); a healthy schedule rewrites the
+     # pages at least every LIVE_SYNC_COOLDOWN_MINUTES.
+     LIST_CACHE_MINUTES: float = 20.0,
+     # The per-workspace sync lease: the schedule holds it for one pass and a
+     # manual sync leaves it held, so the schedule stays out of a workspace
+     # someone is syncing by hand. Shorter than the schedule's interval.
+     SYNC_LEASE_SECONDS: int = 240,
+     MANUAL_OWNER: str = "manual",
      # The review states that answer a review request. A commented review is
      # not a verdict and leaves a pending request pending.
      REVIEW_VERDICTS: list[str] = ["approved", "changes_requested"],
@@ -594,136 +609,265 @@ def pr_state_of(item: dict[str, any]) -> str {
 }
 
 
+# One page of a repo's issues or pull requests from GitHub, the way the
+# list walkers and the sync's list refresh both fetch it.
+def fetch_repo_page(
+    token: str, full_name: str, kind: str, state: str, page: int
+) -> dict[str, any] {
+    return gh_request(
+        token,
+        "GET",
+        "/repos/" + full_name + "/" + kind,
+        {"state": state, "per_page": PAGE_SIZE, "page": page}
+    );
+}
+
+
+# What a stored item keeps, in GitHub's own shape so a row is built from a
+# stored item and a live one alike. Bodies never go in the store.
+def trim_issue(item: dict[str, any]) -> dict[str, any] {
+    who = item.get("assignee") or {};
+    login = str(who.get("login") or "") if isinstance(who, dict) else "";
+    return {
+        "number": int(item.get("number") or 0),
+        "title": str(item.get("title") or ""),
+        "state": str(item.get("state") or ""),
+        "labels": [
+            {"name": n}
+            for n in label_names(item)
+        ],
+        "assignee": {"login": login},
+        "html_url": str(item.get("html_url") or "")
+    };
+}
+
+
+def trim_pull(item: dict[str, any]) -> dict[str, any] {
+    who = item.get("user") or {};
+    login = str(who.get("login") or "") if isinstance(who, dict) else "";
+    return {
+        "number": int(item.get("number") or 0),
+        "title": str(item.get("title") or ""),
+        "state": str(item.get("state") or ""),
+        "draft": bool(item.get("draft")),
+        "merged_at": str(item.get("merged_at") or ""),
+        "user": {"login": login},
+        "html_url": str(item.get("html_url") or ""),
+        "updated_at": str(item.get("updated_at") or "")
+    };
+}
+
+
+# The rows for one page of GitHub's issues list. Pull requests ride that
+# list too (they carry `pull_request`) and belong on the pull request tab.
+def issue_rows(holder: Root, full_name: str, raw: list[any]) -> list[GhIssueRow] {
+    items: list[any] = [];
+    for item in raw {
+        if isinstance(item, dict) and not item.get("pull_request") {
+            items.append(item);
+        }
+    }
+    linked = linked_issues(holder, full_name, items);
+    rows: list[GhIssueRow] = [];
+    for item in items {
+        rows.append(issue_row(item, linked, full_name));
+    }
+    return rows;
+}
+
+
+def pull_rows(holder: Root, full_name: str, raw: list[any]) -> list[GhPrRow] {
+    items: list[any] = [];
+    for item in raw {
+        if isinstance(item, dict) {
+            items.append(item);
+        }
+    }
+    linked = linked_pulls(holder, full_name, items);
+    rows: list[GhPrRow] = [];
+    for item in items {
+        number = int(item.get("number") or 0);
+        author = "";
+        who = item.get("user") or {};
+        if isinstance(who, dict) {
+            author = str(who.get("login") or "");
+        }
+        rows.append(
+            GhPrRow(
+                number=number,
+                title=str(item.get("title") or ""),
+                state=pr_state_of(item),
+                author=author,
+                html_url=str(item.get("html_url") or ""),
+                linked_task_id=linked[number] if number in linked else "",
+                updated_at=str(item.get("updated_at") or "")
+            )
+        );
+    }
+    return rows;
+}
+
+
+# Keep one fetched page as the repo's stored page for that kind and state.
+def keep_repo_list(
+    repo_id: str, kind: str, state: str, raw: list[any], stamp: str
+) {
+    items: list[dict[str, any]] = [];
+    for item in raw {
+        if not isinstance(item, dict) {
+            continue;
+        }
+        if kind == "issues" {
+            if item.get("pull_request") {
+                continue;
+            }
+            items.append(trim_issue(item));
+        } else {
+            items.append(trim_pull(item));
+        }
+    }
+    store_repo_list(repo_id, kind, state, items, len(raw) >= PAGE_SIZE, stamp);
+}
+
+
+# A list walker's page 1 from the store: no GitHub call. `synced_at` is
+# empty when nothing is stored yet, and `stale` says the page is past the
+# cache window (or missing), so the GitHub page can offer a refresh.
+def stored_page(
+    holder: Root, repo_id: str, full_name: str, kind: str, state: str
+) -> dict[str, any] {
+    stored = read_repo_list(repo_id, kind, state);
+    items: list[any] = stored.get("items") or [];
+    synced = str(stored.get("synced_at") or "");
+    rows: any = (
+        issue_rows(holder, full_name, items)
+            if kind == "issues"
+            else pull_rows(holder, full_name, items)
+    );
+    return {
+        "ok": True,
+        "rows": rows,
+        "page": 1,
+        "has_more": bool(stored.get("has_more")),
+        "synced_at": synced,
+        "stale": minutes_since(synced) >= LIST_CACHE_MINUTES
+    };
+}
+
+
+# A list walker's page from GitHub, on an explicit refresh or for a later
+# page; page 1 replaces the stored one.
+def live_page(
+    holder: Root,
+    c: any,
+    repo_id: str,
+    full_name: str,
+    kind: str,
+    state: str,
+    page: int
+) -> dict[str, any] {
+    token = token_of(c);
+    if not token {
+        return not_connected();
+    }
+    result = fetch_repo_page(token, full_name, kind, state, page);
+    if not result["ok"] {
+        mark_invalid(c, result);
+        return result;
+    }
+    data = result["data"];
+    raw: list[any] = [];
+    if isinstance(data, list) {
+        raw = data;
+    }
+    stamp = now_iso();
+    if page == 1 {
+        keep_repo_list(repo_id, kind, state, raw, stamp);
+    }
+    rows: any = (
+        issue_rows(holder, full_name, raw)
+            if kind == "issues"
+            else pull_rows(holder, full_name, raw)
+    );
+    return {
+        "ok": True,
+        "rows": rows,
+        "page": page,
+        "has_more": len(raw) >= PAGE_SIZE,
+        "synced_at": stamp,
+        "stale": False
+    };
+}
+
+
+def empty_page(page: int) -> dict[str, any] {
+    return {
+        "ok": True,
+        "rows": [],
+        "page": page,
+        "has_more": False,
+        "synced_at": "",
+        "stale": False
+    };
+}
+
+
 walker ListRepoIssues {
-    """One page of a repo's issues.
+    """One page of a repo's issues. Page 1 comes from the page the sync
+    stored (`synced_at`, `stale`) and never calls GitHub; `refresh` or a
+    later page reads GitHub, and page 1 then replaces the stored one.
 
     A foreign repo jid reports an empty page rather than an error: it leaks
     nothing about whether the id exists, and burns no GitHub quota."""
     has repo_id: str = "",
         state: str = "open",
         page: int = 1,
+        refresh: bool = False,
         reports: list[dict[str, any]] = [];
 
     can browse with Root entry {
         full_name = owned_full_name(here, self.repo_id);
         if not full_name {
-            report {"ok": True, "rows": [], "page": self.page, "has_more": False};
-            disengage;
-        }
-        c = connection_of(here);
-        token = token_of(c);
-        if not token {
-            report not_connected();
+            report empty_page(self.page);
             disengage;
         }
         want = self.state if self.state in ["open", "closed", "all"] else "open";
         page = self.page if self.page > 0 else 1;
-        result = gh_request(
-            token,
-            "GET",
-            "/repos/" + full_name + "/issues",
-            {"state": want, "per_page": PAGE_SIZE, "page": page}
-        );
-        if not result["ok"] {
-            mark_invalid(c, result);
-            report result;
+        if page == 1 and not self.refresh {
+            report stored_page(here, self.repo_id, full_name, "issues", want);
             disengage;
         }
-        data = result["data"];
-        raw: list[any] = [];
-        if isinstance(data, list) {
-            raw = data;
-        }
-        linked = linked_issues(here, full_name, raw);
-        rows: list[GhIssueRow] = [];
-        for item in raw {
-            if not isinstance(item, dict) {
-                continue;
-            }
-            # /issues returns pull requests too; they carry this key and
-            # belong on the pull-request tab, not the import table.
-            if item.get("pull_request") {
-                continue;
-            }
-            rows.append(issue_row(item, linked, full_name));
-        }
-        report {
-            "ok": True,
-            "rows": rows,
-            "page": page,
-            "has_more": len(raw) >= PAGE_SIZE
-        };
+        report live_page(
+            here, connection_of(here), self.repo_id, full_name, "issues", want, page
+        );
     }
 }
 
 
 walker ListRepoPulls {
+    """One page of a repo's pull requests, served the way ListRepoIssues is:
+    page 1 from the store unless `refresh`, later pages from GitHub."""
     has repo_id: str = "",
         state: str = "open",
         page: int = 1,
+        refresh: bool = False,
         reports: list[dict[str, any]] = [];
 
     can browse with Root entry {
         full_name = owned_full_name(here, self.repo_id);
         if not full_name {
-            report {"ok": True, "rows": [], "page": self.page, "has_more": False};
-            disengage;
-        }
-        c = connection_of(here);
-        token = token_of(c);
-        if not token {
-            report not_connected();
+            report empty_page(self.page);
             disengage;
         }
         want = self.state if self.state in ["open", "closed", "all"] else "open";
         page = self.page if self.page > 0 else 1;
-        result = gh_request(
-            token,
-            "GET",
-            "/repos/" + full_name + "/pulls",
-            {"state": want, "per_page": PAGE_SIZE, "page": page}
-        );
-        if not result["ok"] {
-            mark_invalid(c, result);
-            report result;
+        if page == 1 and not self.refresh {
+            report stored_page(here, self.repo_id, full_name, "pulls", want);
             disengage;
         }
-        data = result["data"];
-        raw: list[any] = [];
-        if isinstance(data, list) {
-            raw = data;
-        }
-        linked = linked_pulls(here, full_name, raw);
-        rows: list[GhPrRow] = [];
-        for item in raw {
-            if not isinstance(item, dict) {
-                continue;
-            }
-            number = int(item.get("number") or 0);
-            url = str(item.get("html_url") or "");
-            author = "";
-            who = item.get("user") or {};
-            if isinstance(who, dict) {
-                author = str(who.get("login") or "");
-            }
-            rows.append(
-                GhPrRow(
-                    number=number,
-                    title=str(item.get("title") or ""),
-                    state=pr_state_of(item),
-                    author=author,
-                    html_url=url,
-                    linked_task_id=linked[number] if number in linked else "",
-                    updated_at=str(item.get("updated_at") or "")
-                )
-            );
-        }
-        report {
-            "ok": True,
-            "rows": rows,
-            "page": page,
-            "has_more": len(raw) >= PAGE_SIZE
-        };
+        report live_page(
+            here, connection_of(here), self.repo_id, full_name, "pulls", want, page
+        );
     }
 }
 
@@ -1932,14 +2076,36 @@ def drain_deliveries(holder: Root, c: any, limit: int) -> dict[str, any] {
 }
 
 
+# Refresh the open issue and pull request pages the GitHub page reads for
+# one tracked repo, in place of what an earlier pass stored.
+def refresh_repo_lists(ctx: SyncContext, full_name: str) -> bool {
+    r = ctx.by_name[full_name];
+    for kind in ["issues", "pulls"] {
+        result = fetch_repo_page(ctx.token, full_name, kind, "open", 1);
+        if not result["ok"] {
+            mark_invalid(ctx.connection, result);
+            return False;
+        }
+        data = result["data"];
+        raw: list[any] = [];
+        if isinstance(data, list) {
+            raw = data;
+        }
+        keep_repo_list(jid(r), kind, "open", raw, ctx.stamp);
+    }
+    return True;
+}
+
+
 walker SyncGithub {
     """One bounded increment of the GitHub sync. Every tracked repo's issues
     stream (issues AND pull requests, oldest update first) is read from the
     repo's cursor and each item goes through apply_issue_item or
-    apply_pr_item; the call stops at the page or time budget with `has_more`."""
+    apply_pr_item; the call stops at the page or time budget with `has_more`.
+    The schedule runs it with `auto`; the Sync buttons run it by hand."""
     has auto: bool = False,
         # Pages this call may read, clamped to SYNC_PAGE_BUDGET; 0 means
-        # the cap. The auto pass asks for less so a board open stays light.
+        # the cap.
         page_budget: int = 0,
         # Re-walk every tracked repo from its first issue: the update path
         # then corrects what an earlier import stamped. One call resets the
@@ -1953,14 +2119,23 @@ walker SyncGithub {
             report not_connected();
             disengage;
         }
-        # Queued deliveries first: they need no token, no budget and no
-        # cooldown, and a board open is exactly when they should land.
-        drained = int(drain_deliveries(here, c, DRAIN_LIMIT)["applied"]);
-        token = token_of(c);
-        if not token {
-            report not_connected();
+        if c.status == "invalid" {
+            report {
+                "ok": False,
+                "error": "invalid",
+                "message": "Reconnect GitHub first."
+            };
             disengage;
         }
+        # A hand-driven sync holds the workspace's lease so the schedule
+        # stays out of its way; a lease held by a pass in flight is no
+        # reason to refuse the person.
+        if not self.auto {
+            acquire_sync_lease(jid(here), MANUAL_OWNER, SYNC_LEASE_SECONDS);
+        }
+        # Queued deliveries first: they need no token, no budget and no
+        # cooldown.
+        drained = int(drain_deliveries(here, c, DRAIN_LIMIT)["applied"]);
         cooldown = AUTO_SYNC_COOLDOWN_MINUTES;
         if minutes_since(installation_seen_at(c.installation_id))
             < LIVE_WINDOW_MINUTES {
@@ -1968,8 +2143,15 @@ walker SyncGithub {
         }
         if self.auto and minutes_since(c.last_sync_at) < cooldown {
             report sync_summary(
-                [0, 0, 0, 0, 0, 0], False, "", c.last_sync_at, drained, cooldown
+                [0, 0, 0, 0, 0, 0, 0], False, "", c.last_sync_at, drained, cooldown
             );
+            disengage;
+        }
+        # The token is minted only once a poll will run: a pass on cooldown
+        # makes no GitHub call at all.
+        token = token_of(c);
+        if not token {
+            report not_connected();
             disengage;
         }
         budget = SYNC_PAGE_BUDGET;
@@ -2093,6 +2275,19 @@ walker SyncGithub {
                 break;
             }
         }
+        # The GitHub page's open lists ride on a pass that reached the end
+        # of every stream with time left: two GET calls per tracked repo.
+        lists = 0;
+        if not has_more and not failure {
+            for full_name in ctx.tracked {
+                if clock() - ctx.started > SYNC_SECONDS_BUDGET {
+                    break;
+                }
+                if refresh_repo_lists(ctx, full_name) {
+                    lists = lists + 1;
+                }
+            }
+        }
         if isinstance(c, GithubConnection) {
             c.last_sync_at = ctx.stamp;
         }
@@ -2103,7 +2298,8 @@ walker SyncGithub {
                 ctx.auto_added,
                 ctx.auto_done_moves,
                 scanned,
-                pages
+                pages,
+                lists
             ],
             has_more,
             failure,
@@ -2118,7 +2314,8 @@ walker SyncGithub {
 
 # The one report shape every sync path returns, so the client reads the
 # same keys after an increment, a cooldown skip, or a GitHub failure.
-# `counts` is [linked, refreshed, auto_added, auto_done, scanned, pages].
+# `counts` is [linked, refreshed, auto_added, auto_done, scanned, pages,
+# lists] (repos whose stored issue and pull request pages were rewritten).
 def sync_summary(
     counts: list[int],
     has_more: bool,
@@ -2138,6 +2335,7 @@ def sync_summary(
         "pages": counts[5],
         "drained": drained,
         "unfiled": unfiled,
+        "lists": counts[6],
         "cooldown_minutes": cooldown,
         "has_more": has_more,
         "failure": failure,

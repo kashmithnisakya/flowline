@@ -3,73 +3,13 @@
 impl BoardPage.boot -> None {
     # One load carries the onboarding gate too: the wizard opens when the
     # snapshot comes back with no projects.
+    # No GitHub call rides on a board open: the server's schedule polls and
+    # the DRAIN_MS timer applies deliveries while they are live.
     info = await loadBoard(True);
     if info["ok"] and int(info["projects"]) == 0 {
         window.location.href = "/setup";
         return;
     }
-    # Opening the board IS the sync trigger: auto-file new issues from
-    # auto-sync repos after first paint. Passed as an argument because the
-    # `ghConnected` loadBoard just assigned is a stale read in this handler.
-    await autoSyncGithub(bool(info["connected"]));
-}
-
-
-impl BoardPage.autoSyncGithub(connected: bool) -> None {
-    if not connected {
-        return;
-    }
-    # One shot per page load, shared by both mounts through the module
-    # glob; a `has` flag cannot arbitrate this, each instance owns its own.
-    d = new(Date);
-    now: float = d.getTime() as float;
-    if now - (AUTO_SYNC["at"] as float) < 60000.0 {
-        return;
-    }
-    AUTO_SYNC["at"] = now;
-    syncing = True;
-    added: int = 0;
-    landed: int = 0;
-    more = False;
-    try {
-        rounds = 0;
-        more = True;
-        while more and rounds < AUTO_SYNC_ROUNDS {
-            rounds = rounds + 1;
-            # Only the first increment is the cooldown-guarded auto pass; a
-            # follow-up continues work the server just said is pending.
-            # No forgetWorkspace: a sync writes no roster data, and one that
-            # added cards reloads the board below, which re-primes the cache.
-            result = root spawn SyncGithub(auto=(rounds == 1), page_budget=2);
-            payload = result.reports[0] if result.reports else None;
-            if not payload or not payload["ok"] {
-                more = False;
-                break;
-            }
-            added = added + int(payload["auto_added"] or 0);
-            landed = landed + int(payload["drained"] or 0);
-            more = bool(payload["has_more"]) and not payload["failure"];
-        }
-        if added > 0 or landed > 0 {
-            await loadAll();
-        }
-        if added > 0 {
-            toast.success(
-                str(added)
-                    + (
-                        " issue added from GitHub"
-                            if added == 1
-                            else " issues added from GitHub"
-                    )
-                    + (", more on the way" if more else "")
-            );
-        }
-    } except Exception as e {
-        # Quiet on purpose: the board just opened and nothing was asked for.
-        # The Sync button still reports loudly.
-        added = 0;
-    }
-    syncing = False;
 }
 
 

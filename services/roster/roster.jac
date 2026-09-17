@@ -30,6 +30,7 @@ import from models {
     roles_box,
     members_box
 }
+import from services.github.util { drop_repo_lists }
 
 # ------------------------------------------------------------------- roster
 
@@ -412,6 +413,7 @@ walker RemoveRepo {
         if isinstance(target, Repo) and owned(here, target) {
             gone = jid(target);
             del target;
+            drop_repo_lists(gone);
             report {"deleted": gone};
         }
     }
