@@ -547,7 +547,10 @@ obj TaskPage {
         has_more: bool = False,
         total: int = 0,
         # Working scope only: Done rows older than the cutoff, same filters.
-        older: int = 0;
+        older: int = 0,
+        # The scope's count with no filter on (what `total` would be on an
+        # unfiltered page), so a filtered view says "12 of 210" in one call.
+        scope_total: int = 0;
 }
 
 obj LogPage {

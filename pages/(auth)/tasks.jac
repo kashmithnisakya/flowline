@@ -180,9 +180,8 @@ def:pub TasksPage -> JsxPage {
         stickyTop: int = 0,
         # Only the newest fetch may paint: filter and page changes race.
         reqRef: Ref[any] = Ref(),
-        # The step/priority match set for one view, and per-scope totals.
+        # The step/priority match set for one view, with its scope_total.
         poolRef: Ref[any] = Ref(),
-        totalsRef: Ref[any] = Ref(),
         # Set once the members, projects and flow line have loaded.
         readyRef: Ref[any] = Ref();
 
