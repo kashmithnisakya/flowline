@@ -82,7 +82,7 @@ impl BoardPage.reloadAll -> None {
 }
 
 
-impl BoardPage.drainDeliveries -> None {
+impl BoardPage.drainDeliveries(refresh: bool) -> None {
     # A hidden tab and a running sync both skip the tick but keep the
     # timer going; the sync drains on its own and would race this one.
     d: any = document;
@@ -90,7 +90,14 @@ impl BoardPage.drainDeliveries -> None {
         try {
             result = root spawn DrainGithubEvents();
             payload = result.reports[0] if result.reports else None;
-            if payload and payload["ok"] and int(payload["applied"] or 0) > 0 {
+            if payload and payload["ok"] and int(payload["drained"] or 0) > 0 {
+                # Rows landed, so deliveries are flowing: back to the short tick.
+                webhookLive = True;
+            }
+            if refresh
+                and payload
+                and payload["ok"]
+                and int(payload["applied"] or 0) > 0 {
                 await refreshTasks();
             }
         } except Exception as e {
@@ -100,6 +107,16 @@ impl BoardPage.drainDeliveries -> None {
         }
     }
     drainTick = drainTick + 1;
+}
+
+
+impl BoardPage.pollTick -> None {
+    # A quiet connection (no delivery inside the live window) drains its
+    # queue here, ahead of the refresh, so what landed is in the snapshot.
+    if ghConnected and not webhookLive {
+        await drainDeliveries(False);
+    }
+    await refreshTasks();
 }
 
 
@@ -116,6 +133,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     }
     projectCount = 0;
     connected = ghConnected;
+    live = webhookLive;
     try {
         # Pages of 500 so a big board paints after the first; the loop is
         # bounded and says so rather than showing part of the workspace.
@@ -153,6 +171,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                     fetchedRoles = data.roles;
                     fetchedIterations = data.iterations;
                     connected = data.github_connected;
+                    live = data.webhook_live;
                     projectCount = len(data.projects);
                 }
             }
@@ -175,6 +194,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 roleRows = fetchedRoles;
                 iterations = fetchedIterations;
                 ghConnected = connected;
+                webhookLive = live;
                 # The next first-load skeleton draws this many lanes.
                 try {
                     localStorage.setItem(
@@ -199,6 +219,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         }
         loadFailed = False;
         d = new(Date);
+        snapshotRef.current = d.getTime();
         hh = str(d.getHours());
         mm = str(d.getMinutes());
         loadedAt = ("0" + hh if len(hh) < 2 else hh)

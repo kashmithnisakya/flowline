@@ -13,7 +13,8 @@ import from ..lib.session {
     cachedAccount,
     rememberOrgName,
     rememberAccount,
-    forgetSession
+    forgetSession,
+    fetchMe
 }
 import from ..components.common.Avatar { Avatar }
 import from ..components.common.KindGlyph { KindGlyph }

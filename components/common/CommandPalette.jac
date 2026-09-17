@@ -278,8 +278,9 @@ def:pub CommandPalette(
     q = query.strip().lower();
     latestRef.current = q;
 
-    # Search the server a beat after typing stops; the runtime's short read
-    # cache makes repeats free.
+    # Search the server a beat after typing stops. ListTasks is not a cached
+    # reader (a task list must not go stale), so every distinct query is a
+    # round trip; the debounce is what keeps the count down.
     useEffect(
         lambda {
             # Always return a cleanup FUNCTION: React only skips a destroy

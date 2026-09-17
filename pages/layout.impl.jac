@@ -1,18 +1,10 @@
 """Implementations for the root layout."""
 
-# One read of /user/me for the organization name and the signed-in identity.
-# lib/session.jac's fetchProfile drops the identities, so this reads the body.
+# The organization name and the signed-in identity, through the one
+# /user/me read of this page load (lib/session.jac's fetchMe).
 impl Shell.loadMe -> None {
     try {
-        token = localStorage.getItem("jac_token") or "";
-        response = await fetch(
-            "/user/me", {"headers": {"Authorization": "Bearer " + token}}
-        );
-        if not response.ok {
-            return;
-        }
-        body: any = await response.json();
-        data: any = body["data"] if body["data"] else {};
+        data: any = await fetchMe();
         profile: any = data["profile"] if data["profile"] else {};
         name = str(profile["org_name"]) if profile["org_name"] else "";
         if name {
