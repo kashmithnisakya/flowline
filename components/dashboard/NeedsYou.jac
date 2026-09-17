@@ -94,8 +94,10 @@ def:pub NeedsYou(
     totalPlus: bool = False,
     failNote: str = "",
     onRetry: any = None,
-    # The first load: the same frame with one group of four skeleton rows.
-    placeholder: bool = False
+    # The first load: the same frame with skeleton groups, one per entry of
+    # `placeholderRows` with that many rows (the shape the last visit had).
+    placeholder: bool = False,
+    placeholderRows: list[int] = [4]
 ) -> JsxElement {
     return
         <section
@@ -119,20 +121,27 @@ def:pub NeedsYou(
                     Open on the board
                 </Link>
             </div>
-            {if placeholder {
-                <div key="ph" className="px-3.5 pt-0.5 pb-2">
-                    <div className="flex items-center gap-1.5 py-1">
+            {for (gi, n) in enumerate(placeholderRows if placeholder else []) {
+                <div
+                    key={"ph" + str(gi)}
+                    className={"px-3.5 pb-2 "
+                        + ("border-t pt-2" if gi > 0 else "pt-0.5")}
+                >
+                    <div className="flex h-[27px] items-center gap-1.5">
                         <Skeleton className="size-3.5 rounded-full"/>
                         <Skeleton className="h-3 w-16"/>
                     </div>
                     <ul>
-                        {for i in range(4) {
+                        {for i in range(n) {
                             <li key={str(i)} className={"border-t" if i > 0 else ""}>
                                 <div
                                     className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-2 py-1.5"
                                 >
                                     <div className="flex h-5 items-center gap-2">
-                                        <Skeleton className={"h-3.5 " + PH_WIDTHS[i]}/>
+                                        <Skeleton
+                                            className={"h-3.5 "
+                                                + PH_WIDTHS[(gi + i) % 4]}
+                                        />
                                         <Skeleton className="h-3 w-16"/>
                                     </div>
                                     <Skeleton className="size-6 rounded-full"/>

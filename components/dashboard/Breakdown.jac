@@ -43,8 +43,11 @@ def Key(color: str, label: str) -> JsxElement {
         </span>;
 }
 
-# `placeholder` is the first load: three skeleton rows in the same grid.
-def:pub ProjectBars(rows: list[dict], placeholder: bool = False) -> JsxElement {
+# `placeholder` is the first load: `placeholderRows` skeleton rows (the count
+# the last visit had) in the same grid.
+def:pub ProjectBars(
+    rows: list[dict], placeholder: bool = False, placeholderRows: int = 3
+) -> JsxElement {
     return
         <section
             className="surface min-w-0"
@@ -66,7 +69,7 @@ def:pub ProjectBars(rows: list[dict], placeholder: bool = False) -> JsxElement {
                 className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] gap-x-2.5 px-3.5 pb-2"
                 hidden={len(rows) == 0 and not placeholder}
             >
-                {for i in range(3 if placeholder else 0) {
+                {for i in range(placeholderRows if placeholder else 0) {
                     <li
                         key={"ph" + str(i)}
                         className={"col-span-3 grid grid-cols-subgrid items-center py-1.5 "
@@ -166,9 +169,14 @@ def dayFill(count: int) -> str {
     return "color-mix(in oklab, var(--foreground) 90%, var(--card))";
 }
 
-# `placeholder` is the first load: the header and five skeleton rows.
+# `placeholder` is the first load: the header and `placeholderRows` skeleton
+# rows (the count the last visit had).
 def:pub PeopleTable(
-    rows: list[dict], dayNames: list[str], todayIndex: int, placeholder: bool = False
+    rows: list[dict],
+    dayNames: list[str],
+    todayIndex: int,
+    placeholder: bool = False,
+    placeholderRows: int = 5
 ) -> JsxElement {
     # Columns follow the panel's own width: when narrow the counts fold under
     # the name as on a phone. Each row is its own grid, so the columns are
@@ -210,7 +218,7 @@ def:pub PeopleTable(
                     <span role="columnheader">Logged, Mon to Sun</span>
                     <span role="columnheader" className="text-right">Entries</span>
                 </div>
-                {for i in range(5 if placeholder else 0) {
+                {for i in range(placeholderRows if placeholder else 0) {
                     <div
                         key={"ph" + str(i)}
                         className={cols + " border-t py-1.5 text-[13.5px]"}

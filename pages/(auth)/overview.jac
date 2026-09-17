@@ -56,19 +56,51 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
 # full load) awaits the first mount's request instead of sending its own. A
 # dict cell, so a function never rebinds a glob.
 glob LOADS: dict[str, any] = {},
-     # Whether the last visit drew the day chart, so the first-load frame
-     # reserves its box only when the loaded panel will have one.
-     CHART_KEY: str = "flowline-overview-chart";
+     # The panels' shape on the last visit (the day chart, rows per worklist
+     # group, project and people rows), so the first-load frame reserves the
+     # same space the loaded page will take.
+     SHAPE_KEY: str = "flowline-overview-shape",
+     NEEDS_CAP: int = 6;
 
 def inflight(key: str) -> any {
     return LOADS[key] if key in LOADS else None;
 }
 
-def chartCached -> bool {
+def clampInt(v: any, low: int, high: int, fallback: int) -> int {
+    n = int(v) if v else 0;
+    if not n {
+        return fallback;
+    }
+    return low if n < low else (high if n > high else n);
+}
+
+def cachedShape -> dict[str, any] {
+    fallback: dict[str, any] = {
+        "chart": True,
+        "groups": [4],
+        "projects": 3,
+        "people": 5
+    };
     try {
-        return localStorage.getItem(CHART_KEY) != "0";
+        raw = localStorage.getItem(SHAPE_KEY) or "";
+        if not raw {
+            return fallback;
+        }
+        parsed: any = JSON.parse(raw);
+        groups: list[int] = [];
+        for n in (parsed["groups"] or []) {
+            if len(groups) < 5 {
+                groups.append(clampInt(n, 1, NEEDS_CAP, 1));
+            }
+        }
+        return {
+            "chart": bool(parsed["chart"]),
+            "groups": groups if len(groups) > 0 else [4],
+            "projects": clampInt(parsed["projects"], 1, 8, 3),
+            "people": clampInt(parsed["people"], 1, 12, 5)
+        };
     } except Exception as e {
-        return True;
+        return fallback;
     }
 }
 
@@ -643,24 +675,6 @@ def:pub OverviewPage -> JsxPage {
                 else "Nothing has moved to Done in four weeks, so there is no day chart yet."
         );
 
-    # Remember whether the day chart drew, for the next first-load frame.
-    # Placed after chartState: an effect's deps are read where it is called.
-    useEffect(
-        lambda {
-            if movesLoaded {
-                try {
-                    localStorage.setItem(
-                        CHART_KEY, "1" if chartState == "chart" else "0"
-                    );
-                } except Exception as e {
-                    movesLoaded = movesLoaded;
-                }
-            }
-            return lambda { movesLoaded = movesLoaded; };
-        },
-        [movesLoaded, chartState]
-    );
-
     # ---- Projects and people.
     projRows: list[dict] = [];
     for p in activeProjects {
@@ -713,6 +727,45 @@ def:pub OverviewPage -> JsxPage {
             "total": countAll(personDays[m.name]) if m.name in personDays else 0
         } for m in activeMembers
     ];
+
+    # Remember the panels' shape once every read has landed, for the next
+    # first-load frame. Placed after those locals: an effect's deps are read
+    # where it is called.
+    shapeReady = not loading and not failed and dueLoaded and movesLoaded;
+    groupRows: list[int] = [];
+    for g in groups {
+        groupRows.append(len(g["rows"]) if len(g["rows"]) < NEEDS_CAP else NEEDS_CAP);
+    }
+    shapeStamp = str(chartState == "chart")
+        + "|"
+        + ",".join([str(n) for n in groupRows])
+        + "|"
+        + str(len(activeProjects))
+        + "|"
+        + str(len(activeMembers));
+    useEffect(
+        lambda {
+            if shapeReady {
+                try {
+                    localStorage.setItem(
+                        SHAPE_KEY,
+                        JSON.stringify(
+                            {
+                                "chart": chartState == "chart",
+                                "groups": groupRows,
+                                "projects": len(activeProjects),
+                                "people": len(activeMembers)
+                            }
+                        )
+                    );
+                } except Exception as e {
+                    groupRows = groupRows;
+                }
+            }
+            return lambda { groupRows = groupRows; };
+        },
+        [shapeReady, shapeStamp]
+    );
 
     # ---- First run: every item from state the page already read. A
     # hand-written line this week ticks the log item (task events are log
@@ -818,6 +871,7 @@ def:pub OverviewPage -> JsxPage {
     # 1280px), not the viewport: two zones from 52rem, and from 90rem (what
     # 2xl gives the page without Ask) three columns: Needs you, the week, People.
     # People keeps 37rem so its own 36rem column query holds behind the border.
+    shape = cachedShape();
     zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(37rem,5fr)]";
 
     # The charts section, in both the first-load frame and the loaded page,
@@ -979,7 +1033,12 @@ def:pub OverviewPage -> JsxPage {
             {if loading {
                 <div key="sk" className={zones} aria-busy="true">
                     <div className="min-w-0 @max-[52rem]:order-1">
-                        <NeedsYou groups={[]} total={0} placeholder={True}/>
+                        <NeedsYou
+                            groups={[]}
+                            total={0}
+                            placeholder={True}
+                            placeholderRows={shape["groups"]}
+                        />
                     </div>
                     <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
                         <div className="min-w-0 @max-[52rem]:order-3">
@@ -987,11 +1046,15 @@ def:pub OverviewPage -> JsxPage {
                                 figures={[]}
                                 days={[]}
                                 placeholder={True}
-                                placeholderChart={chartCached()}
+                                placeholderChart={shape["chart"]}
                             />
                         </div>
                         <div className="min-w-0 @max-[52rem]:order-4">
-                            <ProjectBars rows={[]} placeholder={True}/>
+                            <ProjectBars
+                                rows={[]}
+                                placeholder={True}
+                                placeholderRows={shape["projects"]}
+                            />
                         </div>
                     </div>
                     <div
@@ -1002,6 +1065,7 @@ def:pub OverviewPage -> JsxPage {
                             dayNames={DAY_LABELS}
                             todayIndex={todayIdx}
                             placeholder={True}
+                            placeholderRows={shape["people"]}
                         />
                     </div>
                     {overTime()}
