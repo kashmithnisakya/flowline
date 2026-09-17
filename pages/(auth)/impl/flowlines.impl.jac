@@ -43,12 +43,29 @@ impl FlowLinePage.reload(pid: str) -> None {
     try {
         result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
         steps = result.reports[0] if result.reports else [];
+        failed = False;
     } except Exception as e {
-        toast.error("Failed to load your flow line");
+        # With a line on screen a toast is enough; with nothing, the page
+        # shows its own failed card and retry.
+        failed = True;
+        if len(steps) > 0 {
+            toast.error("Failed to load your flow line");
+        }
     }
     loading = False;
     # Counts moved, so the task titles a close zoom shows are stale too.
     flowVersion = flowVersion + 1;
+}
+
+# Everything again, projects and roster included: the first read failed
+# with them, and the card stays up (Reveal keeps its content) meanwhile.
+impl FlowLinePage.retryLoad -> None {
+    if retrying {
+        return;
+    }
+    retrying = True;
+    await boot();
+    retrying = False;
 }
 
 impl FlowLinePage.peekStep(stepId: str) -> None {

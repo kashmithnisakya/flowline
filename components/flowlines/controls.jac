@@ -1,6 +1,8 @@
 """Toolbar controls for the flow line page: a segmented switch and the zoom
 group. One height (30px) so the toolbar reads as a single row."""
 
+import from ..ui.skeleton { Skeleton }
+
 # `options` rows are {value, label} plus an optional `aria` name, used where a
 # script or screen reader needs more than the short visible word.
 def:pub Segmented(
@@ -44,7 +46,10 @@ def:pub ZoomControls(
     onIn: Callable[[], None] = None,
     onActual: Callable[[], None] = None,
     onFit: Callable[[], None] = None,
-    className: str = ""
+    className: str = "",
+    # The first-load frame: the readout is a block, since the fit zoom is
+    # not known until the flow line is.
+    pending: bool = False
 ) -> JsxElement {
     pct = str(int(zoom * 100.0 + 0.5)) + "%";
     return
@@ -76,11 +81,15 @@ def:pub ZoomControls(
             <button
                 type="button"
                 title="Zoom to 100%"
-                data-zoom={pct}
+                data-zoom={None if pending else pct}
                 className="num h-[30px] min-w-12 rounded-md px-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={lambda { if onActual { onActual(); }}}
             >
-                {pct}
+                {if pending {
+                    <Skeleton key="ph" className="mx-auto h-3 w-8"/>
+                } else {
+                    <span key="pct">{pct}</span>
+                } }
             </button>
             <button
                 type="button"

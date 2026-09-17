@@ -63,6 +63,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
+import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.ui.dialog {
     Dialog,
     DialogContent,
@@ -139,6 +140,10 @@ def:pub FlowLinePage -> JsxPage {
         # you are looking at follows you between the two tabs.
         projectId: str = "all",
         loading: bool = True,
+        # The first read produced nothing: the page says so itself, with a
+        # retry, rather than offering the template picker over a real line.
+        failed: bool = False,
+        retrying: bool = False,
         editing: bool = False,
         scratch: bool = False,
         applying: str = "",
@@ -329,6 +334,7 @@ def:pub FlowLinePage -> JsxPage {
 
     async def boot -> None;
     async def reload(pid: str) -> None;
+    async def retryLoad -> None;
     async def selectProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
     async def refreshPeek(stepId: str, pid: str) -> None;
@@ -630,7 +636,8 @@ def:pub FlowLinePage -> JsxPage {
         }
     }
 
-    showPicker = not loading and len(steps) == 0 and not scratch;
+    showFailed = not loading and failed and len(steps) == 0;
+    showPicker = not loading and not failed and len(steps) == 0 and not scratch;
     # The diagram fills the window below the toolbar and key; edit mode's
     # bar takes one more row.
     canvasH = "max(20rem, calc(100dvh - 12rem))"
@@ -687,7 +694,7 @@ def:pub FlowLinePage -> JsxPage {
                     </Select>
                     <div className="ml-auto flex shrink-0 items-center gap-3">
                         {if not showList {
-                            <ZoomControls key="zoom" zoom={1.0}/>
+                            <ZoomControls key="zoom" zoom={1.0} pending={True}/>
                         }}
                         {if not narrow {
                             <Button
@@ -766,7 +773,16 @@ def:pub FlowLinePage -> JsxPage {
     return
         <div className="flex w-full min-w-0 flex-col gap-4">
             <Reveal ready={not loading} frame={loadFrame()} className="min-w-0">
-                {if showPicker {
+                {if showFailed {
+                    <div key="failed" className="flex flex-col gap-6">
+                        <h1 className="page-title">Flow line</h1>
+                        <LoadFailed
+                            title="Could not load the flow line"
+                            onRetry={retryLoad}
+                            retrying={retrying}
+                        />
+                    </div>
+                } elif showPicker {
                     <div key="picker" className="flex flex-col gap-6">
                         <h1 className="page-title">Flow line</h1>
                         <TemplatePicker
@@ -1428,7 +1444,7 @@ def:pub FlowLinePage -> JsxPage {
                             </div>
                         }}
                     </div>
-                } }
+                }  }
             </Reveal>
             <Sheet
                 open={narrow and not editing and len(peeked) > 0}
