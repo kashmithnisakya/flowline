@@ -191,7 +191,10 @@ def:pub DailyLogPage -> JsxPage {
         quickSaving: bool = False,
         selecting: bool = False,
         selectedIds: list[str] = [],
-        selectedDate: str = "",
+        # Today from the start, not written in an entry: a `has` is a live
+        # cell, so an entry write reaches the [selectedDate] entry's mount run
+        # and fires it again on the re-render, fetching the week twice.
+        selectedDate: str = todayIso(),
         viewMode: str = "day",
         loading: bool = True,
         # The last week fetch failed: a full panel when nothing is showing,
@@ -221,10 +224,6 @@ def:pub DailyLogPage -> JsxPage {
         # The day whose content is on screen: during a week hop the loaded
         # day stays up (aria-busy) until the new week lands.
         focusRef: Ref[any] = Ref();
-
-    async can with entry {
-        selectedDate = todayIso();
-    }
 
     async can with [selectedDate] entry {
         if selectedDate {
