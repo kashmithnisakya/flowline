@@ -31,7 +31,7 @@ def:pub OrganizationSection(onRenamed: Callable[[str], None] = None) -> JsxEleme
     return
         <div className="flex flex-col gap-4">
             <SectionHeader title="Organization"/>
-            <div className="surface">
+            <div className="surface max-w-[960px]">
                 <SettingRow
                     label="Organization name"
                     hint="Shown in the top bar and the account menu."
@@ -42,7 +42,7 @@ def:pub OrganizationSection(onRenamed: Callable[[str], None] = None) -> JsxEleme
                     } else {
                         <form
                             key="form"
-                            className="flex max-w-lg flex-wrap items-center gap-2"
+                            className="flex max-w-[640px] flex-wrap items-center gap-2"
                             onSubmit={lambda (e: FormEvent) {
                                 e.preventDefault();
                                 save();

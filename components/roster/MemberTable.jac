@@ -54,7 +54,7 @@ def:pub MemberTable(
                             <th className={"w-[28%]" if showTags else "w-[34%]"}>
                                 Name
                             </th>
-                            <th className={"w-[24%]" if showTags else "w-[30%]"}>
+                            <th className={"w-[24%]" if showTags else "w-[28%]"}>
                                 Roles
                             </th>
                             <th className={"w-[22%]" if showTags else ""}>Projects</th>

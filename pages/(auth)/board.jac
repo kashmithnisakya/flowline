@@ -669,6 +669,8 @@ def:pub BoardPage -> JsxPage {
     } elif switchTo["kind"] == "new" {
         switchLabel = "a new task";
     }
+    # Lanes are minmax(252px,1fr): they share the width when they all fit
+    # and the grid scrolls sideways once seven of them no longer do.
     laneStyle: dict[str, str] = {};
     if wideView and laneH > 0 {
         laneStyle["height"] = str(laneH) + "px";
@@ -782,7 +784,7 @@ def:pub BoardPage -> JsxPage {
                     </div>
                     <Skeleton className="h-[46px] w-full"/>
                     <div
-                        className="grid auto-cols-[100%] grid-flow-col gap-2.5 overflow-hidden md:auto-cols-[252px]"
+                        className="grid auto-cols-[100%] grid-flow-col gap-2.5 overflow-hidden md:auto-cols-[minmax(252px,1fr)]"
                     >
                         {for i in [0, 1, 2, 3, 4, 5] {
                             <div key={"sk" + str(i)} className="flex flex-col gap-1.5">
@@ -919,7 +921,7 @@ def:pub BoardPage -> JsxPage {
                         data-board-lanes="true"
                         onScroll={lambda { scheduleMeasure(); }}
                         onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(e); }}
-                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[252px] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5"
+                        className="relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5"
                         style={laneStyle}
                     >
                         {for (ci, key) in enumerate(colKeys) {

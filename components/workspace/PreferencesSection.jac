@@ -77,7 +77,7 @@ def:pub PreferencesSection -> JsxElement {
     return
         <div className="flex flex-col gap-4">
             <SectionHeader title="Preferences"/>
-            <div className="surface">
+            <div className="surface max-w-[960px]">
                 <SettingRow
                     label="Theme"
                     hint="System follows your device. Saved in this browser only."

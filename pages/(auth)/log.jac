@@ -256,7 +256,7 @@ def:pub DailyLogPage -> JsxPage {
     );
 
     return
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="@container flex min-w-0 flex-col gap-4">
             <div className="flex min-h-9 flex-wrap items-center gap-3">
                 <h1 className="page-title">Log</h1>
                 {if selecting {
@@ -533,7 +533,10 @@ def:pub DailyLogPage -> JsxPage {
                             }}
                         />
                     } else {
-                        <div key="day" className="flex min-w-0 flex-col gap-[18px]">
+                        <div
+                            key="day"
+                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                        >
                             {if showStandup and not isWeek {
                                 <Standup
                                     key={"standup" + selectedDate}
@@ -586,14 +589,15 @@ def:pub DailyLogPage -> JsxPage {
                                 </div>
                             } }
                             {if not isWeek {
-                                <Composer
-                                    key="composer"
-                                    members={members}
-                                    projects={projects}
-                                    saving={quickSaving}
-                                    onLog={quickLog}
-                                    rosterReady={rosterReady}
-                                />
+                                <div key="composer" className="@min-[90rem]:col-span-2">
+                                    <Composer
+                                        members={members}
+                                        projects={projects}
+                                        saving={quickSaving}
+                                        onLog={quickLog}
+                                        rosterReady={rosterReady}
+                                    />
+                                </div>
                             }}
                         </div>
                     }    }

@@ -785,11 +785,12 @@ def:pub OverviewPage -> JsxPage {
     histAny = countAll(history.scope if history else []) > 0;
     histFinished = countAll(history.finished if history else []) > 0;
     # Layout follows the width the page is given (Ask docks beside it at
-    # 1280px), not the viewport.
-    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start";
+    # 1280px), not the viewport: two zones from 52rem, and from 90rem (what
+    # 2xl gives the page without Ask) three columns: Needs you, the week, People.
+    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(0,5fr)]";
 
     return
-        <div className="@container max-w-[1200px] space-y-4">
+        <div className="@container space-y-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="page-title">Overview</h1>
                 <span className="num text-[12.5px] text-subtle">
@@ -877,7 +878,7 @@ def:pub OverviewPage -> JsxPage {
                         </div>
                     </div>
                     <div
-                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2"
+                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
                     >
                         <PeopleTable
                             rows={peopleRows}
@@ -886,7 +887,7 @@ def:pub OverviewPage -> JsxPage {
                         />
                     </div>
                     <section
-                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2"
+                        className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2 @min-[90rem]:col-span-3"
                         aria-labelledby="over-time"
                     >
                         <div className="flex flex-wrap items-center gap-2">
