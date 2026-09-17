@@ -90,6 +90,7 @@ import from services.github.github {
 }
 import from services.github.events { GithubEvent, DrainGithubEvents }
 import from services.board.board { BoardSnapshot }
+import from services.workspace.workspace { GetWorkspace }
 import from services.iterations.iterations {
     ListIterations,
     SaveIteration,
