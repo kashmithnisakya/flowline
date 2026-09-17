@@ -370,6 +370,7 @@ def:pub TaskDialog(
         checklist = [];
         detailsFor = "";
         failedFor = "";
+        loadRef.current = "";
         if open {
             w: any = window;
             placeSheet();
