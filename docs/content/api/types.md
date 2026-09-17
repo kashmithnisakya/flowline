@@ -23,6 +23,8 @@ nodes (`Project`, `LogEntry` and the rest) are documented on the
 
 ::: obj BoardData h3
 
+::: obj WorkspaceView h3
+
 ## Iterations
 
 ::: obj IterationView h3

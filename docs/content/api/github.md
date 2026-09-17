@@ -37,7 +37,9 @@ and raw bodies never cross back.
 ::: walker GithubStatus h3
 
 **Reports** one [`GithubConnectionView`](types.md#githubconnectionview), with no
-GitHub call. Every GitHub-facing page opens with it.
+GitHub call. Pages open with the same view on
+[`GetWorkspace`](board.md#getworkspace); this is the read after a disconnect
+or a sync.
 
 - `configured` and `missing_config` say whether the server has the five App
   variables, and which are missing.

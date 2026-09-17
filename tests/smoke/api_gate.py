@@ -175,6 +175,24 @@ def main() -> int:
     status, payload, reports = walker("ListMembers")
     check("ListMembers answers", status == 200, f"{status} {payload}")
 
+    # The one read the pages open with: the lists BoardSnapshot carries, the
+    # flow line's record and the GitHub connection view, in one call.
+    status, payload, reports = walker("GetWorkspace")
+    ws = reports[0] if reports and isinstance(reports[0], dict) else {}
+    lists = ("members", "projects", "steps", "repos", "roles", "iterations")
+    check("GetWorkspace reports the workspace lists",
+          status == 200 and all(isinstance(ws.get(k), list) for k in lists)
+          and isinstance(ws.get("github"), dict) and "flow_name" in ws, f"{status} {payload}")
+    counts = {}
+    for name in ("ListMembers", "ListProjects", "ListRoles"):
+        _, _, rows = walker(name)
+        counts[name] = len(rows[0]) if rows and isinstance(rows[0], list) else -1
+    check("GetWorkspace counts match the list walkers",
+          len(ws.get("members", [])) == counts["ListMembers"] == 1
+          and len(ws.get("projects", [])) == counts["ListProjects"] == 1
+          and len(ws.get("roles", [])) == counts["ListRoles"],
+          f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
+
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))
     check("16 concurrent ListTasks all succeed", all(c == 200 for c in codes), str(codes))
