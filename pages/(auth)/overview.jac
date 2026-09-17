@@ -275,10 +275,10 @@ def:pub OverviewPage -> JsxPage {
         taskTotal: int = 0,
         # Digest snapshot slices, kept as dicts: typing them as the walker's
         # objs would pull services.insights.insights types into the client bundle.
-        reviewQueue: list[dict] = [],
-        quiet: list[dict] = [],
-        blockedInfo: dict[str, dict] = {},
-        blockedList: list[dict] = [],
+        reviewQueue: list[dict[str, any]] = [],
+        quiet: list[dict[str, any]] = [],
+        blockedInfo: dict[str, dict[str, any]] = {},
+        blockedList: list[dict[str, any]] = [],
         loading: bool = True,
         failed: bool = False,
         # Open work sorted by due date, for due this week and per-project overdue.
@@ -378,9 +378,9 @@ def:pub OverviewPage -> JsxPage {
     # `flagged` collects the ids the snapshot's attention_total counts.
     shown: list[str] = [];
     flagged: list[str] = [];
-    overdueRows: list[dict] = [];
-    blockedRows: list[dict] = [];
-    earlyDue: list[dict] = [];
+    overdueRows: list[dict[str, any]] = [];
+    blockedRows: list[dict[str, any]] = [];
+    earlyDue: list[dict[str, any]] = [];
     byId: dict[str, TaskView] = {};
     for t in attention {
         byId[t.id] = t;
@@ -388,7 +388,7 @@ def:pub OverviewPage -> JsxPage {
     for t in dueRows {
         byId[t.id] = t;
     }
-    reviewOf: dict[str, dict] = {};
+    reviewOf: dict[str, dict[str, any]] = {};
     for r in reviewQueue {
         reviewOf[r["task_id"]] = r;
     }
@@ -476,7 +476,7 @@ def:pub OverviewPage -> JsxPage {
             );
         }
     }
-    reviewRows: list[dict] = [];
+    reviewRows: list[dict[str, any]] = [];
     for r in reviewQueue {
         if r["task_id"] in shown {
             continue;
@@ -513,7 +513,7 @@ def:pub OverviewPage -> JsxPage {
         reviewRows.append(reviewRow);
     }
     reviewRows.sort(key=lambda (x: dict[str, any]) { x["sortDue"]; });
-    weekDueRows: list[dict] = earlyDue;
+    weekDueRows: list[dict[str, any]] = earlyDue;
     for t in dueRows {
         if t.status == "Done"
             or t.status == "Blocked"
@@ -528,7 +528,7 @@ def:pub OverviewPage -> JsxPage {
     # A page that ends inside this week may have left some due tasks out.
     lastDue = dueRows[len(dueRows) - 1].due_date if len(dueRows) > 0 else "";
     dueCut = dueHasMore and len(lastDue) >= 10 and lastDue <= sunday;
-    quietRows: list[dict] = [];
+    quietRows: list[dict[str, any]] = [];
     for q in quiet {
         if q["task_id"] in shown {
             continue;
@@ -553,7 +553,7 @@ def:pub OverviewPage -> JsxPage {
     if hiddenAttention < 0 {
         hiddenAttention = 0;
     }
-    groups: list[dict] = [];
+    groups: list[dict[str, any]] = [];
     if len(overdueRows) > 0 or hiddenAttention > 0 {
         groups.append(
             {
@@ -650,7 +650,7 @@ def:pub OverviewPage -> JsxPage {
             anyDone = True;
         }
     }
-    dayRows: list[dict] = [];
+    dayRows: list[dict[str, any]] = [];
     for i in range(7) {
         if i < 5 or doneMoves[i] > 0 or todayIdx >= 5 {
             dayRows.append(
@@ -676,7 +676,7 @@ def:pub OverviewPage -> JsxPage {
         );
 
     # ---- Projects and people.
-    projRows: list[dict] = [];
+    projRows: list[dict[str, any]] = [];
     for p in activeProjects {
         pid = jid(p);
         tally: dict[str, int] = {"total": 0, "done": 0, "blocked": 0};
@@ -774,7 +774,7 @@ def:pub OverviewPage -> JsxPage {
     noProject = len(activeProjects) == 0;
     logKnown = movesLoaded and not movesFailed;
     loggedWeek = logKnown and handEntries > 0;
-    steps: list[dict] = [];
+    steps: list[dict[str, any]] = [];
     steps.append(
         {
             "key": "flow",

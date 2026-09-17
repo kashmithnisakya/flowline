@@ -417,7 +417,7 @@ def:pub ThroughputChart(
 # This week's moves to Done, one column per day. `days` rows are dicts:
 # label, value, future (outlined, never drawn as zero) and today (the label
 # turns primary and reads "Today").
-def:pub DayChart(days: list[dict]) -> JsxElement {
+def:pub DayChart(days: list[dict[str, any]]) -> JsxElement {
     values: list[int] = [];
     spoken: list[str] = [];
     for d in days {

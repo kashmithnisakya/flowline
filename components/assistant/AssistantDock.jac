@@ -76,7 +76,7 @@ def noteSection(title: str, items: any) -> list[str] {
 
 
 # Sort key for citations: where the title first appears in the answer.
-def citeOrder(d: dict) -> int {
+def citeOrder(d: dict[str, any]) -> int {
     return d["at"] as int;
 }
 
@@ -95,7 +95,7 @@ def isWordChar(ch: str) -> bool {
 
 # Where `needle` first appears in `hay` as whole words, outside every span a
 # longer title already claimed, or -1.
-def findTitle(hay: str, needle: str, taken: list[dict]) -> int {
+def findTitle(hay: str, needle: str, taken: list[dict[str, int]]) -> int {
     at = hay.find(needle);
     while at >= 0 {
         end = at + len(needle);
@@ -122,7 +122,7 @@ def:pub AssistantDock(
     docked: bool = False,
     narrow: bool = False
 ) -> JsxElement {
-    has turns: list[dict] = [],
+    has turns: list[dict[str, any]] = [],
         draft: str = "",
         mode: str = "ask",
         busy: bool = False,
@@ -256,7 +256,7 @@ def:pub AssistantDock(
     canListen = hasVoice();
 
     # The index travels with the row so the JSX never needs tuple unpacking.
-    rows: list[dict] = [];
+    rows: list[dict[str, any]] = [];
     at = 0;
     for t in turns {
         rows.append({** t, "at": at});

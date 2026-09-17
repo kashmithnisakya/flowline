@@ -6,7 +6,7 @@ import from "@jac/runtime" { Link }
 import from ..common.KindGlyph { KindGlyph }
 import from ..ui.button { Button }
 
-def:pub FirstRun(title: str, items: list[dict]) -> JsxElement {
+def:pub FirstRun(title: str, items: list[dict[str, any]]) -> JsxElement {
     finished = len(
         [
             it

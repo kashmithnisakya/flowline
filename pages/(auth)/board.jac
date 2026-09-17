@@ -405,7 +405,7 @@ def:pub BoardPage -> JsxPage {
     # which are edited on other pages. Both run through loadBoard.
     async def loadAll -> None;
     async def refreshTasks -> None;
-    async def loadBoard(withWorkspace: bool) -> dict;
+    async def loadBoard(withWorkspace: bool) -> dict[str, any];
     async def retryLoad -> None;
     # Older Done history: page 1 replaces, later pages append; any filter
     # change or task write starts over so the rows never go stale.

@@ -88,7 +88,7 @@ def moreText(g: dict[str, any]) -> str {
 }
 
 def:pub NeedsYou(
-    groups: list[dict],
+    groups: list[dict[str, any]],
     total: int,
     pending: bool = False,
     totalPlus: bool = False,

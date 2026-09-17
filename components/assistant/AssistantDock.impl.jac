@@ -4,7 +4,7 @@ of a bare walker (JWT + per-root isolation). The model never mutates: only
 """
 
 impl AssistantDock.setTurnState(index: int, state: str) -> None {
-    out: list[dict] = [];
+    out: list[dict[str, any]] = [];
     at = 0;
     for t in turns {
         if at == index {
@@ -57,7 +57,7 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
     # walkers log the real cause server-side; nothing about keys or billing
     # belongs in a browser.
     unavailable = "The assistant is not available right now. Try again in a moment.";
-    reply: dict = {"role": "assistant", "kind": "error", "text": unavailable};
+    reply: dict[str, any] = {"role": "assistant", "kind": "error", "text": unavailable};
     try {
         if kind == "note" {
             noteRun = root spawn WriteStandup(
@@ -119,8 +119,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
 # names them. The walkers return prose, not ids, so a title match is the citation.
 impl AssistantDock.citeTasks(text: str) -> list[dict[str, str]] {
     hay = text.lower();
-    found: list[dict] = [];
-    taken: list[dict] = [];
+    found: list[dict[str, any]] = [];
+    taken: list[dict[str, int]] = [];
     try {
         run = root spawn ListTasks(scope="working", page_size=500);
         page = run.reports[0] if run.reports else None;
