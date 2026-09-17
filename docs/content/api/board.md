@@ -16,13 +16,14 @@ The page calls it two ways:
 | Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles, iterations and whether GitHub is connected |
 | Poll | `false` | Tasks and categories only; the workspace lists are `[]` and `github_connected` is `false` |
 
-- `rows` is one page of the **working set**: open tasks plus Done tasks updated
-  in the last `done_days` (default 7), ordered by `sort_order`. Tasks of
-  archived projects are included.
-- `older` counts the Done tasks the cutoff left out; `done_days <= 0` trims
-  nothing.
+- `rows` is one page of the **working set**: open tasks plus Done tasks that
+  reached Done in the last `done_days` (default 7), ordered by `sort_order`.
+  Tasks of archived projects are included. Only the working set is loaded.
+- `older` counts the Done tasks the cutoff left out (the Done tally less the
+  rows kept); `done_days <= 0` trims nothing.
 - `categories` covers **every** task, older ones included, so a category filter
-  built from it does not lose categories only old Done tasks carry.
+  built from it does not lose categories only old Done tasks carry. It is
+  the list the projects' box keeps on every category write.
 - There is no `total`, `page` or `page_size` in the report. Loop on
   `has_more`:
 

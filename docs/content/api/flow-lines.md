@@ -26,6 +26,9 @@ but still reports the current name (and creates the box if there was none).
 `task_count` filled in (tasks placed by the board's fallback rules count too).
 With no flow line, `[]`.
 
+- The count is over the board's working set: open tasks plus Done tasks that
+  reached Done in the last `done_days` (default 7), so the done step counts
+  recent Done the way the board's column shows it, not the whole history.
 - `project_id` counts only that project's tasks. A foreign id still lists the
   steps, with every count at 0.
 - `with_counts: false` skips the task walk (the board's poll uses it).
@@ -35,8 +38,10 @@ With no flow line, `[]`.
 The flow line page's step panel: the tasks sitting on one step.
 
 **Reports** one [`TaskPage`](types.md#taskpage) ordered by `sort_order`:
-`page_size` defaults to 50 and is capped at 500, and `older` is always 0. An
-unknown or foreign `step_id` or `project_id` reports an empty page.
+`page_size` defaults to 50 and is capped at 500, and `older` is always 0. The
+rows come from the same working set `GetFlowLine` counts (`done_days`), so
+the panel and the node's count agree. An unknown or foreign `step_id` or
+`project_id` reports an empty page.
 
 ::: walker ApplyTemplate h3
 

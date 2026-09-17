@@ -196,7 +196,7 @@ each tracked repo's issues and pull requests updated since its cursor.
 
 | Field | Meaning |
 | --- | --- |
-| `linked` | Tasks linked to an issue when the pass started |
+| `linked` | Linked tasks the pass looked at: issues and PRs on the pages it read and in the deliveries it drained (it looks tasks up per page, never the whole workspace) |
 | `refreshed` | State, assignee and PR changes applied |
 | `auto_added` | Issues filed as new tasks (`auto_sync` repos) |
 | `auto_done` | Cards moved to done |

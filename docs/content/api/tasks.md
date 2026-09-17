@@ -14,8 +14,8 @@ capped at 500.
 
 | `scope` | Rows | Order |
 | --- | --- | --- |
-| `working` (default) | Open tasks plus Done tasks updated in the last `done_days` | Board order (`sort_order`) |
-| `older` | Done tasks updated before that cutoff | Newest update first |
+| `working` (default) | Open tasks plus Done tasks that reached Done in the last `done_days` | Board order (`sort_order`) |
+| `older` | Done tasks that reached Done before that cutoff | Newest update first |
 | `done` | Every Done task | Newest update first |
 | `attention` | Open tasks that are Blocked or past due | Blocked first, then soonest due date |
 | `all` | Everything | Board order |
@@ -30,8 +30,12 @@ capped at 500.
   (canvas `x`, then `sort_order`, with the same placement fallbacks), then
   board order within a column.
 - `older` is only filled on an unfiltered `working` page: it counts the Done
-  rows the cutoff left out, so a view can say how many it is not showing
-  without a second call.
+  rows the cutoff left out (the Done tally less the rows the page kept), so
+  a view can say how many it is not showing without a second call. Any
+  filter, `project_id` and `assignee_id` included, reports 0.
+- The scope and a `category` filter run in the store's query, so a working
+  page loads the working set alone; `older`, `done` and `all` load the
+  history they page over.
 - A foreign or unknown `project_id` or `assignee_id` matches nothing.
 
 ```bash
@@ -75,7 +79,10 @@ foreign id.
 **Reports** one [`TaskTotals`](types.md#tasktotals) over the whole history: open,
 overdue and blocked counts, Done per week for the four weeks ending in
 `monday`'s week (oldest first), per-project and per-member tallies, and every
-category in use. An empty `monday` counts from today.
+category in use. An empty `monday` counts from today. Only the open tasks and
+those four weeks of Done are loaded; each project's `total` and `done` are the
+tallies it keeps on write, and `categories` is the list the projects' box
+keeps.
 
 ::: walker TaskHistory h3
 
@@ -86,6 +93,8 @@ The Overview's charts over time.
 week, tasks `added` and `finished` that week, and running `scope` and `done`
 totals at each week's end (tasks from before the window seed the totals).
 `project_id` narrows it to one project; a foreign id reports empty history.
+Only the window's rows are loaded (created or reached Done since its first
+Monday); what came before is the project tallies less those rows.
 
 !!! info "What counts as finished"
 
