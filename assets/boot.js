@@ -1,4 +1,4 @@
-/* Flowline boot (inlined into <head> from jac.toml, before the bundle):
+/* Flowline boot (served at /static/boot.js, loaded from <head> before the bundle):
    theme on <html>, an Archivo preload, an app-path placeholder
    that pages/layout.jac removes on first paint. */
 (function(){

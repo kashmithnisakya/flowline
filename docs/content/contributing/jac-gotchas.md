@@ -107,7 +107,9 @@ clean and only fail at runtime, in the browser, or on the deployed build.
 
 ??? note "The first paint is a placeholder"
 
-    `lib/boot.js` is inlined into `<head>` from `jac.toml` and runs before
+    `assets/boot.js` is served at `/static/boot.js`, referenced from
+    `jac.toml` as a script `src` (not inline text: the deploy runner rewrites
+    `jac.toml` and cannot carry a multi-line string), and runs before
     the bundle: it paints the saved theme on `<html>`, preloads the Archivo
     file the header uses (the build keeps asset names) and, on app paths
     with a session, draws `#flowline-boot` before `#root`. The layout removes

@@ -411,8 +411,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   module state, and awaits that same promise from every mount. Keep those
   patterns: a `has` flag or a `Ref` is per instance, and a remount is still
   one route change away.
-- **The first paint is a placeholder, not a blank page.** `lib/boot.js`
-  (inlined into `<head>` from jac.toml, before the bundle) paints the saved
+- **The first paint is a placeholder, not a blank page.** `assets/boot.js`
+  (served at `/static/boot.js` and referenced from jac.toml's
+  `[[client.app_meta_data.scripts]]` as a `src`, never inline text: the
+  jachammer deploy runner rewrites jac.toml and cannot carry a multi-line
+  string, which failed every deploy on 2026-09-17) runs before the bundle and paints the saved
   theme on `<html>`, preloads `/archivo-latin-wdth-normal.woff2` (the Vite
   build keeps asset names, so the CSS asks for that exact URL and the nav
   paints in its final width on a cold cache) and, on app paths with a
