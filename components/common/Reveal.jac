@@ -1,7 +1,8 @@
 """The swap from a page's first-load frame to its content: both sit in one
 grid cell for 150ms, the frame fading out under the content fading in, so no
 frame in between is blank. Mounted with the content already there (a cached
-read) it draws the content plainly; once the frame has gone it never returns.
+read) it draws the content plainly. A page whose `ready` drops again with
+nothing on screen (a retry after a failed first load) gets the frame back.
 """
 
 import from "react" { useEffect }
@@ -15,6 +16,10 @@ def:pub Reveal(
     useEffect(
         lambda {
             timer: any = 0;
+            if not ready and not framed {
+                framed = True;
+                crossfade = True;
+            }
             if ready and framed {
                 timer = window.setTimeout(lambda { framed = False; }, 160);
             }
@@ -25,7 +30,7 @@ def:pub Reveal(
 
     return
         <div className={"grid grid-cols-[minmax(0,1fr)] " + className}>
-            {if framed {
+            {if framed or not ready {
                 <div
                     key="frame"
                     data-reveal="frame"

@@ -35,7 +35,7 @@ import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.Busy { Busy }
 import from ...lib.dates { todayIso, daysUntil, prettyDay }
-import from ...lib.session { fetchOrgName, cachedOrgName }
+import from ...lib.session { fetchOrgName, cachedOrgName, OVERVIEW_SHAPE_KEY }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      DAY_NAMES: list[str] = [
@@ -57,10 +57,6 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
 # full load) awaits the first mount's request instead of sending its own. A
 # dict cell, so a function never rebinds a glob.
 glob LOADS: dict[str, any] = {},
-     # The panels' shape on the last visit (the day chart, rows per worklist
-     # group, project and people rows), so the first-load frame reserves the
-     # same space the loaded page will take.
-     SHAPE_KEY: str = "flowline-overview-shape",
      NEEDS_CAP: int = 6;
 
 def inflight(key: str) -> any {
@@ -75,6 +71,9 @@ def clampInt(v: any, low: int, high: int, fallback: int) -> int {
     return low if n < low else (high if n > high else n);
 }
 
+# The panels' shape on the last visit (the day chart, rows per worklist
+# group, project and people rows), so the first-load frame reserves the
+# same space the loaded page will take.
 def cachedShape -> dict[str, any] {
     fallback: dict[str, any] = {
         "chart": False,
@@ -83,7 +82,7 @@ def cachedShape -> dict[str, any] {
         "people": 5
     };
     try {
-        raw = localStorage.getItem(SHAPE_KEY) or "";
+        raw = localStorage.getItem(OVERVIEW_SHAPE_KEY) or "";
         if not raw {
             return fallback;
         }
@@ -749,7 +748,7 @@ def:pub OverviewPage -> JsxPage {
             if shapeReady {
                 try {
                     localStorage.setItem(
-                        SHAPE_KEY,
+                        OVERVIEW_SHAPE_KEY,
                         JSON.stringify(
                             {
                                 "chart": chartState == "chart",
@@ -1079,7 +1078,18 @@ def:pub OverviewPage -> JsxPage {
                     <LoadFailed
                         key="failed"
                         title="Could not load the overview"
-                        onRetry={loadAll}
+                        onRetry={lambda {
+                            loadAll();
+                            if dueFailed {
+                                loadDue();
+                            }
+                            if movesFailed {
+                                loadMoves();
+                            }
+                            if historyFailed {
+                                loadHistory();
+                            }
+                        }}
                     />
                 } elif early {
                     <div key="first" className={zones}>
