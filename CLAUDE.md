@@ -420,9 +420,13 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   `lib/session.jac` (`flowline-org`, `flowline-account`, written when
   `/user/me` resolves, cleared when a session starts or ends), so it never
   shows the wordmark and then the name. A page renders its loaded frame with
-  skeleton rows on the first data load only, fades the content in
-  (`animate-in fade-in duration-150`) and never re-skeletons: a refetch keeps
-  the rows under `aria-busy` and shows `components/common/Busy` after 300ms.
+  skeleton rows on the first data load only, sized by per-browser caches of
+  the last visit (`flowline-lanes`, `flowline-overview-shape`,
+  `flowline-log-shape`, `flowline-roadmap-shape`, `flowline-github`), swaps
+  to the content through `components/common/Reveal` (a 150ms cross-fade in
+  one grid cell, so no frame in between is blank) and never re-skeletons: a
+  refetch keeps the rows under `aria-busy` and shows `components/common/Busy`
+  after 300ms.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since

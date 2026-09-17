@@ -31,6 +31,7 @@ import from ...components.ui.select {
     SelectItem
 }
 import from ...components.ui.skeleton { Skeleton }
+import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
 import from ...components.common.Busy { Busy }
 import from ...lib.dates { todayIso, daysUntil, prettyDay }
@@ -76,7 +77,7 @@ def clampInt(v: any, low: int, high: int, fallback: int) -> int {
 
 def cachedShape -> dict[str, any] {
     fallback: dict[str, any] = {
-        "chart": True,
+        "chart": False,
         "groups": [4],
         "projects": 3,
         "people": 5
@@ -1022,6 +1023,49 @@ def:pub OverviewPage -> JsxPage {
             </section>;
     }
 
+    def loadFrame -> JsxElement {
+        return
+            <div key="sk" className={zones} aria-busy="true">
+                <div className="min-w-0 @max-[52rem]:order-1">
+                    <NeedsYou
+                        groups={[]}
+                        total={0}
+                        placeholder={True}
+                        placeholderRows={shape["groups"]}
+                    />
+                </div>
+                <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
+                    <div className="min-w-0 @max-[52rem]:order-3">
+                        <ThisWeek
+                            figures={[]}
+                            days={[]}
+                            placeholder={True}
+                            placeholderChart={shape["chart"]}
+                        />
+                    </div>
+                    <div className="min-w-0 @max-[52rem]:order-4">
+                        <ProjectBars
+                            rows={[]}
+                            placeholder={True}
+                            placeholderRows={shape["projects"]}
+                        />
+                    </div>
+                </div>
+                <div
+                    className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
+                >
+                    <PeopleTable
+                        rows={[]}
+                        dayNames={DAY_LABELS}
+                        todayIndex={todayIdx}
+                        placeholder={True}
+                        placeholderRows={shape["people"]}
+                    />
+                </div>
+                {overTime()}
+            </div>;
+    }
+
     return
         <div className="@container space-y-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1030,121 +1074,90 @@ def:pub OverviewPage -> JsxPage {
                     {"Week of " + prettyDay(monday)}
                 </span>
             </div>
-            {if loading {
-                <div key="sk" className={zones} aria-busy="true">
-                    <div className="min-w-0 @max-[52rem]:order-1">
-                        <NeedsYou
-                            groups={[]}
-                            total={0}
-                            placeholder={True}
-                            placeholderRows={shape["groups"]}
-                        />
+            <Reveal ready={not loading} frame={loadFrame()}>
+                {if failed {
+                    <LoadFailed
+                        key="failed"
+                        title="Could not load the overview"
+                        onRetry={loadAll}
+                    />
+                } elif early {
+                    <div key="first" className={zones}>
+                        {if checklistReady {
+                            <FirstRun
+                                key="list"
+                                title={"Get "
+                                    + (orgName or "your workspace")
+                                    + " moving"}
+                                items={steps}
+                            />
+                        } else {
+                            <div key="listsk" className="surface space-y-3 p-3.5">
+                                <Skeleton className="h-4 w-48"/>
+                                {for i in range(4) {
+                                    <Skeleton key={str(i)} className="h-10 w-full"/>
+                                }}
+                            </div>
+                        } }
+                        <div key="note" className="min-w-0 @min-[90rem]:col-span-2">
+                            <ThisWeek figures={[]} days={[]} note={earlyNote}/>
+                        </div>
                     </div>
-                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
-                        <div className="min-w-0 @max-[52rem]:order-3">
-                            <ThisWeek
-                                figures={[]}
-                                days={[]}
-                                placeholder={True}
-                                placeholderChart={shape["chart"]}
+                } else {
+                    <div key="body" className={zones + ""}>
+                        <div className="min-w-0 @max-[52rem]:order-1">
+                            <NeedsYou
+                                groups={groups}
+                                total={needsTotal}
+                                totalPlus={dueCut}
+                                pending={not dueLoaded}
+                                failNote={"Could not check what is due this week."
+                                    if dueFailed
+                                    else ""}
+                                onRetry={loadDue}
                             />
                         </div>
-                        <div className="min-w-0 @max-[52rem]:order-4">
-                            <ProjectBars
-                                rows={[]}
-                                placeholder={True}
-                                placeholderRows={shape["projects"]}
-                            />
-                        </div>
-                    </div>
-                    <div
-                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
-                    >
-                        <PeopleTable
-                            rows={[]}
-                            dayNames={DAY_LABELS}
-                            todayIndex={todayIdx}
-                            placeholder={True}
-                            placeholderRows={shape["people"]}
-                        />
-                    </div>
-                    {overTime()}
-                </div>
-            } elif failed {
-                <LoadFailed
-                    key="failed"
-                    title="Could not load the overview"
-                    onRetry={loadAll}
-                />
-            } elif early {
-                <div key="first" className={zones}>
-                    {if checklistReady {
-                        <FirstRun
-                            key="list"
-                            title={"Get " + (orgName or "your workspace") + " moving"}
-                            items={steps}
-                        />
-                    } else {
-                        <div key="listsk" className="surface space-y-3 p-3.5">
-                            <Skeleton className="h-4 w-48"/>
-                            {for i in range(4) {
-                                <Skeleton key={str(i)} className="h-10 w-full"/>
+                        <div
+                            className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents"
+                        >
+                            {if railChecklist {
+                                <div
+                                    key="list"
+                                    className="min-w-0 @max-[52rem]:order-2"
+                                >
+                                    <FirstRun
+                                        title={"Get "
+                                            + (orgName or "your workspace")
+                                            + " moving"}
+                                        items={steps}
+                                    />
+                                </div>
                             }}
-                        </div>
-                    } }
-                    <div key="note" className="min-w-0 @min-[90rem]:col-span-2">
-                        <ThisWeek figures={[]} days={[]} note={earlyNote}/>
-                    </div>
-                </div>
-            } else {
-                <div key="body" className={zones + " animate-in fade-in duration-150"}>
-                    <div className="min-w-0 @max-[52rem]:order-1">
-                        <NeedsYou
-                            groups={groups}
-                            total={needsTotal}
-                            totalPlus={dueCut}
-                            pending={not dueLoaded}
-                            failNote={"Could not check what is due this week."
-                                if dueFailed
-                                else ""}
-                            onRetry={loadDue}
-                        />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
-                        {if railChecklist {
-                            <div key="list" className="min-w-0 @max-[52rem]:order-2">
-                                <FirstRun
-                                    title={"Get "
-                                        + (orgName or "your workspace")
-                                        + " moving"}
-                                    items={steps}
+                            <div className="min-w-0 @max-[52rem]:order-3">
+                                <ThisWeek
+                                    figures={figures}
+                                    days={dayRows}
+                                    chartState={chartState}
+                                    chartNote={chartNote}
+                                    onRetry={loadMoves if movesFailed else None}
                                 />
                             </div>
-                        }}
-                        <div className="min-w-0 @max-[52rem]:order-3">
-                            <ThisWeek
-                                figures={figures}
-                                days={dayRows}
-                                chartState={chartState}
-                                chartNote={chartNote}
-                                onRetry={loadMoves if movesFailed else None}
+                            <div className="min-w-0 @max-[52rem]:order-4">
+                                <ProjectBars rows={projRows}/>
+                            </div>
+                        </div>
+                        <div
+                            className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
+                        >
+                            <PeopleTable
+                                rows={peopleRows}
+                                dayNames={DAY_LABELS}
+                                todayIndex={todayIdx}
                             />
                         </div>
-                        <div className="min-w-0 @max-[52rem]:order-4">
-                            <ProjectBars rows={projRows}/>
-                        </div>
+                        {overTime()}
                     </div>
-                    <div
-                        className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
-                    >
-                        <PeopleTable
-                            rows={peopleRows}
-                            dayNames={DAY_LABELS}
-                            todayIndex={todayIdx}
-                        />
-                    </div>
-                    {overTime()}
-                </div>
-            }   }
+                }  }
+            </Reveal>
         </div>;
 }
