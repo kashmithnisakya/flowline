@@ -163,6 +163,11 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
         issueHasMore: bool = False,
         issueLoading: bool = False,
         issueMore: bool = False,
+        # When the server last read each list from GitHub (the stored page's
+        # stamp); empty until a list has been read once.
+        issueSyncedAt: str = "",
+        prSyncedAt: str = "",
+        refreshing: bool = False,
         selected: list[int] = [],
         # Destination for a repo added without a project; "none" keeps the
         # import inheriting nothing. A repo WITH a project ignores this.
@@ -189,9 +194,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async can with (repoId, tab, issueState, prState, searchQuery) entry {
         if repoId {
             if tab == "issues" {
-                loadIssues(True);
+                loadIssues(True, False);
             } else {
-                loadPulls(True);
+                loadPulls(True, False);
             }
         }
     }
@@ -226,8 +231,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def toggleAutoDone(rid: str, enabled: bool) -> None;
     async def toggleAutoClose(rid: str, enabled: bool) -> None;
-    async def loadIssues(reset: bool) -> None;
-    async def loadPulls(reset: bool) -> None;
+    async def loadIssues(reset: bool, refresh: bool) -> None;
+    async def loadPulls(reset: bool, refresh: bool) -> None;
+    async def refreshList -> None;
     async def importSelected -> None;
     def toggleIssue(number: int) -> None;
     def selectRepo(value: str) -> None;
@@ -282,7 +288,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     }
     # Webhook and sync stamps belong to the installation, not a repository, so
     # the status sits in the connection strip beside the account.
-    syncLine = "Updates arrive when the board syncs";
+    syncLine = "The server syncs every five minutes";
     if lastEventAgo and not liveNow {
         syncLine = "Last GitHub event " + lastEventAgo;
     }
@@ -306,6 +312,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     if shownCount == 1 and not moreLeft {
         countWord = " issue" if tab == "issues" else " pull request";
     }
+    # The list is the page the server stored; the stamp says how old it is.
+    listSyncedAt = issueSyncedAt if tab == "issues" else prSyncedAt;
+    listAge = ("read " + timeAgo(listSyncedAt)) if listSyncedAt else "not read yet";
     def loadFrame -> JsxElement {
         return
             <div key="sk" aria-busy="true">
@@ -659,6 +668,27 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 <span className="num">{countNum}</span>
                                                 {countWord}
                                             </span>
+                                            {if not searchQuery {
+                                                <span
+                                                    key="age"
+                                                    className="flex items-center gap-1 text-xs text-subtle"
+                                                >
+                                                    {"· " + listAge}
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:opacity-50"
+                                                        onClick={refreshList}
+                                                        disabled={refreshing
+                                                            or issueLoading
+                                                            or prLoading}
+                                                        title="Read this list from GitHub again"
+                                                    >
+                                                        {"Refreshing…"
+                                                            if refreshing
+                                                            else "Refresh"}
+                                                    </button>
+                                                </span>
+                                            }}
                                             <div
                                                 className="relative ml-auto w-full sm:w-56"
                                             >
@@ -737,7 +767,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 onStep={lambda (v: str) { importStep = v; }}
                                                 onImport={importSelected}
                                                 onLoadMore={lambda { loadIssues(
-                                                    False
+                                                    False, False
                                                 ); }}
                                                 onClear={lambda { selected = []; }}
                                             />
@@ -752,7 +782,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 query={searchQuery}
                                                 onState={lambda (v: str) { prState = v; }}
                                                 onLoadMore={lambda { loadPulls(
-                                                    False
+                                                    False, False
                                                 ); }}
                                             />
                                         } }

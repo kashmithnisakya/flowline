@@ -47,7 +47,9 @@ def sync_workspace(root_jid: str, installation_id: int) {
         Jac.commit();
         summary: dict[str, any] = w.reports[0] if w.reports else {};
         if not summary.get("ok") {
-            log.warning(where + " skipped: " + str(summary.get("error") or "no report"));
+            log.warning(
+                where + " skipped: " + str(summary.get("error") or "no report")
+            );
         } elif summary.get("failure") {
             log.warning(where + " failed: " + str(summary.get("failure")));
         } else {
@@ -71,8 +73,8 @@ def sync_workspace(root_jid: str, installation_id: int) {
                     + (
                         (
                             ", on cooldown ("
-                                + str(summary.get("cooldown_minutes") or 0)
-                                + " min)"
+                            + str(summary.get("cooldown_minutes") or 0)
+                            + " min)"
                         )
                             if not summary.get("pages")
                             else ""

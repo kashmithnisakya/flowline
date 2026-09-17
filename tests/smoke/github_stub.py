@@ -43,6 +43,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _token(self):
+        # The bearer the app sent, so a gate can tell one installation's
+        # calls from another's (install tokens are stub-install-token-<id>).
+        auth = self.headers.get("Authorization") or ""
+        return auth[7:] if auth.startswith("Bearer ") else ""
+
     def _body(self):
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b""
@@ -58,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         with LOCK:
-            STATE["calls"].append(("GET", url.path))
+            STATE["calls"].append(("GET", url.path, self._token()))
             if url.path == "/_stub/state":
                 return self._send(200, STATE)
             if url.path == "/user/installations":
@@ -104,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         body = self._body()
         with LOCK:
-            STATE["calls"].append(("POST", url.path))
+            STATE["calls"].append(("POST", url.path, self._token()))
             if url.path == "/_stub/reset":
                 STATE["installations"] = list(body.get("installations") or [])
                 STATE["repos"] = {}
@@ -137,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         body = self._body()
         with LOCK:
-            STATE["calls"].append(("PATCH", url.path))
+            STATE["calls"].append(("PATCH", url.path, self._token()))
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)", url.path)
             if m:
                 item = STATE["repos"].get(m.group(1), {}).get(int(m.group(2)))

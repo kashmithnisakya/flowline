@@ -24,7 +24,10 @@ STUB = (sys.argv[2] if len(sys.argv) > 2 else "http://127.0.0.1:8099").rstrip("/
 SECRET = os.environ.get("GITHUB_APP_WEBHOOK_SECRET", "ci-webhook-secret")
 BOT = os.environ.get("GITHUB_APP_SLUG", "ci-app") + "[bot]"
 REPO = "ci-org/ci-repo"
-INST_A, INST_B, INST_A2, INST_D = 111, 222, 333, 444
+INST_A, INST_B, INST_A2, INST_D, INST_S = 111, 222, 333, 444, 666
+# The scheduled sync's interval as the server was booted (the env the CI
+# serve job and perf-serve.sh set); the default is the production one.
+SYNC_INTERVAL = int(os.environ.get("FLOWLINE_SYNC_INTERVAL_SECONDS") or "300")
 # Never connected by any workspace, in this run or an earlier one against the
 # same store: the index is a docs-store row and outlives a single gate run.
 INST_NONE = 555
@@ -207,7 +210,14 @@ def stub_state():
 
 
 def stub_patches():
-    return [path for method, path in stub_state().get("calls", []) if method == "PATCH"]
+    return [c[1] for c in stub_state().get("calls", []) if c[0] == "PATCH"]
+
+
+def stub_calls(installation_id):
+    """The GitHub calls made with this installation's token, in order; the
+    state reads themselves and the App-level calls are left out."""
+    token = f"stub-install-token-{installation_id}"
+    return [(c[0], c[1]) for c in stub_state().get("calls", []) if c[1] != "/_stub/state" and c[2] == token]
 
 
 def log_rows():
@@ -271,6 +281,28 @@ def main() -> int:
     walker("SetRepoAutoDone", {"repo_id": rid, "enabled": True})
     s = walker("SyncGithub")
     check("poll back-fills the stub's issues", s.get("ok") and s.get("auto_added") == 3 and not s.get("failure"), s)
+    check("  and stores the repo's open issue and pull request pages", s.get("lists") == 1, s)
+
+    # No walker a page load calls reaches GitHub: the board's snapshot, the
+    # workspace read, the GitHub page's lists and the queue drain answer from
+    # the graph and the docs store. Only an explicit refresh reads GitHub.
+    before = stub_calls(INST_A)
+    walker("BoardSnapshot", {"page": 1, "page_size": 500, "with_workspace": True})
+    walker("GetWorkspace")
+    walker("GithubStatus")
+    drain()
+    issues = walker("ListRepoIssues", {"repo_id": rid})
+    pulls = walker("ListRepoPulls", {"repo_id": rid})
+    check("board and GitHub page reads make no GitHub call", stub_calls(INST_A) == before, stub_calls(INST_A)[len(before):])
+    check("  the issue list is the page the sync stored", issues.get("ok") and bool(issues.get("synced_at")) and not issues.get("stale")
+          and len(issues.get("rows", [])) >= 3 and all(r.get("already_imported") for r in issues.get("rows", [])), issues)
+    check("  the pull request list too", pulls.get("ok") and bool(pulls.get("synced_at")) and pulls.get("rows") == [], pulls)
+    fresh = walker("ListRepoIssues", {"repo_id": rid, "refresh": True})
+    check("  an explicit refresh reads GitHub once and rewrites the page",
+          fresh.get("ok") and stub_calls(INST_A) == before + [("GET", f"/repos/{REPO}/issues")] and fresh.get("synced_at", "") >= issues.get("synced_at", ""), (fresh, stub_calls(INST_A)[len(before):]))
+    check("  a later page is read live", walker("ListRepoIssues", {"repo_id": rid, "page": 2}).get("ok") and len(stub_calls(INST_A)) == len(before) + 2, stub_calls(INST_A)[len(before):])
+    s = walker("SyncGithub", {"auto": True})
+    check("an auto pass on cooldown mints no token and makes no GitHub call", s.get("ok") and s.get("pages") == 0 and len(stub_calls(INST_A)) == len(before) + 2, (s, stub_calls(INST_A)[len(before):]))
     t3 = task_by_issue(3) or {}
     check("  closed issue lands on Done", t3.get("status") == "Done" and t3.get("gh_issue_state") == "closed", t3)
     check("  the import keeps GitHub's own dates", t3.get("created_at") == "2026-09-01T00:00:00Z" and t3.get("done_at") == "2026-09-02T12:00:00Z", (t3.get("created_at"), t3.get("done_at")))
@@ -578,6 +610,33 @@ def main() -> int:
     walker("GithubStatus")
     status, rep = deliver("issues", envelope("opened", inst=INST_D, issue=issue(777008, "open", iso(0), title="After status probe")))
     check("  and the status call does not rebind it", rep.get("outcome") == "unknown_installation" and drain().get("drained") == 0, rep)
+
+    # ---------------------------------------------------------- the schedule syncs a workspace nobody opens
+    print("== scheduled sync")
+    req(STUB, "POST", "/_stub/reset", {
+        "installations": [INST_A, INST_B, INST_A2, INST_D, INST_S],
+        "repos": {REPO: [issue(1, "open", "2026-09-02T10:00:00Z", title="Stub issue one")]},
+    }, auth=False)
+    login("s")
+    connect(INST_S)
+    rid_s = walker("AddRepo", {"full_name": REPO, "project_id": project()}).get("id", "")
+    walker("SetRepoAutoSync", {"repo_id": rid_s, "enabled": True})
+    status, rep = deliver("issues", envelope("opened", inst=INST_S, issue=issue(888001, "open", iso(0), title="Schedule probe")))
+    check("a delivery for a workspace nobody opens is queued", rep.get("outcome") == "queued", rep)
+    if SYNC_INTERVAL > 120:
+        print(f"skip the scheduled pass: FLOWLINE_SYNC_INTERVAL_SECONDS is {SYNC_INTERVAL}, boot the server with a short one to observe it")
+    else:
+        # One interval of grace after the connect, then the next tick.
+        deadline = time.time() + 2 * SYNC_INTERVAL + 30
+        found = None
+        while found is None and time.time() < deadline:
+            time.sleep(3)
+            found = task_by_title("Schedule probe")
+        st = walker("GithubStatus")
+        check("the scheduled pass drained the delivery and polled, with no board or drain call",
+              found is not None and bool(st.get("last_sync_at")) and task_by_issue(1) is not None, (found, st.get("last_sync_at")))
+        stored = walker("ListRepoIssues", {"repo_id": rid_s})
+        check("  and stored the repo's issue page", bool(stored.get("synced_at")) and len(stored.get("rows", [])) >= 1, stored)
 
     print("webhook gate: " + ("PASS" if not FAILS else f"FAIL ({len(FAILS)})"))
     return 1 if FAILS else 0

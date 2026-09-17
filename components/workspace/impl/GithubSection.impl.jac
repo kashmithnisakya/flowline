@@ -234,10 +234,11 @@ impl GithubSection.runSync(full: bool) -> None {
         await loadStatus();
         rResult = root spawn ListRepos();
         repos = rResult.reports[0] if rResult.reports else repos;
+        # The pass just rewrote the stored pages, so the store is current.
         if tab == "issues" {
-            await loadIssues(True);
+            await loadIssues(True, False);
         } else {
-            await loadPulls(True);
+            await loadPulls(True, False);
         }
         if failure {
             toast.error(failure);
@@ -415,7 +416,25 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     attaching = "";
 }
 
-impl GithubSection.loadIssues(reset: bool) -> None {
+impl GithubSection.refreshList -> None {
+    # The one explicit way to make a page load's list walker call GitHub.
+    if refreshing {
+        return;
+    }
+    refreshing = True;
+    try {
+        if tab == "issues" {
+            await loadIssues(True, True);
+        } else {
+            await loadPulls(True, True);
+        }
+    } except Exception as e {
+        toast.error("Could not read GitHub");
+    }
+    refreshing = False;
+}
+
+impl GithubSection.loadIssues(reset: bool, refresh: bool) -> None {
     if not repoId {
         return;
     }
@@ -442,13 +461,24 @@ impl GithubSection.loadIssues(reset: bool) -> None {
         )
             if q
             else (
-                root spawn ListRepoIssues(repo_id=repoId, state=issueState, page=wanted)
+                root spawn ListRepoIssues(
+                    repo_id=repoId, state=issueState, page=wanted, refresh=refresh
+                )
             );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
+            # A list never read from GitHub (a repo just added) is read once
+            # here; after that only the schedule and Refresh call GitHub.
+            if reset and not q and not refresh and not payload["synced_at"] {
+                await loadIssues(True, True);
+                return;
+            }
             issues = base + (payload["rows"] or []);
             issuePage = payload["page"] or wanted;
             issueHasMore = bool(payload["has_more"]);
+            if not q {
+                issueSyncedAt = str(payload["synced_at"] or "");
+            }
             if reset {
                 selected = [];
             }
@@ -462,7 +492,7 @@ impl GithubSection.loadIssues(reset: bool) -> None {
     issueMore = False;
 }
 
-impl GithubSection.loadPulls(reset: bool) -> None {
+impl GithubSection.loadPulls(reset: bool, refresh: bool) -> None {
     if not repoId {
         return;
     }
@@ -486,12 +516,23 @@ impl GithubSection.loadPulls(reset: bool) -> None {
             )
         )
             if q
-            else (root spawn ListRepoPulls(repo_id=repoId, state=prState, page=wanted));
+            else (
+                root spawn ListRepoPulls(
+                    repo_id=repoId, state=prState, page=wanted, refresh=refresh
+                )
+            );
         payload = result.reports[0] if result.reports else blank;
         if payload["ok"] {
+            if reset and not q and not refresh and not payload["synced_at"] {
+                await loadPulls(True, True);
+                return;
+            }
             pulls = base + (payload["rows"] or []);
             prPage = payload["page"] or wanted;
             prHasMore = bool(payload["has_more"]);
+            if not q {
+                prSyncedAt = str(payload["synced_at"] or "");
+            }
         } else {
             toast.error(
                 payload["message"] or "GitHub would not list those pull requests"
@@ -569,7 +610,7 @@ impl GithubSection.importSelected -> None {
             }
             toast.success(note);
             selected = [];
-            await loadIssues(True);
+            await loadIssues(True, False);
             # The board is a separate tree; without this it would not show the
             # new cards until its next poll.
             w: any = window;

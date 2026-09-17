@@ -632,10 +632,7 @@ def trim_issue(item: dict[str, any]) -> dict[str, any] {
         "number": int(item.get("number") or 0),
         "title": str(item.get("title") or ""),
         "state": str(item.get("state") or ""),
-        "labels": [
-            {"name": n}
-            for n in label_names(item)
-        ],
+        "labels": [{"name": n} for n in label_names(item)],
         "assignee": {"login": login},
         "html_url": str(item.get("html_url") or "")
     };
@@ -709,9 +706,7 @@ def pull_rows(holder: Root, full_name: str, raw: list[any]) -> list[GhPrRow] {
 
 
 # Keep one fetched page as the repo's stored page for that kind and state.
-def keep_repo_list(
-    repo_id: str, kind: str, state: str, raw: list[any], stamp: str
-) {
+def keep_repo_list(repo_id: str, kind: str, state: str, raw: list[any], stamp: str) {
     items: list[dict[str, any]] = [];
     for item in raw {
         if not isinstance(item, dict) {
@@ -758,13 +753,7 @@ def stored_page(
 # A list walker's page from GitHub, on an explicit refresh or for a later
 # page; page 1 replaces the stored one.
 def live_page(
-    holder: Root,
-    c: any,
-    repo_id: str,
-    full_name: str,
-    kind: str,
-    state: str,
-    page: int
+    holder: Root, c: any, repo_id: str, full_name: str, kind: str, state: str, page: int
 ) -> dict[str, any] {
     token = token_of(c);
     if not token {
