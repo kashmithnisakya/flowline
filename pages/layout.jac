@@ -6,7 +6,7 @@ name are read synchronously, so the first render is the real chrome and a
 page mounts once."""
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
-import from "react" { useEffect, useLayoutEffect }
+import from "react" { useEffect }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..lib.session {
     cachedOrgName,
@@ -208,21 +208,6 @@ def:pub Shell -> JsxLayout {
             loadMe();
         }
     }
-
-    # lib/boot.js drew a header and page placeholder before #root while the
-    # bundle loaded. A layout effect runs once this first render is in the
-    # DOM and before the browser paints it, so the placeholder is on screen
-    # until the real chrome is, and never after.
-    useLayoutEffect(
-        lambda {
-            stub: any = document.getElementById("flowline-boot");
-            if stub {
-                stub.remove();
-            }
-            return lambda { stub = None; };
-        },
-        []
-    );
 
     # ⌘K / Ctrl+K opens the palette and ⌘/ / Ctrl+/ toggles Ask, on app pages
     # other than the setup wizard (Ctrl+J is Chrome's downloads on Windows).

@@ -11,9 +11,8 @@ glob THEME_KEY: str = "flowline-theme",
      GROUND_LIGHT: str = "#F2F3F1",
      GROUND_DARK: str = "#111413";
 
-# Paint the theme at module-import time, before React mounts anything.
-# lib/boot.js already did this from <head> before the bundle arrived; this
-# keeps the two in step and the layout re-applies on mount for good measure.
+# Paint the theme at module-import time, before React mounts anything;
+# the layout re-applies it on mount for good measure.
 with entry {
     applyTheme(getThemePref());
 }
@@ -43,9 +42,8 @@ def:pub applyTheme(pref: str) {
     } else {
         docRoot.classList.remove("dark");
     }
-    # lib/boot.js paints these two before the bundle runs; a theme change
-    # in the app has to move them too, or the ground behind a short page
-    # stays on the old theme.
+    # The ground behind a short page is the <html> background, so a theme
+    # change has to move it and the colour scheme with the class.
     docRoot.style.colorScheme = "dark" if dark else "light";
     docRoot.style.backgroundColor = GROUND_DARK if dark else GROUND_LIGHT;
     meta: any = doc.querySelector("meta[name=theme-color]");

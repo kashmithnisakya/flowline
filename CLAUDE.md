@@ -411,14 +411,13 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   module state, and awaits that same promise from every mount. Keep those
   patterns: a `has` flag or a `Ref` is per instance, and a remount is still
   one route change away.
-- **The first paint is a placeholder, not a blank page.** `lib/boot.js`
-  (inlined into `<head>` from jac.toml, before the bundle) paints the saved
-  theme on `<html>`, preloads `/archivo-latin-wdth-normal.woff2` (the Vite
-  build keeps asset names, so the CSS asks for that exact URL and the nav
-  paints in its final width on a cold cache) and, on app paths with a
-  session, draws `#flowline-boot` before `#root`; the layout removes it in a
-  `useLayoutEffect` on its first render. The header reads the cached
-  workspace name and account from `lib/session.jac` (`flowline-org`,
+- **The page is blank until the bundle runs, then paints its frame at
+  once.** The HTML shell is an empty `#root` plus the bundle: there is no
+  boot script, `jac.toml` carries plain metadata only. (An inline
+  `[[client.app_meta_data.scripts]]` placeholder was tried on 2026-09-17;
+  the jachammer deploy runner rewrites `jac.toml` while staging and cannot
+  carry a multi-line string, so it failed every deploy and was dropped.)
+  The header reads the cached workspace name and account from `lib/session.jac` (`flowline-org`,
   `flowline-account`, written when `/user/me` resolves), so it never shows
   the wordmark and then the name. A page renders its loaded frame with
   skeleton rows on the first data load only, sized by per-browser caches of
