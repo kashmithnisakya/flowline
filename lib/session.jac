@@ -9,6 +9,25 @@ answers on the next load.
 glob ORG_KEY: str = "flowline-org",
      ACCOUNT_KEY: str = "flowline-account";
 
+# The first-load frames' shape caches (what the last visit of each page
+# looked like in this browser). Session-scoped like the name: dropped when
+# a session starts or ends, so another account never inherits them.
+glob:pub LANES_KEY: str = "flowline-lanes",
+     OVERVIEW_SHAPE_KEY: str = "flowline-overview-shape",
+     LOG_SHAPE_KEY: str = "flowline-log-shape",
+     ROADMAP_SHAPE_KEY: str = "flowline-roadmap-shape",
+     GITHUB_KEY: str = "flowline-github";
+
+glob SESSION_KEYS: list[str] = [
+         ORG_KEY,
+         ACCOUNT_KEY,
+         LANES_KEY,
+         OVERVIEW_SHAPE_KEY,
+         LOG_SHAPE_KEY,
+         ROADMAP_SHAPE_KEY,
+         GITHUB_KEY
+     ];
+
 def readKey(key: str) -> str {
     try {
         return localStorage.getItem(key) or "";
@@ -46,11 +65,12 @@ def:pub rememberAccount(who: str) -> None {
 }
 
 # A session starting (login, SSO callback) or ending (sign out) drops the
-# cache, so another account's name never shows on the first paint.
+# caches, so another account's name or page shapes never show first.
 def:pub forgetSession -> None {
     try {
-        localStorage.removeItem(ORG_KEY);
-        localStorage.removeItem(ACCOUNT_KEY);
+        for key in SESSION_KEYS {
+            localStorage.removeItem(key);
+        }
     } except Exception as e {
         return;
     }

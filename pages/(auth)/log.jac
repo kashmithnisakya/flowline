@@ -39,13 +39,12 @@ import from ...components.ui.dropdown_menu {
     DropdownMenuItem
 }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
+import from ...lib.session { LOG_SHAPE_KEY }
 import from ...components.common.glyphs { Spinner }
 import from "sonner" { toast }
 
 # The day's shape on the last visit (standup lines per section, timeline
 # rows), so the first-load frame reserves the space the loaded day takes.
-glob LOG_SHAPE_KEY: str = "flowline-log-shape";
-
 def cachedLogShape -> dict[str, any] {
     fallback: dict[str, any] = {"lines": [2, 2, 2, 2], "rows": 3};
     try {
@@ -308,9 +307,14 @@ def:pub DailyLogPage -> JsxPage {
     showStandup = windowCount > 0
         or (focus == today and blockedLive and len(blockedTasks) > 0);
     dayName = DAY_LONG[weekdayOf(focus)] if focus else "";
-    # Remember the day's shape once it is on screen, for the next first-load
-    # frame. Computed here so the effect's deps read a finished value.
-    shapeReady = not loading and bool(loadedMonday) and not stale and not isWeek;
+    # Remember today's shape once it is on screen, for the next first-load
+    # frame (a first load opens on today; a browsed day would mis-size it).
+    # Computed here so the effect's deps read a finished value.
+    shapeReady = not loading
+        and bool(loadedMonday)
+        and not stale
+        and not isWeek
+        and focus == today;
     shapeLines: list[int] = standupLines(
         entries,
         focus,

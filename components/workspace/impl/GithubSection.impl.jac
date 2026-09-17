@@ -74,7 +74,7 @@ impl GithubSection.loadStatus -> None {
             conn = view;
             configGaps = view.missing_config;
             try {
-                localStorage.setItem(CONNECTED_KEY, "1" if view.connected else "0");
+                localStorage.setItem(GITHUB_KEY, "1" if view.connected else "0");
             } except Exception as e {
                 configGaps = configGaps;
             }

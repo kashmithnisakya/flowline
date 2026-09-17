@@ -318,6 +318,7 @@ def:pub RoadmapPage -> JsxPage {
                                 ends={ends}
                                 steps={steps}
                                 onOpen={openTask}
+                                remember={not fProject and not fIteration}
                             />
                             <div
                                 className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground"

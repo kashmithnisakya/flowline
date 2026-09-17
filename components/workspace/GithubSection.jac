@@ -4,6 +4,7 @@ round trip back to this URL as query params, so the mount handler finishes it
 first and scrubs the params (the nonce is one-shot).
 """
 
+import from ...lib.session { GITHUB_KEY }
 import from ...models {
     Project,
     RepoView,
@@ -60,9 +61,6 @@ import from "react" { useEffect }
 # first mount starts it, every mount awaits it before it reads status
 # (issue #187). A dict cell, so a function never rebinds a glob.
 glob INSTALL_ONCE: dict[str, any] = {"pending": None},
-     # Whether this browser last saw the workspace connected, so the first
-     # load draws the frame the page will most likely land on.
-     CONNECTED_KEY: str = "flowline-github",
      # One "Sync now" press reads at most this many increments; the server
      # bounds each one by its own page and time budget.
      SYNC_ROUNDS: int = 6,
@@ -121,9 +119,11 @@ def timeAgo(iso: str) -> str {
     return iso[:10];
 }
 
+# Whether this browser last saw the workspace connected, so the first load
+# draws the frame the page will most likely land on.
 def wasConnected -> bool {
     try {
-        return localStorage.getItem(CONNECTED_KEY) == "1";
+        return localStorage.getItem(GITHUB_KEY) == "1";
     } except Exception as e {
         return False;
     }

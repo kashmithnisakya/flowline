@@ -4,6 +4,7 @@ step as a 2px rule and its kind as a glyph; overdue turns it red. Positions
 are percentages of the window, so the grid scrolls sideways when it is narrow."""
 
 import from "react" { useEffect }
+import from ...lib.session { ROADMAP_SHAPE_KEY }
 import from ...models { TaskView, StepView, IterationView }
 import from ...constants { STATUS_KIND, KIND_COLORS }
 import from ..flowlines.kinds { DOT_VAR, colorKey }
@@ -15,15 +16,13 @@ import from ...lib.dates { prettyDay, dueTone, dueLabel }
 # how wide it is (mostly the one-day minimum, like a loaded roadmap).
 glob PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"],
      PH_LEFT: list[str] = ["18%", "31%", "26%", "44%", "52%", "38%", "61%", "35%"],
-     PH_BAR: list[str] = ["24px", "24px", "9%", "24px", "24px", "6%", "24px", "24px"],
-     # The project groups the last loaded roadmap had in this browser (rows
-     # per group), so the first-load frame reserves the same group rows.
-     SHAPE_KEY: str = "flowline-roadmap-shape";
+     PH_BAR: list[str] = ["24px", "24px", "9%", "24px", "24px", "6%", "24px", "24px"];
 
-# Rows per placeholder group: the cached shape, else one group of `fallback`.
+# Rows per placeholder group: the project groups the last loaded roadmap had
+# in this browser (rows per group), else one group of `fallback`.
 def cachedGroups(fallback: int) -> list[int] {
     try {
-        raw = localStorage.getItem(SHAPE_KEY) or "";
+        raw = localStorage.getItem(ROADMAP_SHAPE_KEY) or "";
         parsed: any = JSON.parse(raw) if raw else [];
         out: list[int] = [];
         total = 0;
@@ -119,7 +118,10 @@ def:pub RoadmapTimeline(
     onOpen: Callable[[str], None],
     # The first load: this many skeleton rows under the real month and week
     # headers, at the real row height.
-    placeholder: int = 0
+    placeholder: int = 0,
+    # Whether the rows on screen are the unfiltered roadmap, the shape the
+    # next first load should reserve.
+    remember: bool = True
 ) -> JsxElement {
     has scroller: Ref[any] = Ref();
 
@@ -175,15 +177,16 @@ def:pub RoadmapTimeline(
         }
         groupRows[key].append(i);
     }
-    # Remember the groups' shape once rows are on screen, for the next
-    # first-load frame; a placeholder draws the cached groups instead.
+    # Remember the groups' shape once unfiltered rows are on screen, for the
+    # next first-load frame; a placeholder draws the cached groups instead.
     shapeStamp = ",".join([str(len(groupRows[g])) for g in groups]);
     useEffect(
         lambda {
-            if len(rows) > 0 {
+            if remember and len(rows) > 0 {
                 try {
                     localStorage.setItem(
-                        SHAPE_KEY, JSON.stringify([len(groupRows[g]) for g in groups])
+                        ROADMAP_SHAPE_KEY,
+                        JSON.stringify([len(groupRows[g]) for g in groups])
                     );
                 } except Exception as e {
                     shapeStamp = shapeStamp;
@@ -191,7 +194,7 @@ def:pub RoadmapTimeline(
             }
             return lambda { shapeStamp = shapeStamp; };
         },
-        [shapeStamp]
+        [shapeStamp, remember]
     );
     phGroups = cachedGroups(placeholder) if placeholder > 0 else [];
 

@@ -39,6 +39,7 @@ import from ...components.board.RouteStrip { RouteStrip }
 import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
+import from ...lib.session { LANES_KEY }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
@@ -112,8 +113,7 @@ glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
      LANE_GRID: str = "relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:-mr-1 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5 md:pr-1",
      # Node and card title widths for the skeleton, so it reads as a board.
      NODE_WIDTHS: list[int] = [96, 88, 120, 104, 128, 96, 92],
-     CARD_WIDTHS: list[str] = ["w-4/5", "w-3/5", "w-[70%]", "w-1/2"],
-     LANES_KEY: str = "flowline-lanes";
+     CARD_WIDTHS: list[str] = ["w-4/5", "w-3/5", "w-[70%]", "w-1/2"];
 
 # How many lanes the skeleton draws: the count the last load saw in this
 # browser, else six (the legacy statuses).
