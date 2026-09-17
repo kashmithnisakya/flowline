@@ -76,7 +76,7 @@ def noteSection(title: str, items: any) -> list[str] {
 
 
 # Sort key for citations: where the title first appears in the answer.
-def citeOrder(d: dict) -> int {
+def citeOrder(d: dict[str, any]) -> int {
     return d["at"] as int;
 }
 
@@ -95,7 +95,7 @@ def isWordChar(ch: str) -> bool {
 
 # Where `needle` first appears in `hay` as whole words, outside every span a
 # longer title already claimed, or -1.
-def findTitle(hay: str, needle: str, taken: list[dict]) -> int {
+def findTitle(hay: str, needle: str, taken: list[dict[str, int]]) -> int {
     at = hay.find(needle);
     while at >= 0 {
         end = at + len(needle);

@@ -119,8 +119,8 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
 # names them. The walkers return prose, not ids, so a title match is the citation.
 impl AssistantDock.citeTasks(text: str) -> list[dict[str, str]] {
     hay = text.lower();
-    found: list[dict] = [];
-    taken: list[dict] = [];
+    found: list[dict[str, any]] = [];
+    taken: list[dict[str, int]] = [];
     try {
         run = root spawn ListTasks(scope="working", page_size=500);
         page = run.reports[0] if run.reports else None;

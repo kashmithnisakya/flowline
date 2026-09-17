@@ -15,8 +15,8 @@ glob FIGURE_LABELS: list[str] = [
      ];
 
 def:pub ThisWeek(
-    figures: list[dict],
-    days: list[dict],
+    figures: list[dict[str, any]],
+    days: list[dict[str, any]],
     chartState: str = "chart",
     chartNote: str = "",
     note: str = "",

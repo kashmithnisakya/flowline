@@ -46,7 +46,7 @@ def Key(color: str, label: str) -> JsxElement {
 # `placeholder` is the first load: `placeholderRows` skeleton rows (the count
 # the last visit had) in the same grid.
 def:pub ProjectBars(
-    rows: list[dict], placeholder: bool = False, placeholderRows: int = 3
+    rows: list[dict[str, any]], placeholder: bool = False, placeholderRows: int = 3
 ) -> JsxElement {
     return
         <section
@@ -172,7 +172,7 @@ def dayFill(count: int) -> str {
 # `placeholder` is the first load: the header and `placeholderRows` skeleton
 # rows (the count the last visit had).
 def:pub PeopleTable(
-    rows: list[dict],
+    rows: list[dict[str, any]],
     dayNames: list[str],
     todayIndex: int,
     placeholder: bool = False,

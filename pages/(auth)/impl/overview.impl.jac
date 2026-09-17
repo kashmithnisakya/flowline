@@ -155,7 +155,7 @@ impl OverviewPage.loadMoves -> None {
         perDay = [0, 0, 0, 0, 0, 0, 0];
         people: dict[str, list[int]] = {};
         entriesWeek = 0;
-        movesOf: dict[str, list[dict]] = {};
+        movesOf: dict[str, list[dict[str, str]]] = {};
         taskIds: list[str] = [];
         sinceAt: dict[str, str] = {};
         sinceDay: dict[str, str] = {};
