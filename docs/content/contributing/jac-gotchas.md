@@ -105,15 +105,13 @@ clean and only fail at runtime, in the browser, or on the deployed build.
     promise from every mount. A flag or a `Ref` is per instance, so keep
     those patterns.
 
-??? note "The first paint is a placeholder"
+??? note "The page is blank until the bundle runs"
 
-    `assets/boot.js` is served at `/static/boot.js`, referenced from
-    `jac.toml` as a script `src` (not inline text: the deploy runner rewrites
-    `jac.toml` and cannot carry a multi-line string), and runs before
-    the bundle: it paints the saved theme on `<html>`, preloads the Archivo
-    file the header uses (the build keeps asset names) and, on app paths
-    with a session, draws `#flowline-boot` before `#root`. The layout removes
-    it in a `useLayoutEffect` on its first render. The header paints the
+    The HTML shell is an empty `#root` plus the bundle; there is no boot
+    script (an inline `[[client.app_meta_data.scripts]]` placeholder
+    broke every jachammer deploy on 2026-09-17: the deploy runner rewrites
+    `jac.toml` while staging and cannot carry a multi-line string). Once
+    mounted, the app paints its whole frame at once. The header paints the
     workspace name and account from the cache `lib/session.jac` keeps, and a
     page renders its loaded frame with skeleton rows on the first data load
     only, sized by per-browser caches of the last visit (session-scoped: the

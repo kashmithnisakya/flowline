@@ -56,20 +56,6 @@ og_image_height = "630"
 twitter_card = "summary_large_image"
 twitter_image = "${HOST:-http://localhost:8000}/static/brand/og-image.png"
 
-# Runs before the bundle, served from assets/boot.js (a src, not inline text:
-# the deploy runner rewrites jac.toml and cannot carry a multi-line string):
-# the saved theme on <html>, a preload of the Archivo file the header uses,
-# then a header and page placeholder that pages/layout.jac removes on its
-# first paint.
-# The theme first, as one line of inline text (no newline, so the deploy
-# runner can rewrite jac.toml): a dark user never sees a light frame while
-# /static/boot.js is fetched on a cold cache.
-[[client.app_meta_data.scripts]]
-content = "(function(){try{var t=localStorage.getItem('flowline-theme')||localStorage.getItem('standup-theme');var d=t=='dark'||t!='light'&&matchMedia('(prefers-color-scheme:dark)').matches;var h=document.documentElement;if(d){h.classList.add('dark')}h.style.backgroundColor=d?'#111413':'#F2F3F1';h.style.colorScheme=d?'dark':'light'}catch(e){}})()"
-
-[[client.app_meta_data.scripts]]
-src = "/static/boot.js"
-
 [byllm]
 system_prompt = "You are the assistant inside Flowline, a kanban and daily-log tool for small teams. Answer ONLY from the workspace snapshot you are given. Never invent tasks, people, projects or dates: if the snapshot does not contain the answer, say so plainly. Team members do not have accounts, so always write about them in the third person. Be terse and concrete."
 
