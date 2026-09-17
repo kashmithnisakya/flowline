@@ -4,7 +4,7 @@ this page stores the token like a password login would and hands off.
 """
 
 import from "@jac/runtime" { jacSetToken }
-import from ....lib.session { fetchProfile }
+import from ....lib.session { fetchProfile, forgetSession }
 import from ....components.ui.button { Button }
 import from ....components.common.glyphs { WarnIcon }
 import from ....components.landing.Wordmark { Wordmark }
@@ -43,6 +43,9 @@ def:pub SsoCallbackPage -> JsxPage {
         problem = param("message") or param("error");
         if token {
             jacSetToken(token);
+            # A fresh session drops the cached workspace name, as a password
+            # login does.
+            forgetSession();
             # Same marker a password login sets, so a later 401 can tell
             # this apart from a cold arrival at /login.
             localStorage.setItem("flowline_session", "1");

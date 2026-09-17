@@ -84,5 +84,6 @@ Use `agent-browser` (or Playwright) against `jac run --no-dev`.
   a phantom pass.
 - HTML5 drag and drop does not fire from synthetic drags; dispatch a
   `DragEvent` with a `DataTransfer` from `eval` to test the board.
-- On a full page load an app page mounts twice. A test that counts requests
-  (like the install completion) must expect the deduplicated count.
+- A page mounts once on a full load (the layout reads the login state at
+  render time), but a route change can still remount it. A test that counts
+  requests (like the install completion) must expect the deduplicated count.

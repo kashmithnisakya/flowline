@@ -401,20 +401,28 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   vs `has themePref`). Never declare a `has` whose setter name an import uses.
 - **A docstring as the first statement of a plain `def` is a parse error**:
   use a `#` comment above the `def`.
-- **On a full page load an app page mounts twice**: once bare, before the
-  layout's `loggedIn` resolves, then again inside the chrome. Anything a
-  page consumes in `can with entry` (a URL param, a one-shot flag) is gone
-  for the second mount. Read it in entry, but consume it in the effect that
-  acts on it (see `pendingTaskId` on the board). The inverse trap is a
-  one-shot param that must reach the server exactly once: both mounts read
-  the URL, so strip it and start the call BEFORE the first await, keep the
-  in-flight promise in module state, and have every mount await that same
-  promise before it reads the result. A flag alone is not enough: the bare
-  mount that made the call is discarded, and the surviving mount would read
-  status while the call is still in flight. The GitHub install callback
-  fired twice that way, and the two concurrent `CompleteGithubInstall`
-  calls raced the single-use OAuth code and left the connection blank
-  (#187); a `Ref` is no guard, since each mount is its own instance.
+- **A page mounts once, because the layout reads `jacIsLoggedIn()` at render
+  time.** Until Sep 2026 it read it in `can with entry` (an effect), so every
+  full load painted a bare page first and then remounted it inside the
+  chrome, and the pages grew defences that must stay: a one-shot URL param
+  is read in entry but consumed in the effect that acts on it (see
+  `pendingTaskId` on the board), and a call that must reach the server
+  exactly once (the GitHub install completion, #187) strips the param and
+  starts the call BEFORE the first await, keeps the in-flight promise in
+  module state, and awaits that same promise from every mount. Keep those
+  patterns: a `has` flag or a `Ref` is per instance, and a remount is still
+  one route change away.
+- **The first paint is a placeholder, not a blank page.** `lib/boot.js`
+  (inlined into `<head>` from jac.toml, before the bundle) paints the saved
+  theme on `<html>` and, on app paths with a session, draws `#flowline-boot`
+  before `#root`; the layout removes it in a `useLayoutEffect` on its first
+  render. The header reads the cached workspace name and account from
+  `lib/session.jac` (`flowline-org`, `flowline-account`, written when
+  `/user/me` resolves, cleared when a session starts or ends), so it never
+  shows the wordmark and then the name. A page renders its loaded frame with
+  skeleton rows on the first data load only, fades the content in
+  (`animate-in fade-in duration-150`) and never re-skeletons: a refetch keeps
+  the rows under `aria-busy` and shows `components/common/Busy` after 300ms.
 - **`{if}` inside a `{for}` slot body takes no braces** (`if x { <li/> }`,
   not `{if x {…}}`): the compiler rejects the wrapped form (E2023).
 - **Placement is inferred and pinned in `jac.toml`, never in source.** Since

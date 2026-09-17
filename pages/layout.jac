@@ -1,11 +1,20 @@
 """flowline - root layout. App pages get a grouped top bar (the setup group
 folds into More below 1024px), the ⌘K palette, Ask (a docked column at 1280px
 and up, a sheet below) and, on phones, a header over a bottom tab bar. /setup
-gets the mark and Sign out only."""
+gets the mark and Sign out only. The login state and the cached workspace
+name are read synchronously, so the first render is the real chrome and a
+page mounts once."""
 
 import from "@jac/runtime" { Outlet, Link, useLocation, jacIsLoggedIn, jacLogout }
-import from "react" { useEffect }
+import from "react" { useEffect, useLayoutEffect }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
+import from ..lib.session {
+    cachedOrgName,
+    cachedAccount,
+    rememberOrgName,
+    rememberAccount,
+    forgetSession
+}
 import from ..components.common.Avatar { Avatar }
 import from ..components.common.KindGlyph { KindGlyph }
 import from ..components.common.glyphs { WarnIcon }
@@ -167,10 +176,14 @@ def AccountMenu(
 }
 
 def:pub Shell -> JsxLayout {
-    has loggedIn: bool = False,
-        orgName: str = "",
+    # Read at render time, not in entry: an effect would paint a bare page
+    # first and mount every page twice. The name and account come from the
+    # cache /user/me filled last time, so the header never shows the wordmark
+    # and then the name.
+    has loggedIn: bool = jacIsLoggedIn(),
+        orgName: str = cachedOrgName(),
         # The signed-in email (or login) for the account menu.
-        account: str = "",
+        account: str = cachedAccount(),
         # Not `themePref`: its generated setter would shadow the imported
         # setThemePref, silently breaking the toggle (issue #131).
         themeChoice: str = "system",
@@ -195,6 +208,21 @@ def:pub Shell -> JsxLayout {
             loadMe();
         }
     }
+
+    # lib/boot.js drew a header and page placeholder before #root while the
+    # bundle loaded. A layout effect runs once this first render is in the
+    # DOM and before the browser paints it, so the placeholder is on screen
+    # until the real chrome is, and never after.
+    useLayoutEffect(
+        lambda {
+            stub: any = document.getElementById("flowline-boot");
+            if stub {
+                stub.remove();
+            }
+            return lambda { stub = None; };
+        },
+        []
+    );
 
     # ⌘K / Ctrl+K opens the palette and ⌘/ / Ctrl+/ toggles Ask, on app pages
     # other than the setup wizard (Ctrl+J is Chrome's downloads on Windows).
@@ -231,6 +259,7 @@ def:pub Shell -> JsxLayout {
                 name = str(e.detail.name or "") if e.detail else "";
                 if name {
                     orgName = name;
+                    rememberOrgName(name);
                 }
             };
             onTheme = lambda (e: any) { themeChoice = getThemePref(); };

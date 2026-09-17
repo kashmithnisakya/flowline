@@ -5,6 +5,7 @@ and validation shows inline under the field it is about.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
+import from ...lib.session { forgetSession }
 import from ...components.auth.SsoButtons { SsoButtons }
 import from ...components.landing.Wordmark { Wordmark }
 import from ...components.ui.button { Button }

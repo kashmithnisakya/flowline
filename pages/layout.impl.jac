@@ -17,6 +17,7 @@ impl Shell.loadMe -> None {
         name = str(profile["org_name"]) if profile["org_name"] else "";
         if name {
             orgName = name;
+            rememberOrgName(name);
         }
         idents: list[any] = data["identities"] if data["identities"] else [];
         # An email first, then any other login value, then the SSO provider.
@@ -38,12 +39,14 @@ impl Shell.loadMe -> None {
             }
         }
         account = who;
+        rememberAccount(who);
     } except Exception as e {
         return;
     }
 }
 
 impl Shell.logout -> None {
+    forgetSession();
     jacLogout();
     window.location.href = "/login";
 }

@@ -82,6 +82,9 @@ impl LoginPage.submit(e: FormEvent) -> None {
         ok: bool = False;
         ok = await jacLogin(addr, pw);
         if ok {
+            # A fresh session: the header's cached workspace name may belong
+            # to whoever signed in here last.
+            forgetSession();
             # Marker for the session-expired notice: a 401 clears the JWT
             # and reloads, and this is how /login knows it was a timeout.
             localStorage.setItem("flowline_session", "1");

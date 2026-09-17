@@ -92,15 +92,28 @@ clean and only fail at runtime, in the browser, or on the deployed build.
     `return None` anywhere in a function an effect calls becomes that effect's
     cleanup. Give early exits a real no-op cleanup.
 
-??? danger "On a full page load an app page mounts twice"
+??? danger "A page mounts once, but keep the double-mount defences"
 
-    Once bare, before the layout's login state resolves, then inside the
-    chrome. A one-shot URL parameter read in `can with entry` is gone for the
-    second mount: read it in entry, consume it in the effect that acts on it.
-    A call that must reach the server exactly once (the GitHub install
-    completion) must strip the parameter and start the call **before** the
-    first `await`, keep the in-flight promise in module state, and have every
-    mount await that same promise. A flag or a `Ref` is not enough.
+    The layout reads `jacIsLoggedIn()` at render time, so the first render
+    is the real chrome. It used to read it in an effect, which painted a bare
+    page first and remounted every page inside the chrome, and the pages
+    still carry the defences that made that safe: a one-shot URL parameter
+    is read in entry and consumed in the effect that acts on it, and a call
+    that must reach the server exactly once (the GitHub install completion)
+    strips the parameter and starts the call **before** the first `await`,
+    keeps the in-flight promise in module state, and awaits that same
+    promise from every mount. A flag or a `Ref` is per instance, so keep
+    those patterns.
+
+??? note "The first paint is a placeholder"
+
+    `lib/boot.js` is inlined into `<head>` from `jac.toml` and runs before
+    the bundle: it paints the saved theme on `<html>` and, on app paths with
+    a session, draws `#flowline-boot` before `#root`. The layout removes it in
+    a `useLayoutEffect` on its first render. The header paints the workspace
+    name and account from the cache `lib/session.jac` keeps, and a page
+    renders its loaded frame with skeleton rows on the first data load only;
+    a refetch keeps the rows and shows `components/common/Busy` after 300ms.
 
 ??? note "`has` state is a live cell on 0.37"
 
