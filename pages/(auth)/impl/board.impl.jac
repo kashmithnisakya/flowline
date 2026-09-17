@@ -73,26 +73,25 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     if movesRef.current {
         return {"ok": False, "projects": 0, "connected": ghConnected};
     }
+    seq = (loadReqRef.current or 0) + 1;
+    loadReqRef.current = seq;
     projectCount = 0;
     connected = ghConnected;
     live = webhookLive;
+    # A first load paints page 1 and lets the rest join behind it; a refetch
+    # keeps the rows on screen until its whole set is in.
+    paintPages = loading or len(tasks) == 0;
     try {
-        # Pages of 500 so a big board paints after the first; the loop is
-        # bounded and says so rather than showing part of the workspace.
-        # Only page 1 carries the workspace lists.
+        # Pages of 500; the loop is bounded and says so rather than showing
+        # part of the workspace. Only page 1 carries the workspace lists.
         fetchedTasks: list[TaskRow] = [];
         olderUnfiltered = 0;
         cats: list[str] = [];
-        fetchedMembers: list[MemberView] = [];
         fetchedProjects: list[Project] = [];
-        fetchedSteps: list[StepView] = [];
-        fetchedRepos: list[RepoView] = [];
-        fetchedRoles: list[RoleView] = [];
-        fetchedIterations: list[IterationView] = [];
         pageNo = 1;
         more = True;
         gotPage = False;
-        while more and pageNo <= 20 {
+        while more and pageNo <= 20 and loadReqRef.current == seq {
             bResult = root spawn BoardSnapshot(
                 page=pageNo, page_size=500, with_workspace=withWorkspace and pageNo == 1
             );
@@ -106,52 +105,35 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 olderUnfiltered = data.older;
                 cats = data.categories;
                 if withWorkspace and pageNo == 1 {
-                    fetchedMembers = data.members;
                     fetchedProjects = data.projects;
-                    fetchedSteps = data.steps;
-                    fetchedRepos = data.repos;
-                    fetchedRoles = data.roles;
-                    fetchedIterations = data.iterations;
                     connected = data.github_connected;
                     live = data.webhook_live;
                     projectCount = len(data.projects);
                     # The next page mounts on this view without a request.
                     rememberWorkspace(data);
+                    if loadReqRef.current == seq {
+                        absorbWorkspace(data);
+                    }
+                }
+                # The working set is one sort_order run, so a later page
+                # lands under the cards already in its lanes: nothing moves.
+                if paintPages and loadReqRef.current == seq and not movesRef.current {
+                    tasks = fetchedTasks;
+                    knownCategories = cats;
+                    loading = False;
+                    retrying = False;
                 }
             }
             pageNo = pageNo + 1;
         }
         truncated = more;
-        if not movesRef.current {
+        if not movesRef.current and loadReqRef.current == seq {
             tasks = fetchedTasks;
             workingTruncated = truncated;
             # An empty answer must not wipe the category list the filter bar
             # is built from: an empty page keeps the list it already had.
             if gotPage {
                 knownCategories = cats;
-            }
-            if withWorkspace {
-                members = fetchedMembers;
-                projects = fetchedProjects;
-                steps = fetchedSteps;
-                repos = fetchedRepos;
-                roleRows = fetchedRoles;
-                iterations = fetchedIterations;
-                ghConnected = connected;
-                webhookLive = live;
-                # The next first-load skeleton draws this many lanes.
-                try {
-                    localStorage.setItem(
-                        LANES_KEY,
-                        str(
-                            len(fetchedSteps)
-                                if len(fetchedSteps) > 0
-                                else len(STATUSES)
-                        )
-                    );
-                } except Exception as e {
-                    connected = connected;
-                }
             }
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`
@@ -200,6 +182,26 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     return {"ok": True, "projects": projectCount, "connected": connected};
 }
 
+
+# The workspace lists a page 1 carries, and the lane count the next
+# first-load skeleton draws.
+impl BoardPage.absorbWorkspace(data: any) -> None {
+    members = data.members;
+    projects = data.projects;
+    steps = data.steps;
+    repos = data.repos;
+    roleRows = data.roles;
+    iterations = data.iterations;
+    ghConnected = data.github_connected;
+    webhookLive = data.webhook_live;
+    try {
+        localStorage.setItem(
+            LANES_KEY, str(len(data.steps) if len(data.steps) > 0 else len(STATUSES))
+        );
+    } except Exception as e {
+        members = members;
+    }
+}
 
 impl BoardPage.retryLoad -> None {
     if movesRef.current {

@@ -177,6 +177,9 @@ def:pub BoardPage -> JsxPage {
         syncNote: str = "",
         loading: bool = True,
         movesRef: Ref[any] = Ref(),
+        # The newest snapshot load owns the state: an older one still paging
+        # neither paints its pages nor fetches the rest.
+        loadReqRef: Ref[any] = Ref(),
         fProject: str = "all",
         fAssignee: str = "All",
         fCategory: str = "All",
@@ -426,6 +429,7 @@ def:pub BoardPage -> JsxPage {
     async def reloadAll -> None;
     async def refreshTasks -> None;
     async def loadBoard(withWorkspace: bool) -> dict[str, any];
+    def absorbWorkspace(data: any) -> None;
     async def retryLoad -> None;
     # Older Done history: page 1 replaces, later pages append; any filter
     # change or task write starts over so the rows never go stale.
