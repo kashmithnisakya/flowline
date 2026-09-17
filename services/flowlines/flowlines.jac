@@ -13,18 +13,22 @@ import from models {
     StepView,
     TaskView,
     TaskPage,
+    Project,
     hydrate_views,
     step_view,
     resolve,
     on_attached,
     owned,
-    all_tasks,
-    project_tasks,
+    working_tasks,
+    project_working,
+    tasks_on_step,
+    tasks_on_steps,
+    mismatched_on_step,
     steps_of,
     roles_box,
     steps_box
 }
-import from services.util { now_iso, page_bounds }
+import from services.util { now_iso, page_bounds, done_cutoff, ensure_tallies }
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
@@ -38,16 +42,29 @@ import from constants {
 # A step's kind IS the semantics every other part of the app reads, through
 # each task's `status`. Re-point the tasks sitting on this step whenever the
 # kind changes, or "done" work would keep reporting as "In Progress" to
-# insights, the digest and the assistant.
+# insights, the digest and the assistant. Only the mismatched rows load.
 def restatus_tasks(holder: Root, step: WorkflowStep) {
     landing = KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
-    target = jid(step);
     stamp = now_iso();
-    for t in all_tasks(holder) {
-        if t.step_id == target and t.status != landing {
-            t.set_status(landing, stamp);
-        }
+    for t in mismatched_on_step(holder, jid(step), landing) {
+        t.set_status(landing, stamp);
     }
+}
+
+
+# The tasks the flow line counts and lists: the board's working set (open
+# plus Done reached in the last `done_days`), for one project or all. The
+# done step therefore shows recent Done the way the board's column does.
+def flow_pool(holder: Root, project_id: str, done_days: int) -> list[Task] {
+    cutoff = done_cutoff(done_days);
+    if project_id {
+        p = resolve(project_id);
+        if not isinstance(p, Project) or not owned(holder, p) {
+            return [];
+        }
+        return project_working(p, cutoff);
+    }
+    return working_tasks(holder, cutoff);
 }
 
 
@@ -119,13 +136,18 @@ walker GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
     the legacy status fallback) has one implementation for board and view.
-    `with_counts=False` skips the walk over every task: the board counts the
-    rows it already holds, so its 60 s poll need not pay for it."""
+    The count is over the working set (`done_days`, as on the board), so
+    only that is loaded. `with_counts=False` skips the walk: the board
+    counts the rows it already holds, so its 60 s poll need not pay for it."""
     has project_id: str = "",
         with_counts: bool = True,
+        done_days: int = 7,
         reports: list[list[StepView]] = [];
 
     can start with Root entry {
+        if self.with_counts {
+            ensure_tallies(here);
+        }
         visit [here-->[?:WorkflowSteps]] else {
             report [];
         }
@@ -154,10 +176,7 @@ walker GetFlowLine {
                 first_of_kind[v.kind] = v.id;
             }
         }
-        pool = (
-            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
-        );
-        for t in pool {
+        for t in flow_pool(root, self.project_id, self.done_days) {
             landing = landing_step(t, known, first_of_kind);
             if landing {
                 counts[landing] = int(counts[landing]) + 1;
@@ -173,16 +192,19 @@ walker GetFlowLine {
 
 walker ListStepTasks {
     """One page of the work sitting on one step, for the panel the flow line
-    view opens. Placement reuses GetFlowLine's rule so list and count never
-    disagree; the walk touches node fields only and `to_view()` runs for the
-    page. `total` is the whole step, so the header can keep counting."""
+    view opens. Placement reuses GetFlowLine's rule over the same working
+    set (`done_days`) so list and count never disagree; the walk touches
+    node fields only and the page alone is hydrated. `total` is the whole
+    step, so the header can keep counting."""
     has step_id: str = "",
         project_id: str = "",
+        done_days: int = 7,
         page: int = 1,
         page_size: int = 0,
         reports: list[TaskPage] = [];
 
     can start with Root entry {
+        ensure_tallies(here);
         target = resolve(self.step_id);
         if isinstance(target, WorkflowStep) and owned(here, target) {
             visit [target];
@@ -204,10 +226,7 @@ walker ListStepTasks {
             }
         }
         picked: list[Task] = [];
-        pool = (
-            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
-        );
-        for t in pool {
+        for t in flow_pool(root, self.project_id, self.done_days) {
             if landing_step(t, known, first_of_kind) != wanted {
                 continue;
             }
@@ -493,10 +512,8 @@ walker DeleteStep(find_step) {
         gone = jid(here);
         # Tasks keep their status, so they land by kind rather than vanishing
         # into whichever column happens to be first.
-        for t in all_tasks(holder) {
-            if t.step_id == gone {
-                t.step_id = "";
-            }
+        for t in tasks_on_step(holder, gone) {
+            t.step_id = "";
         }
         # An id in a field does not die with its node the way an edge did.
         for s in steps_of(holder) {
@@ -535,10 +552,8 @@ walker DeleteFlowLine {
         for s in steps {
             gone.append(jid(s));
         }
-        for t in all_tasks(root) {
-            if t.step_id and t.step_id in gone {
-                t.step_id = "";
-            }
+        for t in tasks_on_steps(root, gone) {
+            t.step_id = "";
         }
         for s in steps {
             del s;

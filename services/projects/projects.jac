@@ -12,6 +12,7 @@ import from models {
     owned,
     projects_box
 }
+import from services.util { now_iso }
 
 # ----------------------------------------------------------------- projects
 
@@ -69,8 +70,12 @@ walker SaveProject {
         }
     }
 
+    # A new project's tallies are exact at zero, so it is stamped here and
+    # ensure_tallies never loads it.
     can create with Projects entry {
-        fresh = here ++> Project(name=self.name.strip(), description=self.description);
+        fresh = here ++> Project(
+            name=self.name.strip(), description=self.description, tallies_at=now_iso()
+        );
         on_attached(root, fresh);
         report fresh;
     }

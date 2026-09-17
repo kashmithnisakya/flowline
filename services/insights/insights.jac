@@ -13,19 +13,24 @@ import from models {
     TaskTotals,
     LogTotals,
     MemberView,
-    TaskLinks,
-    AssignedTo,
+    TaskNames,
     member_view,
     member_roles,
-    task_links,
+    task_names,
     views_from,
-    all_tasks,
+    open_tasks,
+    done_since,
     projects_of,
     members_of,
     days_between
 }
-import from services.util { now_iso, done_day, moved_to_done }
-import from services.tasks.tasks { task_totals, needs_attention, order_attention }
+import from services.util { now_iso, done_day, moved_to_done, ensure_tallies }
+import from services.tasks.tasks {
+    task_totals,
+    tally_since,
+    needs_attention,
+    order_attention
+}
 import from services.log.log { log_totals }
 
 glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
@@ -141,11 +146,8 @@ def _today -> str {
 
 # ------------------------------------------------------------- gathering defs
 # Each takes the caller's root and traverses it directly. No walker spawns.
-
-def _tasks_of(holder: Root) -> list[Task] {
-    return all_tasks(holder);
-}
-
+# Every queue here is open work, so the readers load the open tasks and the
+# Done tasks of the period; the all-time totals come from the tallies.
 
 def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
     rows: list[LogEntry] = [];
@@ -174,23 +176,29 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple[str, str] {
 
 # ------------------------------------------------------------------- assembly
 
-# The three queues the Overview and the assistant both read. Each takes tasks
-# and links already gathered, so callers traverse the graph once.
+# The three queues the Overview and the assistant both read. Each takes the
+# open tasks and the names already gathered, so callers read the graph once.
+# Blocked rows come out in the attention order (soonest due first, ties by
+# jid) so a capped list still covers the attention list's blocked prefix.
 def _blocked_items(
-    tasks: list[Task], links: TaskLinks, entries: list[LogEntry]
+    open: list[Task], names: TaskNames, entries: list[LogEntry]
 ) -> list[BlockedItem] {
+    stuck = [
+        t
+        for t in open
+        if t.status == "Blocked"
+    ];
+    stuck.sort(key=lambda (t: Task) { jid(t); });
+    order_attention(stuck);
     rows: list[BlockedItem] = [];
-    for t in tasks {
-        if t.status != "Blocked" {
-            continue;
-        }
+    for t in stuck {
         (reason, since) = _blocked_reason(entries, jid(t));
         rows.append(
             BlockedItem(
                 task_id=jid(t),
                 title=t.title,
-                project=links.project_of(jid(t)),
-                assignees=links.named(jid(t)),
+                project=names.project_of(t),
+                assignees=names.named(t),
                 reason=reason or t.notes,
                 since=since[:10] if since else t.updated_at[:10]
             )
@@ -201,9 +209,9 @@ def _blocked_items(
 
 
 # Longest-waiting first; negative key because .sort takes no reverse here.
-def _review_items(tasks: list[Task], links: TaskLinks, today: str) -> list[ReviewItem] {
+def _review_items(open: list[Task], names: TaskNames, today: str) -> list[ReviewItem] {
     rows: list[ReviewItem] = [];
-    for t in tasks {
+    for t in open {
         if t.status != "Review" {
             continue;
         }
@@ -211,7 +219,7 @@ def _review_items(tasks: list[Task], links: TaskLinks, today: str) -> list[Revie
             ReviewItem(
                 task_id=jid(t),
                 title=t.title,
-                project=links.project_of(jid(t)),
+                project=names.project_of(t),
                 reviewer=t.reviewer_name,
                 review_due=t.review_due,
                 pr_link=t.pr_link,
@@ -225,21 +233,18 @@ def _review_items(tasks: list[Task], links: TaskLinks, today: str) -> list[Revie
 
 
 # Open tasks untouched for STALE_AFTER_DAYS, longest-idle first.
-def _aging_items(tasks: list[Task], links: TaskLinks, today: str) -> list[AgingItem] {
+def _aging_items(open: list[Task], names: TaskNames, today: str) -> list[AgingItem] {
     rows: list[AgingItem] = [];
-    for t in tasks {
-        if t.status == "Done" {
-            continue;
-        }
+    for t in open {
         idle = _days_between(t.updated_at[:10], today);
         if idle >= STALE_AFTER_DAYS {
             rows.append(
                 AgingItem(
                     task_id=jid(t),
                     title=t.title,
-                    project=links.project_of(jid(t)),
+                    project=names.project_of(t),
                     status=t.status,
-                    assignees=links.named(jid(t)),
+                    assignees=names.named(t),
                     idle_days=idle
                 )
             );
@@ -253,18 +258,18 @@ def _aging_items(tasks: list[Task], links: TaskLinks, today: str) -> list[AgingI
 # Open tasks already past their due date. Assistant-only: the Overview shows
 # the overdue count from task_totals, not the list.
 def _overdue_items(
-    tasks: list[Task], links: TaskLinks, today: str
+    open: list[Task], names: TaskNames, today: str
 ) -> list[OverdueItem] {
     rows: list[OverdueItem] = [];
-    for t in tasks {
-        if t.status == "Done" or not (t.due_date and t.due_date < today) {
+    for t in open {
+        if not (t.due_date and t.due_date < today) {
             continue;
         }
         rows.append(
             OverdueItem(
                 title=t.title,
-                project=links.project_of(jid(t)),
-                assignees=links.named(jid(t)),
+                project=names.project_of(t),
+                assignees=names.named(t),
                 due_date=t.due_date,
                 status=t.status
             )
@@ -274,10 +279,17 @@ def _overdue_items(
 }
 
 
-# Gather the whole workspace into one object. Reads only, root-scoped.
+# Gather the whole workspace into one object. Root-scoped; the only write
+# is the one-off tally fill.
 def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
+    ensure_tallies(holder);
     today = _today();
-    tasks = _tasks_of(holder);
+    open = open_tasks(holder);
+    done_period = [
+        t
+        for t in done_since(holder, from_date)
+        if moved_to_done(t) and done_day(t) >= from_date
+    ];
     members = [
         m
         for m in members_of(holder)
@@ -289,49 +301,33 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         if p.active
     ];
     entries = _entries_between(holder, from_date, to_date);
-    links = task_links(holder);
+    names = task_names(holder);
 
-    open_tasks = [
-        t
-        for t in tasks
-        if t.status != "Done"
-    ];
-    done_period = [
-        t
-        for t in tasks
-        if moved_to_done(t) and done_day(t) >= from_date
-    ];
-
-    blocked = _blocked_items(tasks, links, entries);
-    review_queue = _review_items(tasks, links, today);
-    aging = _aging_items(tasks, links, today);
-    overdue = _overdue_items(tasks, links, today);
+    blocked = _blocked_items(open, names, entries);
+    review_queue = _review_items(open, names, today);
+    aging = _aging_items(open, names, today);
+    overdue = _overdue_items(open, names, today);
 
     people: list[PersonStat] = [];
     for m in members {
         shown = m.full_name();
-        mine = [
+        mid = jid(m);
+        mine_open = [
             t
-            for t in tasks
-            if shown in links.named(jid(t))
+            for t in open
+            if mid in t.assignee_ids
         ];
         people.append(
             PersonStat(
                 name=shown,
                 roles=", ".join(member_roles(m)),
                 tags=", ".join(m.tags),
-                open_tasks=len(
-                    [
-                        t
-                        for t in mine
-                        if t.status != "Done"
-                    ]
-                ),
+                open_tasks=len(mine_open),
                 done_in_period=len(
                     [
                         t
-                        for t in mine
-                        if moved_to_done(t) and done_day(t) >= from_date
+                        for t in done_period
+                        if mid in t.assignee_ids
                     ]
                 ),
                 log_entries=len(
@@ -344,7 +340,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
                 blocked=len(
                     [
                         t
-                        for t in mine
+                        for t in mine_open
                         if t.status == "Blocked"
                     ]
                 )
@@ -354,33 +350,28 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
 
     project_stats: list[ProjectStat] = [];
     for p in projects {
-        owned_tasks = [
+        pid = jid(p);
+        mine = [
             t
-            for t in tasks
-            if links.project_of(jid(t)) == p.name
+            for t in open
+            if t.project_id == pid
         ];
         project_stats.append(
             ProjectStat(
                 name=p.name,
-                total=len(owned_tasks),
-                done=len(
-                    [
-                        t
-                        for t in owned_tasks
-                        if t.status == "Done"
-                    ]
-                ),
+                total=p.task_total,
+                done=p.done_total,
                 active=len(
                     [
                         t
-                        for t in owned_tasks
+                        for t in mine
                         if t.status in ACTIVE_STATUSES
                     ]
                 ),
                 blocked=len(
                     [
                         t
-                        for t in owned_tasks
+                        for t in mine
                         if t.status == "Blocked"
                     ]
                 )
@@ -407,7 +398,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         period_to=to_date,
         org_members=len(members),
         active_projects=len(projects),
-        open_tasks=len(open_tasks),
+        open_tasks=len(open),
         done_in_period=len(done_period),
         log_entries_in_period=len(entries),
         blocked=blocked,
@@ -438,22 +429,25 @@ obj OverviewData {
 
 
 walker OverviewSnapshot {
-    """The whole Overview in one call. Tasks, members and projects are walked
-    once and every panel is computed from that, so the page costs one round
-    trip and one traversal instead of six and three."""
+    """The whole Overview in one call. The open tasks and the four weeks of
+    Done are read once and every panel is computed from that, so the page
+    costs one round trip and never loads the history. The three queues
+    are capped at `attention_size`, in their own order."""
     has monday: str = "",
         from_date: str = "",
         attention_size: int = 8,
         reports: list[OverviewData] = [];
 
     can build with Root entry {
+        ensure_tallies(here);
         today = _today();
-        tasks = _tasks_of(here);
-        links = task_links(here);
+        open = open_tasks(here);
+        recent = done_since(here, tally_since(self.monday));
+        names = task_names(here);
         entries = _entries_between(here, self.from_date or today, today);
         flagged = [
             t
-            for t in tasks
+            for t in open
             if needs_attention(t, today)
         ];
         # Same tiebreak as ListTasks: sorts are stable, so the jid pass
@@ -467,16 +461,17 @@ walker OverviewSnapshot {
         members.sort(key=lambda (m: MemberView) { m.name; });
         projects = projects_of(here);
         projects.sort(key=lambda (p: Project) { p.name; });
+        cap = self.attention_size;
         report OverviewData(
-            counts=task_totals(here, tasks, links, self.monday),
+            counts=task_totals(here, open, recent, names, self.monday),
             logs=log_totals(here, self.monday),
-            attention=views_from(links, flagged[:self.attention_size]),
+            attention=views_from(names, flagged[:cap]),
             attention_total=len(flagged),
             members=members,
             projects=projects,
-            review_queue=_review_items(tasks, links, today),
-            aging=_aging_items(tasks, links, today),
-            blocked=_blocked_items(tasks, links, entries)
+            review_queue=_review_items(open, names, today)[:cap],
+            aging=_aging_items(open, names, today)[:cap],
+            blocked=_blocked_items(open, names, entries)[:cap]
         );
     }
 }
