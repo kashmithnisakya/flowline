@@ -6,7 +6,8 @@ keeps two passes apart and yields to a manual sync."""
 
 import os;
 import from jaclang { JacRuntime as Jac }
-import from services.github.github { SyncGithub, SYNC_LEASE_SECONDS }
+import from models { GithubConnection }
+import from services.github.github { SyncGithub, SYNC_LEASE_SECONDS, connection_of }
 import from services.github.util {
     bound_installations,
     acquire_sync_lease,
@@ -43,9 +44,14 @@ def sync_workspace(root_jid: str, installation_id: int) {
     ctx = Jac.create_j_context(user_root=root_jid);
     token = Jac.push_request_context(ctx);
     try {
+        # A pass on cooldown reports the previous stamp back; a pass that
+        # ran stamps a new one, even with nothing to poll.
+        c = connection_of(ctx.get_root());
+        was = c.last_sync_at if isinstance(c, GithubConnection) else "";
         w: any = Jac.spawn(SyncGithub(auto=True), ctx.get_root());
         Jac.commit();
         summary: dict[str, any] = w.reports[0] if w.reports else {};
+        on_cooldown = str(summary.get("last_sync_at") or "") == was;
         if not summary.get("ok") {
             log.warning(
                 where + " skipped: " + str(summary.get("error") or "no report")
@@ -76,7 +82,7 @@ def sync_workspace(root_jid: str, installation_id: int) {
                             + str(summary.get("cooldown_minutes") or 0)
                             + " min)"
                         )
-                            if not summary.get("pages")
+                            if on_cooldown
                             else ""
                     )
             );
