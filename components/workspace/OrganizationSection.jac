@@ -4,7 +4,7 @@ a walker. Save appears only once the name differs; the header hears about it
 through a `flowline:org-renamed` event, so nothing has to reload.
 """
 
-import from ...lib.session { fetchProfile, patchProfile }
+import from ...lib.session { fetchProfile, patchProfile, cachedOrgName }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 import from ..ui.skeleton { Skeleton }
@@ -15,9 +15,11 @@ import from "sonner" { toast }
 
 
 def:pub OrganizationSection(onRenamed: Callable[[str], None] = None) -> JsxElement {
-    has draft: str = "",
-        saved: str = "",
-        loading: bool = True,
+    # The header's cached name fills the field at once; the profile read
+    # then confirms it (and only replaces an untouched draft).
+    has draft: str = cachedOrgName(),
+        saved: str = cachedOrgName(),
+        loading: bool = not bool(cachedOrgName()),
         saving: bool = False;
 
     async can with entry {

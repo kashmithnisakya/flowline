@@ -6,6 +6,7 @@ columns fold into a meta line on a phone.
 import from ...models { Project, RepoView, MemberView }
 import from ..common.Avatar { AvatarStack }
 import from ..workspace.RowActions { RowActions }
+import from ..ui.skeleton { Skeleton }
 
 def:pub ProjectTable(
     projects: list[Project],
@@ -15,9 +16,12 @@ def:pub ProjectTable(
     countsReady: bool,
     onEdit: Callable[[Project], None],
     onArchive: Callable[[Project], None],
-    onCreate: Callable[[], None] = None
+    onCreate: Callable[[], None] = None,
+    # The first load: this many skeleton rows under the real header, at the
+    # real row height, instead of the empty state.
+    placeholder: int = 0
 ) -> JsxElement {
-    if len(projects) == 0 {
+    if len(projects) == 0 and placeholder == 0 {
         return
             <div
                 className="surface flex flex-col items-center gap-2 px-6 py-12 text-center"
@@ -30,7 +34,7 @@ def:pub ProjectTable(
     }
 
     return
-        <div className="surface">
+        <div className="surface" aria-busy={placeholder > 0}>
             <div
                 className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_96px_72px_40px] items-center gap-x-4 border-b px-3 py-2 text-[12.5px] text-muted-foreground md:grid"
             >
@@ -41,6 +45,49 @@ def:pub ProjectTable(
                 <span/>
             </div>
             <ul className="divide-y">
+                {for i in range(placeholder) {
+                    <li
+                        key={"ph" + str(i)}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-3 py-2.5 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_96px_72px_40px] md:py-2"
+                    >
+                        <div className="col-start-1 row-start-1 min-w-0">
+                            <div className="flex h-5 items-center">
+                                <Skeleton
+                                    className={"h-3.5 " + ("w-24" if i % 2 else "w-32")}
+                                />
+                            </div>
+                            <div className="flex h-4 items-center">
+                                <Skeleton className="h-3 w-40"/>
+                            </div>
+                        </div>
+                        <div
+                            className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:contents"
+                        >
+                            <div className="min-w-0 md:col-start-2">
+                                <Skeleton className="h-3 w-28"/>
+                            </div>
+                            <div className="md:col-start-3">
+                                <span className="inline-flex items-center -space-x-px">
+                                    <Skeleton
+                                        className="size-6 rounded-full ring-2 ring-card"
+                                    />
+                                    <Skeleton
+                                        className="size-6 rounded-full ring-2 ring-card"
+                                    />
+                                    <Skeleton
+                                        className="size-6 rounded-full ring-2 ring-card"
+                                    />
+                                </span>
+                            </div>
+                            <div className="md:col-start-4 md:justify-self-end">
+                                <Skeleton className="h-3 w-12"/>
+                            </div>
+                        </div>
+                        <div
+                            className="col-start-2 row-span-2 row-start-1 justify-self-end md:col-start-5 md:row-span-1"
+                        />
+                    </li>
+                }}
                 {for p in projects {
                     <li
                         key={jid(p)}

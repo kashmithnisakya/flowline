@@ -10,6 +10,7 @@ import from ...lib.dates { daysUntil }
 import from ..common.KindGlyph { KindGlyph }
 import from ..ui.button { Button }
 import from ..ui.checkbox { Checkbox }
+import from ..ui.skeleton { Skeleton }
 import from "sonner" { toast }
 
 # Reading order: what needs someone first. Stuck and Handed off never fold,
@@ -703,6 +704,43 @@ def:pub Standup(
                     </svg>
                     Copy as Markdown
                 </Button>
+            </div>
+        </section>;
+}
+
+# The standup's frame before the week has loaded: four section headings with
+# two lines each and the copy button's row, at the standup's own sizes.
+def:pub StandupPlaceholder -> JsxElement {
+    widths: list[list[str]] = [
+        ["w-[78%]", "w-[62%]"],
+        ["w-[70%]", "w-[84%]"],
+        ["w-[66%]", "w-[58%]"],
+        ["w-[74%]", "w-[52%]"]
+    ];
+    return
+        <section
+            aria-label="Standup"
+            aria-busy="true"
+            className="grid max-w-[68ch] gap-3.5"
+        >
+            {for i in range(4) {
+                <div key={str(i)}>
+                    <div className="mb-1 flex h-5 items-center gap-x-[7px]">
+                        <Skeleton className="size-3.5 rounded-full"/>
+                        <Skeleton className="h-3.5 w-20"/>
+                    </div>
+                    <div className="grid gap-1 pl-[21px]">
+                        <div className="flex h-[21px] items-center">
+                            <Skeleton className={"h-3 " + widths[i][0]}/>
+                        </div>
+                        <div className="flex h-[21px] items-center">
+                            <Skeleton className={"h-3 " + widths[i][1]}/>
+                        </div>
+                    </div>
+                </div>
+            }}
+            <div className="flex h-8 items-center">
+                <Skeleton className="h-3 w-32"/>
             </div>
         </section>;
 }

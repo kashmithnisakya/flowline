@@ -6,6 +6,7 @@ picks truncates instead of widening the column; a two-line list on a phone.
 import from ...models { Project, MemberView }
 import from ..common.Avatar { Avatar }
 import from ..workspace.RowActions { RowActions }
+import from ..ui.skeleton { Skeleton }
 import from .AssignMenu { AssignMenu }
 
 def:pub MemberTable(
@@ -20,7 +21,10 @@ def:pub MemberTable(
     onManageProjects: Callable[[], None],
     onCreate: Callable[[], None] = None,
     showTags: bool = False,
-    query: str = ""
+    query: str = "",
+    # The first load: this many skeleton rows under the real header, at the
+    # real row height, instead of the empty state.
+    placeholder: int = 0
 ) -> JsxElement {
     projectIds: list[str] = [];
     projectNames: list[str] = [];
@@ -29,7 +33,7 @@ def:pub MemberTable(
         projectNames.append(p.name);
     }
 
-    if len(members) == 0 {
+    if len(members) == 0 and placeholder == 0 {
         return
             <div
                 className="surface flex flex-col items-center gap-2 px-6 py-12 text-center"
@@ -46,7 +50,7 @@ def:pub MemberTable(
     }
 
     return
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" aria-busy={placeholder > 0}>
             <div className="surface hidden md:block">
                 <table className="data-table table-fixed">
                     <thead>
@@ -69,6 +73,40 @@ def:pub MemberTable(
                         </tr>
                     </thead>
                     <tbody>
+                        {for i in range(placeholder) {
+                            <tr key={"ph" + str(i)}>
+                                <td>
+                                    <div className="flex min-w-0 items-center gap-2.5">
+                                        <Skeleton
+                                            className="size-6 shrink-0 rounded-full"
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="flex h-5 items-center">
+                                                <Skeleton
+                                                    className={"h-3.5 "
+                                                        + ("w-24" if i % 2 else "w-32")}
+                                                />
+                                            </div>
+                                            <div className="flex h-4 items-center">
+                                                <Skeleton className="h-3 w-44"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <Skeleton className="h-3.5 w-28"/>
+                                </td>
+                                <td>
+                                    <Skeleton className="h-3.5 w-36"/>
+                                </td>
+                                {if showTags {
+                                    <td key="tags" className="hidden lg:table-cell">
+                                        <Skeleton className="h-3.5 w-20"/>
+                                    </td>
+                                }}
+                                <td className="text-right"/>
+                            </tr>
+                        }}
                         {for m in members {
                             <tr key={m.id}>
                                 <td>
@@ -156,6 +194,23 @@ def:pub MemberTable(
                 </table>
             </div>
             <ul className="surface divide-y md:hidden">
+                {for i in range(placeholder) {
+                    <li
+                        key={"ph" + str(i)}
+                        className="flex items-start gap-3 px-3 py-2.5"
+                    >
+                        <Skeleton className="size-8 shrink-0 rounded-full"/>
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <div className="flex h-5 items-center">
+                                <Skeleton className="h-3.5 w-32"/>
+                            </div>
+                            <div className="flex h-5 items-center gap-3">
+                                <Skeleton className="h-3 w-20"/>
+                                <Skeleton className="h-3 w-24"/>
+                            </div>
+                        </div>
+                    </li>
+                }}
                 {for m in members {
                     <li key={m.id} className="flex items-start gap-3 px-3 py-2.5">
                         <Avatar name={m.name} size="md" color={m.color}/>

@@ -4,8 +4,11 @@ impl OrganizationSection.load -> None {
     try {
         profile = await fetchProfile();
         name = str(profile["org_name"]) if profile["org_name"] else "";
+        untouched = draft == saved;
         saved = name;
-        draft = name;
+        if untouched {
+            draft = name;
+        }
     } except Exception as e {
         toast.error("Could not load your organization details");
     }

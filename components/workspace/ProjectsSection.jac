@@ -109,30 +109,30 @@ def:pub ProjectsSection(
                 </Button>
             </SectionHeader>
             {if loading {
-                <div key="sk" className="surface flex flex-col divide-y">
-                    {for i in [0, 1, 2] {
-                        <div
-                            key={"r" + str(i)}
-                            className="flex items-center gap-4 px-3 py-3"
-                        >
-                            <Skeleton className="h-4 w-40 max-w-full"/>
-                            <Skeleton className="h-3 w-32 max-w-full"/>
-                            <Skeleton className="ml-auto h-4 w-12"/>
-                        </div>
-                    }}
-                </div>
-            } else {
                 <ProjectTable
-                    key="rows"
-                    projects={active}
-                    repos={repos}
-                    members={members}
-                    openCounts={openCounts}
-                    countsReady={countsReady}
+                    key="sk"
+                    projects={[]}
+                    repos={[]}
+                    members={[]}
+                    openCounts={{}}
+                    countsReady={False}
                     onEdit={openEdit}
                     onArchive={askArchive}
-                    onCreate={openCreate}
+                    placeholder={3}
                 />
+            } else {
+                <div key="rows" className="animate-in fade-in duration-150">
+                    <ProjectTable
+                        projects={active}
+                        repos={repos}
+                        members={members}
+                        openCounts={openCounts}
+                        countsReady={countsReady}
+                        onEdit={openEdit}
+                        onArchive={askArchive}
+                        onCreate={openCreate}
+                    />
+                </div>
             } }
             <ProjectDialog
                 open={dialogOpen}

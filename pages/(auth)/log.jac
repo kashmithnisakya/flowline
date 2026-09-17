@@ -18,7 +18,8 @@ import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { ListProjects }
 import from ...services.tasks.tasks { ListTasks }
 import from ...components.log.DayRail { DayRail }
-import from ...components.log.DayLog { Standup, LogTimeline }
+import from ...components.log.DayLog { Standup, StandupPlaceholder, LogTimeline }
+import from ...components.common.Busy { Busy }
 import from ...components.log.Composer { Composer }
 import from ...components.log.EntryDialog { EntryDialog }
 import from ...components.log.DatePicker { DatePicker }
@@ -184,7 +185,13 @@ def:pub DailyLogPage -> JsxPage {
         # the loaded log shows; `blockedLive` is False until that call lands.
         blockedTasks: list[TaskView] = [],
         blockedLive: bool = False,
-        rosterReady: bool = False;
+        rosterReady: bool = False,
+        # The streaming note shows only once a page has been in flight for
+        # 300ms, so a week that lands in one page never flashes it.
+        streamSlow: bool = False,
+        # The day whose content is on screen: during a week hop the loaded
+        # day stays up (aria-busy) until the new week lands.
+        focusRef: Ref[any] = Ref();
 
     async can with entry {
         selectedDate = todayIso();
@@ -195,6 +202,20 @@ def:pub DailyLogPage -> JsxPage {
             loadWeek();
         }
     }
+
+    streaming = weekStreaming and weekLoaded < weekTotal;
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if streaming {
+                timer = window.setTimeout(lambda { streamSlow = True; }, 300);
+            } else {
+                streamSlow = False;
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [streaming]
+    );
 
     async def loadWeek -> None;
     async def loadBlocked -> None;
@@ -213,16 +234,26 @@ def:pub DailyLogPage -> JsxPage {
     today = todayIso();
     weekMonday = mondayOf(selectedDate) if selectedDate else "";
     weekDays = [shiftDay(weekMonday, i) for i in range(7)] if weekMonday else [];
-    weekSunday = weekDays[6] if len(weekDays) == 7 else "";
+    # The first load draws the frame; a later week hop keeps the loaded
+    # week's content under aria-busy until the new one lands.
+    firstLoad = loading and not loadedMonday;
+    stale = loading and bool(loadedMonday) and weekMonday != loadedMonday;
+    focus = focusRef.current if stale and focusRef.current else selectedDate;
+    if not stale {
+        focusRef.current = selectedDate;
+    }
+    viewMonday = loadedMonday if stale else weekMonday;
+    viewDays = [shiftDay(viewMonday, i) for i in range(7)] if viewMonday else [];
+    viewSunday = viewDays[6] if len(viewDays) == 7 else "";
     weekEntries = [
         e
         for e in entries
-        if e.date >= weekMonday and e.date <= weekSunday
+        if e.date >= viewMonday and e.date <= viewSunday
     ];
     dayEntries = [
         e
         for e in entries
-        if e.date == selectedDate
+        if e.date == focus
     ];
     counts = [
         len(
@@ -233,25 +264,25 @@ def:pub DailyLogPage -> JsxPage {
             ]
         ) for d in weekDays
     ];
-    since = prevWorkday(selectedDate) if selectedDate else "";
+    since = prevWorkday(focus) if focus else "";
     windowCount = len(
         [
             e
             for e in entries
-            if e.date >= since and e.date <= selectedDate
+            if e.date >= since and e.date <= focus
         ]
     );
     isWeek = viewMode == "week";
     onToday = (weekMonday == mondayOf(today)) if isWeek else (selectedDate == today);
     showStandup = windowCount > 0
-        or (selectedDate == today and blockedLive and len(blockedTasks) > 0);
-    dayName = DAY_LONG[weekdayOf(selectedDate)] if selectedDate else "";
+        or (focus == today and blockedLive and len(blockedTasks) > 0);
+    dayName = DAY_LONG[weekdayOf(focus)] if focus else "";
     emptyLine = (
         "Nothing logged this week; board moves land here on their own."
             if isWeek
             else "Nothing logged on "
                 + dayName
-                + (" yet" if selectedDate >= today else "")
+                + (" yet" if focus >= today else "")
                 + "; board moves land here on their own."
     );
 
@@ -355,24 +386,10 @@ def:pub DailyLogPage -> JsxPage {
                     </div>
                 } }
             </div>
-            {if loadFailed and not loading and len(entries) > 0 {
+            {if loadFailed and not firstLoad and len(entries) > 0 {
                 <StaleDataStrip key="stale" onRetry={retryLoad} retrying={retrying}/>
             }}
-            {if not loading and weekStreaming {
-                <div
-                    key="partial"
-                    className="num flex items-center gap-2 text-xs text-muted-foreground"
-                    role="status"
-                >
-                    <Spinner/>
-                    {"Loading the rest of the log ("
-                        + str(weekLoaded)
-                        + " of "
-                        + str(weekTotal)
-                        + " entries)"}
-                </div>
-            }}
-            {if not loading and not weekStreaming and weekLoaded < weekTotal {
+            {if not firstLoad and not weekStreaming and weekLoaded < weekTotal {
                 <div
                     key="partialstop"
                     className="num flex items-center justify-between gap-2 rounded-md border border-warning/50 bg-card px-3 py-2 text-xs text-warning"
@@ -414,10 +431,25 @@ def:pub DailyLogPage -> JsxPage {
                                 else (longDate(selectedDate) if selectedDate else "")}
                         </h2>
                         <span className="text-[13px] text-muted-foreground">
-                            {(countLabel(len(weekEntries)) if not loading else "")
+                            {(countLabel(len(weekEntries)) if not firstLoad else "")
                                 if isWeek
-                                else (sinceLabel(selectedDate) if showStandup else "")}
+                                else (sinceLabel(focus) if showStandup else "")}
                         </span>
+                        <Busy active={stale} className="self-center"/>
+                        {if streamSlow {
+                            <span
+                                key="partial"
+                                className="num hidden items-center gap-2 self-center text-xs text-muted-foreground md:inline-flex"
+                                role="status"
+                            >
+                                <Spinner/>
+                                {"Loading the rest of the log ("
+                                    + str(weekLoaded)
+                                    + " of "
+                                    + str(weekTotal)
+                                    + " entries)"}
+                            </span>
+                        }}
                         <div className="ml-auto flex items-center gap-1 self-center">
                             {if not onToday {
                                 <Button
@@ -483,19 +515,48 @@ def:pub DailyLogPage -> JsxPage {
                             />
                         </div>
                     </div>
-                    {if loading {
+                    {if firstLoad {
                         <div
                             key="sk"
-                            className="grid max-w-[68ch] gap-3"
-                            aria-hidden="true"
+                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                            aria-busy="true"
                         >
-                            <Skeleton className="h-4 w-28"/>
-                            <Skeleton className="h-4 w-4/5"/>
-                            <Skeleton className="h-4 w-3/5"/>
-                            <Skeleton className="mt-2 h-4 w-32"/>
-                            <Skeleton className="h-4 w-2/3"/>
-                            <Skeleton className="h-4 w-1/2"/>
-                            <Skeleton className="mt-4 h-24 w-full"/>
+                            <StandupPlaceholder/>
+                            <section aria-label="Timeline">
+                                <div className="mb-2 flex h-5 items-center">
+                                    <Skeleton className="h-3.5 w-16"/>
+                                </div>
+                                <ul className="border-t">
+                                    {for i in range(3) {
+                                        <li
+                                            key={str(i)}
+                                            className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b py-2"
+                                        >
+                                            <Skeleton className="h-3 w-9"/>
+                                            <div className="flex h-5 items-center">
+                                                <Skeleton
+                                                    className={"h-3 "
+                                                        + (
+                                                            "w-3/5"
+                                                                if i == 1
+                                                                else "w-4/5"
+                                                        )}
+                                                />
+                                            </div>
+                                            <Skeleton className="h-3 w-14"/>
+                                        </li>
+                                    }}
+                                </ul>
+                            </section>
+                            <div className="@min-[90rem]:col-span-2">
+                                <Composer
+                                    members={[]}
+                                    projects={[]}
+                                    saving={False}
+                                    onLog={quickLog}
+                                    rosterReady={False}
+                                />
+                            </div>
                         </div>
                     } elif loadFailed and len(entries) == 0 {
                         <LoadFailed
@@ -520,35 +581,41 @@ def:pub DailyLogPage -> JsxPage {
                             />
                         </div>
                     } elif isWeek and len(weekEntries) > 0 {
-                        <WeekMatrix
+                        <div
                             key="matrix"
-                            entries={weekEntries}
-                            weekDays={weekDays}
-                            memberNames={memberNames}
-                            selectedDate={selectedDate}
-                            today={today}
-                            onSelectDate={lambda (d: str) {
-                                selectedDate = d;
-                                viewMode = "day";
-                            }}
-                        />
+                            className="animate-in fade-in duration-150"
+                            aria-busy={stale}
+                        >
+                            <WeekMatrix
+                                entries={weekEntries}
+                                weekDays={viewDays}
+                                memberNames={memberNames}
+                                selectedDate={selectedDate}
+                                today={today}
+                                onSelectDate={lambda (d: str) {
+                                    selectedDate = d;
+                                    viewMode = "day";
+                                }}
+                            />
+                        </div>
                     } else {
                         <div
                             key="day"
-                            className="grid min-w-0 gap-[18px] @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                            className="grid min-w-0 gap-[18px] animate-in fade-in duration-150 @min-[90rem]:grid-cols-[minmax(0,68ch)_minmax(0,1fr)] @min-[90rem]:items-start @min-[90rem]:gap-x-8"
+                            aria-busy={stale}
                         >
                             {if showStandup and not isWeek {
                                 <Standup
-                                    key={"standup" + selectedDate}
+                                    key={"standup" + focus}
                                     entries={entries}
-                                    day={selectedDate}
+                                    day={focus}
                                     since={since}
                                     loadedFrom={loadedFrom}
                                     today={today}
                                     blocked={blockedTasks}
                                     liveBlocked={blockedLive}
                                     roster={memberNames}
-                                    windowLabel={sinceLabel(selectedDate)}
+                                    windowLabel={sinceLabel(focus)}
                                 />
                             }}
                             {if len(dayEntries) > 0 and not isWeek {

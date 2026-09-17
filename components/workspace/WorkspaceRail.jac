@@ -13,8 +13,9 @@ def:pub WorkspaceRail(
 ) -> JsxElement {
     has navRef: Ref[any] = Ref();
 
-    # Counts arrive after the first paint and widen the row, so they are part
-    # of what the scroll position depends on.
+    # A count column is reserved (2ch) so the labels never shift when the
+    # numbers land; a wider count still changes the row, so it stays in the
+    # scroll effect's inputs.
     widths = "|".join([item["count"] for item in items]);
 
     # On a phone the row scrolls sideways; keep the current section in view,
@@ -42,15 +43,12 @@ def:pub WorkspaceRail(
             aria-label="Workspace sections"
             className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:-mx-6 sm:px-6 md:sticky md:top-20 md:mx-0 md:flex-col md:gap-0.5 md:overflow-visible md:border-b-0 md:px-0 md:pb-0"
         >
-            {if orgName {
-                <div
-                    key="org"
-                    className="hidden truncate px-2 pt-0.5 pb-2.5 text-sm font-bold [font-stretch:108%] md:block"
-                    title={orgName}
-                >
-                    {orgName}
-                </div>
-            }}
+            <div
+                className="hidden min-h-8 truncate px-2 pt-0.5 pb-2.5 text-sm font-bold [font-stretch:108%] md:block"
+                title={orgName}
+            >
+                {orgName}
+            </div>
             {for item in items {
                 <a
                     key={item["key"]}
@@ -70,19 +68,16 @@ def:pub WorkspaceRail(
                     }}}
                 >
                     <span>{item["label"]}</span>
-                    {if item["count"] {
-                        <span
-                            key="n"
-                            className={"num text-xs font-normal "
-                                + (
-                                    "text-muted-foreground"
-                                        if current == item["key"]
-                                        else "text-subtle group-hover:text-muted-foreground"
-                                )}
-                        >
-                            {item["count"]}
-                        </span>
-                    }}
+                    <span
+                        className={"num min-w-[2ch] text-right text-xs font-normal "
+                            + (
+                                "text-muted-foreground"
+                                    if current == item["key"]
+                                    else "text-subtle group-hover:text-muted-foreground"
+                            )}
+                    >
+                        {item["count"]}
+                    </span>
                 </a>
             }}
         </nav>;

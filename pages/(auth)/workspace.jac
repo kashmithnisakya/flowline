@@ -6,7 +6,7 @@ at /github, so old ?tab=github links forward there."""
 import from "@jac/runtime" { useLocation }
 import from "react" { useEffect }
 import from ...models { Project, MemberView, RoleView }
-import from ...lib.session { fetchOrgName }
+import from ...lib.session { fetchOrgName, cachedOrgName }
 import from ...services.roster.roster {
     ListMembers,
     SaveMember,
@@ -73,7 +73,8 @@ def:pub WorkspacePage -> JsxPage {
     has members: list[MemberView] = [],
         projects: list[Project] = [],
         roles: list[RoleView] = [],
-        orgName: str = "",
+        # The header's cache, so the rail shows the name from the first paint.
+        orgName: str = cachedOrgName(),
         loading: bool = True,
         # Read during the first render, so the deep-linked section paints
         # straight away instead of flipping after an effect.
@@ -221,7 +222,7 @@ def:pub WorkspacePage -> JsxPage {
                                     title="People"
                                     count={"" if loading else str(len(active))}
                                 >
-                                    {if len(active) > 0 {
+                                    {if len(active) > 0 or loading {
                                         <div
                                             key="find"
                                             className="relative min-w-0 flex-1 sm:w-48 sm:flex-none"
@@ -244,38 +245,13 @@ def:pub WorkspacePage -> JsxPage {
                                     </Button>
                                 </SectionHeader>
                                 {if loading {
-                                    <div
-                                        key="sk"
-                                        className="surface flex flex-col divide-y"
-                                    >
-                                        {for i in [0, 1, 2, 3] {
-                                            <div
-                                                key={"r" + str(i)}
-                                                className="flex items-center gap-3 px-3 py-3"
-                                            >
-                                                <Skeleton
-                                                    className="h-6 w-6 shrink-0 rounded-full"
-                                                />
-                                                <Skeleton
-                                                    className="h-4 w-36 max-w-full"
-                                                />
-                                                <Skeleton
-                                                    className="ml-auto h-4 w-24 max-w-full"
-                                                />
-                                            </div>
-                                        }}
-                                    </div>
-                                } else {
                                     <MemberTable
-                                        key="table"
-                                        members={shown}
-                                        projects={activeProjects}
-                                        roleOptions={roleOptions}
-                                        query={query.strip()}
-                                        showTags={len(allTags) > 0}
+                                        key="sk"
+                                        members={[]}
+                                        projects={[]}
+                                        roleOptions={[]}
                                         onEdit={openEdit}
                                         onArchive={askArchive}
-                                        onCreate={openCreate}
                                         onRoles={lambda (
                                             memberId: str, next: list[str]
                                         ) { applyRoles(memberId, next, True); }}
@@ -286,7 +262,36 @@ def:pub WorkspacePage -> JsxPage {
                                         onManageProjects={lambda { selectTab(
                                             "projects"
                                         ); }}
+                                        placeholder={4}
                                     />
+                                } else {
+                                    <div
+                                        key="table"
+                                        className="animate-in fade-in duration-150"
+                                    >
+                                        <MemberTable
+                                            members={shown}
+                                            projects={activeProjects}
+                                            roleOptions={roleOptions}
+                                            query={query.strip()}
+                                            showTags={len(allTags) > 0}
+                                            onEdit={openEdit}
+                                            onArchive={askArchive}
+                                            onCreate={openCreate}
+                                            onRoles={lambda (
+                                                memberId: str, next: list[str]
+                                            ) { applyRoles(memberId, next, True); }}
+                                            onProjects={lambda (
+                                                memberId: str, next: list[str]
+                                            ) { applyProjects(memberId, next, True); }}
+                                            onManageRoles={lambda { selectTab(
+                                                "roles"
+                                            ); }}
+                                            onManageProjects={lambda { selectTab(
+                                                "projects"
+                                            ); }}
+                                        />
+                                    </div>
                                 } }
                             </div>
                         } elif tab == "projects" {
