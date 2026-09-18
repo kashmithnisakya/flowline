@@ -1,32 +1,28 @@
 """Implementations for the Tasks page."""
 
-impl TasksPage.loadWorkspace -> None {
-    # The flow line first: the table waits for it, and a step filter places
-    # rows by it.
-    try {
-        sResult = root spawn GetFlowLine(with_counts=False);
-        steps = sResult.reports[0] if sResult.reports else [];
-        if fStep != "All" and fStep not in columnKeys() {
-            fStep = "All";
-        }
-    } except Exception as e {
-        steps = [];
+impl TasksPage.loadShared -> None {
+    # One read for the flow line, roster, projects, roles and iterations,
+    # fired beside the first ListTasks. The table waits for the flow line,
+    # and a step filter places rows by it. A failed read is non-fatal: the
+    # filters show fewer options; loadTasks owns the table's failure panel.
+    ws = await loadWorkspace();
+    steps = ws["steps"];
+    if fStep != "All" and fStep not in columnKeys() {
+        fStep = "All";
     }
     stepsLoaded = True;
     readyRef.current = True;
     if fStep != "All" {
         loadTasks();
     }
-    try {
-        mResult = root spawn ListMembers();
-        pResult = root spawn ListProjects();
-        members = mResult.reports[0] if mResult.reports else [];
-        allProjects: list[Project] = pResult.reports[0] if pResult.reports else [];
-        projects = [
-            p
-            for p in allProjects
-            if p.active
-        ];
+    members = ws["members"];
+    allProjects: list[Project] = ws["projects"];
+    projects = [
+        p
+        for p in allProjects
+        if p.active
+    ];
+    if ws["ok"] {
         # A project or assignee id from the URL that is not in the menus
         # (archived, or another workspace's) would show a blank filter.
         knownProject = fProject == "all";
@@ -47,15 +43,9 @@ impl TasksPage.loadWorkspace -> None {
         if not knownMember {
             fAssignee = "All";
         }
-        rResult = root spawn ListRoles();
-        roleRows = rResult.reports[0] if rResult.reports else [];
-        iResult = root spawn ListIterations();
-        iterations = iResult.reports[0] if iResult.reports else [];
-    } except Exception as e {
-        # Non-fatal: the filters just show fewer options; loadTasks owns the
-        # failure panel for the table itself.
-        members = [];
     }
+    roleRows = ws["roles"];
+    iterations = ws["iterations"];
     workspaceReady = True;
     # The app bar may have mounted after the first measure (a full load).
     measureHeader();

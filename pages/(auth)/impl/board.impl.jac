@@ -75,6 +75,12 @@ impl BoardPage.loadAll -> None {
     await loadBoard(True);
 }
 
+impl BoardPage.reloadAll -> None {
+    # After a write: the working set and the loaded history, together.
+    w: any = window;
+    await w.Promise.all([loadAll(), refreshOlder(fProject, fAssignee, fCategory)]);
+}
+
 
 impl BoardPage.drainDeliveries -> None {
     # A hidden tab and a running sync both skip the tick but keep the
@@ -635,8 +641,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
             dialogOpen = False;
             switchTo = NO_SWITCH;
         }
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        await reloadAll();
     } except Exception as e {
         toast.error("Failed to save task");
     }
@@ -652,8 +657,7 @@ impl BoardPage.deleteTask -> None {
         root spawn DeleteTask(task_id=editingId);
         dialogOpen = False;
         switchTo = NO_SWITCH;
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        await reloadAll();
     } except Exception as e {
         toast.error("Failed to delete task");
     }
@@ -890,8 +894,7 @@ impl BoardPage.moveTo(
     }
     if failed {
         toast.error("Move failed. Restoring the board.");
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        await reloadAll();
         return;
     }
     # Who the card went to, when the move handed it over. Read off the

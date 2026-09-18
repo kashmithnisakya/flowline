@@ -12,10 +12,8 @@ import from ...models {
     IterationView
 }
 import from ...constants { KIND_STATUS }
-import from ...services.projects.projects { ListProjects, AssignToProject }
+import from ...services.projects.projects { AssignToProject }
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
-import from ...services.roster.roster { ListMembers, ListRoles }
-import from ...services.iterations.iterations { ListIterations }
 import from ...services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
@@ -26,10 +24,10 @@ import from ...services.flowlines.flowlines {
     LinkTransition,
     LabelTransition,
     UnlinkTransition,
-    GetFlowLineMeta,
     RenameFlowLine,
     ListStepTasks
 }
+import from ...lib.workspace { loadWorkspace }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,
@@ -333,6 +331,7 @@ def:pub FlowLinePage -> JsxPage {
     );
 
     async def boot -> None;
+    async def loadShared -> None;
     async def reload(pid: str) -> None;
     async def retryLoad -> None;
     async def selectProject(v: str) -> None;
@@ -351,7 +350,6 @@ def:pub FlowLinePage -> JsxPage {
     async def deleteTask -> None;
     def stepName(key: str) -> str;
     def mappedStatus(key: str) -> str;
-    async def loadMeta -> None;
     def switchView(v: str) -> None;
     def switchMode(v: str) -> None;
     def finishEditing -> None;

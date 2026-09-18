@@ -12,7 +12,8 @@ and handoffs. Source: `services/flowlines/flowlines.jac`.
 
 **Reports** `{"name": "...", "template_key": "..."}`; with no flow line yet,
 `{"name": "Flow line", "template_key": ""}`. An empty `template_key` means the
-steps were drawn from scratch.
+steps were drawn from scratch. [`GetWorkspace`](board.md#getworkspace) carries
+the same two values as `flow_name` and `template_key`.
 
 ::: walker RenameFlowLine h3
 

@@ -14,9 +14,8 @@ import from ...services.log.log {
     LogActivity,
     UpdateLogEntry
 }
-import from ...services.roster.roster { ListMembers }
-import from ...services.projects.projects { ListProjects }
 import from ...services.tasks.tasks { ListTasks }
+import from ...lib.workspace { loadWorkspace }
 import from ...components.log.DayRail { DayRail }
 import from ...components.log.DayLog {
     Standup,
@@ -248,6 +247,15 @@ def:pub DailyLogPage -> JsxPage {
     );
 
     async def loadWeek -> None;
+    async def weekPage(
+        seq: int,
+        monday: str,
+        start: str,
+        sunday: str,
+        pageNo: int,
+        sofar: list[LogEntry]
+    ) -> dict[str, any];
+    async def loadShared -> bool;
     async def loadBlocked -> None;
     async def retryLoad -> None;
     async def deleteSelected -> None;

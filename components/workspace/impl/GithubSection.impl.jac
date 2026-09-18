@@ -42,8 +42,7 @@ impl GithubSection.boot -> None {
     if INSTALL_ONCE["pending"] {
         await INSTALL_ONCE["pending"];
     }
-    await loadStatus();
-    await loadWorkspace();
+    await loadShared();
     loading = False;
 }
 
@@ -84,14 +83,31 @@ impl GithubSection.loadStatus -> None {
     }
 }
 
-impl GithubSection.loadWorkspace -> None {
+impl GithubSection.loadShared -> None {
+    # One read for the connection, repos, projects and flow line; the issue
+    # list follows once the repo is known (the repoId effect). GithubStatus
+    # stays the read after a disconnect or a sync.
+    ws = await loadWorkspace();
+    if not ws["ok"] {
+        toast.error(
+            "Could not load this workspace's GitHub connection and repositories"
+        );
+        return;
+    }
+    view: any = ws["github"];
+    if view {
+        conn = view;
+        configGaps = view.missing_config;
+        try {
+            localStorage.setItem(GITHUB_KEY, "1" if view.connected else "0");
+        } except Exception as e {
+            configGaps = configGaps;
+        }
+    }
     try {
-        rResult = root spawn ListRepos();
-        pResult = root spawn ListProjects();
-        sResult = root spawn GetFlowLine();
-        fetched = rResult.reports[0] if rResult.reports else [];
+        fetched: list[RepoView] = ws["repos"];
         repos = fetched;
-        fetchedProjects: list[Project] = pResult.reports[0] if pResult.reports else [];
+        fetchedProjects: list[Project] = ws["projects"];
         projects = fetchedProjects;
         # One active project is no real choice: preselect it so a fresh
         # workspace never attaches its first repo to "No project".
@@ -106,7 +122,7 @@ impl GithubSection.loadWorkspace -> None {
         # The "as" picker offers the org's own flow line steps; imports land on
         # the start step by default (where new work lands). An org with no
         # flow line keeps the legacy status list instead.
-        stepRows: list[StepView] = sResult.reports[0] if sResult.reports else [];
+        stepRows: list[StepView] = ws["steps"];
         steps = stepRows;
         if not importStep and len(stepRows) > 0 {
             landing = stepRows[0].id;
@@ -120,7 +136,7 @@ impl GithubSection.loadWorkspace -> None {
         }
         # Land on something readable rather than an empty picker. An explicit
         # choice already made is left alone.
-        if not repoId and fetched {
+        if not repoId and len(fetched) > 0 {
             repoId = fetched[0].id;
         }
     } except Exception as e {
@@ -378,7 +394,7 @@ impl GithubSection.attachRepo(fullName: str) -> None {
     try {
         result = root spawn AddRepo(full_name=fullName, project_id=project);
         added = result.reports[0] if result.reports else None;
-        await loadWorkspace();
+        await loadShared();
         await searchRepos();
         # Land on the repository that was just added, so the panes show it
         # when the dialog closes.

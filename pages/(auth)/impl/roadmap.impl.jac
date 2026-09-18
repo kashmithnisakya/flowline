@@ -1,21 +1,15 @@
 """Implementations for the Roadmap page."""
 
-impl RoadmapPage.loadWorkspace -> None {
-    try {
-        pResult = root spawn ListProjects();
-        projects = pResult.reports[0] if pResult.reports else [];
-        mResult = root spawn ListMembers();
-        members = mResult.reports[0] if mResult.reports else [];
-        sResult = root spawn GetFlowLine(with_counts=False);
-        steps = sResult.reports[0] if sResult.reports else [];
-        rResult = root spawn ListRoles();
-        roleRows = rResult.reports[0] if rResult.reports else [];
-        iResult = root spawn ListIterations();
-        iterations = iResult.reports[0] if iResult.reports else [];
-    } except Exception as e {
-        # Non-fatal: the timeline still draws; the dialog offers fewer choices.
-        members = [];
-    }
+impl RoadmapPage.loadShared -> None {
+    # One read for the projects, roster, flow line, roles and iterations,
+    # fired beside RoadmapSnapshot. Non-fatal: the timeline still draws; the
+    # dialog offers fewer choices.
+    ws = await loadWorkspace();
+    projects = ws["projects"];
+    members = ws["members"];
+    steps = ws["steps"];
+    roleRows = ws["roles"];
+    iterations = ws["iterations"];
 }
 
 impl RoadmapPage.loadRoadmap -> None {

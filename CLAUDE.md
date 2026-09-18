@@ -93,7 +93,11 @@ people it tracks are roster members.
   `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `iterations` (iteration CRUD and `RoadmapSnapshot`), and
+  `iterations` (iteration CRUD and `RoadmapSnapshot`),
+  `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
+  roles, iterations, flow line meta and GitHub connection in one read;
+  `BoardSnapshot` fills its workspace fields from the same
+  `workspace_view` helper, so there is one definition of those lists), and
   `github` with `github.jac`, `events.jac` and `util.jac`) plus
   `services/util.jac` for shared server-only helpers. Walkers are **bare
   (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
@@ -281,6 +285,16 @@ File-based routing with route groups:
   Checkbox once needed the same treatment (`tickbox.jac`, for a stray
   `# noqa` text node); the registry copy at jac 0.34.14 is clean, so
   `checkbox.jac` is imported directly again.
+- **A page fires the workspace read beside its own data, never after it.**
+  `lib/workspace.jac` `loadWorkspace()` spawns `GetWorkspace` and answers a
+  dict keyed like `WorkspaceView` plus `ok` (the empty shape on failure, so
+  a page keeps its own failed-load handling). Every page other than the
+  board calls it as `loadShared` together with its own walker
+  (`w.Promise.all(jobs)`), and no page awaits more than two calls in
+  sequence on mount; only `/github` has a dependent third (the issue list
+  once the repo is known). A refetch of one list after a save may still
+  call that list's walker. Its two helpers are pinned `"client"` in
+  `jac.toml`, like `lib/utils`.
 - **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper).
   **`lib/dates.jac`** owns the calendar rules (`todayIso`, `daysUntil`,
   `dueTone`, `dueLabel`): the card, the lane header and the overview all

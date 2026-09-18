@@ -47,7 +47,20 @@ while more {
 [Where a task sits on the board](../concepts/flow-lines.md#where-a-task-sits-on-the-board).
 
 `github_connected` is true whenever an installation is stored, even one marked
-invalid; call [`GithubStatus`](github.md#githubstatus) for the detail.
+invalid; the full view is `github` on [`GetWorkspace`](#getworkspace) or
+[`GithubStatus`](github.md#githubstatus).
+
+## The workspace
+
+::: walker GetWorkspace
+
+**Reports** exactly one [`WorkspaceView`](types.md#workspaceview): the six
+lists `BoardSnapshot` carries with `with_workspace`, in the same order, plus
+the flow line's `flow_name` and `template_key` (what
+[`GetFlowLineMeta`](flow-lines.md#getflowlinemeta) reports) and the connection
+view `github` (what [`GithubStatus`](github.md#githubstatus) reports, no GitHub
+call). Every page other than the board opens with it, fired together with its
+own read, so a page never waits for one roster list after another.
 
 ## Deep links
 
