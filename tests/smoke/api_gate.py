@@ -249,6 +249,19 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     exp_totals = {sc: exp[sc] for sc in totals}
     check(f"{label}: ListTasks totals per scope", got_totals == exp_totals and totals["working"].get("older") == exp["older"],
           f"{got_totals} older={totals['working'].get('older')} vs {exp_totals} older={exp['older']}")
+    # scope_total is the scope's unfiltered count on every page, so a filtered
+    # view says "N of M" without a second call: with no filter it equals total,
+    # under a project or category filter (pushed into the query) it is still
+    # the whole scope.
+    plain = {sc: totals[sc].get("scope_total") for sc in totals}
+    check(f"{label}: ListTasks scope_total equals total on an unfiltered page", plain == exp_totals, f"{plain} vs {exp_totals}")
+    narrowed = {}
+    for sc in totals:
+        narrowed[sc + "/project"] = report("ListTasks", {"scope": sc, "project_id": project_ids[0], "page_size": 1}).get("scope_total")
+        if exp["categories"]:
+            narrowed[sc + "/category"] = report("ListTasks", {"scope": sc, "category": exp["categories"][0], "page_size": 1}).get("scope_total")
+    want = {k: exp_totals[k.split("/")[0]] for k in narrowed}
+    check(f"{label}: ListTasks scope_total under a project or category filter is the whole scope", narrowed == want, f"{narrowed} vs {want}")
 
 
 def parity_suite(project_id, member_id, tag):

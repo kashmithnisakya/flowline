@@ -106,8 +106,9 @@ impl OverviewPage.loadDue -> None {
 }
 
 # This week's log, a day wider on each side: rows carry the server's UTC
-# date, and the page buckets them by the local day of their stamp. `full`
-# is False when the page cap cut the read short.
+# date, and the page buckets them by the local day of their stamp. Every
+# page is absorbed as it lands, so the first one paints; `full` is False
+# while more is coming or when the page cap cut the read short.
 impl OverviewPage.fetchWeekLog(monday: str) -> any {
     rows: list[any] = [];
     pageNo = 1;
@@ -127,6 +128,7 @@ impl OverviewPage.fetchWeekLog(monday: str) -> any {
                 rows.append(row);
             }
             more = got.has_more;
+            absorbWeekLog(rows, not more);
         }
         pageNo = pageNo + 1;
     }
@@ -137,9 +139,7 @@ impl OverviewPage.fetchWeekLog(monday: str) -> any {
 # of its last move into Done, and only while its last move left it in Done,
 # so a reopened card drops out and the bars add up to the week's figure.
 impl OverviewPage.loadMoves -> None {
-    today = todayIso();
-    monday = mondayOf(today);
-    days = [shiftDay(monday, i) for i in range(7)];
+    monday = mondayOf(todayIso());
     mine = False;
     key = "log:" + monday;
     if not inflight(key) {
@@ -150,91 +150,100 @@ impl OverviewPage.loadMoves -> None {
     movesFailed = False;
     pending: any = LOADS[key];
     try {
-        got: any = await pending;
-        rows: list[any] = got["rows"];
-        perDay = [0, 0, 0, 0, 0, 0, 0];
-        people: dict[str, list[int]] = {};
-        entriesWeek = 0;
-        movesOf: dict[str, list[dict[str, str]]] = {};
-        taskIds: list[str] = [];
-        sinceAt: dict[str, str] = {};
-        sinceDay: dict[str, str] = {};
-        handWeek = 0;
-        for row in rows {
-            stamp = row.at or row.date;
-            # A task event is dated by its own UTC stamp; a hand-written line
-            # keeps the day its author picked.
-            day = localDayOf(row.at, row.date)
-                if row.task_id and row.at[:10] == row.date
-                else row.date;
-            slot = -1;
-            for i in range(7) {
-                if days[i] == day {
-                    slot = i;
-                }
-            }
-            if slot >= 0 {
-                entriesWeek = entriesWeek + 1;
-                for who in row.member_name.split(",") {
-                    name = who.strip();
-                    if name and name not in people {
-                        people[name] = [0, 0, 0, 0, 0, 0, 0];
-                    }
-                    if name {
-                        people[name][slot] = people[name][slot] + 1;
-                    }
-                }
-            }
-            if not row.task_id {
-                if slot >= 0 {
-                    handWeek = handWeek + 1;
-                }
-                continue;
-            }
-            tid = row.task_id;
-            if row.status == "Blocked"
-                and (tid not in sinceAt or sinceAt[tid] < stamp) {
-                sinceAt[tid] = stamp;
-                sinceDay[tid] = day;
-            }
-            if row.status and row.activity.startswith("Moved to ") {
-                if tid not in movesOf {
-                    movesOf[tid] = [];
-                    taskIds.append(tid);
-                }
-                movesOf[tid].append({"stamp": stamp, "status": row.status, "day": day});
-            }
-        }
-        for tid in taskIds {
-            moves = movesOf[tid];
-            moves.sort(key=lambda (m: dict) { m["stamp"]; });
-            last = "";
-            entered = "";
-            for m in moves {
-                if m["status"] == "Done" and last != "Done" {
-                    entered = m["day"];
-                }
-                last = m["status"];
-            }
-            if last == "Done" and entered {
-                for i in range(7) {
-                    if days[i] == entered {
-                        perDay[i] = perDay[i] + 1;
-                    }
-                }
-            }
-        }
-        doneMoves = perDay;
-        blockedSince = sinceDay;
-        handEntries = handWeek;
-        weekPeople = people;
-        weekEntries = entriesWeek if got["full"] else -1;
+        # The pages paint as they land (absorbWeekLog); this only waits.
+        await pending;
     } except Exception as e {
         movesFailed = True;
     }
     if mine {
         LOADS[key] = None;
     }
+    movesLoaded = True;
+}
+
+# The week's figures from the rows in so far. `weekEntries` stays -1 until
+# the read is complete, so the entries figure and the People strip keep the
+# snapshot's numbers until every page is in.
+impl OverviewPage.absorbWeekLog(rows: list[any], full: bool) -> None {
+    today = todayIso();
+    monday = mondayOf(today);
+    days = [shiftDay(monday, i) for i in range(7)];
+    perDay = [0, 0, 0, 0, 0, 0, 0];
+    people: dict[str, list[int]] = {};
+    entriesWeek = 0;
+    movesOf: dict[str, list[dict[str, str]]] = {};
+    taskIds: list[str] = [];
+    sinceAt: dict[str, str] = {};
+    sinceDay: dict[str, str] = {};
+    handWeek = 0;
+    for row in rows {
+        stamp = row.at or row.date;
+        # A task event is dated by its own UTC stamp; a hand-written line
+        # keeps the day its author picked.
+        day = localDayOf(row.at, row.date)
+            if row.task_id and row.at[:10] == row.date
+            else row.date;
+        slot = -1;
+        for i in range(7) {
+            if days[i] == day {
+                slot = i;
+            }
+        }
+        if slot >= 0 {
+            entriesWeek = entriesWeek + 1;
+            for who in row.member_name.split(",") {
+                name = who.strip();
+                if name and name not in people {
+                    people[name] = [0, 0, 0, 0, 0, 0, 0];
+                }
+                if name {
+                    people[name][slot] = people[name][slot] + 1;
+                }
+            }
+        }
+        if not row.task_id {
+            if slot >= 0 {
+                handWeek = handWeek + 1;
+            }
+            continue;
+        }
+        tid = row.task_id;
+        if row.status == "Blocked" and (tid not in sinceAt or sinceAt[tid] < stamp) {
+            sinceAt[tid] = stamp;
+            sinceDay[tid] = day;
+        }
+        if row.status and row.activity.startswith("Moved to ") {
+            if tid not in movesOf {
+                movesOf[tid] = [];
+                taskIds.append(tid);
+            }
+            movesOf[tid].append({"stamp": stamp, "status": row.status, "day": day});
+        }
+    }
+    for tid in taskIds {
+        moves = movesOf[tid];
+        moves.sort(key=lambda (m: dict) { m["stamp"]; });
+        last = "";
+        entered = "";
+        for m in moves {
+            if m["status"] == "Done" and last != "Done" {
+                entered = m["day"];
+            }
+            last = m["status"];
+        }
+        if last == "Done" and entered {
+            for i in range(7) {
+                if days[i] == entered {
+                    perDay[i] = perDay[i] + 1;
+                }
+            }
+        }
+    }
+    doneMoves = perDay;
+    blockedSince = sinceDay;
+    handEntries = handWeek;
+    weekPeople = people;
+    weekEntries = entriesWeek if full else -1;
     movesLoaded = True;
 }
 
@@ -313,8 +322,8 @@ impl OverviewPage.loadHistory -> None {
             history = got;
             historyFailed = False;
         }
-        # "tasks added" is this week across every project, so it is taken
-        # only from an unfiltered history and kept across filters.
+        # "tasks added" is this week across every project: the last entry
+        # of an unfiltered history, kept across filters (no second walker).
         if got and projectId == "" and len(got.added) > 0 {
             weekAdded = got.added[len(got.added) - 1];
             addedFailed = False;
@@ -329,20 +338,4 @@ impl OverviewPage.loadHistory -> None {
         LOADS[key] = None;
     }
     historyLoading = False;
-    if projectId != "" and weekAdded < 0 {
-        loadWeekAdded();
-    }
-}
-
-# The week's "tasks added" when the charts were filtered before it landed.
-impl OverviewPage.loadWeekAdded -> None {
-    try {
-        got: any = await fetchHistory("", 4);
-        if got and len(got.added) > 0 {
-            weekAdded = got.added[len(got.added) - 1];
-            addedFailed = False;
-        }
-    } except Exception as e {
-        addedFailed = True;
-    }
 }

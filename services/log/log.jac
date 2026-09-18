@@ -24,9 +24,11 @@ import from services.util { today_iso, shift_day, page_bounds, now_iso }
 
 walker ListLogEntries {
     """One page of entries whose LogDay date falls in [from_date, to_date],
-    ISO strings, newest day first. `total` counts the whole range so a page
-    can say how much of the week it is. A `task_id` keeps only that task's
-    rows (the task sheet's history), before paging."""
+    ISO strings, newest day first and newest stamp first within a day, the
+    order every view shows, so a later page only ever lands under the rows
+    already on screen. `total` counts the whole range so a page can say how
+    much of the week it is. A `task_id` keeps only that task's rows (the
+    task sheet's history), before paging."""
     has from_date: str,
         to_date: str,
         page: int = 1,
@@ -56,12 +58,11 @@ walker ListLogEntries {
                 }
             }
         }
-        # Newest day first so page 1 is the end of the week; the jid pass
-        # underneath keeps rows that tie on day and name in one order
-        # across pages (sorts are stable).
+        # Newest day, then newest stamp, so page 1 is the end of the week and
+        # the top of its day; the jid pass underneath keeps rows that tie on
+        # the stamp in one order across pages (sorts are stable).
         found.sort(key=lambda (r: LogEntry) { jid(r); });
-        found.sort(key=lambda (r: LogEntry) { r.member_name; });
-        found.sort(key=lambda (r: LogEntry) { r.date; }, reverse=True);
+        found.sort(key=lambda (r: LogEntry) { r.date + "|" + r.at; }, reverse=True);
         report LogPage(
             rows=found[start:end],
             page=p,

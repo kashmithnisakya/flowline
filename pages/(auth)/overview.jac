@@ -337,7 +337,7 @@ def:pub OverviewPage -> JsxPage {
     async def loadMoves -> None;
     async def loadSetup -> None;
     async def loadHistory -> None;
-    async def loadWeekAdded -> None;
+    def absorbWeekLog(rows: list[any], full: bool) -> None;
 
     today = todayIso();
     # The snapshot flags overdue by the server's UTC day; this is that day,

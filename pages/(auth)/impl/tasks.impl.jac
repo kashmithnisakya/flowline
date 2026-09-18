@@ -65,12 +65,17 @@ impl TasksPage.loadTasks -> None {
         fetched: list[TaskRow] = [];
         matched = 0;
         more = False;
+        # The scope's unfiltered count rides on every page (scope_total), so
+        # "12 of 210" costs no second call.
+        whole = -1;
         if fStep != "All" or fPriority != "All" {
             pool = await gatherPool(seq);
             start = (page - 1) * PAGE_SIZE;
             fetched = pool[start:start + PAGE_SIZE];
             matched = len(pool);
             more = len(pool) > start + PAGE_SIZE;
+            kept: any = poolRef.current;
+            whole = int(kept["scope_total"]) if kept else -1;
         } else {
             result = root spawn ListTasks(
                 scope=scope,
@@ -89,18 +94,8 @@ impl TasksPage.loadTasks -> None {
             fetched = data.rows if data else [];
             matched = data.total if data else 0;
             more = data.has_more if data else False;
+            whole = data.scope_total if data else -1;
         }
-        # The scope's unfiltered count, read once per scope while a filter is
-        # on; any write forgets them.
-        totals: any = totalsRef.current or {};
-        if not filtered() {
-            totals[scope] = matched;
-        } elif reqRef.current == seq and scope not in totals {
-            whole = root spawn ListTasks(scope=scope, page=1, page_size=1);
-            wholePage = whole.reports[0] if whole.reports else None;
-            totals[scope] = wholePage.total if wholePage else -1;
-        }
-        totalsRef.current = totals;
         # A page past the end (an old link, or the last row deleted elsewhere)
         # steps back to the last page; the view effect reloads it.
         if reqRef.current == seq and len(fetched) == 0 and page > 1 and matched > 0 {
@@ -111,7 +106,7 @@ impl TasksPage.loadTasks -> None {
             rows = fetched;
             total = matched;
             hasMore = more;
-            scopeTotal = totals[scope] if scope in totals else -1;
+            scopeTotal = whole;
             if cursor >= len(fetched) {
                 cursor = len(fetched) - 1;
             }
@@ -171,11 +166,17 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskRow] {
         kept: list[TaskRow] = cached["rows"];
         if cached["order"] != order {
             kept = sortPool(kept);
-            poolRef.current = {"sig": sig, "order": order, "rows": kept};
+            poolRef.current = {
+                "sig": sig,
+                "order": order,
+                "rows": kept,
+                "scope_total": cached["scope_total"]
+            };
         }
         return kept;
     }
     pool: list[TaskRow] = [];
+    whole = -1;
     pg = 1;
     more = True;
     while more and pg <= GATHER_PAGES and reqRef.current == seq {
@@ -194,6 +195,9 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskRow] {
         );
         data = result.reports[0] if result.reports else None;
         got: list[TaskRow] = data.rows if data else [];
+        if pg == 1 and data {
+            whole = data.scope_total;
+        }
         for t in got {
             if (fPriority == "All" or t.priority == fPriority)
                 and (fStep == "All" or columnKeyOf(t, keys) == fStep) {
@@ -204,7 +208,12 @@ impl TasksPage.gatherPool(seq: int) -> list[TaskRow] {
         pg = pg + 1;
     }
     if reqRef.current == seq {
-        poolRef.current = {"sig": sig, "order": order, "rows": pool};
+        poolRef.current = {
+            "sig": sig,
+            "order": order,
+            "rows": pool,
+            "scope_total": whole
+        };
     }
     return pool;
 }
@@ -255,10 +264,9 @@ impl TasksPage.filtered -> bool {
         or fEstimate != "All";
 }
 
-# A write can change what any view matches: drop the kept pool and totals.
+# A write can change what any view matches: drop the kept pool.
 impl TasksPage.forget -> None {
     poolRef.current = None;
-    totalsRef.current = {};
 }
 
 impl TasksPage.sortBy(field: str) -> None {

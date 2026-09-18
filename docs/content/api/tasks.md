@@ -33,6 +33,11 @@ capped at 500.
   rows the cutoff left out (the Done tally less the rows the page kept), so
   a view can say how many it is not showing without a second call. Any
   filter, `project_id` and `assignee_id` included, reports 0.
+- `scope_total` is the scope's count with no filter on (what `total` would
+  be on an unfiltered page), on every page, so a filtered view can say
+  "12 of 210" without a second call. It is the pool's size when the page
+  loaded the whole scope; under a `project_id` or `category` filter it is a
+  tally (`done`, `all`, `older`) or one more pushed read of the live scope.
 - The scope and a `category` filter run in the store's query, so a working
   page loads the working set alone; `older`, `done` and `all` load the
   history they page over.

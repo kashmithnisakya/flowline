@@ -408,8 +408,42 @@ walker ListTasks {
             page_size=size,
             has_more=len(picked) > end,
             total=len(picked),
-            older=older
+            older=older,
+            scope_total=self.scope_size(holder, pool, projects, cutoff, today)
         );
+    }
+
+    # The scope's count with no filter on: the pool when it is the whole
+    # scope, else a tally, or one more pushed read for the live scopes (a
+    # project or category filter narrowed the pool in the query).
+    def scope_size(
+        holder: Root, pool: list[Task], projects: list[Project], cutoff: str, today: str
+    ) -> int {
+        whole = pool;
+        if projects or self.category {
+            if self.scope == "done" {
+                return tally_totals(holder)[1];
+            } elif self.scope == "all" {
+                return tally_totals(holder)[0];
+            } elif self.scope == "older" {
+                return tally_totals(holder)[1] - len(done_since(holder, cutoff))
+                    if cutoff
+                    else 0;
+            }
+            whole = working_tasks(holder, cutoff)
+                if self.scope == "working"
+                else open_tasks(holder);
+        }
+        if self.scope != "attention" {
+            return len(whole);
+        }
+        n = 0;
+        for t in whole {
+            if needs_attention(t, today) {
+                n = n + 1;
+            }
+        }
+        return n;
     }
 
     # The assignee filter, read off the rows' link field. A foreign or
