@@ -16,9 +16,12 @@ import from models {
     resolve,
     on_attached,
     owned,
-    all_tasks
+    open_tasks,
+    project_open,
+    done_in_window,
+    tasks_in_iteration
 }
-import from services.util { now_iso, today_iso, shift_day, iso_day }
+import from services.util { now_iso, today_iso, shift_day, iso_day, ensure_tallies }
 
 glob ROADMAP_MAX_ROWS: int = 400;
 
@@ -162,11 +165,9 @@ walker DeleteIteration {
     can remove with Iteration entry {
         gone = jid(here);
         cleared = 0;
-        for t in all_tasks(root) {
-            if t.iteration_id == gone {
-                t.iteration_id = "";
-                cleared = cleared + 1;
-            }
+        for t in tasks_in_iteration(root, gone) {
+            t.iteration_id = "";
+            cleared = cleared + 1;
         }
         del here;
         report {"ok": True, "deleted": gone, "cleared": cleared};
@@ -179,31 +180,37 @@ walker RoadmapSnapshot {
     """The roadmap for [from_date, to_date]: the iterations overlapping it and
     the tasks whose span (task_span) does, earliest first, at most
     ROADMAP_MAX_ROWS. `project_id` narrows to that project; open tasks with
-    no span count as unscheduled. A bad window reads as two weeks back to eight ahead."""
+    no span count as unscheduled. A bad window reads as two weeks back to
+    eight ahead. Only the open tasks and the Done tasks whose dates or
+    iteration touch the window are loaded (done_in_window), never the
+    history."""
     has from_date: str = "",
         to_date: str = "",
         project_id: str = "",
         reports: list[RoadmapData] = [];
 
     can start with Root entry {
+        ensure_tallies(here);
         if self.project_id {
             p = resolve(self.project_id);
             if isinstance(p, Project) and owned(here, p) {
                 visit [p];
             } else {
-                report self.plan(here, []);
+                report self.plan(here, [], "");
             }
         } else {
-            report self.plan(here, all_tasks(here));
+            report self.plan(here, open_tasks(here), "");
         }
     }
 
     can gather with Project entry {
-        report self.plan(root, [here-->[?:Task]]);
+        report self.plan(root, project_open(here), jid(here));
         disengage;
     }
 
-    def plan(holder: Root, pool: list[Task]) -> RoadmapData {
+    # `open` is the open pool; `only` narrows the Done candidates (read
+    # workspace-wide, then kept by their project link) to one project.
+    def plan(holder: Root, open: list[Task], only: str) -> RoadmapData {
         lo = iso_day(self.from_date);
         hi = iso_day(self.to_date);
         if not lo or not hi or lo > hi {
@@ -212,13 +219,35 @@ walker RoadmapSnapshot {
         }
         spans: dict[str, list[str]] = {};
         windows: list[IterationView] = [];
+        window_ids: list[str] = [];
+        after_ids: list[str] = [];
+        before_ids: list[str] = [];
         for it in iterations_of(holder) {
             spans[jid(it)] = [it.start_date, it.end_date];
             if it.start_date <= hi and it.end_date >= lo {
                 windows.append(iteration_view(it));
+                window_ids.append(jid(it));
+            }
+            if it.end_date >= lo {
+                after_ids.append(jid(it));
+            }
+            if it.start_date <= hi {
+                before_ids.append(jid(it));
             }
         }
         iteration_order(windows);
+        pool = open;
+        if self.project_id and not only {
+            pool = [];
+        } else {
+            for t in done_in_window(
+                holder, lo, hi, window_ids, after_ids, before_ids
+            ) {
+                if not only or t.project_id == only {
+                    pool.append(t);
+                }
+            }
+        }
         placed: list[list[any]] = [];
         unscheduled = 0;
         for t in pool {

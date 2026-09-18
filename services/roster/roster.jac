@@ -188,16 +188,21 @@ walker ArchiveMember(find_member) {
     Unassigned; Done-task edges stay for history."""
     can archive with Member entry {
         here.active = False;
+        me = jid(here);
         # Filter to Task explicitly: the reverse read also surfaces the
-        # box's generic parent edge, which has no `status`.
-        for t in [here<-:AssignedTo:<-[?:Task]] {
-            if t.status != "Done" {
-                for e in [edge t->:AssignedTo:->] {
-                    del e;
-                }
+        # box's generic parent edge, which has no `status`. The status
+        # predicate is pushed, so the Done history is never loaded.
+        for t in [here<-:AssignedTo:<-[?:Task, status!="Done"]] {
+            for e in [edge t->:AssignedTo:->] {
+                del e;
             }
+            t.assignee_ids = [
+                who
+                for who in t.assignee_ids
+                if who != me
+            ];
         }
-        report {"archived": jid(here)};
+        report {"archived": me};
         disengage;
     }
 }

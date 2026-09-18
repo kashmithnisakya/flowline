@@ -87,10 +87,10 @@ people it tracks are roster members.
   without an owned, active one; `AddRepo` needs a project for the same
   reason (the sync files issues under the repo's project). A box is made
   on first write by its get-or-create helper (`projects_box(root)` and
-  friends); the cross-kind readers `projects_of`, `members_of`, `roles_of`,
-  `steps_of`, `all_tasks` and `project_tasks` serve the walkers that
-  aggregate from the root. A `Member` stores `first_name` and `last_name`;
-  `full_name()` is the display name.
+  friends); the cross-kind readers `projects_of`, `members_of`, `roles_of`
+  and `steps_of` serve the walkers that aggregate from the root, and the
+  task readers below serve every task walker. A `Member` stores
+  `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
   `iterations` (iteration CRUD and `RoadmapSnapshot`),
@@ -128,15 +128,45 @@ people it tracks are roster members.
   It runs as the system identity and only queues the delivery in the shared
   docs store; `DrainGithubEvents` (and every `SyncGithub`) applies the queue
   in the workspace's own session, so no walker ever writes a foreign root.
-- **A per-task edge hop is a separate traversal; one traversal yielding many
-  edges is not.** `Task.to_view()` hops twice (assignees, project), and
-  at 2,000 tasks on the pinned runtime the three-hop version measured ~113ms
-  PER ROW: a 500-row page took 56s. Walking IN from each Member and Project
-  once costs a handful of traversals no matter how long the page is, and the
-  same page then takes 0.56s. `hydrate_views(holder, rows)` in `models.jac`
-  is that path and is what every list walker uses; `to_view()` is for a
-  single task. `services/insights/insights.jac` does the same thing for the snapshot
-  (`_hydrate`). Never build a list by calling `to_view()` in a loop.
+- **No aggregator loads the task history.** A predicate inside a graph
+  reference (`[box-->[?:Project]-->[?:Task, status != "Done"]]`) compiles
+  to one SQL statement and loads only the matching rows (pushed: `==`,
+  `!=`, `<`, `<=`, `>`, `>=`, a comma is AND, a trailing field name or
+  `-field` orders, `[:n]` bounds; no OR, and a left side must be a declared
+  field name, else E5094). The readers in `models.jac` are those queries:
+  `open_tasks`, `done_since`, `done_before`, `working_tasks` (the board's
+  working set), `created_since`, their `project_*` twins, the per-step and
+  per-iteration lookups, the column readers (`step_column_peak` and
+  friends, for the drag order) and the GitHub lookups (`tasks_by_issue`,
+  `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
+  `done_tasks` and `done_before` load history, and only the explicit
+  history scopes of `ListTasks` (`older`, `done`, `all`, the palette's
+  search) call them. All-time totals are tallies kept on write:
+  `Project.task_total`, `done_total`, `seeded_done_total` (created already
+  Done: history, not throughput) and `Projects.categories` (exact:
+  `note_category` adds, `forget_category` drops after a two-row lookup).
+  `count_task`, `rehome_task` and `Task.set_status` move them; `CreateTask`,
+  `DeleteTask`, `UpdateTask` (category, re-parent), `file_issue_item` and
+  the sync's date corrections (`reseed`) are the write points. A task
+  carries `project_id` and `assignee_ids` (written wherever an `AssignedTo`
+  edge or the container changes: `link_assignees`, `rehome_task`,
+  `file_issue_item`, `ArchiveMember`), so `hydrate_views` / `views_from`
+  build a page from fields plus `task_names` (two roster lists), never a
+  hop; `to_view()` still hops and is for a single task.
+  `ensure_tallies(holder)` in `services/util.jac` fills tallies, link
+  fields and a missing `done_at` for a project whose `tallies_at` is empty
+  (one full load, once; `SaveProject` stamps a new project) and every
+  counting or listing walker calls it first. Two runtime facts shape this
+  (jac 0.37.18, verified in scratch apps): a field write is not visible to
+  a pushed query later in the same request, only to the next one, so a
+  walker that writes and then looks the same row up keeps it in a local
+  (the sync's lookup caches, `others()` in `MoveTask`, the `except_id` in
+  `forget_category`); and `jac fmt` collapses `field in list` inside a
+  filter into one name (`ninwanted`), so there is no pushed `in`: short
+  lists loop one query per value, a GitHub page over `LOOKUP_ONE_BY_ONE`
+  numbers runs one range query kept to the page in Python. Loading costs
+  about 0.2 ms per Task row locally plus 1 to 2 ms per query, so a walker's
+  time is its working set: 209 rows at 1,500 tasks is about 60 ms.
 - **List walkers page, and build their rows in a local.** A walker's public
   `has` fields are serialised into the response (`data.result`) beside
   `data.reports`, so an accumulator field (`has results`) ships every row a
@@ -144,12 +174,16 @@ people it tracks are roster members.
   `ListStepTasks`, `ListLogEntries`, the GitHub walkers) takes `page` /
   `page_size` (1-based, clamped by `page_bounds` in `services/util.jac`) and
   reports one page object (`TaskPage`, `LogPage`, or the GitHub dict) with
-  `rows`, `has_more` and `total`. Filter and sort on node fields first, run
-  `to_view()` (three edge hops) for the page alone. Roster-sized lists
-  (members, projects, roles, repos, steps) stay whole. `ListTasks` has a
-  `scope`: `working` (open plus Done in the last `done_days`, what the board
-  renders, `older` counting what the cutoff left out), `older`, `done`,
-  `all`; `q` is a server-side title search ranked exact, prefix, contains.
+  `rows`, `has_more` and `total`. The scope and a category filter are
+  pushed into the query (`pool_of`), the other filters and the sort run on
+  those rows, and the page alone is hydrated. Roster-sized lists (members,
+  projects, roles, repos, steps) stay whole. `ListTasks` has a `scope`:
+  `working` (open plus Done reached in the last `done_days`, what the board
+  renders, `older` counting what the cutoff left out from the tallies, on
+  an unfiltered page only), `older`, `done`, `all`; `q` is a server-side
+  title search ranked exact, prefix, contains. `GetFlowLine` counts and
+  `ListStepTasks` lists the same working set (`done_days`), so a done step
+  shows recent Done the way the board's column does.
   The Overview adds up history through `TaskCounts` / `LogCounts` rather
   than loading it. Every ordering ends in the jid, so a row cannot swap
   pages between two requests (sorts are stable, so a `jid` pass first and
@@ -184,10 +218,13 @@ assignment** (a constructor passes `done_at` itself). It stamps `done_at`
 when a task enters Done and clears it when it leaves; `done_day(t)` and
 `moved_to_done(t)` in `services/util.jac` are the done date (falling back to
 `updated_at` on older rows) and the rule that a task created straight into
-Done is history, not throughput. The Overview's weekly Done count,
+Done is history, not throughput (`seeded_done` in `models.jac`, which the
+`seeded_done_total` tally counts). The Overview's weekly Done count,
 `TaskHistory` (burn-up, throughput), the snapshot's done-in-period and the
-board's working scope (`is_older`: Done before the `done_days` cutoff by
-`done_day`) all read those two, so they agree. A GitHub import writes the
+board's working scope (the pushed `done_at >= cutoff`, the same test as
+`done_day` once `ensure_tallies` has filled every Done row's `done_at`) all
+read those two, so they agree. `set_status` also moves the project's Done
+tallies, which is one more reason never to assign `status`. A GitHub import writes the
 issue's own `created_at` and `closed_at`, so a closed issue lands in the week
 it was really closed and ages out of the board like any other task;
 `SyncGithub(full=True)` re-walks a repo and corrects rows an earlier import
@@ -522,7 +559,13 @@ no-ops, and every list filter (`project_id`, `assignee_id`, `step_id`,
 `task_id`) yields nothing for a foreign id. Paging gates: pages partition
 the set with no repeats, `total` is stable across pages, a page past the end
 is empty, `page_size` clamps. Re-run something equivalent after touching
-walkers or `owned()`.
+walkers or `owned()`. The repo's `tests/smoke/api_gate.py` carries the
+tally parity suite: tasks across statuses, projects, members and
+categories, some created Done and some moved there, then deletes and a
+re-parent, and `TaskCounts`, `BoardSnapshot`, `TaskHistory`, `GetFlowLine`
+counts and `ListTasks` totals must equal a brute-force pass over
+`ListTasks(scope="all")` each time. Run it after touching a tally write
+point or a reader.
 
 **Browser QA**: use `agent-browser`, and note that **`agent-browser type` does
 not reliably trigger React onChange** (it sets the value in a way React's

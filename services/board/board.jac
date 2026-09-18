@@ -11,11 +11,12 @@ import from models {
     RoleView,
     StepView,
     IterationView,
-    task_links,
-    views_from,
-    all_tasks
+    hydrate_views,
+    working_tasks,
+    tally_totals,
+    categories_of
 }
-import from services.util { page_bounds, done_cutoff, is_older, order_working }
+import from services.util { page_bounds, done_cutoff, order_working, ensure_tallies }
 import from services.workspace.workspace { workspace_view }
 
 obj BoardData {
@@ -38,8 +39,10 @@ obj BoardData {
 
 walker BoardSnapshot {
     """The board in one call. `with_workspace` adds the roster, flow line and
-    GitHub state the boot needs; the poll leaves it off and pays for the task
-    walk alone."""
+    GitHub state the boot needs; the poll leaves it off and pays for the
+    working set alone. Only the working set is loaded: `older` is the Done
+    tally less the Done rows the cutoff kept, and `categories` is the list
+    the projects' box keeps on write."""
     has page: int = 1,
         page_size: int = 500,
         done_days: int = 7,
@@ -47,30 +50,24 @@ walker BoardSnapshot {
         reports: list[BoardData] = [];
 
     can gather with Root entry {
+        ensure_tallies(here);
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         cutoff = done_cutoff(self.done_days);
-        picked: list[Task] = [];
+        picked = working_tasks(here, cutoff);
         older = 0;
-        cats: list[str] = [];
-        # Categories come out of the same walk that picks the page. The board
-        # only ever read `categories` off TaskCounts, whose project and member
-        # tallies it discarded.
-        for t in all_tasks(here) {
-            if t.category and t.category not in cats {
-                cats.append(t.category);
+        if cutoff {
+            recent_done = 0;
+            for t in picked {
+                if t.status == "Done" {
+                    recent_done = recent_done + 1;
+                }
             }
-            if is_older(t, cutoff) {
-                older = older + 1;
-                continue;
-            }
-            picked.append(t);
+            older = tally_totals(here)[1] - recent_done;
         }
-        cats.sort();
         # Sorts are stable, so the jid pass underneath the real key is what
         # keeps a row from swapping pages between two requests.
         picked.sort(key=lambda (t: Task) { jid(t); });
         order_working(picked);
-        links = task_links(here);
         members: list[MemberView] = [];
         projects: list[Project] = [];
         steps: list[StepView] = [];
@@ -91,10 +88,10 @@ walker BoardSnapshot {
             connected = ws.github_connected;
         }
         report BoardData(
-            rows=views_from(links, picked[start:end]),
+            rows=hydrate_views(here, picked[start:end]),
             has_more=len(picked) > end,
             older=older,
-            categories=cats,
+            categories=categories_of(here),
             members=members,
             projects=projects,
             steps=steps,
