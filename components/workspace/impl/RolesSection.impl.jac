@@ -1,19 +1,12 @@
 """Implementations for the Roles section."""
 
-impl RolesSection.load -> None {
-    try {
-        rResult = root spawn ListRoles();
-        roles = rResult.reports[0] if rResult.reports else [];
-        mResult = root spawn ListMembers();
-        members = mResult.reports[0] if mResult.reports else [];
-        # Which steps a role owns; the count is not needed, so skip the walk
-        # over every task.
-        sResult = root spawn GetFlowLine(with_counts=False);
-        steps = sResult.reports[0] if sResult.reports else [];
-    } except Exception as e {
-        toast.error("Could not load roles");
+impl RolesSection.refresh -> None {
+    # After a write here: drop the cached view and let the page reload its
+    # lists, so the section and the page never disagree.
+    forgetWorkspace();
+    if onChanged {
+        await onChanged();
     }
-    loading = False;
 }
 
 impl RolesSection.startAdd -> None {
@@ -39,14 +32,10 @@ impl RolesSection.addRole -> None {
         } else {
             root spawn SaveRole(name=draft);
         }
-        forgetWorkspace();
         newRole = "";
         newBlurb = "";
         adding = False;
-        await load();
-        if onChanged {
-            onChanged();
-        }
+        await refresh();
     } except Exception as e {
         toast.error("Could not add that role");
     }
@@ -76,12 +65,8 @@ impl RolesSection.saveEdit -> None {
         if resp and not resp["ok"] {
             toast.error("A role with that name already exists");
         } else {
-            forgetWorkspace();
             editingRole = "";
-            await load();
-            if onChanged {
-                onChanged();
-            }
+            await refresh();
         }
     } except Exception as e {
         toast.error("Could not save that role");
@@ -97,12 +82,8 @@ impl RolesSection.removeRole -> None {
     busy = True;
     try {
         root spawn DeleteRole(name=name);
-        forgetWorkspace();
         deleteTarget = "";
-        await load();
-        if onChanged {
-            onChanged();
-        }
+        await refresh();
         toast.success("Role deleted");
     } except Exception as e {
         toast.error("Could not delete that role");
@@ -142,11 +123,7 @@ impl RolesSection.setHolders(role: str, wanted: list[str], undoable: bool) -> No
         if changes == 0 {
             return;
         }
-        forgetWorkspace();
-        await load();
-        if onChanged {
-            onChanged();
-        }
+        await refresh();
         if undoable {
             toast.success(
                 role + " updated",

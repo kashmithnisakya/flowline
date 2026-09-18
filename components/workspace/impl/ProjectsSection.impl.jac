@@ -1,34 +1,11 @@
 """Implementations for the Projects section."""
 
-impl ProjectsSection.loadProjects -> None {
-    try {
-        result = root spawn ListProjects();
-        rResult = root spawn ListRepos();
-        projects = result.reports[0] if result.reports else [];
-        repos = rResult.reports[0] if rResult.reports else [];
-    } except Exception as e {
-        toast.error("Could not load projects");
-    }
-    loading = False;
-    await loadCounts();
-}
-
-impl ProjectsSection.loadCounts -> None {
-    # Open work per project, counted server-side over the whole history: the
-    # rows need a number, not the tasks.
-    try {
-        result = root spawn TaskCounts();
-        totals: TaskTotals | None = result.reports[0] if result.reports else None;
-        if totals {
-            tallies: dict[str, int] = {};
-            for t in totals.projects {
-                tallies[t.project_id] = t.total - t.done;
-            }
-            openCounts = tallies;
-            countsReady = True;
-        }
-    } except Exception as e {
-        countsReady = False;
+impl ProjectsSection.refresh -> None {
+    # After a write here: drop the cached view and let the page reload its
+    # lists, so the section and the page never disagree.
+    forgetWorkspace();
+    if onChanged {
+        await onChanged();
     }
 }
 
@@ -71,13 +48,9 @@ impl ProjectsSection.saveProject -> None {
                 toast.error("That did not look like a GitHub repository");
             }
         }
-        forgetWorkspace();
         fRepoDraft = "";
         dialogOpen = False;
-        await loadProjects();
-        if onChanged {
-            onChanged();
-        }
+        await refresh();
     } except Exception as e {
         toast.error("Could not save that project");
     }
@@ -92,12 +65,8 @@ impl ProjectsSection.archiveProject -> None {
     busy = True;
     try {
         root spawn ArchiveProject(project_id=target);
-        forgetWorkspace();
         archiveId = "";
-        await loadProjects();
-        if onChanged {
-            onChanged();
-        }
+        await refresh();
         toast.success("Project archived");
     } except Exception as e {
         toast.error("Could not archive that project");
@@ -109,8 +78,7 @@ impl ProjectsSection.archiveProject -> None {
 impl ProjectsSection.removeRepo(repoId: str) -> None {
     try {
         root spawn RemoveRepo(repo_id=repoId);
-        forgetWorkspace();
-        await loadProjects();
+        await refresh();
     } except Exception as e {
         toast.error("Could not remove that repository");
     }

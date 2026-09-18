@@ -1,13 +1,13 @@
 """flowline - Projects section of the workspace: create, rename, link a repo,
-archive. Open counts come from TaskCounts (total minus done), so a row says how
-much work is still standing without loading a single task.
+archive. The lists are the page's (one workspace read), and the open count
+is the tallies a project carries (total minus done), so a row says how much
+work is still standing without a count call.
 """
 
-import from ...models { Project, RepoView, MemberView, TaskTotals }
+import from ...models { Project, RepoView, MemberView }
 import from ...lib.workspace { forgetWorkspace }
-import from ...services.projects.projects { ListProjects, SaveProject, ArchiveProject }
-import from ...services.roster.roster { ListRepos, AddRepo, RemoveRepo }
-import from ...services.tasks.tasks { TaskCounts }
+import from ...services.projects.projects { SaveProject, ArchiveProject }
+import from ...services.roster.roster { AddRepo, RemoveRepo }
 import from ...components.projects.ProjectTable { ProjectTable }
 import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
@@ -40,16 +40,13 @@ def normalizeRepoInput(raw: str) -> str {
 }
 
 def:pub ProjectsSection(
-    members: list[MemberView] = [], onChanged: Callable[[], None] = None
+    members: list[MemberView] = [],
+    projects: list[Project] = [],
+    repos: list[RepoView] = [],
+    loading: bool = False,
+    onChanged: Callable[[], any] = None
 ) -> JsxElement {
-    has projects: list[Project] = [],
-        repos: list[RepoView] = [],
-        openCounts: dict[str, int] = {},
-        # len() on a dict is `.length` in the browser, which is undefined, so
-        # the "counts have arrived" flag is its own bool.
-        countsReady: bool = False,
-        loading: bool = True,
-        dialogOpen: bool = False,
+    has dialogOpen: bool = False,
         editingId: str = "",
         fName: str = "",
         fDescription: str = "",
@@ -59,12 +56,7 @@ def:pub ProjectsSection(
         busy: bool = False,
         saving: bool = False;
 
-    async can with entry {
-        loadProjects();
-    }
-
-    async def loadProjects -> None;
-    async def loadCounts -> None;
+    async def refresh -> None;
     async def removeRepo(repoId: str) -> None;
     async def saveProject -> None;
     async def archiveProject -> None;
@@ -77,6 +69,11 @@ def:pub ProjectsSection(
         for p in projects
         if p.active
     ];
+    # Open work per project from the tallies kept on every task write.
+    openCounts: dict[str, int] = {};
+    for p in projects {
+        openCounts[jid(p)] = p.task_total - p.done_total;
+    }
     # The GitHub sync never checks `active`, so an archived project with a
     # linked repository still receives issues; the confirm says so.
     linkedRepos: list[str] = [];
@@ -131,7 +128,7 @@ def:pub ProjectsSection(
                         repos={repos}
                         members={members}
                         openCounts={openCounts}
-                        countsReady={countsReady}
+                        countsReady={not loading}
                         onEdit={openEdit}
                         onArchive={askArchive}
                         onCreate={openCreate}

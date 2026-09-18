@@ -39,7 +39,9 @@ impl FlowLinePage.loadShared -> None {
 impl FlowLinePage.reload(pid: str) -> None {
     try {
         result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
-        steps = result.reports[0] if result.reports else [];
+        fresh: list[StepView] = result.reports[0] if result.reports else [];
+        steps = fresh;
+        loadTitles(fresh);
         failed = False;
     } except Exception as e {
         # With a line on screen a toast is enough; with nothing, the page
@@ -50,8 +52,6 @@ impl FlowLinePage.reload(pid: str) -> None {
         }
     }
     loading = False;
-    # Counts moved, so the task titles a close zoom shows are stale too.
-    flowVersion = flowVersion + 1;
 }
 
 # Everything again, projects and roster included: the first read failed
@@ -147,49 +147,17 @@ impl FlowLinePage.morePeek -> None {
     peekLoadingMore = False;
 }
 
-impl FlowLinePage.loadTitles(wanted: str) -> None {
-    # Two titles per step with work on it, every step's request at once; the
+impl FlowLinePage.loadTitles(fresh: list[StepView]) -> None {
+    # The titles a close zoom shows ride on the flow line itself, two per
+    # step with work on it, so reaching that zoom makes no request; the
     # count on the node says the rest.
-    titlesFor = wanted;
-    pid = projectId;
-    ids: list[str] = [];
-    jobs: list[any] = [];
-    for s in steps {
+    got: dict[str, list[str]] = {};
+    for s in fresh {
         if s.task_count > 0 {
-            ids.append(s.id);
-            jobs.append(firstTitles(s.id, pid));
+            got[s.id] = s.task_titles;
         }
     }
-    try {
-        w: any = window;
-        lists: list[any] = await w.Promise.all(jobs);
-        got: dict[str, list[str]] = {};
-        for (i, sid) in enumerate(ids) {
-            got[sid] = lists[i];
-        }
-        if titlesFor == wanted {
-            stepTitles = got;
-        }
-    } except Exception as e {
-        titlesFor = "";
-    }
-}
-
-impl FlowLinePage.firstTitles(stepId: str, pid: str) -> list[str] {
-    result = root spawn ListStepTasks(
-        step_id=stepId,
-        project_id=pid if pid and pid != "all" else "",
-        page=1,
-        page_size=2
-    );
-    page = result.reports[0] if result.reports else None;
-    names: list[str] = [];
-    if page {
-        for t in page.rows {
-            names.append(t.title);
-        }
-    }
-    return names;
+    stepTitles = got;
 }
 
 impl FlowLinePage.closePeek -> None {

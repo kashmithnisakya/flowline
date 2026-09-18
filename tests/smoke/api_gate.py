@@ -238,6 +238,12 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     check(f"{label}: TaskHistory added/finished/scope/done", got_history == exp["history"], f"{got_history} vs {exp['history']}")
     got_counts = {s["id"]: s["task_count"] for s in steps}
     check(f"{label}: GetFlowLine step counts", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    # The titles ride on the flow line so the page's close zoom makes no
+    # request: per step, the first two rows the panel would page.
+    got_titles = {s["id"]: s.get("task_titles") for s in steps}
+    exp_titles = {s["id"]: [t["title"] for t in (report("ListStepTasks", {"step_id": s["id"], "page_size": 2}) or {}).get("rows", [])]
+                  for s in steps}
+    check(f"{label}: GetFlowLine step titles are the panel's first two", got_titles == exp_titles, f"{got_titles} vs {exp_titles}")
     totals = {sc: report("ListTasks", {"scope": sc, "page_size": 1}) for sc in ("working", "older", "done", "attention", "all")}
     got_totals = {sc: totals[sc].get("total") for sc in totals}
     exp_totals = {sc: exp[sc] for sc in totals}

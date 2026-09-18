@@ -138,9 +138,15 @@ walker RenameFlowLine {
 }
 
 
-# The steps in order, each counting the tasks it holds when `with_counts`.
-# Declared a pure read (the `task_count` stamp is on a view, not a node) so
-# the browser caches GetFlowLine; a write anywhere invalidates it.
+# How many titles a step carries beside its count: what a node shows at
+# the flow line's closest zoom.
+glob STEP_TITLES: int = 2;
+
+
+# The steps in order, each counting the tasks it holds when `with_counts`
+# and carrying the first STEP_TITLES titles in the panel's order. Declared
+# a pure read (the stamps are on a view, not a node) so the browser caches
+# GetFlowLine; a write anywhere invalidates it.
 @effects(reads=["WorkflowStep", "Task"], writes=[])
 def read_flow_line(
     box: WorkflowSteps, holder: Root, project_id: str, with_counts: bool, done_days: int
@@ -157,26 +163,39 @@ def read_flow_line(
     # The one-time tally fill lives here, not in the walker: a call the
     # effect pass cannot classify would cost the reader its cache verdict.
     ensure_tallies(holder);
-    # Count into a plain map first, then stamp the views: mutating a
+    # Count into plain maps first, then stamp the views: mutating a
     # view through a dict lookup is more than the checker can follow.
     counts: dict[str, int] = {};
+    titles: dict[str, list[str]] = {};
     known: list[str] = [];
     first_of_kind: dict[str, str] = {};
     for v in views {
         counts[v.id] = 0;
+        titles[v.id] = [];
         known.append(v.id);
         if v.kind not in first_of_kind {
             first_of_kind[v.kind] = v.id;
         }
     }
-    for t in flow_pool(holder, project_id, done_days) {
+    # The working set is loaded once for the counts; in the panel's order
+    # (jid, then sort_order, as ListStepTasks pages it) the first titles
+    # per landing step are the panel's first rows, with no query per step.
+    pool = flow_pool(holder, project_id, done_days);
+    pool.sort(key=lambda (t: Task) { jid(t); });
+    pool.sort(key=lambda (t: Task) { t.sort_order; });
+    for t in pool {
         landing = landing_step(t, known, first_of_kind);
         if landing {
             counts[landing] = int(counts[landing]) + 1;
+            held = titles[landing];
+            if len(held) < STEP_TITLES {
+                held.append(t.title);
+            }
         }
     }
     for v in views {
         v.task_count = counts[v.id];
+        v.task_titles = titles[v.id];
     }
     return views;
 }
