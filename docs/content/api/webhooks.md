@@ -65,7 +65,9 @@ Handled event kinds: `issues`, `pull_request`, `pull_request_review`,
 ```
 
 Applies up to 200 of this workspace's queued deliveries, oldest first, without
-calling GitHub. An open, visible board calls it every 20 seconds. When the
+calling GitHub. An open, visible board calls it every 20 seconds while
+deliveries are live and once a minute otherwise; the scheduled sync drains
+too. When the
 installation is bound to a different workspace, every count is 0. What each
 event does is tabled in [GitHub sync](../concepts/github-sync.md#what-each-event-does).
 

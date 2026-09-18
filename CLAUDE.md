@@ -98,7 +98,8 @@ people it tracks are roster members.
   roles, iterations, flow line meta and GitHub connection in one read;
   `BoardSnapshot` fills its workspace fields from the same
   `workspace_view` helper, so there is one definition of those lists), and
-  `github` with `github.jac`, `events.jac` and `util.jac`) plus
+  `github` with `github.jac`, `events.jac`, `schedule.jac` (the scheduled
+  sync, a function, not a walker) and `util.jac`) plus
   `services/util.jac` for shared server-only helpers. Walkers are **bare
   (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
   bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.18: the endpoint
@@ -343,6 +344,44 @@ App's echo by sender login so neither is applied a second time. An issue
 reopened on GitHub does not move its card; titles, assignees and labels are
 never written back.
 
+**No walker a page load calls reaches GitHub.** The poll is
+`sync_connected_workspaces` in `services/github/schedule.jac`, a plain `def`
+under `@schedule(trigger=ScheduleTrigger.STATIC, interval=SYNC_INTERVAL_SECONDS)`
+(300 s; `FLOWLINE_SYNC_INTERVAL_SECONDS` overrides it for the gates, CI
+uses 30), registered by its import in `main.jac` like a walker. It runs in
+the app workers as the system identity, one worker per tick through the
+runtime's `sched:` lease on the Postgres store, walks the `gh_installations`
+index (`bound_installations`), skips a workspace bound inside the last
+interval (still being set up on its GitHub page), takes the per-workspace
+lease `sync:<root jid>` (`acquire_sync_lease`, `SYNC_LEASE_SECONDS` = 240,
+released after the pass) and spawns `SyncGithub(auto=True)` inside a pushed
+context on that workspace's root (`Jac.create_j_context(user_root=jid)` +
+`push_request_context`; `here` and `root` in the walker are that root, so
+`owned()` works unchanged), commits, closes, and logs one `flowline.github`
+line per workspace with the counts. Schedule a function, never a walker: a
+decorated walker loses its `/walker/` route and logs a spurious error per
+fire on 0.37.18, and static fires do not serialise themselves, hence the
+lease. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
+15 min while deliveries are live, both shorter than never) gates only the
+poll, the token is minted only when a poll will run, an invalid connection
+reports `invalid` without a call, and a manual sync (`auto=False`) holds the
+same lease with owner `manual` so the schedule stays out of a workspace
+someone is syncing by hand. A pass that reaches the end of every stream
+rewrites the repo's stored open issue and pull request pages
+(`gh_repo_lists` in the docs store, keyed by repo jid, kind and state;
+`RemoveRepo` drops them); `ListRepoIssues` / `ListRepoPulls` answer page 1
+from that store with `synced_at` and `stale` and call GitHub only with
+`refresh=True` (the page's Refresh button, and once for a repo with no
+stored page yet) or for a later page. The board spawns no `SyncGithub` on
+open; it keeps `DrainGithubEvents` on its timers and the manual Sync
+button. The webhook gate asserts a board and GitHub page read make no stub
+call (the stub records each call's bearer), and that the scheduled pass
+syncs a workspace nobody opens; the browser gate asserts a board open
+spawns no sync. The webhook gate's own drain checks stay deterministic
+because every workspace it drives is inside the grace window or holds the
+manual lease, so add a manual `SyncGithub` after a new workspace's connect
+if a section grows past one interval.
+
 ### Client
 
 File-based routing with route groups:
@@ -455,7 +494,8 @@ File-based routing with route groups:
   is older than that; `DrainGithubEvents` every `DRAIN_MS` (20 s) only while
   `webhook_live` (the workspace view: a delivery inside the server's
   `LIVE_WINDOW_MINUTES`, or a drain that just landed rows), otherwise once
-  per poll ahead of the refresh.
+  per poll ahead of the refresh. It never spawns `SyncGithub` on open: the
+  server schedule polls (see the GitHub section above).
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead

@@ -304,6 +304,18 @@ def github_install_once(page) -> None:
     page.wait_for_timeout(1500)
     assert len(callbacks) == 1, f"CompleteGithubInstall was called {len(callbacks)} times, expected exactly 1"
 
+    # The GitHub poll runs on the server's schedule: a board open with a
+    # connected workspace spawns no SyncGithub, and drains the webhook queue
+    # only on its timers (none inside the first seconds of a quiet one).
+    step("github: a board open makes no sync call")
+    syncs: list[str] = []
+    page.on("request", lambda r: syncs.append(r.url)
+            if r.url.endswith("/walker/SyncGithub") or r.url.endswith("/walker/DrainGithubEvents") else None)
+    page.goto(f"{BASE}/board")
+    settle(page, "/board", "Board")
+    page.wait_for_timeout(3000)
+    assert not syncs, f"the board open called {syncs}"
+
 
 def main() -> int:
     tag = uuid.uuid4().hex[:8]

@@ -159,6 +159,9 @@ jobs:
             echo "GITHUB_APP_CLIENT_SECRET=ci-secret"
             echo "GITHUB_APP_PRIVATE_KEY=$(openssl genrsa 2048 2>/dev/null | base64 | tr -d '\n')"
             echo "GITHUB_APP_WEBHOOK_SECRET=ci-webhook-secret"
+            # The scheduled GitHub sync ticks every 5 minutes by default; the
+            # webhook gate waits for one pass, so the serve job shortens it.
+            echo "FLOWLINE_SYNC_INTERVAL_SECONDS=30"
           } >> "$GITHUB_ENV"
 
       - name: Serve the app (jac run --no-dev, background)
@@ -169,7 +172,7 @@ jobs:
       - name: API gate (shell, bundle, register, login, walkers, concurrency)
         run: python3 tests/smoke/api_gate.py http://localhost:8000
 
-      - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation)
+      - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
         run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
 
       - name: Two worker processes are serving

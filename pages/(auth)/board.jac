@@ -98,11 +98,9 @@ glob BLANK_TASK: dict[str, str] = {
      # kind "task" (id, title) or "new" (lane key); kind "" is nothing.
      NO_SWITCH: dict[str, str] = {"kind": "", "id": "", "key": "", "title": ""};
 
-# The auto sync's one-shot lives at module level on purpose: a remount
-# (the page used to mount twice on a full load) gets its own `has` flags.
-glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
-     AUTO_SYNC_ROUNDS: int = 3,
-     SYNC_ROUNDS: int = 40,
+# The GitHub poll runs on the server's schedule, never on a board open; the
+# Sync button drives this many increments by hand.
+glob SYNC_ROUNDS: int = 40,
      # The task poll, and the age past which a tab return refetches: a
      # snapshot younger than one poll is what the poll would return.
      POLL_MS: int = 60000,
@@ -500,7 +498,6 @@ def:pub BoardPage -> JsxPage {
     def replaceRow(view: TaskView) -> None;
     def absorbDetails(view: TaskView) -> None;
     async def syncGithub -> None;
-    async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
     async def createIssue(repoId: str) -> None;
 
