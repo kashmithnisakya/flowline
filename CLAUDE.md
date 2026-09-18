@@ -167,6 +167,54 @@ people it tracks are roster members.
   numbers runs one range query kept to the page in Python. Loading costs
   about 0.2 ms per Task row locally plus 1 to 2 ms per query, so a walker's
   time is its working set: 209 rows at 1,500 tasks is about 60 ms.
+- **The browser caches a declared reader for 60 s; the task lists are
+  never cached.** The runtime caches a walker call (key: walker plus fields,
+  in-flight dedupe, cleared by `jacSetToken`/`jacLogout`) only when the
+  served effects table (`endpointEffects` in the shell's `__jac_init__`)
+  says `unknown: false, writes: []`; any other call invalidates every cached
+  reader before and after it. The compiler's effect pass marks a body
+  unknown on any call it cannot classify (`len`, `sorted`, `.sort`,
+  `.append`, `str`, an `obj` constructor) and a writer on `++>`, `del` or an
+  attribute assignment, so a cacheable reader keeps its abilities to
+  `visit` and `report` and does the work in a same-module `def` under
+  `@effects(reads=[...], writes=[])` (`import from jaclang.lib.effects
+  { effects }`): a decorated body is not scanned, its declaration is
+  merged, a decorator on the walker itself is ignored, and a helper that
+  another module imports is not recognised (`workspace_view`, imported by
+  `board.jac`, lost its decorator; `GetWorkspace` reports through its own
+  `read_workspace`), so a reader's helper is its own. Declared: `GetWorkspace`,
+  `ListMembers`, `ListProjects`, `ListRoles`, `ListIterations`,
+  `GetFlowLine`, `GetFlowLineMeta`, `ListRepos`, `GithubStatus`. Never
+  declare a task list (`BoardSnapshot`, `ListTasks`, `OverviewSnapshot`,
+  `ListLogEntries`, `TaskCounts`, `TaskHistory`, `RoadmapSnapshot`,
+  `ListStepTasks`): a colleague's move, a webhook drain applied on the
+  server or a sync from another tab would be invisible for up to 60 s.
+  The flip side: an unknown call flushes every cached reader before and
+  after it (a walker's `reads` is always `["*"]`, so nothing narrows it), and
+  every page fires a task list in the same batch as `GetWorkspace`, so the
+  runtime's cache alone never serves the workspace on those pages. That is
+  why `lib/workspace.jac` keeps its own: `loadWorkspace` answers the last
+  view while it is younger than 60 s and shares one in-flight read,
+  `rememberWorkspace(view)` lets the board prime it from `BoardSnapshot`
+  (`BoardData` carries the whole `WorkspaceView`), `forgetWorkspace()`
+  drops it and `forgetSession` drops it too. **Every client call site that
+  writes roster data calls `forgetWorkspace()` right after the write, before
+  its refetch** (members, projects, roles, iterations, steps and
+  transitions, the template and flow line name, repos and their switches,
+  the GitHub connection, a sync, an assignment to a project, the org
+  rename through `patchProfile`); a new writer must do the same or the
+  next page shows the old roster for a minute. Recognition can vary between
+  builds, so `tests/smoke/api_gate.py` asserts the served table per build
+  (the readers cacheable, the task lists not, the mutators writing) and
+  `browser_gate.py` counts the requests (board, tasks, roadmap, board make
+  one `/user/me` and no `GetWorkspace`; a People-tab save then tasks makes
+  exactly one). The trap that hid the cache
+  until Sep 2026: a server `def:pub` in a module the client imports
+  (`statusChip` in `components/flowlines/kinds.jac`) makes that module
+  register a partial effects table at load, which the runtime uses instead
+  of the served one, so every walker took the writer path. No server
+  `def:pub` in a client-imported module, ever; `kinds` is pinned client and
+  exports with `:pub` (the browser gate's first check is this table).
 - **List walkers page, and build their rows in a local.** A walker's public
   `has` fields are serialised into the response (`data.result`) beside
   `data.reports`, so an accumulator field (`has results`) ships every row a
@@ -323,16 +371,21 @@ File-based routing with route groups:
   `# noqa` text node); the registry copy at jac 0.34.14 is clean, so
   `checkbox.jac` is imported directly again.
 - **A page fires the workspace read beside its own data, never after it.**
-  `lib/workspace.jac` `loadWorkspace()` spawns `GetWorkspace` and answers a
-  dict keyed like `WorkspaceView` plus `ok` (the empty shape on failure, so
-  a page keeps its own failed-load handling). Every page other than the
+  `lib/workspace.jac` `loadWorkspace()` answers a dict keyed like
+  `WorkspaceView` plus `ok` from its minute-long cache, or spawns
+  `GetWorkspace` (the empty shape on failure, so a page keeps its own
+  failed-load handling). Every page other than the
   board calls it as `loadShared` together with its own walker
   (`w.Promise.all(jobs)`), and no page awaits more than two calls in
   sequence on mount; only `/github` has a dependent third (the issue list
   once the repo is known). A refetch of one list after a save may still
   call that list's walker. Its two helpers are pinned `"client"` in
   `jac.toml`, like `lib/utils`.
-- **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper).
+- **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper)
+  and reads it once per page load: `fetchMe` keeps the in-flight promise and
+  the answer in module state, `fetchProfile` / `fetchOrgName` and the
+  layout's `loadMe` go through it, and `patchProfile` or `forgetSession`
+  drops it.
   **`lib/dates.jac`** owns the calendar rules (`todayIso`, `daysUntil`,
   `dueTone`, `dueLabel`): the card, the lane header and the overview all
   derive "overdue" from it, so change it there or nowhere.
@@ -373,6 +426,12 @@ File-based routing with route groups:
   save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
   page that opens `TaskDialog` passes `taskId`, `checklist` and an
   `onChecklist` that swaps the reported view into its rows.
+- **The board polls, it does not react to focus.** `BoardSnapshot` every
+  `POLL_MS` (60 s); a tab return refetches only when the snapshot on screen
+  is older than that; `DrainGithubEvents` every `DRAIN_MS` (20 s) only while
+  `webhook_live` (the workspace view: a delivery inside the server's
+  `LIVE_WINDOW_MINUTES`, or a drain that just landed rows), otherwise once
+  per poll ahead of the refresh.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead

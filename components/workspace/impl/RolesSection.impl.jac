@@ -39,6 +39,7 @@ impl RolesSection.addRole -> None {
         } else {
             root spawn SaveRole(name=draft);
         }
+        forgetWorkspace();
         newRole = "";
         newBlurb = "";
         adding = False;
@@ -75,6 +76,7 @@ impl RolesSection.saveEdit -> None {
         if resp and not resp["ok"] {
             toast.error("A role with that name already exists");
         } else {
+            forgetWorkspace();
             editingRole = "";
             await load();
             if onChanged {
@@ -95,6 +97,7 @@ impl RolesSection.removeRole -> None {
     busy = True;
     try {
         root spawn DeleteRole(name=name);
+        forgetWorkspace();
         deleteTarget = "";
         await load();
         if onChanged {
@@ -139,6 +142,7 @@ impl RolesSection.setHolders(role: str, wanted: list[str], undoable: bool) -> No
         if changes == 0 {
             return;
         }
+        forgetWorkspace();
         await load();
         if onChanged {
             onChanged();

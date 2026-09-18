@@ -11,6 +11,7 @@ import from models {
     RoleView,
     StepView,
     IterationView,
+    GithubConnectionView,
     hydrate_views,
     working_tasks,
     tally_totals,
@@ -33,7 +34,13 @@ obj BoardData {
         repos: list[RepoView],
         roles: list[RoleView],
         iterations: list[IterationView],
-        github_connected: bool;
+        github_connected: bool,
+        webhook_live: bool,
+        # The rest of WorkspaceView, so the board can prime the client's
+        # workspace cache from its own result.
+        flow_name: str,
+        template_key: str,
+        github: GithubConnectionView;
 }
 
 
@@ -75,6 +82,10 @@ walker BoardSnapshot {
         roles: list[RoleView] = [];
         iterations: list[IterationView] = [];
         connected = False;
+        live = False;
+        flow_name = "";
+        template_key = "";
+        github = GithubConnectionView();
         # One definition of the lists and their order, shared with
         # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
@@ -86,6 +97,10 @@ walker BoardSnapshot {
             roles = ws.roles;
             iterations = ws.iterations;
             connected = ws.github_connected;
+            live = ws.webhook_live;
+            flow_name = ws.flow_name;
+            template_key = ws.template_key;
+            github = ws.github;
         }
         report BoardData(
             rows=hydrate_views(here, picked[start:end]),
@@ -98,7 +113,11 @@ walker BoardSnapshot {
             repos=repos,
             roles=roles,
             iterations=iterations,
-            github_connected=connected
+            github_connected=connected,
+            webhook_live=live,
+            flow_name=flow_name,
+            template_key=template_key,
+            github=github
         );
     }
 }

@@ -17,7 +17,7 @@ import from ...services.iterations.iterations { RoadmapSnapshot, ListIterations 
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
 import from ...services.projects.projects { AssignToProject }
 import from ...services.roster.roster { ListMembers }
-import from ...lib.workspace { loadWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.roadmap.Timeline { RoadmapTimeline }
 import from ...components.roadmap.RoadmapToolbar { RoadmapToolbar }
 import from ...components.roadmap.IterationsDialog { IterationsDialog }

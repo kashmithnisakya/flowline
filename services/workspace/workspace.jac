@@ -3,6 +3,7 @@ iterations and GitHub connection every page renders beside its own rows,
 in one call. BoardSnapshot fills its workspace fields from the same helper,
 so the board and the other pages never disagree on a sort."""
 
+import from jaclang.lib.effects { effects }
 import from models {
     Project,
     Repo,
@@ -24,7 +25,13 @@ import from models {
     roles_of,
     steps_of
 }
-import from services.github.github { connection_of, connection_view, ensure_bound }
+import from services.github.github {
+    connection_of,
+    connection_view,
+    ensure_bound,
+    LIVE_WINDOW_MINUTES
+}
+import from services.util { minutes_since }
 
 obj WorkspaceView {
     """The workspace part of BoardData plus the flow line's own record
@@ -39,7 +46,10 @@ obj WorkspaceView {
         github_connected: bool,
         flow_name: str,
         template_key: str,
-        github: GithubConnectionView;
+        github: GithubConnectionView,
+        # A delivery reached the receiver inside the server's live window,
+        # so the board polls its queue every 20 s; otherwise once per poll.
+        webhook_live: bool;
 }
 
 
@@ -95,8 +105,32 @@ def workspace_view(holder: Root) -> WorkspaceView {
         github_connected=github.connected,
         flow_name=flow_name,
         template_key=template_key,
-        github=github
+        github=github,
+        webhook_live=github.connected
+            and minutes_since(github.webhook_seen_at) < LIVE_WINDOW_MINUTES
     );
+}
+
+
+# The declared read GetWorkspace reports through, so the browser caches it;
+# a write anywhere invalidates it. Its own helper on purpose: the effect
+# pass did not see the decorator on workspace_view, which board.jac also
+# imports, and the API gate pins this walker as cacheable per build.
+@effects(
+    reads=[
+        "Member",
+        "Project",
+        "Role",
+        "WorkflowSteps",
+        "WorkflowStep",
+        "Repo",
+        "Iteration",
+        "GithubConnection"
+    ],
+    writes=[]
+)
+def read_workspace(holder: Root) -> WorkspaceView {
+    return workspace_view(holder);
 }
 
 
@@ -107,6 +141,6 @@ walker GetWorkspace {
     has reports: list[WorkspaceView] = [];
 
     can gather with Root entry {
-        report workspace_view(here);
+        report read_workspace(here);
     }
 }

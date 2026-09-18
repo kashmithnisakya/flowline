@@ -4,6 +4,7 @@ renames or deletes it from its own menu.
 """
 
 import from ...models { MemberView, RoleView, StepView }
+import from ...lib.workspace { forgetWorkspace }
 import from ...services.roster.roster {
     ListMembers,
     ListRoles,

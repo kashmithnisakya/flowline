@@ -71,6 +71,7 @@ impl ProjectsSection.saveProject -> None {
                 toast.error("That did not look like a GitHub repository");
             }
         }
+        forgetWorkspace();
         fRepoDraft = "";
         dialogOpen = False;
         await loadProjects();
@@ -91,6 +92,7 @@ impl ProjectsSection.archiveProject -> None {
     busy = True;
     try {
         root spawn ArchiveProject(project_id=target);
+        forgetWorkspace();
         archiveId = "";
         await loadProjects();
         if onChanged {
@@ -107,6 +109,7 @@ impl ProjectsSection.archiveProject -> None {
 impl ProjectsSection.removeRepo(repoId: str) -> None {
     try {
         root spawn RemoveRepo(repo_id=repoId);
+        forgetWorkspace();
         await loadProjects();
     } except Exception as e {
         toast.error("Could not remove that repository");

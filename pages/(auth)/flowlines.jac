@@ -27,7 +27,7 @@ import from ...services.flowlines.flowlines {
     RenameFlowLine,
     ListStepTasks
 }
-import from ...lib.workspace { loadWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,

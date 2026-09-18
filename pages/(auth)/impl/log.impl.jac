@@ -1,9 +1,10 @@
 """Implementations for the Daily Log page."""
 
 impl DailyLogPage.loadWeek -> None {
-    # Sequence fence: responses can resolve out of order (the 60s reader
-    # cache makes the previous week near-instant while a new week is a slow
-    # round-trip), so only the newest request may assign state.
+    # Sequence fence: responses can resolve out of order (a small week
+    # answers before a big one that was asked earlier; ListLogEntries is
+    # never served from the browser cache), so only the newest request may
+    # assign state.
     seq = (weekReqRef.current or 0) + 1;
     weekReqRef.current = seq;
     monday = mondayOf(selectedDate);

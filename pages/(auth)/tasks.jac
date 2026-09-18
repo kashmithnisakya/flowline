@@ -16,7 +16,7 @@ import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 import from ...services.tasks.tasks { ListTasks, CreateTask, UpdateTask, DeleteTask }
 import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { AssignToProject }
-import from ...lib.workspace { loadWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.tasks.TaskTable { TaskTable }
 import from ...components.tasks.TaskToolbar { TaskToolbar, ScopeSwitch }
 import from ...components.board.TaskDialog { TaskDialog }

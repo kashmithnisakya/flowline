@@ -17,6 +17,25 @@ READY_TIMEOUT = 420
 TOKEN = ""
 FAILS: list[str] = []
 
+# The browser caches a walker for 60 s only when the served effects table
+# says `unknown: false, writes: []`. These readers are declared through a
+# same-module @effects helper; recognition can vary between builds, so the
+# table of THIS build is asserted here.
+CACHED_READERS = [
+    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles", "ListIterations",
+    "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus",
+]
+# Task lists stay uncached on purpose: a colleague's move, a webhook drain or
+# a sync from another tab must show on the next call, not 60 s later.
+LIVE_READERS = [
+    "BoardSnapshot", "ListTasks", "OverviewSnapshot", "ListLogEntries",
+    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks",
+]
+MUTATORS = [
+    "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
+    "SaveRole", "SaveStep", "SaveIteration", "AddRepo", "SyncGithub", "ApplyTemplate",
+]
+
 
 def req(method, path, body=None, accept="application/json"):
     headers = {"Accept": accept}
@@ -285,6 +304,39 @@ def parity_suite(project_id, member_id, tag):
     assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
 
 
+def effects_table(html: str) -> dict:
+    # The shell carries the compiler's endpoint effects in its __jac_init__
+    # JSON; the client runtime reads its cache verdicts from this table.
+    m = re.search(r'<script[^>]*id="__jac_init__"[^>]*>(.*?)</script>', html, re.S)
+    if not m:
+        return {}
+    try:
+        table = json.loads(m.group(1)).get("endpointEffects") or {}
+    except ValueError:
+        return {}
+    return {v.get("name"): v for v in table.values()
+            if isinstance(v, dict) and v.get("kind") == "walker"}
+
+
+def check_effects(html: str) -> None:
+    table = effects_table(html)
+    check("shell carries the endpoint effects table", len(table) > 20, str(len(table)))
+    for name in CACHED_READERS:
+        row = table.get(name) or {}
+        check(f"{name} is a cacheable reader",
+              row.get("unknown") is False and row.get("writes") == [],
+              f"unknown={row.get('unknown')} writes={row.get('writes')} assumptions={row.get('assumptions')}")
+    for name in LIVE_READERS:
+        row = table.get(name) or {}
+        check(f"{name} is never served from the cache",
+              bool(row) and (row.get("unknown") or bool(row.get("writes"))),
+              f"unknown={row.get('unknown')} writes={row.get('writes')}")
+    for name in MUTATORS:
+        row = table.get(name) or {}
+        check(f"{name} is a writer", bool(row.get("writes")),
+              f"unknown={row.get('unknown')} writes={row.get('writes')}")
+
+
 def wait_ready():
     deadline = time.time() + READY_TIMEOUT
     while time.time() < deadline:
@@ -315,6 +367,7 @@ def main() -> int:
     status, _, raw = req("GET", "/board", accept="text/html")
     check("GET /board serves the shell (SPA fallback)",
           status == 200 and "<title>Flowline</title>" in raw.decode(errors="replace"), str(status))
+    check_effects(html)
 
     status, _, _ = req("POST", "/walker/ListProjects", {})
     check("anonymous walker call is 401", status == 401, str(status))

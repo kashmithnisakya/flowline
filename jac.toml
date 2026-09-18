@@ -156,11 +156,15 @@ max_body_bytes = 2097152
 default = "server"
 
 [placement.pins]
+# Pure client metadata (colour tables, colorKey). With no server def:pub in
+# it the module would infer server and every plain import of it fail E5082.
+"components.flowlines.kinds" = "client"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
-"lib.workspace.emptyWorkspace" = "client"
-"lib.workspace.loadWorkspace" = "client"
+# The whole module: rememberWorkspace/forgetWorkspace have no browser
+# evidence, and a server def:pub here would shadow the effects table.
+"lib.workspace" = "client"
 models = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"

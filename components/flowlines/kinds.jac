@@ -1,9 +1,11 @@
 """Step-kind and colour metadata shared by every flow line surface. The step
 stores a colour KEY; class strings stay literal here or Tailwind drops them.
 A step colour shows only as a swatch or a 2px rule; kind is a glyph, never a tint.
+Pinned client in jac.toml, so what other modules import is `:pub`; a server
+`def:pub` here would register a partial effects table and break the cache.
 """
 
-glob KIND_LABEL: dict[str, str] = {
+glob:pub KIND_LABEL: dict[str, str] = {
          "start": "Start",
          "active": "Active",
          "handoff": "Handoff",
@@ -57,7 +59,7 @@ glob KIND_LABEL: dict[str, str] = {
      };
 
 # The same colour as a raw CSS value, for inline styles.
-glob DOT_VAR: dict[str, str] = {
+glob:pub DOT_VAR: dict[str, str] = {
          "sky": "var(--step-sky)",
          "indigo": "var(--step-indigo)",
          "amber": "var(--step-amber)",
@@ -74,30 +76,24 @@ glob CARD_BAR: dict[str, str] = {
          "rose": "",
          "emerald": "",
          "slate": ""
-     };
-
-# The step's colour as a 2px rule (a board lane header, a roadmap row).
-glob LANE_BAR: dict[str, str] = {
+     },
+     LANE_BAR: dict[str, str] = {
          "sky": "bg-step-sky",
          "indigo": "bg-step-indigo",
          "amber": "bg-step-amber",
          "rose": "bg-step-rose",
          "emerald": "bg-step-emerald",
          "slate": "bg-step-slate"
-     };
-
-# Drag-over highlight: an outline in the column's colour, no tinted fill.
-glob RING_TINT: dict[str, str] = {
+     },
+     RING_TINT: dict[str, str] = {
          "sky": "ring-2 ring-step-sky/60",
          "indigo": "ring-2 ring-step-indigo/60",
          "amber": "ring-2 ring-step-amber/60",
          "rose": "ring-2 ring-step-rose/60",
          "emerald": "ring-2 ring-step-emerald/60",
          "slate": "ring-2 ring-step-slate/60"
-     };
-
-# One neutral count badge; the step colour no longer tints counts.
-glob COUNT_TINT: dict[str, str] = {
+     },
+     COUNT_TINT: dict[str, str] = {
          "sky": "border-transparent bg-muted text-muted-foreground",
          "indigo": "border-transparent bg-muted text-muted-foreground",
          "amber": "border-transparent bg-muted text-muted-foreground",
@@ -107,14 +103,12 @@ glob COUNT_TINT: dict[str, str] = {
      };
 
 
-# A legacy status as badge classes, for tables that still show one. Neutral:
-# the kind glyph (STATUS_KIND) carries the meaning.
-def:pub statusChip(status: str) -> str {
-    return COUNT_TINT["slate"];
-}
+# The step's colour as a 2px rule (a board lane header, a roadmap row).
 
+# Drag-over highlight: an outline in the column's colour, no tinted fill.
 
-def colorKey(raw: str) -> str {
+# One neutral count badge; the step colour no longer tints counts.
+def:pub colorKey(raw: str) -> str {
     if raw in DOT_FILL {
         return raw;
     }
@@ -124,4 +118,4 @@ def colorKey(raw: str) -> str {
 
 # What a transition carries: an issue (no code yet) or a PR (code, waiting on
 # a person). Shown as a quiet word before the label, never as a tinted chip.
-glob CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"};
+glob:pub CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"};

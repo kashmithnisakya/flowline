@@ -15,7 +15,7 @@ import from ...services.roster.roster {
     ArchiveMember
 }
 import from ...services.projects.projects { AssignToProject, UnassignFromProject }
-import from ...lib.workspace { loadWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.ConfirmDialog { ConfirmDialog }

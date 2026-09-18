@@ -40,6 +40,7 @@ import from ...components.ui.button { Button }
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
 import from ...lib.session { LANES_KEY }
+import from ...lib.workspace { rememberWorkspace, forgetWorkspace }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.glyphs { Spinner }
@@ -101,9 +102,12 @@ glob BLANK_TASK: dict[str, str] = {
 glob AUTO_SYNC: dict[str, float] = {"at": 0.0},
      AUTO_SYNC_ROUNDS: int = 3,
      SYNC_ROUNDS: int = 40,
-     # How often an open board applies queued webhook deliveries: one keyed
-     # store read per tick, no GitHub call, so it can be far shorter than
-     # the 60s task poll.
+     # The task poll, and the age past which a tab return refetches: a
+     # snapshot younger than one poll is what the poll would return.
+     POLL_MS: int = 60000,
+     # How often an open board applies queued webhook deliveries while they
+     # are live (one keyed store read per tick, no GitHub call); a quiet
+     # connection drains once per task poll instead.
      DRAIN_MS: int = 20000,
      # The lane grid, shared by the lanes and their first-load skeleton.
      # Lanes are minmax(252px,1fr): they share the width when they all fit
@@ -161,9 +165,15 @@ def:pub BoardPage -> JsxPage {
         steps: list[StepView] = [],
         repos: list[RepoView] = [],
         ghConnected: bool = False,
+        # A delivery reached the server inside its live window (the snapshot
+        # says; a drain that lands rows says so too), so the queue is
+        # polled every DRAIN_MS instead of once per task poll.
+        webhookLive: bool = False,
         # Bumped after each drain so the effect below re-arms its timer with
         # the current state (a setInterval closure would keep the first one).
         drainTick: int = 0,
+        # When the last good snapshot landed (ms), for the focus gate.
+        snapshotRef: Ref[any] = Ref(),
         syncing: bool = False,
         syncNote: str = "",
         loading: bool = True,
@@ -267,25 +277,33 @@ def:pub BoardPage -> JsxPage {
         [pendingTaskId, loading, len(tasks)]
     );
 
-    # Live-ish board: refetch on tab focus plus a 60s poll, both through
+    # Live-ish board: a POLL_MS poll, and a refetch on tab focus only when
+    # the snapshot on screen is older than one poll, both through
     # refreshTasks -- one walker call, no roster refetch. One manual
     # useEffect so the listener/interval handles are visible to the cleanup
     # (entry/exit abilities compile to separate closures).
     useEffect(
         lambda {
-            onFocus = lambda { refreshTasks(); };
+            onFocus = lambda {
+                d = new(Date);
+                age: float = (d.getTime() as float) - (snapshotRef.current or 0.0);
+                if age >= POLL_MS {
+                    refreshTasks();
+                }
+            };
+            onRefresh = lambda { refreshTasks(); };
             window.addEventListener("focus", onFocus);
             # The assistant dock lives in the layout, not in this tree, so an
             # applied proposal announces itself with an event rather than leaving
             # the new card invisible until the next poll.
-            window.addEventListener("flowline:refresh", onFocus);
+            window.addEventListener("flowline:refresh", onRefresh);
             # The command palette, mounted in the layout, asks an already
             # mounted board to open a card or the new-task dialog.
             onOpenTask = lambda (e: any) { pendingTaskId = str(e.detail or ""); };
             onNewTask = lambda { pendingTaskId = "new"; };
             window.addEventListener("flowline:open-task", onOpenTask);
             window.addEventListener("flowline:new-task", onNewTask);
-            timer = window.setInterval(lambda { refreshTasks(); }, 60000);
+            timer = window.setInterval(lambda { pollTick(); }, POLL_MS);
             onResize = lambda { scheduleMeasure(); };
             window.addEventListener("resize", onResize);
             # "/" focuses the title filter, N opens a new task (beside a sheet
@@ -336,7 +354,7 @@ def:pub BoardPage -> JsxPage {
                 window.removeEventListener("resize", onResize);
                 window.removeEventListener("keydown", onKey);
                 window.removeEventListener("focus", onFocus);
-                window.removeEventListener("flowline:refresh", onFocus);
+                window.removeEventListener("flowline:refresh", onRefresh);
                 window.removeEventListener("flowline:open-task", onOpenTask);
                 window.removeEventListener("flowline:new-task", onNewTask);
                 window.clearInterval(timer);
@@ -346,17 +364,18 @@ def:pub BoardPage -> JsxPage {
     );
 
     # Webhook deliveries queue on the server until the workspace applies
-    # them; while the board is open that is this timer, so a merged PR moves
-    # its card within a tick rather than on the next visit.
+    # them; while they are live and the board is open that is this timer,
+    # so a merged PR moves its card within a tick rather than on the next
+    # visit. A quiet connection is drained by the task poll instead.
     useEffect(
         lambda {
             timer: any = 0;
-            if ghConnected and not loading {
-                timer = window.setTimeout(lambda { drainDeliveries(); }, DRAIN_MS);
+            if ghConnected and webhookLive and not loading {
+                timer = window.setTimeout(lambda { drainDeliveries(True); }, DRAIN_MS);
             }
             return lambda { if timer { window.clearTimeout(timer); }};
         },
-        [ghConnected, loading, drainTick]
+        [ghConnected, webhookLive, loading, drainTick]
     );
 
     # Measure after the lanes lay out, and again whenever what sits above
@@ -399,7 +418,8 @@ def:pub BoardPage -> JsxPage {
     );
 
     async def boot -> None;
-    async def drainDeliveries -> None;
+    async def drainDeliveries(refresh: bool) -> None;
+    async def pollTick -> None;
     # loadAll refreshes everything (boot, and every write that can touch the
     # roster); refreshTasks is the poll's path and skips the workspace lists,
     # which are edited on other pages. Both run through loadBoard.

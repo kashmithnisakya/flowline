@@ -2,6 +2,7 @@
 one read. Iterations hang off their box; a task points at one through
 Task.iteration_id, so deleting an iteration clears that field on its tasks."""
 
+import from jaclang.lib.effects { effects }
 import from models {
     Iteration,
     Iterations,
@@ -62,8 +63,17 @@ def iteration_order(rows: list[IterationView]) {
 }
 
 
+@effects(reads=["Iteration"], writes=[])
+def read_iterations(box: Iterations) -> list[IterationView] {
+    rows = [iteration_view(it) for it in [box-->[?:Iteration]]];
+    iteration_order(rows);
+    return rows;
+}
+
+
 walker ListIterations {
-    """Every iteration, earliest first. A read never makes the box."""
+    """Every iteration, earliest first. A read never makes the box, and the
+    body is one declared-read call so the browser caches it."""
     has reports: list[list[IterationView]] = [];
 
     can start with Root entry {
@@ -73,9 +83,7 @@ walker ListIterations {
     }
 
     can gather with Iterations entry {
-        rows = [iteration_view(it) for it in [here-->[?:Iteration]]];
-        iteration_order(rows);
-        report rows;
+        report read_iterations(here);
     }
 }
 

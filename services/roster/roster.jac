@@ -3,6 +3,7 @@ visit the Members or Roles box (or the addressed row) and work there: the
 traversal from the caller's root is the isolation, so only a jid-addressed
 row needs the owned() check. Repos hang off the root and stay there."""
 
+import from jaclang.lib.effects { effects }
 import from models {
     Project,
     Member,
@@ -71,6 +72,19 @@ def link_roles(m: Member, names: list[str], rbox: Roles) {
 }
 
 
+# The roster, sorted by name. Declared a pure read so the browser caches the
+# walker (a `len` or `.sort` in a walker body marks it unknown, uncached).
+@effects(reads=["Member", "Project", "Role"], writes=[])
+def read_members(box: Members) -> list[MemberView] {
+    rows: list[MemberView] = [];
+    for m in [box-->[?:Member]] {
+        rows.append(member_view(m));
+    }
+    rows.sort(key=lambda (m: MemberView) { m.name; });
+    return rows;
+}
+
+
 walker ListMembers {
     has reports: list[list[MemberView]] = [];
 
@@ -83,12 +97,7 @@ walker ListMembers {
 
     # Rows in a local, not a `has` field, or the response carries them twice.
     can gather with Members entry {
-        rows: list[MemberView] = [];
-        for m in [here-->[?:Member]] {
-            rows.append(member_view(m));
-        }
-        rows.sort(key=lambda (m: MemberView) { m.name; });
-        report rows;
+        report read_members(here);
     }
 }
 
@@ -211,6 +220,17 @@ walker ArchiveMember(find_member) {
 # Members reach a role through HasRole, so a rename or delete reaches them
 # by itself; a step's `owner` still holds the NAME and is kept in step here.
 
+@effects(reads=["Role"], writes=[])
+def read_roles(box: Roles) -> list[RoleView] {
+    rows: list[RoleView] = [];
+    for r in [box-->[?:Role]] {
+        rows.append(role_view(r));
+    }
+    rows.sort(key=lambda (r: RoleView) { r.sort_order; });
+    return rows;
+}
+
+
 walker ListRoles {
     has reports: list[list[RoleView]] = [];
 
@@ -221,12 +241,7 @@ walker ListRoles {
     }
 
     can gather with Roles entry {
-        rows: list[RoleView] = [];
-        for r in [here-->[?:Role]] {
-            rows.append(role_view(r));
-        }
-        rows.sort(key=lambda (r: RoleView) { r.sort_order; });
-        report rows;
+        report read_roles(here);
     }
 }
 
@@ -333,16 +348,22 @@ walker DeleteRole {
     }
 }
 
+@effects(reads=["Repo", "Project"], writes=[])
+def read_repos(holder: Root) -> list[RepoView] {
+    rows: list[RepoView] = [];
+    for r in [holder-->[?:Repo]] {
+        rows.append(repo_view(r));
+    }
+    rows.sort(key=lambda (r: RepoView) { r.full_name; });
+    return rows;
+}
+
+
 walker ListRepos {
     has reports: list[list[RepoView]] = [];
 
     can gather with Root entry {
-        rows: list[RepoView] = [];
-        for r in [here-->[?:Repo]] {
-            rows.append(repo_view(r));
-        }
-        rows.sort(key=lambda (r: RepoView) { r.full_name; });
-        report rows;
+        report read_repos(here);
     }
 }
 
