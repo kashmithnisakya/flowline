@@ -10,7 +10,7 @@ import from ...services.assistant.assistant {
     WriteStandup,
     ProposeAction
 }
-import from ...services.tasks.tasks { ListTasks, CreateTask, MoveTask }
+import from ...services.tasks.tasks { ListTasks, ListTaskTitles, CreateTask, MoveTask }
 import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { ListProjects }
 import from ..ui.button { Button }

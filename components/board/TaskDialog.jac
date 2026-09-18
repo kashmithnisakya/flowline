@@ -10,9 +10,11 @@ import from ...models {
     RepoView,
     StepView,
     RoleView,
+    TaskRow,
     TaskView,
     IterationView
 }
+import from ...services.tasks.tasks { GetTask }
 import from ..common.Markdown { Markdown }
 import from ..common.StepName { StepName }
 import from ..common.Avatar { AvatarStack }
@@ -24,6 +26,7 @@ import from ..ui.button { Button }
 import from ..ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
 import from ..ui.input { Input }
 import from ..ui.textarea { Textarea }
+import from ..ui.skeleton { Skeleton }
 import from ..ui.select {
     Select,
     SelectTrigger,
@@ -146,7 +149,7 @@ def Flag -> JsxElement {
 
 # A family row's column label: the child's step (or legacy status) mapped
 # through the board's own key/label lists, so it says what the column says.
-def familyStepLabel(kid: TaskView, keys: list[str], labels: list[str]) -> str {
+def familyStepLabel(kid: TaskRow, keys: list[str], labels: list[str]) -> str {
     for (i, k) in enumerate(keys) {
         if (k == kid.step_id or k == kid.status) and i < len(labels) {
             return labels[i];
@@ -185,16 +188,19 @@ def:pub TaskDialog(
     roles: list[RoleView] = [],
     # Sub-issue family of the open card, resolved by the caller from rows it
     # already holds. onOpenTask jumps the sheet to another card of the family.
-    family: list[TaskView] = [],
+    family: list[TaskRow] = [],
     familyTotal: int = 0,
     familyDone: int = 0,
     parentTaskId: str = "",
     parentLabel: str = "",
     onOpenTask: Callable[[str], None] = None,
-    # The open task's checklist. Edits write at once, not on Save, and each
-    # reports the task view to `onChecklist`; no `taskId` hides the section.
+    # The open task's id; without one the checklist and history stay hidden.
+    # The sheet loads the task's notes and checklist itself (GetTask, a list
+    # row carries neither) and hands the view to `onLoaded`, which seeds the
+    # page's form notes. Checklist edits write at once, not on Save, and each
+    # reports the task view to `onChecklist` so the page's row keeps count.
     taskId: str = "",
-    checklist: list[dict[str, any]] = [],
+    onLoaded: Callable[[TaskView], None] = None,
     onChecklist: Callable[[TaskView], None] = None,
     # The workspace's iterations; the form's "iteration" is a jid or "none".
     iterations: list[IterationView] = [],
@@ -222,13 +228,54 @@ def:pub TaskDialog(
     # open rendered once written; pendingAction marks which button started
     # the shared `saving` flight. topPx and rightPx fit the sheet between the
     # app header and the right edge of <main>, so a docked column stays clear.
+    # `checklist` and `detailsFor` (the task whose notes and checklist are
+    # loaded, "" while GetTask is out) are the sheet's own; `failedFor` is the
+    # task whose load failed, and `loadRef` drops a late answer for a task
+    # the sheet has since left.
     has repoChoice: str = "",
         notesEditing: bool = False,
         pendingAction: str = "",
         moveOpen: bool = False,
         topPx: int = 0,
         rightPx: int = 0,
-        viewW: int = 0;
+        viewW: int = 0,
+        checklist: list[dict[str, any]] = [],
+        detailsFor: str = "",
+        failedFor: str = "",
+        loadRef: Ref[any] = Ref();
+
+    # The open task's notes and checklist, one GetTask.
+    async def loadDetails(tid: str) {
+        loadRef.current = tid;
+        view: any = None;
+        try {
+            result = root spawn GetTask(task_id=tid);
+            view = result.reports[0] if result.reports else None;
+        } except Exception as e {
+            view = None;
+        }
+        if loadRef.current != tid {
+            return;
+        }
+        if not view {
+            failedFor = tid;
+            return;
+        }
+        checklist = view.checklist;
+        if onLoaded {
+            onLoaded(view);
+        }
+        detailsFor = tid;
+    }
+
+    # A checklist write reports the task's fresh view: the items stay here,
+    # the view goes up so the page's row shows the new counts.
+    def absorbChecklist(view: TaskView) {
+        checklist = view.checklist;
+        if onChecklist {
+            onChecklist(view);
+        }
+    }
 
     def placeSheet {
         w: any = window;
@@ -320,6 +367,10 @@ def:pub TaskDialog(
     async can with (open, taskId, editing) entry {
         notesEditing = False;
         moveOpen = False;
+        checklist = [];
+        detailsFor = "";
+        failedFor = "";
+        loadRef.current = "";
         if open {
             w: any = window;
             placeSheet();
@@ -333,6 +384,9 @@ def:pub TaskDialog(
                     },
                     30
                 );
+            }
+            if editing and taskId {
+                await loadDetails(taskId);
             }
         }
     }
@@ -380,7 +434,13 @@ def:pub TaskDialog(
     canCreateIssue = (
         editing and ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0
     );
-    canSave = not saving and bool(form["title"].strip()) and hasProject;
+    # An existing task's notes and checklist come from GetTask; until they
+    # are in, Save stays off, or it would write empty notes over the real ones.
+    detailsShown = not (editing and taskId) or detailsFor == taskId;
+    detailsFailed = not detailsShown and failedFor == taskId;
+    canSave = (
+        not saving and bool(form["title"].strip()) and hasProject and detailsShown
+    );
 
     # The columns' colours and where this task stands on the route.
     colors: list[str] = [];
@@ -1161,7 +1221,7 @@ def:pub TaskDialog(
                         <section className="grid gap-1.5" aria-label="Notes">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-[13px] font-semibold">Notes</h3>
-                                {if hasNotes {
+                                {if hasNotes and detailsShown {
                                     <Button
                                         key="toggle"
                                         variant="ghost"
@@ -1172,7 +1232,38 @@ def:pub TaskDialog(
                                     </Button>
                                 }}
                             </div>
-                            {if notesEditing or not hasNotes {
+                            {if not detailsShown {
+                                if detailsFailed {
+                                    <div
+                                        key="failed"
+                                        className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 px-2.5 py-2 text-[13px] text-destructive"
+                                    >
+                                        <span>
+                                            Notes and checklist could not be loaded.
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            size="xs"
+                                            onClick={lambda {
+                                                failedFor = "";
+                                                loadDetails(taskId);
+                                            }}
+                                        >
+                                            Try again
+                                        </Button>
+                                    </div>
+                                } else {
+                                    <div
+                                        key="loading"
+                                        className="grid gap-2 py-1"
+                                        aria-busy="true"
+                                    >
+                                        <Skeleton className="h-3.5 w-4/5"/>
+                                        <Skeleton className="h-3.5 w-3/5"/>
+                                        <Skeleton className="mt-3 h-3.5 w-2/5"/>
+                                    </div>
+                                }
+                            } elif notesEditing or not hasNotes {
                                 <Textarea
                                     key="write"
                                     className="min-h-20 rounded-md text-[13px] md:text-[13px]"
@@ -1191,7 +1282,7 @@ def:pub TaskDialog(
                                 >
                                     <Markdown text={form["notes"]}/>
                                 </div>
-                            } }
+                            }  }
                         </section>
                         {if editing and familyTotal > 0 {
                             <section
@@ -1275,12 +1366,12 @@ def:pub TaskDialog(
                                 </span>
                             </button>
                         }}
-                        {if editing and taskId {
+                        {if editing and taskId and detailsShown {
                             <ChecklistEditor
                                 key={"checklist-" + taskId}
                                 taskId={taskId}
                                 items={checklist}
-                                onChange={onChecklist}
+                                onChange={absorbChecklist}
                             />
                         }}
                         {if editing and taskId {

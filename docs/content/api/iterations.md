@@ -96,4 +96,4 @@ curl -X POST $BASE/walker/RoadmapSnapshot -H "Authorization: Bearer $TOKEN" \
 ]
 ```
 
-The row above is trimmed; see [`TaskView`](types.md#taskview) for every field.
+The row above is trimmed; see [`TaskRow`](types.md#taskrow) for every field.

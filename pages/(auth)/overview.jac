@@ -7,7 +7,7 @@ import from "react" { useEffect }
 import from ...models {
     Project,
     MemberView,
-    TaskView,
+    TaskRow,
     TaskTotals,
     LogTotals,
     WeeklyHistory
@@ -214,7 +214,7 @@ def workRow(
     };
 }
 
-def dueRow(t: TaskView, today: str) -> dict[str, any] {
+def dueRow(t: TaskRow, today: str) -> dict[str, any] {
     return workRow(
         t.id,
         t.title,
@@ -263,7 +263,7 @@ def withReview(row: dict[str, any], r: dict[str, any], held: any) -> dict[str, a
 }
 
 def:pub OverviewPage -> JsxPage {
-    has attention: list[TaskView] = [],
+    has attention: list[TaskRow] = [],
         attentionTotal: int = 0,
         members: list[MemberView] = [],
         projects: list[Project] = [],
@@ -282,7 +282,7 @@ def:pub OverviewPage -> JsxPage {
         loading: bool = True,
         failed: bool = False,
         # Open work sorted by due date, for due this week and per-project overdue.
-        dueRows: list[TaskView] = [],
+        dueRows: list[TaskRow] = [],
         dueLoaded: bool = False,
         dueHasMore: bool = False,
         dueFailed: bool = False,
@@ -381,7 +381,7 @@ def:pub OverviewPage -> JsxPage {
     overdueRows: list[dict[str, any]] = [];
     blockedRows: list[dict[str, any]] = [];
     earlyDue: list[dict[str, any]] = [];
-    byId: dict[str, TaskView] = {};
+    byId: dict[str, TaskRow] = {};
     for t in attention {
         byId[t.id] = t;
     }

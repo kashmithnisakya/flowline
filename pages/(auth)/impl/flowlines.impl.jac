@@ -89,7 +89,7 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
         return;
     }
     wanted = peekPage if peekPage > 1 else 1;
-    rows: list[TaskView] = [];
+    rows: list[TaskRow] = [];
     try {
         step = 1;
         while step <= wanted and step <= 20 {
@@ -282,7 +282,7 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "due_date": picked.due_date,
         "start_date": picked.start_date,
         "iteration": picked.iteration_id or "none",
-        "notes": picked.notes,
+        "notes": "",
         "issue": picked.issue_link,
         "pr": picked.pr_link,
         "reviewer": picked.reviewer_id or "none",
@@ -295,6 +295,16 @@ impl FlowLinePage.openTask(tid: str) -> None {
 # A checklist write reports the task's fresh view; the panel row takes it.
 impl FlowLinePage.replacePeekRow(view: TaskView) -> None {
     peekTasks = [view if t.id == view.id else t for t in peekTasks];
+}
+
+# The sheet's GetTask hands the open task's notes to the form.
+impl FlowLinePage.absorbDetails(view: TaskView) -> None {
+    if view.id != editTaskId {
+        return;
+    }
+    updated = {** taskForm};
+    updated["notes"] = view.notes;
+    taskForm = updated;
 }
 
 impl FlowLinePage.setTaskField(key: str, value: str) -> None {

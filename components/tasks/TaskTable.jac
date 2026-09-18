@@ -3,7 +3,7 @@
 places each row on its board column (`stepNames`, `stepColors`) and keeps the
 J/K `cursor`; only the active sort header shows an arrow."""
 
-import from ...models { TaskView }
+import from ...models { TaskRow }
 import from ..common.Avatar { AvatarStack }
 import from ..common.StepName { StepName }
 import from ..common.KindGlyph { KindGlyph }
@@ -126,7 +126,7 @@ def linkNumber(url: str) -> int {
 
 # The row's GitHub reference as [label, href, description]: the issue when
 # there is one, else the pull request. Empty strings when neither is known.
-def:pub ghRef(t: TaskView) -> list[str] {
+def:pub ghRef(t: TaskRow) -> list[str] {
     href = "";
     label = "";
     about = "";
@@ -226,7 +226,7 @@ def People(names: list[str]) -> JsxElement {
         </span>;
 }
 
-def GitHubCell(task: TaskView) -> JsxElement {
+def GitHubCell(task: TaskRow) -> JsxElement {
     ref = ghRef(task);
     if not ref[0] {
         return <span className="text-muted-foreground">None</span>;
@@ -302,7 +302,7 @@ def HeaderCell(
 }
 
 def:pub TaskTable(
-    rows: list[TaskView],
+    rows: list[TaskRow],
     sort: str,
     sortDir: str,
     onSort: Callable[[str], None],

@@ -425,6 +425,35 @@ def main() -> int:
     check("ListTasks pages the new task", status == 200 and page.get("total") == 1
           and titles == [f"CI task {tag}"], f"{status} {payload}")
 
+    # #227: a list row is slim. The note's first line and the checklist counts
+    # ride instead of the notes and the items, which GetTask carries.
+    status, payload, reports = walker("UpdateTask", {
+        "task_id": task_id, "title": f"CI task {tag}", "category": "", "tags": [], "estimate": 0, "priority": "High",
+        "status": "Backlog", "step_id": "", "due_date": "", "start_date": "", "iteration_id": "",
+        "notes": "First line of the notes.\nSecond line.", "issue_link": "", "pr_link": "", "reviewer_id": "",
+        "review_due": "", "assignee_ids": [], "project_id": project_id})
+    check("UpdateTask reports the notes", status == 200 and bool(reports)
+          and str(reports[0].get("notes", "")).startswith("First line"), f"{status} {payload}")
+    status, payload, reports = walker("AddChecklistItem", {"task_id": task_id, "text": "one step"})
+    check("AddChecklistItem reports the checklist", status == 200 and bool(reports)
+          and len(reports[0].get("checklist", [])) == 1, f"{status} {payload}")
+    row = report("ListTasks", {"scope": "working"}).get("rows", [{}])[0]
+    check("ListTasks rows carry note_lead and the checklist counts, no notes or items",
+          "notes" not in row and "checklist" not in row and "gh_assignees" not in row
+          and row.get("note_lead") == "First line of the notes." and row.get("checklist_total") == 1
+          and row.get("checklist_done") == 0, str(row)[:300])
+    full = report("GetTask", {"task_id": task_id})
+    check("GetTask carries the notes and the checklist for the task sheet",
+          str(full.get("notes", "")).startswith("First line") and len(full.get("checklist", [])) == 1
+          and full.get("note_lead") == "First line of the notes." and full.get("checklist_total") == 1
+          and full.get("gh_assignees") == [], str(full)[:300])
+    status, payload, reports = walker("ListTaskTitles")
+    titles_page = reports[0] if reports and isinstance(reports[0], list) else []
+    check("ListTaskTitles reports id and title alone, in the working page's order",
+          status == 200 and [t.get("id") for t in titles_page] == [row.get("id")]
+          and all(set(k for k in t if not k.startswith("_jac")) == {"id", "title"} for t in titles_page),
+          f"{status} {payload}")
+
     status, payload, reports = walker("SaveMember", {"first_name": "Priya", "last_name": "Raman"})
     member = reports[0] if reports else {}
     member_id = str(find_key(member, "id", "_jac_id") or "")

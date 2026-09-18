@@ -12,10 +12,9 @@ import from models {
     Task,
     Role,
     StepView,
-    TaskView,
     TaskPage,
     Project,
-    hydrate_views,
+    hydrate_rows,
     step_view,
     resolve,
     on_attached,
@@ -256,7 +255,7 @@ walker ListStepTasks {
         picked.sort(key=lambda (t: Task) { jid(t); });
         picked.sort(key=lambda (t: Task) { t.sort_order; });
         report TaskPage(
-            rows=hydrate_views(root, picked[start:end]),
+            rows=hydrate_rows(root, picked[start:end]),
             page=p,
             page_size=size,
             has_more=len(picked) > end,

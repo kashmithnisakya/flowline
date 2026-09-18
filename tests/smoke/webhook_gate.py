@@ -164,12 +164,17 @@ def tasks_all():
         page += 1
 
 
+def full_task(row):
+    # A list row is slim (#227): gh_assignees and pr_review_state ride on GetTask.
+    return walker("GetTask", {"task_id": row["id"]}) if row else None
+
+
 def task_by_issue(number):
-    return next((r for r in tasks_all() if r.get("gh_repo") == REPO and r.get("gh_issue_number") == number), None)
+    return full_task(next((r for r in tasks_all() if r.get("gh_repo") == REPO and r.get("gh_issue_number") == number), None))
 
 
 def task_by_title(title):
-    return next((r for r in tasks_all() if r.get("title") == title), None)
+    return full_task(next((r for r in tasks_all() if r.get("title") == title), None))
 
 
 def repo_flags(full_name):

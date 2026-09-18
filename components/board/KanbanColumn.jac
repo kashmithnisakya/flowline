@@ -4,7 +4,7 @@ cards. A column is addressed by an opaque key (step jid, or the legacy
 status with no flow line). On md+ the board sets the lane height and the
 card list scrolls inside it."""
 
-import from ...models { TaskView, StepView }
+import from ...models { TaskRow, StepView }
 import from ...constants { KIND_COLORS }
 import from .TaskCard { TaskCard }
 import from ..common.KindGlyph { KindGlyph }
@@ -23,9 +23,9 @@ def:pub KanbanColumn(
     label: str,
     kind: str,
     color: str = "",
-    tasks: list[TaskView],
-    onOpen: Callable[[TaskView], None],
-    onArrowMove: Callable[[TaskView, str], None],
+    tasks: list[TaskRow],
+    onOpen: Callable[[TaskRow], None],
+    onArrowMove: Callable[[TaskRow, str], None],
     onDropTask: Callable[[str, str], None],
     # A drop on a card's half, threaded to TaskCard: insert beside that card.
     onDropBeside: Callable[[str, str, bool], None] = None,

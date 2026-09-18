@@ -7,6 +7,7 @@ import from "sonner" { toast }
 import from ...models {
     Project,
     MemberView,
+    TaskRow,
     TaskView,
     StepView,
     RoleView,
@@ -105,11 +106,12 @@ def:pub RoadmapPage -> JsxPage {
     def clearFilters -> None;
     def columnKeys -> list[str];
     def columnKind(key: str) -> str;
-    def columnKeyOf(t: TaskView, keys: list[str]) -> str;
+    def columnKeyOf(t: TaskRow, keys: list[str]) -> str;
     def mappedStatus(key: str) -> str;
     def openTask(tid: str) -> None;
     def closeTask(isOpen: bool) -> None;
     def replaceRow(view: TaskView) -> None;
+    def absorbDetails(view: TaskView) -> None;
     def setTaskField(key: str, value: str) -> None;
     def toggleTaskAssignee(memberId: str) -> None;
     async def saveTask -> None;
@@ -117,12 +119,12 @@ def:pub RoadmapPage -> JsxPage {
 
     today = todayIso();
     windowEnd = shiftIso(windowStart, WEEKS * 7 - 1);
-    allRows: list[TaskView] = data["rows"] if data else [];
+    allRows: list[TaskRow] = data["rows"] if data else [];
     allStarts: list[str] = data["starts"] if data else [];
     allEnds: list[str] = data["ends"] if data else [];
     # The iteration filter is a client-side narrowing of the window's rows, so
     # the three lists have to stay index-aligned.
-    rows: list[TaskView] = [];
+    rows: list[TaskRow] = [];
     starts: list[str] = [];
     ends: list[str] = [];
     for (i, t) in enumerate(allRows) {
@@ -188,13 +190,11 @@ def:pub RoadmapPage -> JsxPage {
         for m in members
         if m.active
     ];
-    taskChecklist: list[dict[str, any]] = [];
     taskCreated: str = "";
     taskUpdated: str = "";
     taskPrState: str = "";
     for t in allRows {
         if t.id == editTaskId {
-            taskChecklist = t.checklist;
             taskCreated = t.created_at;
             taskUpdated = t.updated_at;
             taskPrState = t.pr_state;
@@ -377,7 +377,7 @@ def:pub RoadmapPage -> JsxPage {
                 roles={roleRows}
                 iterations={iterations}
                 taskId={editTaskId}
-                checklist={taskChecklist}
+                onLoaded={absorbDetails}
                 onChecklist={replaceRow}
                 createdAt={taskCreated}
                 historyKey={taskUpdated}

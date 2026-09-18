@@ -5,14 +5,14 @@ services/insights/insights.jac). Everything traverses the caller's root directly
 import from models {
     Project,
     Task,
-    TaskView,
+    TaskRow,
     MemberView,
     RepoView,
     RoleView,
     StepView,
     IterationView,
     GithubConnectionView,
-    hydrate_views,
+    hydrate_rows,
     working_tasks,
     tally_totals,
     categories_of
@@ -24,7 +24,7 @@ obj BoardData {
     """One page of the board's working set, plus the workspace lists it
     renders. The workspace fields are filled only when `with_workspace` asks:
     they are edited on other pages, so the poll has no reason to refetch them."""
-    has rows: list[TaskView],
+    has rows: list[TaskRow],
         has_more: bool,
         older: int,
         categories: list[str],
@@ -103,7 +103,7 @@ walker BoardSnapshot {
             github = ws.github;
         }
         report BoardData(
-            rows=hydrate_views(here, picked[start:end]),
+            rows=hydrate_rows(here, picked[start:end]),
             has_more=len(picked) > end,
             older=older,
             categories=categories_of(here),

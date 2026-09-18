@@ -241,7 +241,7 @@ node Task {
     }
 
     # One task's view, hopping its own edges (the structural truth). Fine
-    # for a single task; a list reads the link fields through hydrate_views.
+    # for a single task; a list reads the link fields through hydrate_rows.
     def to_view -> TaskView {
         assignee_ids: list[str] = [];
         assignee_names: list[str] = [];
@@ -259,15 +259,16 @@ node Task {
         return self.view_with(assignee_ids, assignee_names, project_id, project_name);
     }
 
-    # The view given names the caller already has. The field list lives here
-    # once, so to_view and hydrate_views cannot drift apart.
-    def view_with(
+    # The list row given names the caller already has. The row's field list
+    # lives here once; view_with adds the sheet's fields on top of it.
+    def row_with(
         assignee_ids: list[str],
         assignee_names: list[str],
         project_id: str,
         project_name: str
-    ) -> TaskView {
-        return TaskView(
+    ) -> TaskRow {
+        counts = checklist_counts(self.checklist);
+        return TaskRow(
             id=jid(self),
             title=self.title,
             category=self.category,
@@ -277,7 +278,6 @@ node Task {
             status=self.status,
             step_id=self.step_id,
             due_date=self.due_date,
-            notes=self.notes,
             created_at=self.created_at,
             updated_at=self.updated_at,
             done_at=self.done_at,
@@ -294,20 +294,64 @@ node Task {
             gh_repo=self.gh_repo,
             gh_issue_number=self.gh_issue_number,
             gh_issue_state=self.gh_issue_state,
-            gh_synced_at=self.gh_synced_at,
             gh_parent_repo=self.gh_parent_repo,
             gh_parent_number=self.gh_parent_number,
             gh_sub_total=self.gh_sub_total,
             gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
             pr_state=self.pr_state,
-            gh_assignees=self.gh_assignees,
-            pr_review_state=self.pr_review_state,
-            checklist=self.checklist,
             iteration_id=self.iteration_id,
-            start_date=self.start_date
+            start_date=self.start_date,
+            note_lead=note_lead(self.notes),
+            checklist_done=counts[0],
+            checklist_total=counts[1]
         );
     }
+
+    # The full view: the row plus notes, the checklist and the GitHub-only
+    # fields. vars() of an obj is exactly its declared fields.
+    def view_with(
+        assignee_ids: list[str],
+        assignee_names: list[str],
+        project_id: str,
+        project_name: str
+    ) -> TaskView {
+        row = self.row_with(assignee_ids, assignee_names, project_id, project_name);
+        return TaskView(
+            **vars(row),
+            notes=self.notes,
+            gh_synced_at=self.gh_synced_at,
+            gh_assignees=self.gh_assignees,
+            pr_review_state=self.pr_review_state,
+            checklist=self.checklist
+        );
+    }
+}
+
+# The first line of a task's notes, capped: what a card's overdue reason and
+# blocked line read (leadNote in TaskCard), so a list row never ships the
+# rest of a 2,000-character note.
+glob NOTE_LEAD_MAX: int = 200;
+
+
+def note_lead(notes: str) -> str {
+    text = notes.strip() if notes else "";
+    if not text {
+        return "";
+    }
+    return text.split("\n")[0].strip()[:NOTE_LEAD_MAX];
+}
+
+
+# [done, total] over a checklist, the way the card counts it.
+def checklist_counts(items: list[dict[str, any]]) -> list[int] {
+    done = 0;
+    for item in items {
+        if isinstance(item, dict) and item.get("done") {
+            done = done + 1;
+        }
+    }
+    return [done, len(items)];
 }
 
 # One day of the log under the Logs box; its entries hang off it.
@@ -421,14 +465,17 @@ edge By: LogEntry --> Member {}
 edge OnProject: Member --> Project {}
 edge HasRole: Member --> Role {}
 
-obj TaskView {
+obj TaskRow {
+    """What a list renders: the board card, the table row, the roadmap bar,
+    the step panel and the Overview's queues. Every list walker reports
+    these; the notes and the checklist items stay on TaskView, which the
+    task sheet loads with GetTask when it opens."""
     has id: str,
         title: str,
         category: str,
         priority: str,
         status: str,
         due_date: str,
-        notes: str,
         created_at: str,
         updated_at: str,
         sort_order: float,
@@ -447,19 +494,37 @@ obj TaskView {
         gh_repo: str = "",
         gh_issue_number: int = 0,
         gh_issue_state: str = "",
-        gh_synced_at: str = "",
         gh_parent_repo: str = "",
         gh_parent_number: int = 0,
         gh_sub_total: int = 0,
         gh_sub_done: int = 0,
         pr_number: int = 0,
         pr_state: str = "",
-        gh_assignees: list[str] = [],
-        pr_review_state: str = "",
-        checklist: list[dict[str, any]] = [],
         iteration_id: str = "",
         start_date: str = "",
-        done_at: str = "";
+        done_at: str = "",
+        # The first line of the notes (at most NOTE_LEAD_MAX characters):
+        # the card's blocked line and overdue reason.
+        note_lead: str = "",
+        # How many checklist items are ticked, and how many there are.
+        checklist_done: int = 0,
+        checklist_total: int = 0;
+}
+
+obj TaskView(TaskRow) {
+    """One task in full: a TaskRow plus the notes, the checklist items and
+    the GitHub-only fields. GetTask and every task write report this."""
+    has notes: str = "",
+        gh_synced_at: str = "",
+        gh_assignees: list[str] = [],
+        pr_review_state: str = "",
+        checklist: list[dict[str, any]] = [];
+}
+
+# A task by id and title, for the assistant's citations: nothing else rides.
+obj TaskTitle {
+    has id: str,
+        title: str;
 }
 
 # The Overview's charts over time, one entry per week oldest first: `weeks`
@@ -476,7 +541,7 @@ obj WeeklyHistory {
 # One page of tasks. `total` counts every row that matched the filters, not
 # just this page, so a caller can say "50 of 1,417" without a second call.
 obj TaskPage {
-    has rows: list[TaskView] = [],
+    has rows: list[TaskRow] = [],
         page: int = 1,
         page_size: int = 50,
         has_more: bool = False,
@@ -1464,24 +1529,24 @@ def task_names(holder: Root) -> TaskNames {
 }
 
 
-# Views for a page of tasks from names already gathered.
-def views_from(names: TaskNames, rows: list[Task]) -> list[TaskView] {
-    views: list[TaskView] = [];
-    for t in rows {
-        views.append(
-            t.view_with(
+# Rows for a page of tasks from names already gathered.
+def rows_from(names: TaskNames, tasks: list[Task]) -> list[TaskRow] {
+    rows: list[TaskRow] = [];
+    for t in tasks {
+        rows.append(
+            t.row_with(
                 names.ids_of(t), names.names_of(t), t.project_id, names.project_of(t)
             )
         );
     }
-    return views;
+    return rows;
 }
 
 
-# Views for a page of tasks, gathering the names itself. Use `views_from`
+# Rows for a page of tasks, gathering the names itself. Use `rows_from`
 # when the caller already holds a TaskNames.
-def hydrate_views(holder: Root, rows: list[Task]) -> list[TaskView] {
-    return views_from(task_names(holder), rows);
+def hydrate_rows(holder: Root, tasks: list[Task]) -> list[TaskRow] {
+    return rows_from(task_names(holder), tasks);
 }
 
 

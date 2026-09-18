@@ -7,6 +7,7 @@ presentational."""
 import from ...models {
     Project,
     MemberView,
+    TaskRow,
     TaskView,
     StepView,
     RepoView,
@@ -138,8 +139,8 @@ def:pub BoardPage -> JsxPage {
         # The working set: open tasks plus Done touched in the last week,
         # which is everything the board renders until "completed earlier"
         # is opened. Older Done history pages in on demand below.
-        tasks: list[TaskView] = [],
-        olderDone: list[TaskView] = [],
+        tasks: list[TaskRow] = [],
+        olderDone: list[TaskRow] = [],
         # How many older Done rows exist under the current filters (-1
         # until the first filtered fetch says), how many pages are in, and
         # whether the server holds more.
@@ -447,7 +448,7 @@ def:pub BoardPage -> JsxPage {
     def columnLabel(key: str) -> str;
     def columnKind(key: str) -> str;
     def columnColor(key: str) -> str;
-    def columnKeyOf(t: TaskView) -> str;
+    def columnKeyOf(t: TaskRow) -> str;
     def mappedStatus(key: str) -> str;
     def doneColumnKey -> str;
     # askDetails=False is a move from the task sheet: no handoff dialog (the
@@ -461,7 +462,7 @@ def:pub BoardPage -> JsxPage {
     ) -> None;
     def sheetMove(columnKey: str) -> None;
     def moveBeside(draggedId: str, targetId: str, ahead: bool) -> None;
-    def arrowMove(t: TaskView, columnKey: str) -> None;
+    def arrowMove(t: TaskRow, columnKey: str) -> None;
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
     def setCategoryFilter(v: str) -> None;
@@ -489,14 +490,15 @@ def:pub BoardPage -> JsxPage {
     # Empty inKey lands the task in the first column. openCreate and openEdit
     # ask before replacing unsaved edits; showCreate and showTask replace.
     def openCreate(inKey: str = "") -> None;
-    def openEdit(t: TaskView) -> None;
+    def openEdit(t: TaskRow) -> None;
     def showCreate(inKey: str = "") -> None;
-    def showTask(t: TaskView) -> None;
+    def showTask(t: TaskRow) -> None;
     def formDirty -> bool;
     async def resolveSwitch(save: bool) -> None;
     def openSwitchTarget -> None;
     def sheetOpenChange(o: bool) -> None;
     def replaceRow(view: TaskView) -> None;
+    def absorbDetails(view: TaskView) -> None;
     async def syncGithub -> None;
     async def autoSyncGithub(connected: bool) -> None;
     def openTaskById(tid: str) -> None;
@@ -551,7 +553,7 @@ def:pub BoardPage -> JsxPage {
         }
     }
 
-    def matches(t: TaskView) -> bool {
+    def matches(t: TaskRow) -> bool {
         # The issue/PR number lives in the synced numeric field OR the tail of
         # a hand-pasted link, so search the number wherever it actually is.
         issueTail = t.issue_link.split("/")[-1] if t.issue_link else "";
@@ -618,17 +620,15 @@ def:pub BoardPage -> JsxPage {
     editingPrState = "";
     # The open card's sub-issue family, resolved from rows already loaded:
     # its children when it is a parent, its parent's card when it is a child.
-    famRows: list[TaskView] = [];
+    famRows: list[TaskRow] = [];
     famTotal: int = 0;
     famDone: int = 0;
     famParentId: str = "";
     famParentLabel: str = "";
-    editingChecklist: list[dict[str, any]] = [];
     for t in tasks + olderDone {
         if t.id == editingId {
             editingIssueNumber = t.gh_issue_number;
             editingPrState = t.pr_state;
-            editingChecklist = t.checklist;
             famTotal = t.gh_sub_total;
             famDone = t.gh_sub_done;
             if t.gh_sub_total > 0 {
@@ -663,7 +663,7 @@ def:pub BoardPage -> JsxPage {
     # colour, shared by the route strip, the lanes and the move menus.
     colLabels: list[str] = [columnLabel(k) for k in colKeys];
     colColors: list[str] = [];
-    laneRows: list[list[TaskView]] = [];
+    laneRows: list[list[TaskRow]] = [];
     laneCounts: list[int] = [];
     laneOverdue: list[int] = [];
     for key in colKeys {
@@ -674,7 +674,7 @@ def:pub BoardPage -> JsxPage {
         } else {
             colColors.append(KIND_COLORS[kind] if kind in KIND_COLORS else "slate");
         }
-        rows: list[TaskView] = (recentDone + olderShown)
+        rows: list[TaskRow] = (recentDone + olderShown)
             if key == doneKey
             else [
                 t
@@ -1124,7 +1124,7 @@ def:pub BoardPage -> JsxPage {
                 iterations={iterations}
                 onOpenTask={openTaskById}
                 taskId={editingId}
-                checklist={editingChecklist}
+                onLoaded={absorbDetails}
                 onChecklist={replaceRow}
                 onMove={sheetMove}
                 createdAt={editingCreated}

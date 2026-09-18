@@ -116,7 +116,7 @@ impl RoadmapPage.columnKind(key: str) -> str {
     return STATUS_KIND[key] if key in STATUS_KIND else "active";
 }
 
-impl RoadmapPage.columnKeyOf(t: TaskView, keys: list[str]) -> str {
+impl RoadmapPage.columnKeyOf(t: TaskRow, keys: list[str]) -> str {
     if t.step_id and t.step_id in keys {
         return t.step_id;
     }
@@ -144,7 +144,7 @@ impl RoadmapPage.mappedStatus(key: str) -> str {
 
 impl RoadmapPage.openTask(tid: str) -> None {
     keys = columnKeys();
-    shown: list[TaskView] = data["rows"] if data else [];
+    shown: list[TaskRow] = data["rows"] if data else [];
     for t in shown {
         if t.id == tid {
             editTaskId = t.id;
@@ -159,7 +159,7 @@ impl RoadmapPage.openTask(tid: str) -> None {
                 "due_date": t.due_date,
                 "start_date": t.start_date,
                 "iteration": t.iteration_id or "none",
-                "notes": t.notes,
+                "notes": "",
                 "issue": t.issue_link,
                 "pr": t.pr_link,
                 "reviewer": t.reviewer_id or "none",
@@ -192,9 +192,19 @@ impl RoadmapPage.closeTask(isOpen: bool) -> None {
 # A checklist write reports the task's fresh view; the roadmap row takes it.
 impl RoadmapPage.replaceRow(view: TaskView) -> None {
     if data {
-        shown: list[TaskView] = data["rows"];
+        shown: list[TaskRow] = data["rows"];
         data = {** data, "rows": [view if t.id == view.id else t for t in shown]};
     }
+}
+
+# The sheet's GetTask hands the open task's notes to the form.
+impl RoadmapPage.absorbDetails(view: TaskView) -> None {
+    if view.id != editTaskId {
+        return;
+    }
+    updated = {** taskForm};
+    updated["notes"] = view.notes;
+    taskForm = updated;
 }
 
 impl RoadmapPage.setTaskField(key: str, value: str) -> None {

@@ -6,7 +6,7 @@ PageIcon are also the top bar's and the tab bar's, so every list agrees.
 
 import from "@jac/runtime" { navigate, useLocation, jacLogout }
 import from "react" { useEffect }
-import from ...models { TaskView, StepView }
+import from ...models { TaskRow, StepView }
 import from ...constants { STATUS_KIND }
 import from ...services.tasks.tasks { ListTasks }
 import from ...services.flowlines.flowlines { GetFlowLine }
@@ -247,7 +247,7 @@ def:pub CommandPalette(
 ) -> JsxElement {
     has query: str = "",
         active: int = -1,
-        tasks: list[TaskView] = [],
+        tasks: list[TaskRow] = [],
         recent: list[dict[str, str]] = [],
         steps: list[StepView] = [],
         stepsAsked: bool = False,
@@ -296,7 +296,7 @@ def:pub CommandPalette(
     );
 
     async def fetchTasks(wanted: str) {
-        rows: list[TaskView] = [];
+        rows: list[TaskRow] = [];
         try {
             result = root spawn ListTasks(scope="all", q=wanted, page_size=MAX_TASKS);
             page = result.reports[0] if result.reports else None;
@@ -321,7 +321,7 @@ def:pub CommandPalette(
 
     # The board's placement rule: the task's own step, else the first step of
     # the kind its legacy status maps to, else the status itself.
-    def stepOf(t: TaskView) -> dict[str, str] {
+    def stepOf(t: TaskRow) -> dict[str, str] {
         kind = STATUS_KIND[t.status] if t.status in STATUS_KIND else "start";
         byKind: dict[str, str] = {};
         hasKind = False;
