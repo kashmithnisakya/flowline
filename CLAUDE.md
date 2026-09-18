@@ -179,10 +179,15 @@ rather than teaching them.
 assignment** (a constructor passes `done_at` itself). It stamps `done_at`
 when a task enters Done and clears it when it leaves; `done_day(t)` and
 `moved_to_done(t)` in `services/util.jac` are the done date (falling back to
-`updated_at` on older rows) and the rule that a task created already Done (a
-GitHub backfill) is history, not throughput. The Overview's weekly Done
-count, `TaskHistory` (burn-up, throughput) and the snapshot's done-in-period
-all read those two, so they agree.
+`updated_at` on older rows) and the rule that a task created straight into
+Done is history, not throughput. The Overview's weekly Done count,
+`TaskHistory` (burn-up, throughput), the snapshot's done-in-period and the
+board's working scope (`is_older`: Done before the `done_days` cutoff by
+`done_day`) all read those two, so they agree. A GitHub import writes the
+issue's own `created_at` and `closed_at`, so a closed issue lands in the week
+it was really closed and ages out of the board like any other task;
+`SyncGithub(full=True)` re-walks a repo and corrects rows an earlier import
+stamped with the sync time.
 
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column

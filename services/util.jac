@@ -119,10 +119,11 @@ def moved_to_done(t: Task) -> bool {
 }
 
 
-# A Done task last touched before the cutoff: history, not the working set.
-# Shared by the list walkers and the board so the split has one definition.
+# A task that reached Done before the cutoff: history, not the working set.
+# Shared by the list walkers and the board so the split has one definition,
+# and measured by done_day so it agrees with the charts.
 def is_older(t: Task, cutoff: str) -> bool {
-    return t.status == "Done" and bool(cutoff) and t.updated_at[:10] < cutoff;
+    return t.status == "Done" and bool(cutoff) and done_day(t) < cutoff;
 }
 
 

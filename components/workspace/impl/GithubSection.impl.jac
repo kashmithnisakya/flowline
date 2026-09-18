@@ -176,8 +176,17 @@ impl GithubSection.disconnect -> None {
 }
 
 impl GithubSection.syncNow -> None {
+    await runSync(False);
+}
+
+impl GithubSection.resyncAll -> None {
+    await runSync(True);
+}
+
+impl GithubSection.runSync(full: bool) -> None {
     # The same bounded loop the board runs, driven by hand: each increment is
     # capped server-side, so this asks for the next one until it says done.
+    # A history pass resets the cursors on its first round only.
     if syncing {
         return;
     }
@@ -191,7 +200,7 @@ impl GithubSection.syncNow -> None {
         more = True;
         while more and rounds < SYNC_ROUNDS {
             rounds = rounds + 1;
-            result = root spawn SyncGithub();
+            result = root spawn SyncGithub(full=(full and rounds == 1));
             payload = result.reports[0] if result.reports else None;
             if not payload or not payload["ok"] {
                 failure = str(payload["message"]) if payload else "Sync failed";

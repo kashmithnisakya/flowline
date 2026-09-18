@@ -268,6 +268,11 @@ def main() -> int:
     check("poll back-fills the stub's issues", s.get("ok") and s.get("auto_added") == 3 and not s.get("failure"), s)
     t3 = task_by_issue(3) or {}
     check("  closed issue lands on Done", t3.get("status") == "Done" and t3.get("gh_issue_state") == "closed", t3)
+    check("  the import keeps GitHub's own dates", t3.get("created_at") == "2026-09-01T00:00:00Z" and t3.get("done_at") == "2026-09-02T12:00:00Z", (t3.get("created_at"), t3.get("done_at")))
+    older = walker("ListTasks", {"scope": "older", "page_size": 100}).get("rows", [])
+    working = walker("ListTasks", {"scope": "working", "page_size": 100}).get("rows", [])
+    check("  an issue closed weeks ago is history, not the working set",
+          any(r.get("gh_issue_number") == 3 for r in older) and not any(r.get("gh_issue_number") == 3 for r in working), (len(older), len(working)))
     check("drain on an empty queue", drain().get("drained") == 0)
     N = 1
 

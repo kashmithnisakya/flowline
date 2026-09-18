@@ -218,6 +218,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def startInstall -> None;
     async def disconnect -> None;
     async def syncNow -> None;
+    async def resyncAll -> None;
+    async def runSync(full: bool) -> None;
     async def openPicker -> None;
     async def searchRepos -> None;
     async def moreRepos -> None;
@@ -462,6 +464,15 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                             >
                                 <IconSync/>
                                 {"Syncing…" if syncing else "Sync now"}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={resyncAll}
+                                disabled={syncing}
+                                title="Read every issue again and refresh what an earlier import stamped"
+                            >
+                                {"Re-sync history"}
                             </Button>
                             <Button
                                 variant="outline"

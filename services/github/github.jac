@@ -902,6 +902,10 @@ def file_issue_item(
     sub_done = int(subs.get("completed") or 0) if isinstance(subs, dict) else 0;
     body = str(item.get("body") or "");
     stamp = now_iso();
+    # GitHub's own dates: a closed issue then lands in the week it was closed
+    # and ages out of the board's recent-done window like any other task.
+    made = str(item.get("created_at") or "") or stamp;
+    closed = str(item.get("closed_at") or "") or stamp;
     fresh = target_project ++> Task(
         title=str(item.get("title") or ("Issue #" + str(number))),
         category="",
@@ -911,9 +915,9 @@ def file_issue_item(
         step_id=landing_step,
         notes=body[:2000],
         issue_link=str(item.get("html_url") or ""),
-        created_at=stamp,
+        created_at=made,
         updated_at=stamp,
-        done_at=stamp if landing == "Done" else "",
+        done_at=closed if landing == "Done" else "",
         sort_order=peaks[landing],
         gh_repo=full_name,
         gh_issue_number=number,
@@ -1328,7 +1332,7 @@ def apply_pr_item(
                 ctx.done_step,
                 ctx.done_name,
                 "PR merged",
-                ctx.stamp,
+                event_time(item),
                 ctx.done_peak
             );
             ctx.auto_done_moves = ctx.auto_done_moves + 1;
@@ -1374,6 +1378,16 @@ def apply_issue_item(
         return False;
     }
     t = ctx.task_by_key[key];
+    # GitHub's dates win when they are earlier: a sync-stamped import is
+    # corrected, while a card that closed its own issue keeps its moment.
+    made = str(item.get("created_at") or "");
+    if made and made < t.created_at {
+        t.created_at = made;
+    }
+    closed = str(item.get("closed_at") or "");
+    if closed and t.status == "Done" and (not t.done_at or closed < t.done_at) {
+        t.done_at = closed;
+    }
     fresh_state = str(item.get("state") or "");
     if fresh_state and fresh_state != t.gh_issue_state {
         t.gh_issue_state = fresh_state;
@@ -1389,7 +1403,7 @@ def apply_issue_item(
                 ctx.done_step,
                 ctx.done_name,
                 "issue closed",
-                ctx.stamp,
+                event_time(item),
                 ctx.done_peak
             );
             ctx.auto_done_moves = ctx.auto_done_moves + 1;
@@ -1815,6 +1829,10 @@ walker SyncGithub {
         # Pages this call may read, clamped to SYNC_PAGE_BUDGET; 0 means
         # the cap. The auto pass asks for less so a board open stays light.
         page_budget: int = 0,
+        # Re-walk every tracked repo from its first issue: the update path
+        # then corrects what an earlier import stamped. One call resets the
+        # cursors; the rounds that follow continue from where it stopped.
+        full: bool = False,
         reports: list[dict[str, any]] = [];
 
     can refresh with Root entry {
@@ -1851,6 +1869,11 @@ walker SyncGithub {
         scanned = 0;
         has_more = False;
         failure = "";
+        if self.full {
+            for full_name in ctx.tracked {
+                ctx.by_name[full_name].issue_cursor = "";
+            }
+        }
         for full_name in ctx.tracked {
             r = ctx.by_name[full_name];
             # An empty cursor means "from the beginning": right for an
@@ -1858,7 +1881,7 @@ walker SyncGithub {
             # tasks. Those start from the earliest sync stamp among their
             # tasks, since everything older was fresh when it was imported.
             cursor = r.issue_cursor;
-            if not cursor and not r.auto_sync {
+            if not cursor and not r.auto_sync and not self.full {
                 if full_name not in ctx.earliest {
                     continue;
                 }

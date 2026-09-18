@@ -38,7 +38,8 @@ in the period as an activity line. This is exactly the object the
 !!! info "How the snapshot counts"
 
     - `done_in_period` counts tasks that moved to Done on or after `from_date`
-      (by `done_at`); a task created already Done counts nowhere.
+      (by `done_at`); a task created straight into Done counts nowhere, and
+      an imported closed issue counts on the day GitHub closed it.
     - People are matched to tasks and log entries by name, on the
       comma-joined assignee names.
     - Project stats cover active projects and match tasks by project name.
