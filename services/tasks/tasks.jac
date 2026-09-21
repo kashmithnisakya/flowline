@@ -31,7 +31,6 @@ import from models {
     done_before,
     done_before_in,
     working_tasks,
-    created_since,
     project_tasks_in,
     project_open,
     project_done,
@@ -48,7 +47,6 @@ import from models {
     project_recent_done_before,
     project_done_before_stamped,
     project_working,
-    project_created_since,
     step_column_peak,
     step_column_below,
     step_column_above,
@@ -68,7 +66,8 @@ import from models {
     members_of,
     roles_of,
     steps_of,
-    rehome_task
+    rehome_task,
+    week_start
 }
 import from services.util {
     now_iso,
@@ -82,7 +81,8 @@ import from services.util {
     order_working,
     done_day,
     moved_to_done,
-    ensure_tallies
+    ensure_tallies,
+    ensure_history
 }
 import from services.log.log { record_task_event, sync_task_links }
 import from services.github.util { sync_issue_state }
@@ -700,26 +700,13 @@ walker TaskCounts {
 }
 
 
-# The week a day falls in: the last start on or before it, -1 before the
-# first. `starts` is ascending Mondays; an empty day is before them all.
-def week_slot(day: str, starts: list[str]) -> int {
-    slot = -1;
-    for (i, s) in enumerate(starts) {
-        if day and day >= s {
-            slot = i;
-        }
-    }
-    return slot;
-}
-
-
 walker TaskHistory {
     """The Overview's charts over time: for the `weeks` weeks ending in
     `monday`'s week, tasks added and moved to Done per week plus running
-    scope and done totals. `project_id` narrows it to that project. Only
-    the window's rows are loaded (created or reached Done since its first
-    Monday); what came before is the tallies less those rows. A task
-    created already Done counts nowhere."""
+    scope and done totals. `project_id` narrows it to that project. It reads
+    the projects' weekly counts, kept on write; what came before the window
+    is the tallies less the window. A task created already Done counts
+    nowhere."""
     has project_id: str = "",
         monday: str = "",
         weeks: int = 12,
@@ -727,63 +714,49 @@ walker TaskHistory {
 
     can start with Root entry {
         ensure_tallies(here);
+        ensure_history(here);
         if self.project_id {
             p = resolve(self.project_id);
             if isinstance(p, Project) and owned(here, p) {
                 visit [p];
             } else {
-                report self.history_of([], [], [0, 0, 0]);
+                report self.history_of([], [0, 0, 0]);
             }
         } else {
-            since = self.starts()[0];
-            report self.history_of(
-                created_since(here, since), done_since(here, since), tally_totals(here)
-            );
+            report self.history_of(projects_of(here), tally_totals(here));
         }
     }
 
     can gather with Project entry {
-        since = self.starts()[0];
         report self.history_of(
-            project_created_since(here, since),
-            project_done_since(here, since),
-            [here.task_total, here.done_total, here.seeded_done_total]
+            [here], [here.task_total, here.done_total, here.seeded_done_total]
         );
         disengage;
     }
 
-    # The window's Mondays, oldest first.
+    # The window's Mondays, oldest first: the weeks the counts are kept by.
     def starts -> list[str] {
         count = min(max(self.weeks, 4), 52);
-        week0 = week_anchor(self.monday);
+        anchor = week_anchor(self.monday);
+        week0 = week_start(anchor) or anchor;
         return [shift_day(week0, -7 * (count - 1 - i)) for i in range(count)];
     }
 
-    # `made` is every task created in the window, `closed` every task that
-    # reached Done in it, `totals` the all-time [tasks, done, seeded done].
-    def history_of(
-        made: list[Task], closed: list[Task], totals: list[int]
-    ) -> WeeklyHistory {
+    # `projects` carry the weekly counts, `totals` is the all-time
+    # [tasks, done, seeded done] over the same projects.
+    def history_of(projects: list[Project], totals: list[int]) -> WeeklyHistory {
         starts = self.starts();
         count = len(starts);
         added = [0 for _ in range(count)];
         finished = [0 for _ in range(count)];
-        for t in made {
-            if seeded_done(t) {
-                continue;
-            }
-            slot = week_slot(t.created_at[:10], starts);
-            if slot >= 0 {
-                added[slot] = added[slot] + 1;
-            }
-        }
-        for t in closed {
-            if not moved_to_done(t) {
-                continue;
-            }
-            slot = week_slot(done_day(t), starts);
-            if slot >= 0 {
-                finished[slot] = finished[slot] + 1;
+        for p in projects {
+            for (i, week) in enumerate(starts) {
+                if week in p.week_added {
+                    added[i] = added[i] + p.week_added[week];
+                }
+                if week in p.week_finished {
+                    finished[i] = finished[i] + p.week_finished[week];
+                }
             }
         }
         # Before the window: everything that ever counted, less the window.

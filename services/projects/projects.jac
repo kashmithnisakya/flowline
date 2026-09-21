@@ -83,7 +83,10 @@ walker SaveProject {
     # ensure_tallies never loads it.
     can create with Projects entry {
         fresh = here ++> Project(
-            name=self.name.strip(), description=self.description, tallies_at=now_iso()
+            name=self.name.strip(),
+            description=self.description,
+            tallies_at=now_iso(),
+            history_at=now_iso()
         );
         on_attached(root, fresh);
         report fresh;

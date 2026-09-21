@@ -11,7 +11,9 @@ import from models {
     projects_of,
     members_of,
     seeded_done,
-    note_category
+    note_category,
+    history_days,
+    week_start
 }
 
 
@@ -187,6 +189,33 @@ def ensure_tallies(holder: Root) -> None {
     }
     for c in cats {
         note_category(holder, c);
+    }
+}
+
+
+# The weekly history of every project that has none yet (an empty
+# `history_at`): one full load per such project, once, after its tallies.
+# TaskHistory calls this first; the writes keep it from then on.
+def ensure_history(holder: Root) {
+    stamp = now_iso();
+    for p in projects_of(holder) {
+        if p.history_at {
+            continue;
+        }
+        added: dict[str, int] = {};
+        finished: dict[str, int] = {};
+        for t in [p-->[?:Task]] {
+            days = history_days(t);
+            for (counts, day) in [(added, days[0]), (finished, days[1])] {
+                week = week_start(day);
+                if week {
+                    counts[week] = (counts[week] if week in counts else 0) + 1;
+                }
+            }
+        }
+        p.week_added = added;
+        p.week_finished = finished;
+        p.history_at = stamp;
     }
 }
 

@@ -34,6 +34,8 @@ import from models {
     count_task,
     task_project,
     seeded_done,
+    history_days,
+    shift_history,
     members_of,
     steps_of
 }
@@ -1518,14 +1520,15 @@ def remember_issue(ctx: SyncContext, key: str, t: Task) {
 
 
 # GitHub's dates can move a Done task between "moved to Done" and "created
-# already Done"; the project's seeded tally follows.
-def reseed(t: Task, was_seeded: bool) {
+# already Done", and move the weeks it counts in; the project's seeded tally
+# and weekly history follow. `before` is history_days ahead of the change.
+def reseed(t: Task, was_seeded: bool, before: list[str]) {
     now_seeded = seeded_done(t);
-    if was_seeded == now_seeded {
-        return;
-    }
     for p in task_project(t) {
-        p.seeded_done_total = p.seeded_done_total + (1 if now_seeded else -1);
+        if was_seeded != now_seeded {
+            p.seeded_done_total = p.seeded_done_total + (1 if now_seeded else -1);
+        }
+        shift_history(p, before, history_days(t));
     }
 }
 
@@ -1624,6 +1627,7 @@ def apply_issue_item(
     # GitHub's dates win when they are earlier: a sync-stamped import is
     # corrected, while a card that closed its own issue keeps its moment.
     was_seeded = seeded_done(t);
+    before = history_days(t);
     made = str(item.get("created_at") or "");
     if made and made < t.created_at {
         t.created_at = made;
@@ -1632,7 +1636,7 @@ def apply_issue_item(
     if closed and t.status == "Done" and (not t.done_at or closed < t.done_at) {
         t.done_at = closed;
     }
-    reseed(t, was_seeded);
+    reseed(t, was_seeded, before);
     fresh_state = str(item.get("state") or "");
     if fresh_state and fresh_state != t.gh_issue_state {
         t.gh_issue_state = fresh_state;

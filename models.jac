@@ -100,7 +100,13 @@ node Project {
         task_total: int = 0,
         done_total: int = 0,
         seeded_done_total: int = 0,
-        tallies_at: str = "";
+        tallies_at: str = "",
+        # The Overview's history, kept on the same writes: tasks added and
+        # moved to Done per week, keyed by the week's Monday (history_days).
+        # An empty `history_at` means not counted yet; ensure_history fills it.
+        week_added: dict[str, int] = {},
+        week_finished: dict[str, int] = {},
+        history_at: str = "";
 }
 
 # Roles are HasRole edges to Role nodes, never names on the member.
@@ -219,6 +225,7 @@ node Task {
     def set_status(status: str, stamp: str) {
         was_done = self.status == "Done";
         was_seeded = seeded_done(self);
+        before = history_days(self);
         if status == "Done" and not was_done {
             self.done_at = stamp;
         } elif status != "Done" {
@@ -237,6 +244,7 @@ node Task {
             if was_seeded != now_seeded {
                 p.seeded_done_total = p.seeded_done_total + (1 if now_seeded else -1);
             }
+            shift_history(p, before, history_days(self));
         }
     }
 
@@ -1043,16 +1051,6 @@ def working_tasks(holder: Root, cutoff: str) -> list[Task] {
 }
 
 
-# Tasks created on or after `since`, any status: the burn-up's additions.
-def created_since(holder: Root, since: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, created_at>=since]]);
-    }
-    return out;
-}
-
-
 # The same readers for one project, which a project-scoped walker visits.
 def project_tasks_in(p: Project, said: str) -> list[Task] {
     return [p-->[?:Task, category==said]];
@@ -1163,11 +1161,6 @@ def project_working(p: Project, cutoff: str) -> list[Task] {
     out = project_open(p);
     out.extend(project_done_since(p, cutoff) if cutoff else project_done(p));
     return out;
-}
-
-
-def project_created_since(p: Project, since: str) -> list[Task] {
-    return [p-->[?:Task, created_at>=since]];
 }
 
 
@@ -1549,6 +1542,99 @@ def count_task(p: Project, t: Task, delta: int) {
             p.seeded_done_total = p.seeded_done_total + delta;
         }
     }
+    days = history_days(t);
+    shift_history(p, [] if delta > 0 else days, days if delta > 0 else []);
+}
+
+
+# Where a task counts in the Overview's history, as [added day, finished
+# day], "" where it does not: added the day it was made, unless it was made
+# already Done; finished the day it reached Done (never before it was made).
+def history_days(t: Task) -> list[str] {
+    if seeded_done(t) {
+        return ["", ""];
+    }
+    finished = "";
+    if t.status == "Done" {
+        day = (t.done_at or t.updated_at)[:10];
+        made = t.created_at[:10];
+        finished = made if made and day < made else day;
+    }
+    return [t.created_at[:10], finished];
+}
+
+
+# Move a task's weekly counts from `before` to `after` (history_days of the
+# task before and after a write; [] for not counted). Each dict is rebuilt
+# and assigned, so the write is tracked like any field.
+def shift_history(p: Project, before: list[str], after: list[str]) {
+    if not p.history_at or before == after {
+        return;
+    }
+    added = dict(p.week_added);
+    finished = dict(p.week_finished);
+    if before {
+        bump_week(added, before[0], -1);
+        bump_week(finished, before[1], -1);
+    }
+    if after {
+        bump_week(added, after[0], 1);
+        bump_week(finished, after[1], 1);
+    }
+    p.week_added = added;
+    p.week_finished = finished;
+}
+
+
+def bump_week(counts: dict[str, int], day: str, delta: int) {
+    week = week_start(day);
+    if not week {
+        return;
+    }
+    n = (counts[week] if week in counts else 0) + delta;
+    if n > 0 {
+        counts[week] = n;
+    } elif week in counts {
+        del counts[week];
+    }
+}
+
+
+# The Monday on or before an ISO date, "" for anything else. Plain integer
+# arithmetic on days since 1970-01-01 (a Thursday), after H. Hinnant's
+# civil-date algorithms, since this module imports no Python.
+def week_start(day: str) -> str {
+    if len(day) < 10 or day[4] != "-" or day[7] != "-" {
+        return "";
+    }
+    for c in day[0:4] + day[5:7] + day[8:10] {
+        if not c.isdigit() {
+            return "";
+        }
+    }
+    y = int(day[0:4]);
+    m = int(day[5:7]);
+    d = int(day[8:10]);
+    if m < 1 or m > 12 or d < 1 or d > 31 {
+        return "";
+    }
+    yy = y - 1 if m <= 2 else y;
+    era = yy // 400;
+    yoe = yy - era * 400;
+    doy = (153 * (m - 3 if m > 2 else m + 9) + 2) // 5 + d - 1;
+    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy;
+    z = era * 146097 + doe - 719468;
+    z = z - (z + 3) % 7;
+    z = z + 719468;
+    era = z // 146097;
+    doe = z - era * 146097;
+    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365;
+    doy = doe - (365 * yoe + yoe // 4 - yoe // 100);
+    mp = (5 * doy + 2) // 153;
+    dd = doy - (153 * mp + 2) // 5 + 1;
+    mm = mp + 3 if mp < 10 else mp - 9;
+    year = yoe + era * 400 + (1 if mm <= 2 else 0);
+    return str(year).zfill(4) + "-" + str(mm).zfill(2) + "-" + str(dd).zfill(2);
 }
 
 
