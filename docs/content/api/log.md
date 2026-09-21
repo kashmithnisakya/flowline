@@ -49,7 +49,8 @@ curl -X POST $BASE/walker/ListLogEntries -H "Authorization: Bearer $TOKEN" \
 **Reports** one [`LogTotals`](types.md#logtotals): entries per week for the four
 weeks ending in `monday`'s week (oldest first), per day for that week, and per
 person for that week. `member_name` is split on commas, so an entry with two
-assignees counts for both. An empty `monday` starts the week today.
+assignees counts for both. An empty `monday` starts the week today. It reads
+the days' tallies, so it costs the same however busy the weeks were.
 
 ::: walker LogActivity
 

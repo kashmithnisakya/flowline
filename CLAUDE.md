@@ -255,7 +255,13 @@ people it tracks are roster members.
   end of `ImportIssues`, a sync pass and a drain): one issue keeps its own
   line, more grow the day's `Imported N issues from org/repo` line for that
   repo and status (`item_count`, no task), which the log page folds with
-  the single lines. `GetFlowLine` counts and
+  the single lines. The log's counts (`log_totals`, so `LogCounts` and the
+  Overview) read each day's `entry_total` and `member_counts`, kept by the
+  same helpers; `fill_day` tallies a day written before them, once, and
+  folds a backfill of more than `IMPORT_FOLD_MIN` single import lines for
+  one repo and status into the day's batch line. The Overview's blocked
+  reasons are one pushed query per blocked task (`blocked_lines`), no log
+  load. `GetFlowLine` counts and
   `ListStepTasks` lists the same working set (`done_days`), so a done step
   shows recent Done the way the board's column does; the count's pass over
   that set also keeps each step's first two titles (`StepView.task_titles`,

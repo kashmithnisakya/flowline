@@ -22,7 +22,8 @@ import from models {
     done_since,
     projects_of,
     members_of,
-    days_between
+    days_between,
+    blocked_lines
 }
 import from services.util { now_iso, done_day, moved_to_done, ensure_tallies }
 import from services.tasks.tasks {
@@ -174,6 +175,43 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple[str, str] {
     return (reason, since);
 }
 
+# Each blocked task's reason and since, from log rows already loaded.
+def _reasons_from(
+    entries: list[LogEntry], open: list[Task]
+) -> dict[str, tuple[str, str]] {
+    out: dict[str, tuple[str, str]] = {};
+    for t in open {
+        if t.status == "Blocked" {
+            out[jid(t)] = _blocked_reason(entries, jid(t));
+        }
+    }
+    return out;
+}
+
+# The same from the store: one query per blocked task for its Blocked lines
+# in [since, until], the latest stamp winning. No blocked task, no read.
+def _reasons_between(
+    holder: Root, open: list[Task], since: str, until: str
+) -> dict[str, tuple[str, str]] {
+    out: dict[str, tuple[str, str]] = {};
+    for t in open {
+        if t.status != "Blocked" {
+            continue;
+        }
+        reason = "";
+        when = "";
+        for row in blocked_lines(holder, jid(t), since, until) {
+            stamp = row.at or row.date;
+            if stamp >= when {
+                reason = row.notes;
+                when = stamp;
+            }
+        }
+        out[jid(t)] = (reason, when);
+    }
+    return out;
+}
+
 # ------------------------------------------------------------------- assembly
 
 # The three queues the Overview and the assistant both read. Each takes the
@@ -181,7 +219,7 @@ def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple[str, str] {
 # Blocked rows come out in the attention order (soonest due first, ties by
 # jid) so a capped list still covers the attention list's blocked prefix.
 def _blocked_items(
-    open: list[Task], names: TaskNames, entries: list[LogEntry]
+    open: list[Task], names: TaskNames, reasons: dict[str, tuple[str, str]]
 ) -> list[BlockedItem] {
     stuck = [
         t
@@ -192,7 +230,7 @@ def _blocked_items(
     order_attention(stuck);
     rows: list[BlockedItem] = [];
     for t in stuck {
-        (reason, since) = _blocked_reason(entries, jid(t));
+        (reason, since) = reasons[jid(t)] if jid(t) in reasons else ("", "");
         rows.append(
             BlockedItem(
                 task_id=jid(t),
@@ -303,7 +341,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
     entries = _entries_between(holder, from_date, to_date);
     names = task_names(holder);
 
-    blocked = _blocked_items(open, names, entries);
+    blocked = _blocked_items(open, names, _reasons_from(entries, open));
     review_queue = _review_items(open, names, today);
     aging = _aging_items(open, names, today);
     overdue = _overdue_items(open, names, today);
@@ -444,7 +482,6 @@ walker OverviewSnapshot {
         open = open_tasks(here);
         recent = done_since(here, tally_since(self.monday));
         names = task_names(here);
-        entries = _entries_between(here, self.from_date or today, today);
         flagged = [
             t
             for t in open
@@ -471,7 +508,11 @@ walker OverviewSnapshot {
             projects=projects,
             review_queue=_review_items(open, names, today)[:cap],
             aging=_aging_items(open, names, today)[:cap],
-            blocked=_blocked_items(open, names, entries)[:cap]
+            blocked=_blocked_items(
+                open,
+                names,
+                _reasons_between(here, open, self.from_date or today, today)
+            )[:cap]
         );
     }
 }

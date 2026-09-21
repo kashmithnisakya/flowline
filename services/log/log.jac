@@ -21,6 +21,7 @@ import from models {
     day_task_entries,
     day_import_lines,
     entry_key,
+    entry_people,
     note_entry,
     forget_entry
 }
@@ -28,19 +29,98 @@ import from services.util { today_iso, shift_day, page_bounds, now_iso }
 
 # ---------------------------------------------------------------- daily log
 
-# A day written before its count and keys: key its entries and count them,
-# once. Answers them newest first, because a query later in this request
-# cannot see the new keys (a field write shows to the next request only).
+glob IMPORT_PREFIX: str = "Imported from GitHub ",
+     IMPORT_FOLD_MIN: int = 10;
+
+# A day written before its tallies: fold its backfill, key its entries and
+# count them, once. Answers them newest first, because a query later in this
+# request cannot see the new keys (a field write shows to the next request).
 def fill_day(day: LogDay) -> list[LogEntry] {
-    rows = [day-->[?:LogEntry]];
+    rows = fold_imports(day, [day-->[?:LogEntry]]);
+    counts: dict[str, int] = {};
     for r in rows {
         if not r.sort_key {
             r.sort_key = entry_key(r.at, r.date, jid(r));
         }
+        for name in entry_people(r.member_name) {
+            counts[name] = (counts[name] if name in counts else 0) + 1;
+        }
     }
     rows.sort(key=lambda (r: LogEntry) { r.sort_key; }, reverse=True);
     day.entry_total = len(rows);
+    day.member_counts = counts;
+    day.tallied = True;
     return rows;
+}
+
+
+# A backfill from before batch lines wrote one "Imported from GitHub
+# org/repo #n" line per issue. More than IMPORT_FOLD_MIN of them for one repo
+# and status on a day become that day's batch line, as log_imports writes it.
+def fold_imports(day: LogDay, rows: list[LogEntry]) -> list[LogEntry] {
+    batches: dict[str, list[LogEntry]] = {};
+    order: list[str] = [];
+    for r in rows {
+        if r.task_id and r.activity.startswith(IMPORT_PREFIX) {
+            key = r.activity[len(IMPORT_PREFIX):].split(" #")[0] + "|" + r.status;
+            if key not in batches {
+                batches[key] = [];
+                order.append(key);
+            }
+            batches[key].append(r);
+        }
+    }
+    gone: list[str] = [];
+    made: list[LogEntry] = [];
+    for key in order {
+        batch = batches[key];
+        if len(batch) <= IMPORT_FOLD_MIN {
+            continue;
+        }
+        full_name = key.split("|")[0];
+        status = batch[0].status;
+        latest = "";
+        for r in batch {
+            latest = r.at if r.at > latest else latest;
+        }
+        lines = [
+            e
+            for e in rows
+            if not e.task_id
+                and e.item_count > 0
+                and e.repo == full_name
+                and e.status == status
+        ];
+        if lines {
+            line = lines[0];
+            line.item_count = line.item_count + len(batch);
+            line.at = latest if latest > line.at else line.at;
+            line.activity = import_line(line.item_count, full_name, status == "Done");
+            line.sort_key = entry_key(line.at, line.date, jid(line));
+        } else {
+            made.append(
+                day ++> LogEntry(
+                    date=day.date,
+                    at=latest,
+                    activity=import_line(len(batch), full_name, status == "Done"),
+                    repo=full_name,
+                    status=status,
+                    project_name=batch[0].project_name,
+                    item_count=len(batch)
+                )
+            );
+        }
+        for r in batch {
+            gone.append(jid(r));
+            del r;
+        }
+    }
+    kept = [
+        r
+        for r in rows
+        if jid(r) not in gone
+    ];
+    return kept + made;
 }
 
 
@@ -90,7 +170,7 @@ walker ListLogEntries {
     ) -> LogPage {
         loaded: dict[str, list[LogEntry]] = {};
         for d in days {
-            if d.entry_total < 0 {
+            if not d.tallied {
                 loaded[jid(d)] = fill_day(d);
             }
         }
@@ -163,7 +243,7 @@ walker ListLogEntries {
 
 # The Overview's log numbers: entries per week for the four weeks ending in
 # `monday`'s week (oldest first), per weekday of that week, and which days each
-# person logged on. Reads node fields only, so row volume does not change cost.
+# person logged on. Reads the days' tallies, never their entries.
 def log_totals(holder: Root, monday: str) -> LogTotals {
     week0 = monday if len(monday) >= 10 else today_iso();
     starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
@@ -176,35 +256,33 @@ def log_totals(holder: Root, monday: str) -> LogTotals {
     by_day = [0, 0, 0, 0, 0, 0, 0];
     per_person: dict[str, list[int]] = {};
     for day in days_between(holder, since, until) {
-        for row in [day-->[?:LogEntry]] {
-            for i in range(4) {
-                if row.date >= starts[i] and row.date < ends[i] {
-                    by_week[i] = by_week[i] + 1;
-                }
+        if not day.tallied {
+            fill_day(day);
+        }
+        n = day.entry_total;
+        for i in range(4) {
+            if day.date >= starts[i] and day.date < ends[i] {
+                by_week[i] = by_week[i] + n;
             }
-            if row.date < week0 {
-                continue;
+        }
+        if day.date < week0 {
+            continue;
+        }
+        slot = -1;
+        for i in range(7) {
+            if day.date == week_days[i] {
+                slot = i;
             }
-            slot = -1;
-            for i in range(7) {
-                if row.date == week_days[i] {
-                    slot = i;
-                }
+        }
+        if slot < 0 {
+            continue;
+        }
+        by_day[slot] = by_day[slot] + n;
+        for name in day.member_counts {
+            if name not in per_person {
+                per_person[name] = [0, 0, 0, 0, 0, 0, 0];
             }
-            if slot < 0 {
-                continue;
-            }
-            by_day[slot] = by_day[slot] + 1;
-            for who in row.member_name.split(",") {
-                name = who.strip();
-                if not name {
-                    continue;
-                }
-                if name not in per_person {
-                    per_person[name] = [0, 0, 0, 0, 0, 0, 0];
-                }
-                per_person[name][slot] = per_person[name][slot] + 1;
-            }
+            per_person[name][slot] = per_person[name][slot] + day.member_counts[name];
         }
     }
     people: list[MemberDays] = [];
@@ -262,7 +340,7 @@ walker LogActivity {
         if days {
             visit [days[0]];
         } else {
-            fresh = here ++> LogDay(date=self.date, entry_total=0);
+            fresh = here ++> LogDay(date=self.date, entry_total=0, tallied=True);
             on_attached(root, fresh);
             visit fresh;
         }
@@ -314,7 +392,7 @@ def log_day(holder: Root, date: str) -> LogDay {
     if days {
         return days[0];
     }
-    day = logs_box(holder) ++> LogDay(date=date, entry_total=0);
+    day = logs_box(holder) ++> LogDay(date=date, entry_total=0, tallied=True);
     on_attached(holder, day);
     return day;
 }
@@ -378,10 +456,7 @@ def log_imports(holder: Root, fresh: list[Task], stamp: str) {
             record_task_event(
                 holder,
                 first,
-                "Imported from GitHub "
-                    + first.gh_repo
-                    + " #"
-                    + str(first.gh_issue_number),
+                IMPORT_PREFIX + first.gh_repo + " #" + str(first.gh_issue_number),
                 stamp
             );
         } else {
@@ -435,11 +510,7 @@ def sync_task_links(holder: Root, task: Task, note: str) -> None {
     if not days {
         return;
     }
-    matches = [
-        r
-        for r in [days[0]-->[?:LogEntry]]
-        if r.task_id == jid(task)
-    ];
+    matches = day_task_entries(days[0], jid(task));
     if not matches {
         return;
     }

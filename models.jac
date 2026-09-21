@@ -354,12 +354,15 @@ def checklist_counts(items: list[dict[str, any]]) -> list[int] {
     return [done, len(items)];
 }
 
-# One day of the log under the Logs box; its entries hang off it.
-# `entry_total` counts them, kept on write by note_entry / forget_entry;
-# -1 is a day written before the count existed, until fill_day counts it.
+# One day of the log under the Logs box; its entries hang off it. Its
+# tallies (entries, and entries per person named on them) are kept on write
+# by note_entry / forget_entry once `tallied`; fill_day sets them for a day
+# written before they existed, so no count ever loads the entries.
 node LogDay {
     has date: str,
-        entry_total: int = -1;
+        entry_total: int = -1,
+        member_counts: dict[str, int] = {},
+        tallied: bool = False;
 }
 
 node LogEntry {
@@ -837,6 +840,18 @@ def day_import_lines(day: LogDay, full_name: str) -> list[LogEntry] {
 }
 
 
+# A task's Blocked lines between two dates, in one query across the days.
+def blocked_lines(holder: Root, tid: str, since: str, until: str) -> list[LogEntry] {
+    out: list[LogEntry] = [];
+    for box in [holder-->[?:Logs]] {
+        out.extend(
+            [box-->[?:LogDay, date>=since, date<=until]-->[?:LogEntry, task_id==tid, status=="Blocked"]]
+        );
+    }
+    return out;
+}
+
+
 # The stamp (else the date) as 20 digits, then the jid. Digits and lowercase
 # hex sort alike under any collation, so the store and a Python sort agree,
 # and a stamp with or without microseconds lands in time order.
@@ -862,22 +877,52 @@ def entry_key(at: str, date: str, id: str) -> str {
 }
 
 
+# The people an entry counts for: `member_name` is every assignee joined
+# with ", ", so a name appears once per mention.
+def entry_people(member_name: str) -> list[str] {
+    out: list[str] = [];
+    for who in member_name.split(",") {
+        name = who.strip();
+        if name {
+            out.append(name);
+        }
+    }
+    return out;
+}
+
+
+# Move a day's tallies by one entry, in or out. The dict is rebuilt and
+# assigned, so the write is tracked like any field.
+def tally_entry(day: LogDay, row: LogEntry, delta: int) {
+    if not day.tallied {
+        return;
+    }
+    day.entry_total = max(0, day.entry_total + delta);
+    counts = dict(day.member_counts);
+    for name in entry_people(row.member_name) {
+        left = (counts[name] if name in counts else 0) + delta;
+        if left > 0 {
+            counts[name] = left;
+        } elif name in counts {
+            del counts[name];
+        }
+    }
+    day.member_counts = counts;
+}
+
+
 # A new entry under its day: key it and count it. Every LogEntry write goes
 # through here, or the day's pages skip or repeat rows.
 def note_entry(day: LogDay, row: LogEntry) {
     row.sort_key = entry_key(row.at, row.date, jid(row));
-    if day.entry_total >= 0 {
-        day.entry_total = day.entry_total + 1;
-    }
+    tally_entry(day, row, 1);
 }
 
 
-# An entry about to be deleted leaves its day's count.
+# An entry about to be deleted leaves its day's tallies.
 def forget_entry(row: LogEntry) {
     for day in [row<--[?:LogDay]] {
-        if day.entry_total > 0 {
-            day.entry_total = day.entry_total - 1;
-        }
+        tally_entry(day, row, -1);
     }
 }
 
