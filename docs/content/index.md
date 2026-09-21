@@ -56,7 +56,7 @@ included), and **the board becomes those steps**. Every move the board makes
 lands in a written daily log, so the standup note is already there. Work can
 be planned into iterations and followed on a twelve-week roadmap.
 
-![A tour of flowline: sign in, design a flow line, the board it becomes, a task on its flow line, and the log it writes](gifs/flowline-demo.gif){ .fl-demo loading=lazy }
+![A tour of flowline: sign in to the board, open a task, tick a checklist item and move it on, then the flow line behind the board, the tasks table, the roadmap, the log it wrote and the Overview](gifs/flowline-demo.gif){ .fl-demo loading=lazy }
 
 <div class="grid cards fl-features" markdown>
 
