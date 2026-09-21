@@ -1087,6 +1087,70 @@ def project_done_before(p: Project, cutoff: str) -> list[Task] {
 }
 
 
+# The history in updated order, for a page the store cuts: the first `n`
+# rows, newest first, and every row stamped exactly `at` (the tie at a
+# page's end). "Done" is Done before `cutoff` (the done scope passes a date
+# no task reaches). Across the projects, or under one.
+def recent_tasks(holder: Root, n: int) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, -updated_at]][:n]);
+    }
+    return out;
+}
+
+
+def tasks_stamped(holder: Root, at: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend([box-->[?:Project]-->[?:Task, updated_at==at]]);
+    }
+    return out;
+}
+
+
+def recent_done_before(holder: Root, cutoff: str, n: int) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n]
+        );
+    }
+    return out;
+}
+
+
+def done_before_stamped(holder: Root, cutoff: str, at: str) -> list[Task] {
+    out: list[Task] = [];
+    for box in [holder-->[?:Projects]] {
+        out.extend(
+            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]]
+        );
+    }
+    return out;
+}
+
+
+def project_recent(p: Project, n: int) -> list[Task] {
+    return [p-->[?:Task, -updated_at]][:n];
+}
+
+
+def project_stamped(p: Project, at: str) -> list[Task] {
+    return [p-->[?:Task, updated_at==at]];
+}
+
+
+def project_recent_done_before(p: Project, cutoff: str, n: int) -> list[Task] {
+    return [p-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n];
+}
+
+
+def project_done_before_stamped(p: Project, cutoff: str, at: str) -> list[Task] {
+    return [p-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]];
+}
+
+
 def project_done_before_in(p: Project, cutoff: str, said: str) -> list[Task] {
     if not cutoff {
         return [];

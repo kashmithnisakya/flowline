@@ -39,8 +39,11 @@ capped at 500.
   loaded the whole scope; under a `project_id` or `category` filter it is a
   tally (`done`, `all`, `older`) or one more pushed read of the live scope.
 - The scope and a `category` filter run in the store's query, so a working
-  page loads the working set alone; `older`, `done` and `all` load the
-  history they page over.
+  page loads the working set alone. An unfiltered `older`, `done` or `all`
+  page in updated order, newest first (the table's default) is cut in the
+  store too: it loads the rows up to the page's end, and `total` comes from
+  the tallies. Any other sort, a search or a filter loads the history the
+  page is taken from.
 - A foreign or unknown `project_id` or `assignee_id` matches nothing.
 
 ```bash

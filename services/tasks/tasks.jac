@@ -39,6 +39,14 @@ import from models {
     project_done_since,
     project_done_before,
     project_done_before_in,
+    recent_tasks,
+    tasks_stamped,
+    recent_done_before,
+    done_before_stamped,
+    project_recent,
+    project_stamped,
+    project_recent_done_before,
+    project_done_before_stamped,
     project_working,
     project_created_since,
     step_column_peak,
@@ -161,8 +169,10 @@ def order_attention(rows: list[Task]) {
 }
 
 
-glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2};
+glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2},
+     FAR_FUTURE: str = "9999-12-31";
 
+# A date no done_at reaches: the done scope is Done before it.
 # A task's board column as a number, by the board's placement rule: its own
 # step, else the status itself (no flow line), else the first column of its
 # status's kind. `rank` and `kind_rank` come from sort_tasks.
@@ -280,13 +290,110 @@ walker ListTasks {
                 report self.page_of(here, [], []);
             }
         } else {
-            report self.page_of(here, self.pool_of(here, []), []);
+            cut = self.history_page(here, []);
+            report cut or self.page_of(here, self.pool_of(here, []), []);
         }
     }
 
     can gather with Project entry {
-        report self.page_of(root, self.pool_of(root, [here]), [here]);
+        cut = self.history_page(root, [here]);
+        report cut or self.page_of(root, self.pool_of(root, [here]), [here]);
         disengage;
+    }
+
+    # An unfiltered history page in updated order, newest first (the table's
+    # default), is cut in the store: the rows up to the page's end plus every
+    # row that ties with the last of them, so it matches a full load exactly.
+    # Anything else answers None and pages the loaded pool.
+    def history_page(holder: Root, projects: list[Project]) -> TaskPage | None {
+        newest = (self.sort == "updated" and self.sort_dir == "desc")
+            or (not self.sort and self.scope in ["older", "done"]);
+        filtered = bool(
+            self.q.strip()
+                or self.category
+                or self.tag
+                or self.estimated
+                or self.iteration_id
+                or self.assignee_id
+        );
+        cutoff = FAR_FUTURE if self.scope == "done" else done_cutoff(self.done_days);
+        if not newest
+            or filtered
+            or self.scope not in ["older", "done", "all"]
+            or (self.scope == "older" and not cutoff) {
+            return None;
+        }
+        (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
+        rows = self.recent(holder, projects, cutoff, end);
+        if len(rows) >= end and len(rows) > 0 {
+            held = [jid(t) for t in rows];
+            for t in self.stamped(
+                holder, projects, cutoff, rows[len(rows) - 1].updated_at
+            ) {
+                if jid(t) not in held {
+                    rows.append(t);
+                }
+            }
+        }
+        rows.sort(key=lambda (t: Task) { jid(t); });
+        rows.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
+        total = self.history_total(holder, projects, cutoff);
+        return TaskPage(
+            rows=hydrate_rows(holder, rows[start:end]),
+            page=p,
+            page_size=size,
+            has_more=total > end,
+            total=total,
+            scope_total=self.history_total(holder, [], cutoff) if projects else total
+        );
+    }
+
+    # The scope's first `n` rows in updated order, and the rows stamped `at`.
+    def recent(
+        holder: Root, projects: list[Project], cutoff: str, n: int
+    ) -> list[Task] {
+        if self.scope == "all" {
+            return project_recent(projects[0], n)
+                if projects
+                else recent_tasks(holder, n);
+        }
+        return project_recent_done_before(projects[0], cutoff, n)
+            if projects
+            else recent_done_before(holder, cutoff, n);
+    }
+
+    def stamped(
+        holder: Root, projects: list[Project], cutoff: str, at: str
+    ) -> list[Task] {
+        if self.scope == "all" {
+            return project_stamped(projects[0], at)
+                if projects
+                else tasks_stamped(holder, at);
+        }
+        return project_done_before_stamped(projects[0], cutoff, at)
+            if projects
+            else done_before_stamped(holder, cutoff, at);
+    }
+
+    # The scope's size from the tallies: every task, every Done task, or the
+    # Done tasks less those reached since the cutoff.
+    def history_total(holder: Root, projects: list[Project], cutoff: str) -> int {
+        if projects {
+            pr = projects[0];
+            if self.scope == "all" {
+                return pr.task_total;
+            }
+            return pr.done_total - len(project_done_since(pr, cutoff))
+                if self.scope == "older"
+                else pr.done_total;
+        }
+        totals = tally_totals(holder);
+        if self.scope == "all" {
+            return totals[0];
+        }
+        return totals[1] - len(done_since(holder, cutoff))
+            if self.scope == "older"
+            else totals[1];
     }
 
     # The rows a scope pages over, from the pushed readers: the working set
