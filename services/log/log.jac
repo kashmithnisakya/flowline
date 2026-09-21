@@ -16,19 +16,38 @@ import from models {
     on_attached,
     owned,
     logs_box,
-    days_between
+    days_between,
+    day_entries,
+    day_task_entries,
+    entry_key,
+    note_entry,
+    forget_entry
 }
 import from services.util { today_iso, shift_day, page_bounds, now_iso }
 
 # ---------------------------------------------------------------- daily log
 
+# A day written before its count and keys: key its entries and count them,
+# once. Answers them newest first, because a query later in this request
+# cannot see the new keys (a field write shows to the next request only).
+def fill_day(day: LogDay) -> list[LogEntry] {
+    rows = [day-->[?:LogEntry]];
+    for r in rows {
+        if not r.sort_key {
+            r.sort_key = entry_key(r.at, r.date, jid(r));
+        }
+    }
+    rows.sort(key=lambda (r: LogEntry) { r.sort_key; }, reverse=True);
+    day.entry_total = len(rows);
+    return rows;
+}
+
+
 walker ListLogEntries {
-    """One page of entries whose LogDay date falls in [from_date, to_date],
-    ISO strings, newest day first and newest stamp first within a day, the
-    order every view shows, so a later page only ever lands under the rows
-    already on screen. `total` counts the whole range so a page can say how
-    much of the week it is. A `task_id` keeps only that task's rows (the
-    task sheet's history), before paging."""
+    """One page of the entries in [from_date, to_date], newest day first and
+    newest stamp first within a day, so a later page lands under the rows on
+    screen. `total` is the whole range, from the day counts. A `task_id`
+    keeps only that task's rows (the task sheet's history), before paging."""
     has from_date: str,
         to_date: str,
         page: int = 1,
@@ -50,20 +69,88 @@ walker ListLogEntries {
 
     can gather with Logs entry {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
-        found: list[LogEntry] = [];
-        for day in days_between(root, self.from_date, self.to_date) {
-            for row in [day-->[?:LogEntry]] {
-                if not self.task_id or row.task_id == self.task_id {
-                    found.append(row);
-                }
+        days = days_between(root, self.from_date, self.to_date);
+        # Newest day first; two days on one date (a racing first write) keep
+        # one order between requests.
+        days.sort(key=lambda (d: LogDay) { jid(d); });
+        days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
+        if self.task_id {
+            report self.task_page(days, p, size, start, end);
+        } else {
+            report self.range_page(days, p, size, start, end);
+        }
+    }
+
+    # Whole days before the page are skipped on their counts and each day in
+    # it answers only its slice. A short slice means the count drifted, so
+    # that day is counted again and paged from what it loaded.
+    def range_page(
+        days: list[LogDay], p: int, size: int, start: int, end: int
+    ) -> LogPage {
+        loaded: dict[str, list[LogEntry]] = {};
+        for d in days {
+            if d.entry_total < 0 {
+                loaded[jid(d)] = fill_day(d);
             }
         }
-        # Newest day, then newest stamp, so page 1 is the end of the week and
-        # the top of its day; the jid pass underneath keeps rows that tie on
-        # the stamp in one order across pages (sorts are stable).
-        found.sort(key=lambda (r: LogEntry) { jid(r); });
-        found.sort(key=lambda (r: LogEntry) { r.date + "|" + r.at; }, reverse=True);
-        report LogPage(
+        rows: list[LogEntry] = [];
+        offset = start;
+        for d in days {
+            if len(rows) >= size {
+                break;
+            }
+            if offset < d.entry_total {
+                stop = min(d.entry_total, offset + size - len(rows));
+                part = self.day_slice(d, offset, stop, loaded);
+                # A recount can leave the day shorter than the offset.
+                if offset < d.entry_total {
+                    rows.extend(part);
+                    offset = 0;
+                    continue;
+                }
+            }
+            offset = offset - d.entry_total;
+        }
+        total = 0;
+        for d in days {
+            total = total + d.entry_total;
+        }
+        return LogPage(
+            rows=rows, page=p, page_size=size, has_more=total > end, total=total
+        );
+    }
+
+    # Rows [offset, stop) of one day: from the store, or from fill_day's load
+    # when the day was counted in this request or the store came back short.
+    def day_slice(
+        d: LogDay, offset: int, stop: int, loaded: dict[str, list[LogEntry]]
+    ) -> list[LogEntry] {
+        key = jid(d);
+        if key not in loaded {
+            part = day_entries(d, offset, stop);
+            if len(part) == stop - offset {
+                return part;
+            }
+            loaded[key] = fill_day(d);
+        }
+        return loaded[key][offset:stop];
+    }
+
+    # A task's rows: the filter runs in the store, so only they load, then
+    # they sort and page here in the range's order.
+    def task_page(
+        days: list[LogDay], p: int, size: int, start: int, end: int
+    ) -> LogPage {
+        found: list[LogEntry] = [];
+        for d in days {
+            part = day_task_entries(d, self.task_id);
+            part.sort(
+                key=lambda (r: LogEntry) { entry_key(r.at, r.date, jid(r)); },
+                reverse=True
+            );
+            found.extend(part);
+        }
+        return LogPage(
             rows=found[start:end],
             page=p,
             page_size=size,
@@ -174,7 +261,7 @@ walker LogActivity {
         if days {
             visit [days[0]];
         } else {
-            fresh = here ++> LogDay(date=self.date);
+            fresh = here ++> LogDay(date=self.date, entry_total=0);
             on_attached(root, fresh);
             visit fresh;
         }
@@ -211,6 +298,7 @@ walker LogActivity {
             tags=tags_snap,
             project_name=project_name
         );
+        note_entry(here, row);
         if isinstance(m, Member) {
             row +>:By():+> m;
         }
@@ -230,7 +318,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     if days {
         day = days[0];
     } else {
-        day = logs_box(holder) ++> LogDay(date=today);
+        day = logs_box(holder) ++> LogDay(date=today, entry_total=0);
         on_attached(holder, day);
     }
     names: list[str] = [];
@@ -244,7 +332,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         }
     }
     projects = [task<--[?:Project]];
-    day ++> LogEntry(
+    row = day ++> LogEntry(
         date=today,
         at=stamp,
         task_id=jid(task),
@@ -260,6 +348,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         tags=", ".join(tag_pool),
         project_name=projects[0].name if projects else ""
     );
+    note_entry(day, row);
 }
 
 # The move handoff arrives after the move row was written; refresh the
@@ -334,6 +423,7 @@ walker DeleteLogEntries {
             target = resolve(eid);
             if isinstance(target, LogEntry) and owned(here, target) {
                 gone.append(jid(target));
+                forget_entry(target);
                 del target;
             }
         }

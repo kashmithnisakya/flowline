@@ -355,8 +355,11 @@ def checklist_counts(items: list[dict[str, any]]) -> list[int] {
 }
 
 # One day of the log under the Logs box; its entries hang off it.
+# `entry_total` counts them, kept on write by note_entry / forget_entry;
+# -1 is a day written before the count existed, until fill_day counts it.
 node LogDay {
-    has date: str;
+    has date: str,
+        entry_total: int = -1;
 }
 
 node LogEntry {
@@ -373,7 +376,10 @@ node LogEntry {
         notes: str = "",
         member_name: str = "",
         tags: str = "",
-        project_name: str = "";
+        project_name: str = "",
+        # entry_key(): the stamp as digits, then the jid. Unique, so a page of
+        # a day is an ORDER BY plus OFFSET/LIMIT in the store.
+        sort_key: str = "";
 }
 
 
@@ -806,6 +812,64 @@ def days_between(holder: Root, since: str, until: str) -> list[LogDay] {
         out.extend([box-->[?:LogDay, date>=since, date<=until]]);
     }
     return out;
+}
+
+
+# Rows [start, stop) of a day's entries, newest first. The order and the
+# slice run in the store, so a page loads its own rows and no others.
+def day_entries(day: LogDay, start: int, stop: int) -> list[LogEntry] {
+    return [day-->[?:LogEntry, -sort_key]][start:stop];
+}
+
+
+# One task's entries under a day, the filter in the store's query.
+def day_task_entries(day: LogDay, tid: str) -> list[LogEntry] {
+    return [day-->[?:LogEntry, task_id==tid]];
+}
+
+
+# The stamp (else the date) as 20 digits, then the jid. Digits and lowercase
+# hex sort alike under any collation, so the store and a Python sort agree,
+# and a stamp with or without microseconds lands in time order.
+def entry_key(at: str, date: str, id: str) -> str {
+    base = at or date;
+    digits = "".join(
+        [
+            c
+            for c in base[:19]
+            if c.isdigit()
+        ]
+    );
+    frac = "";
+    if len(base) > 20 and base[19] == "." {
+        for c in base[20:] {
+            if not c.isdigit() {
+                break;
+            }
+            frac = frac + c;
+        }
+    }
+    return (digits + "00000000000000")[:14] + (frac + "000000")[:6] + id;
+}
+
+
+# A new entry under its day: key it and count it. Every LogEntry write goes
+# through here, or the day's pages skip or repeat rows.
+def note_entry(day: LogDay, row: LogEntry) {
+    row.sort_key = entry_key(row.at, row.date, jid(row));
+    if day.entry_total >= 0 {
+        day.entry_total = day.entry_total + 1;
+    }
+}
+
+
+# An entry about to be deleted leaves its day's count.
+def forget_entry(row: LogEntry) {
+    for day in [row<--[?:LogDay]] {
+        if day.entry_total > 0 {
+            day.entry_total = day.entry_total - 1;
+        }
+    }
 }
 
 
