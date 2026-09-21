@@ -39,9 +39,14 @@ change, issue and PR links, and the project's name. Their `activity` reads:
 | `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on an `auto_close` repo |
 | `UpdateTask` that changes status | `Moved to Done` |
 | A merged PR or closed issue on an `auto_done` repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
-| An issue imported or auto-filed | `Imported from GitHub org/repo #12` |
+| One issue imported or auto-filed in a batch | `Imported from GitHub org/repo #12` |
+| More than one in a batch (an import, a sync pass) | `Imported 40 issues from org/repo` (or `closed issues`), one line per day, repo and status; a later batch that day grows it |
 | An issue opened from a card | `Opened GitHub issue org/repo #12` |
 | A checklist item checked off | `Checked off: Draft the rollback steps (2/5)` |
+
+The batch line carries no task: `item_count` holds its number of issues, the
+count grows in place, and the log page folds it with single import lines for
+the same repo. A backfill of 1,400 issues is one row, not 1,400.
 
 A pure reorder inside a column writes nothing, and neither does deleting a
 task. `SetMoveInfo` (the reviewer, PR link or blocker note a handoff asks for)

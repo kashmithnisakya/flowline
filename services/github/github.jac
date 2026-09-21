@@ -38,7 +38,7 @@ import from models {
     steps_of
 }
 import from services.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
-import from services.log.log { record_task_event }
+import from services.log.log { record_task_event, log_imports }
 import from services.tasks.tasks { find_task, status_for_step }
 import from services.github.util {
     missing_config,
@@ -1114,9 +1114,6 @@ def file_issue_item(
         }
     }
     fresh.assignee_ids = linked;
-    record_task_event(
-        holder, fresh, "Imported from GitHub " + full_name + " #" + str(number), stamp
-    );
     return fresh;
 }
 
@@ -1184,6 +1181,7 @@ walker ImportIssues {
             held[t.gh_issue_number] = True;
         }
         imported: list[TaskView] = [];
+        filed: list[Task] = [];
         skipped: list[int] = [];
         failed: list[int] = [];
         peaks: dict[str, float] = {};
@@ -1224,8 +1222,10 @@ walker ImportIssues {
                 done_step,
                 peaks
             );
+            filed.append(fresh);
             imported.append(fresh.to_view());
         }
+        log_imports(here, filed, now_iso());
         report {"ok": True, "imported": imported, "skipped": skipped, "failed": failed};
     }
 }
@@ -1404,7 +1404,9 @@ obj SyncContext {
         auto_done_moves: int = 0,
         # New issues on an auto-sync repo that has no project: nowhere to
         # file them, so they are counted and left for the next pass.
-        unfiled: int = 0;
+        unfiled: int = 0,
+        # Tasks this pass filed; log_imports writes them at its end.
+        filed: list[Task] = [];
 }
 
 
@@ -1613,6 +1615,7 @@ def apply_issue_item(
                 ctx.peaks
             );
             remember_issue(ctx, key, fresh);
+            ctx.filed.append(fresh);
             ctx.auto_added = ctx.auto_added + 1;
         }
         return False;
@@ -2060,6 +2063,7 @@ def drain_deliveries(holder: Root, c: any, limit: int) -> dict[str, any] {
         mark_delivered(str(row.get("id")), now_iso(), kind);
         counts["drained"] = counts["drained"] + 1;
     }
+    log_imports(holder, ctx.filed, now_iso());
     counts["added"] = ctx.auto_added;
     counts["moved"] = ctx.auto_done_moves;
     purge_deliveries(c.installation_id, shift_day(today_iso(), -7));
@@ -2282,6 +2286,7 @@ walker SyncGithub {
         if isinstance(c, GithubConnection) {
             c.last_sync_at = ctx.stamp;
         }
+        log_imports(here, ctx.filed, now_iso());
         report sync_summary(
             [
                 ctx.linked,
