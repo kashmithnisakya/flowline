@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
@@ -323,6 +324,66 @@ def parity_suite(project_id, member_id, tag):
     assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
 
 
+def log_pages(body):
+    # Every page of one ListLogEntries read, in order.
+    pages = []
+    for page in range(1, 51):
+        got = report("ListLogEntries", {**body, "page": page})
+        pages.append(got)
+        if not got.get("has_more"):
+            break
+    return pages
+
+
+def entry_id(row):
+    return find_key(row, "id", "_jac_id")
+
+
+def log_paging_suite(member_id):
+    # The log pages in the store: whole days are skipped on their counts and
+    # a day answers its slice by a unique key. Pages must partition the range
+    # in one order at any page size, and the counts must follow every write.
+    span = {"from_date": "2020-01-01", "to_date": "2030-12-31"}
+    for date, n in (("2025-06-02", 3), ("2025-06-03", 2), ("2025-06-04", 1)):
+        for i in range(n):
+            got = report("LogActivity", {"date": date, "member_id": member_id, "activity": f"log gate {date} #{i}"})
+            check(f"log: LogActivity writes an entry on {date}", got.get("date") == date, str(got)[:160])
+    whole = report("ListLogEntries", {**span, "page_size": 500})
+    rows = whole.get("rows", [])
+    ids = [entry_id(r) for r in rows]
+    total = whole.get("total")
+    check("log: one page holds the range and total counts it",
+          total == len(ids) and total >= 6 and not whole.get("has_more"), f"{total} {len(ids)}")
+    check("log: newest day first, newest stamp first within a day",
+          all((a["date"], a.get("at", "")) >= (b["date"], b.get("at", "")) for a, b in zip(rows, rows[1:])),
+          str([(r["date"], r.get("at")) for r in rows][:8]))
+    for size in (1, 2, 4):
+        pages = log_pages({**span, "page_size": size})
+        paged = [entry_id(r) for p in pages for r in p.get("rows", [])]
+        check(f"log: pages of {size} partition the range in the one-page order", paged == ids,
+              f"{len(paged)} rows vs {len(ids)}")
+        check(f"log: pages of {size} all report the same total", all(p.get("total") == total for p in pages),
+              str([p.get("total") for p in pages]))
+    past = report("ListLogEntries", {**span, "page": 999, "page_size": 2})
+    check("log: a page past the end is empty", past.get("rows") == [] and not past.get("has_more")
+          and past.get("total") == total, str(past)[:160])
+    clamp = report("ListLogEntries", {**span, "page_size": 100000})
+    check("log: page_size clamps to 500", clamp.get("page_size") == 500, str(clamp.get("page_size")))
+    gone = report("DeleteLogEntries", {"entry_ids": [ids[1]]})
+    check("log: DeleteLogEntries removes the entry", gone.get("deleted") == [ids[1]], str(gone))
+    left = [i for i in ids if i != ids[1]]
+    after = log_pages({**span, "page_size": 2})
+    check("log: the day count follows a delete", [entry_id(r) for p in after for r in p.get("rows", [])] == left
+          and all(p.get("total") == total - 1 for p in after), f"{[p.get('total') for p in after]}")
+    moved = Counter(r.get("task_id") for r in rows if r.get("task_id") and entry_id(r) != ids[1])
+    task_id = moved.most_common(1)[0][0] if moved else ""
+    mine = [entry_id(r) for r in rows if r.get("task_id") == task_id and entry_id(r) != ids[1]]
+    only = report("ListLogEntries", {**span, "task_id": task_id, "page_size": 500})
+    check("log: task_id keeps that task's rows, in the range's order",
+          bool(task_id) and [entry_id(r) for r in only.get("rows", [])] == mine and only.get("total") == len(mine),
+          f"{task_id} {len(mine)}")
+
+
 def effects_table(html: str) -> dict:
     # The shell carries the compiler's endpoint effects in its __jac_init__
     # JSON; the client runtime reads its cache verdicts from this table.
@@ -509,6 +570,7 @@ def main() -> int:
           f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
 
     parity_suite(project_id, member_id, tag)
+    log_paging_suite(member_id)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))

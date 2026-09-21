@@ -12,11 +12,12 @@ daily log](../concepts/daily-log.md) for how. Source: `services/log/log.jac`.
 range: `page_size` defaults to 200 and is capped at 500. Rows are ordered by
 date (newest first), then stamp (newest first), then id, which is the order
 the log page shows, so a page fetched behind the first only adds rows below
-what is on screen. An empty or inverted range, or a workspace with no log,
-reports an empty page.
+what is on screen. The page is cut in the store, so a request loads its own
+rows, not the whole range, and `total` comes from the days' counts. An empty
+or inverted range, or a workspace with no log, reports an empty page.
 
-`task_id` (optional) keeps only that task's entries before paging, so `total`
-and `has_more` count that task alone. The task sheet's **Travel so far** reads
+`task_id` (optional) keeps only that task's entries before paging, filtered in
+the store's query, so `total` and `has_more` count that task alone. The task sheet's **Travel so far** reads
 a task's history this way. An empty `task_id` returns every entry.
 
 ```bash

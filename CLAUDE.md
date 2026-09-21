@@ -244,7 +244,14 @@ people it tracks are roster members.
   loaded the whole scope, else a tally or one more pushed read), so the
   table says "12 of 210" off its own page. `ListLogEntries` orders a day
   by stamp, newest first, the order every view shows, so a page fetched
-  behind the first only adds rows below what is on screen. `GetFlowLine` counts and
+  behind the first only adds rows below what is on screen, and it pages
+  in the store: whole days are skipped on `LogDay.entry_total` and a day
+  answers its slice ordered by `LogEntry.sort_key` (the stamp as digits,
+  then the jid, so unique), which makes a page load its own rows only.
+  Both are kept on write by `note_entry` / `forget_entry` in `models.jac`,
+  so a new writer of log entries must call them; a day from before them
+  (`entry_total` -1) is keyed and counted once by `fill_day` on its first
+  read. `GetFlowLine` counts and
   `ListStepTasks` lists the same working set (`done_days`), so a done step
   shows recent Done the way the board's column does; the count's pass over
   that set also keeps each step's first two titles (`StepView.task_titles`,
