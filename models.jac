@@ -840,6 +840,20 @@ def day_import_lines(day: LogDay, full_name: str) -> list[LogEntry] {
 }
 
 
+# A task's entries between two dates, in one query across the days.
+def task_entries_between(
+    holder: Root, tid: str, since: str, until: str
+) -> list[LogEntry] {
+    out: list[LogEntry] = [];
+    for box in [holder-->[?:Logs]] {
+        out.extend(
+            [box-->[?:LogDay, date>=since, date<=until]-->[?:LogEntry, task_id==tid]]
+        );
+    }
+    return out;
+}
+
+
 # A task's Blocked lines between two dates, in one query across the days.
 def blocked_lines(holder: Root, tid: str, since: str, until: str) -> list[LogEntry] {
     out: list[LogEntry] = [];

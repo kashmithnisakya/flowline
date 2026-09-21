@@ -20,6 +20,7 @@ import from models {
     day_entries,
     day_task_entries,
     day_import_lines,
+    task_entries_between,
     entry_key,
     entry_people,
     note_entry,
@@ -150,14 +151,14 @@ walker ListLogEntries {
 
     can gather with Logs entry {
         (p, size, start, end) = page_bounds(self.page, self.page_size, 200, 500);
-        days = days_between(root, self.from_date, self.to_date);
-        # Newest day first; two days on one date (a racing first write) keep
-        # one order between requests.
-        days.sort(key=lambda (d: LogDay) { jid(d); });
-        days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
         if self.task_id {
-            report self.task_page(days, p, size, start, end);
+            report self.task_page(root, p, size, start, end);
         } else {
+            days = days_between(root, self.from_date, self.to_date);
+            # Newest day first; two days on one date (a racing first write)
+            # keep one order between requests.
+            days.sort(key=lambda (d: LogDay) { jid(d); });
+            days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
             report self.range_page(days, p, size, start, end);
         }
     }
@@ -217,20 +218,19 @@ walker ListLogEntries {
         return loaded[key][offset:stop];
     }
 
-    # A task's rows: the filter runs in the store, so only they load, then
+    # A task's rows (the task sheet's history): one query across the range's
+    # days loads them and nothing else, however many days the range spans;
     # they sort and page here in the range's order.
-    def task_page(
-        days: list[LogDay], p: int, size: int, start: int, end: int
-    ) -> LogPage {
-        found: list[LogEntry] = [];
-        for d in days {
-            part = day_task_entries(d, self.task_id);
-            part.sort(
-                key=lambda (r: LogEntry) { entry_key(r.at, r.date, jid(r)); },
-                reverse=True
-            );
-            found.extend(part);
-        }
+    def task_page(holder: Root, p: int, size: int, start: int, end: int) -> LogPage {
+        found = task_entries_between(
+            holder, self.task_id, self.from_date, self.to_date
+        );
+        found.sort(
+            key=lambda (r: LogEntry) { r.date
+                + "|"
+                + entry_key(r.at, r.date, jid(r)); },
+            reverse=True
+        );
         return LogPage(
             rows=found[start:end],
             page=p,
