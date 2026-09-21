@@ -16,12 +16,15 @@ flowchart LR
 There is one `LogDay` per date under the `Logs` box, and each entry hangs off
 its day. Reading a date range asks the store for the days between two ISO
 dates (`days_between`), so a week costs the same however long the history
-grows. Each day also keeps a count of its entries (`entry_total`) and each
-entry a unique `sort_key` (its stamp as digits, then its id), both written
-with the entry, so a page of the log is cut in the store: days before the
-page are skipped on their counts and a day returns only its slice. A day
-written before those fields existed is keyed and counted once, on its first
-read.
+grows. Each day also keeps its tallies (`entry_total`, and `member_counts`:
+entries per person named on them) and each entry a unique `sort_key` (its
+stamp as digits, then its id), all written with the entry. A page of the log
+is cut in the store (days before the page are skipped on their counts and a
+day returns only its slice), and the log's counts read the tallies, never
+the entries. A day written before those fields existed is tallied once, on
+its first read, which also folds a backfill it holds: more than ten
+single-issue import lines for one repo and status become that day's batch
+line.
 
 ## Two writers
 

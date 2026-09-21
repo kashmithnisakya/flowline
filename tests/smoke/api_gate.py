@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import uuid
 from collections import Counter
+from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
@@ -384,6 +385,46 @@ def log_paging_suite(member_id):
           f"{task_id} {len(mine)}")
 
 
+def log_counts_suite(member_id, project_id, tag):
+    # The log's counts come from the days' tallies, kept on write. They must
+    # equal a count of the entries themselves, before and after a delete, and
+    # the Overview's blocked reason comes from the task's own Blocked line.
+    today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
+    monday = today - timedelta(days=today.weekday())
+    starts = [(monday - timedelta(days=7 * (3 - i))).isoformat() for i in range(4)]
+    days = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
+
+    def parity(label):
+        rows = [r for p in log_pages({"from_date": starts[0], "to_date": days[6], "page_size": 500}) for r in p.get("rows", [])]
+        by_week = [sum(1 for r in rows if starts[i] <= r["date"] < (starts[i + 1] if i < 3 else days[6] + "~")) for i in range(4)]
+        by_day = [sum(1 for r in rows if r["date"] == d) for d in days]
+        people = {}
+        for r in rows:
+            if r["date"] in days:
+                for name in [n.strip() for n in r.get("member_name", "").split(",") if n.strip()]:
+                    people.setdefault(name, [0] * 7)[days.index(r["date"])] += 1
+        got = report("LogCounts", {"monday": monday.isoformat()})
+        got_people = {m["name"]: m["by_day"] for m in got.get("members", [])}
+        check(f"log counts: {label} equal a count of the entries",
+              got.get("by_week") == by_week and got.get("by_day") == by_day and got_people == people,
+              f"{got.get('by_week')} vs {by_week}; {got.get('by_day')} vs {by_day}; {got_people} vs {people}")
+
+    made = [entry_id(report("LogActivity", {"date": today.isoformat(), "member_id": member_id, "activity": f"counts {tag} #{i}"}))
+            for i in range(2)]
+    parity("after two notes today")
+    report("DeleteLogEntries", {"entry_ids": made[:1]})
+    parity("after a delete")
+    task = report("CreateTask", {"title": f"Blocked probe {tag}", "priority": "High", "project_id": project_id})
+    report("MoveTask", {"task_id": task.get("id", ""), "status": "Blocked"})
+    report("SetMoveInfo", {"task_id": task.get("id", ""), "note": f"waiting on keys {tag}"})
+    parity("after a move and its note")
+    snap = report("OverviewSnapshot", {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
+                                       "attention_size": 50})
+    item = next((b for b in snap.get("blocked", []) if b.get("task_id") == task.get("id")), {})
+    check("overview: a blocked task's reason is the note on its Blocked line",
+          item.get("reason") == f"waiting on keys {tag}" and item.get("since") == today.isoformat(), str(item)[:200])
+
+
 def effects_table(html: str) -> dict:
     # The shell carries the compiler's endpoint effects in its __jac_init__
     # JSON; the client runtime reads its cache verdicts from this table.
@@ -571,6 +612,7 @@ def main() -> int:
 
     parity_suite(project_id, member_id, tag)
     log_paging_suite(member_id)
+    log_counts_suite(member_id, project_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))
