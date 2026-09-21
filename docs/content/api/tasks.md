@@ -113,6 +113,9 @@ The Overview's charts over time.
 week, tasks `added` and `finished` that week, and running `scope` and `done`
 totals at each week's end (tasks from before the window seed the totals).
 `project_id` narrows it to one project; a foreign id reports empty history.
+It reads each project's weekly counts, kept on every task write, so it costs
+the same whatever the window; a project's first call fills them from one
+full load, once. An empty `monday` means this week.
 Only the window's rows are loaded (created or reached Done since its first
 Monday); what came before is the project tallies less those rows.
 

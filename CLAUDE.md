@@ -136,7 +136,7 @@ people it tracks are roster members.
   `-field` orders, `[:n]` bounds; no OR, and a left side must be a declared
   field name, else E5094). The readers in `models.jac` are those queries:
   `open_tasks`, `done_since`, `done_before`, `working_tasks` (the board's
-  working set), `created_since`, their `project_*` twins, the per-step and
+  working set), their `project_*` twins, the per-step and
   per-iteration lookups, the column readers (`step_column_peak` and
   friends, for the drag order) and the GitHub lookups (`tasks_by_issue`,
   `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
@@ -148,8 +148,13 @@ people it tracks are roster members.
   every row stamped like the prefix's last (`tasks_stamped`), because a sync
   pass stamps many rows alike and the store orders ties arbitrarily. All-time totals are tallies kept on write:
   `Project.task_total`, `done_total`, `seeded_done_total` (created already
-  Done: history, not throughput) and `Projects.categories` (exact:
-  `note_category` adds, `forget_category` drops after a two-row lookup).
+  Done: history, not throughput), the Overview's weekly history
+  (`Project.week_added` / `week_finished`, keyed by the week's Monday from
+  `history_days` and `week_start`, filled once per project by
+  `ensure_history`, which only `TaskHistory` calls, and moved by
+  `shift_history` on the same writes plus the sync's `reseed`) and
+  `Projects.categories` (exact: `note_category` adds, `forget_category`
+  drops after a two-row lookup).
   `count_task`, `rehome_task` and `Task.set_status` move them; `CreateTask`,
   `DeleteTask`, `UpdateTask` (category, re-parent), `file_issue_item` and
   the sync's date corrections (`reseed`) are the write points. A task
