@@ -10,8 +10,16 @@ daily log](../concepts/daily-log.md) for how. Source: `services/log/log.jac`.
 **Reports** one [`LogPage`](types.md#logpage) of raw
 [`LogEntry`](../concepts/data-graph.md#logentry) nodes for the inclusive date
 range: `page_size` defaults to 200 and is capped at 500. Rows are ordered by
-date (newest first), then `member_name`, then id. An empty or inverted range,
-or a workspace with no log, reports an empty page.
+date (newest first), then stamp (newest first), then id, which is the order
+the log page shows, so a page fetched behind the first only adds rows below
+what is on screen. The page is cut in the store, so a request loads its own
+rows, not the whole range, and `total` comes from the days' counts. An empty
+or inverted range, or a workspace with no log, reports an empty page.
+
+`task_id` (optional) keeps only that task's entries before paging, in one
+store query across the range's days (so a range of years costs the same as a
+week), and `total` and `has_more` count that task alone. The task sheet's **Travel so far** reads
+a task's history this way. An empty `task_id` returns every entry.
 
 ```bash
 curl -X POST $BASE/walker/ListLogEntries -H "Authorization: Bearer $TOKEN" \
@@ -42,7 +50,8 @@ curl -X POST $BASE/walker/ListLogEntries -H "Authorization: Bearer $TOKEN" \
 **Reports** one [`LogTotals`](types.md#logtotals): entries per week for the four
 weeks ending in `monday`'s week (oldest first), per day for that week, and per
 person for that week. `member_name` is split on commas, so an entry with two
-assignees counts for both. An empty `monday` starts the week today.
+assignees counts for both. An empty `monday` starts the week today. It reads
+the days' tallies, so it costs the same however busy the weeks were.
 
 ::: walker LogActivity
 

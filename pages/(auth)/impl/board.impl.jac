@@ -3,71 +3,13 @@
 impl BoardPage.boot -> None {
     # One load carries the onboarding gate too: the wizard opens when the
     # snapshot comes back with no projects.
+    # No GitHub call rides on a board open: the server's schedule polls and
+    # the DRAIN_MS timer applies deliveries while they are live.
     info = await loadBoard(True);
     if info["ok"] and int(info["projects"]) == 0 {
         window.location.href = "/setup";
         return;
     }
-    # Opening the board IS the sync trigger: auto-file new issues from
-    # auto-sync repos after first paint. Passed as an argument because the
-    # `ghConnected` loadBoard just assigned is a stale read in this handler.
-    await autoSyncGithub(bool(info["connected"]));
-}
-
-
-impl BoardPage.autoSyncGithub(connected: bool) -> None {
-    if not connected {
-        return;
-    }
-    # One shot per page load, shared by both mounts through the module
-    # glob; a `has` flag cannot arbitrate this, each instance owns its own.
-    d = new(Date);
-    now: float = d.getTime() as float;
-    if now - (AUTO_SYNC["at"] as float) < 60000.0 {
-        return;
-    }
-    AUTO_SYNC["at"] = now;
-    syncing = True;
-    added: int = 0;
-    landed: int = 0;
-    more = False;
-    try {
-        rounds = 0;
-        more = True;
-        while more and rounds < AUTO_SYNC_ROUNDS {
-            rounds = rounds + 1;
-            # Only the first increment is the cooldown-guarded auto pass; a
-            # follow-up continues work the server just said is pending.
-            result = root spawn SyncGithub(auto=(rounds == 1), page_budget=2);
-            payload = result.reports[0] if result.reports else None;
-            if not payload or not payload["ok"] {
-                more = False;
-                break;
-            }
-            added = added + int(payload["auto_added"] or 0);
-            landed = landed + int(payload["drained"] or 0);
-            more = bool(payload["has_more"]) and not payload["failure"];
-        }
-        if added > 0 or landed > 0 {
-            await loadAll();
-        }
-        if added > 0 {
-            toast(
-                str(added)
-                    + (
-                        " issue added from GitHub"
-                            if added == 1
-                            else " issues added from GitHub"
-                    )
-                    + (", more on the way" if more else "")
-            );
-        }
-    } except Exception as e {
-        # Quiet on purpose: the board just opened and nothing was asked for.
-        # The Sync button still reports loudly.
-        added = 0;
-    }
-    syncing = False;
 }
 
 
@@ -75,8 +17,14 @@ impl BoardPage.loadAll -> None {
     await loadBoard(True);
 }
 
+impl BoardPage.reloadAll -> None {
+    # After a write: the working set and the loaded history, together.
+    w: any = window;
+    await w.Promise.all([loadAll(), refreshOlder(fProject, fAssignee, fCategory)]);
+}
 
-impl BoardPage.drainDeliveries -> None {
+
+impl BoardPage.drainDeliveries(refresh: bool) -> None {
     # A hidden tab and a running sync both skip the tick but keep the
     # timer going; the sync drains on its own and would race this one.
     d: any = document;
@@ -84,7 +32,14 @@ impl BoardPage.drainDeliveries -> None {
         try {
             result = root spawn DrainGithubEvents();
             payload = result.reports[0] if result.reports else None;
-            if payload and payload["ok"] and int(payload["applied"] or 0) > 0 {
+            if payload and payload["ok"] and int(payload["drained"] or 0) > 0 {
+                # Rows landed, so deliveries are flowing: back to the short tick.
+                webhookLive = True;
+            }
+            if refresh
+                and payload
+                and payload["ok"]
+                and int(payload["applied"] or 0) > 0 {
                 await refreshTasks();
             }
         } except Exception as e {
@@ -94,6 +49,16 @@ impl BoardPage.drainDeliveries -> None {
         }
     }
     drainTick = drainTick + 1;
+}
+
+
+impl BoardPage.pollTick -> None {
+    # A quiet connection (no delivery inside the live window) drains its
+    # queue here, ahead of the refresh, so what landed is in the snapshot.
+    if ghConnected and not webhookLive {
+        await drainDeliveries(False);
+    }
+    await refreshTasks();
 }
 
 
@@ -108,25 +73,25 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
     if movesRef.current {
         return {"ok": False, "projects": 0, "connected": ghConnected};
     }
+    seq = (loadReqRef.current or 0) + 1;
+    loadReqRef.current = seq;
     projectCount = 0;
     connected = ghConnected;
+    live = webhookLive;
+    # A first load paints page 1 and lets the rest join behind it; a refetch
+    # keeps the rows on screen until its whole set is in.
+    paintPages = loading or len(tasks) == 0;
     try {
-        # Pages of 500 so a big board paints after the first; the loop is
-        # bounded and says so rather than showing part of the workspace.
-        # Only page 1 carries the workspace lists.
-        fetchedTasks: list[TaskView] = [];
+        # Pages of 500; the loop is bounded and says so rather than showing
+        # part of the workspace. Only page 1 carries the workspace lists.
+        fetchedTasks: list[TaskRow] = [];
         olderUnfiltered = 0;
         cats: list[str] = [];
-        fetchedMembers: list[MemberView] = [];
         fetchedProjects: list[Project] = [];
-        fetchedSteps: list[StepView] = [];
-        fetchedRepos: list[RepoView] = [];
-        fetchedRoles: list[RoleView] = [];
-        fetchedIterations: list[IterationView] = [];
         pageNo = 1;
         more = True;
         gotPage = False;
-        while more and pageNo <= 20 {
+        while more and pageNo <= 20 and loadReqRef.current == seq {
             bResult = root spawn BoardSnapshot(
                 page=pageNo, page_size=500, with_workspace=withWorkspace and pageNo == 1
             );
@@ -140,35 +105,35 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 olderUnfiltered = data.older;
                 cats = data.categories;
                 if withWorkspace and pageNo == 1 {
-                    fetchedMembers = data.members;
                     fetchedProjects = data.projects;
-                    fetchedSteps = data.steps;
-                    fetchedRepos = data.repos;
-                    fetchedRoles = data.roles;
-                    fetchedIterations = data.iterations;
                     connected = data.github_connected;
+                    live = data.webhook_live;
                     projectCount = len(data.projects);
+                    # The next page mounts on this view without a request.
+                    rememberWorkspace(data);
+                    if loadReqRef.current == seq {
+                        absorbWorkspace(data);
+                    }
+                }
+                # The working set is one sort_order run, so a later page
+                # lands under the cards already in its lanes: nothing moves.
+                if paintPages and loadReqRef.current == seq and not movesRef.current {
+                    tasks = fetchedTasks;
+                    knownCategories = cats;
+                    loading = False;
+                    retrying = False;
                 }
             }
             pageNo = pageNo + 1;
         }
         truncated = more;
-        if not movesRef.current {
+        if not movesRef.current and loadReqRef.current == seq {
             tasks = fetchedTasks;
             workingTruncated = truncated;
             # An empty answer must not wipe the category list the filter bar
             # is built from: an empty page keeps the list it already had.
             if gotPage {
                 knownCategories = cats;
-            }
-            if withWorkspace {
-                members = fetchedMembers;
-                projects = fetchedProjects;
-                steps = fetchedSteps;
-                repos = fetchedRepos;
-                roleRows = fetchedRoles;
-                iterations = fetchedIterations;
-                ghConnected = connected;
             }
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`
@@ -180,6 +145,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         }
         loadFailed = False;
         d = new(Date);
+        snapshotRef.current = d.getTime();
         hh = str(d.getHours());
         mm = str(d.getMinutes());
         loadedAt = ("0" + hh if len(hh) < 2 else hh)
@@ -217,6 +183,26 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
 }
 
 
+# The workspace lists a page 1 carries, and the lane count the next
+# first-load skeleton draws.
+impl BoardPage.absorbWorkspace(data: any) -> None {
+    members = data.members;
+    projects = data.projects;
+    steps = data.steps;
+    repos = data.repos;
+    roleRows = data.roles;
+    iterations = data.iterations;
+    ghConnected = data.github_connected;
+    webhookLive = data.webhook_live;
+    try {
+        localStorage.setItem(
+            LANES_KEY, str(len(data.steps) if len(data.steps) > 0 else len(STATUSES))
+        );
+    } except Exception as e {
+        members = members;
+    }
+}
+
 impl BoardPage.retryLoad -> None {
     if movesRef.current {
         return;
@@ -227,6 +213,19 @@ impl BoardPage.retryLoad -> None {
 
 impl BoardPage.filtersOn(pid: str, who: str, cat: str) -> bool {
     return pid != "all" or who != "All" or cat != "All";
+}
+
+impl BoardPage.clearFilters -> None {
+    boardQuery = "";
+    fAssignee = "All";
+    fCategory = "All";
+    fTag = "All";
+    fEstimate = "All";
+    fIteration = "All";
+    fPriority = "All";
+    fProject = "all";
+    localStorage.setItem("flowline_project", "all");
+    refreshOlder("all", "All", "All");
 }
 
 impl BoardPage.setProjectFilter(v: str) -> None {
@@ -270,7 +269,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
     filterRef.current = stamp;
     # Rows already on screen come from the ref: `olderDone` read after the
     # await is the value from the render that started this call.
-    have: list[TaskView] = rowsRef.current or [];
+    have: list[TaskRow] = rowsRef.current or [];
     try {
         result = root spawn ListTasks(
             scope="older",
@@ -290,7 +289,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
             olderTotal = got.total;
         }
     } except Exception as e {
-        toast("Could not load older completed tasks");
+        toast.error("Could not load older completed tasks");
     }
     olderRef.current = False;
     loadingOlder = False;
@@ -339,7 +338,7 @@ impl BoardPage.openById(taskId: str) -> None {
             openEdit(found);
         }
     } except Exception as e {
-        toast("Could not open that task");
+        toast.error("Could not open that task");
     }
 }
 
@@ -353,6 +352,27 @@ impl BoardPage.setField(key: str, value: str) -> None {
 }
 
 impl BoardPage.openCreate(inKey: str = "") -> None {
+    # A new-task sheet already open keeps its draft and takes the lane asked
+    # for; over an edited task the sheet asks first.
+    if dialogOpen and not editingId {
+        if inKey and inKey in columnKeys() {
+            setField("status", inKey);
+        }
+        field: any = document.querySelector("[data-task-title]");
+        if field {
+            field.focus();
+        }
+        switchTo = NO_SWITCH;
+        return;
+    }
+    if formDirty() {
+        switchTo = {"kind": "new", "id": "", "key": inKey, "title": ""};
+        return;
+    }
+    showCreate(inKey);
+}
+
+impl BoardPage.showCreate(inKey: str = "") -> None {
     editingId = "";
     d = new(Date);
     shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
@@ -381,20 +401,38 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
             planned = it.id;
         }
     }
-    form = {
+    # No due date: a quick capture must not be born due today.
+    fresh = {
         ** BLANK_TASK,
         "project": fProject if fProject != "all" else firstProject,
         "status": landing,
-        "due_date": shifted.toISOString()[:10],
         "iteration": planned
     };
+    form = fresh;
+    baseForm = fresh;
     fAssignees = [];
+    baseAssignees = [];
+    switchTo = NO_SWITCH;
     dialogOpen = True;
 }
 
-impl BoardPage.openEdit(t: TaskView) -> None {
+impl BoardPage.openEdit(t: TaskRow) -> None {
+    # The open card again keeps its edits; another card waits for them.
+    if dialogOpen and editingId == t.id {
+        switchTo = NO_SWITCH;
+        return;
+    }
+    if formDirty() {
+        switchRow.current = t;
+        switchTo = {"kind": "task", "id": t.id, "key": "", "title": t.title};
+        return;
+    }
+    showTask(t);
+}
+
+impl BoardPage.showTask(t: TaskRow) -> None {
     editingId = t.id;
-    form = {
+    fresh = {
         "title": t.title,
         "category": t.category,
         "tags": ", ".join(t.tags),
@@ -405,14 +443,69 @@ impl BoardPage.openEdit(t: TaskView) -> None {
         "due_date": t.due_date,
         "start_date": t.start_date,
         "iteration": t.iteration_id or "none",
-        "notes": t.notes,
+        "notes": "",
         "issue": t.issue_link,
         "pr": t.pr_link,
         "reviewer": t.reviewer_id or "none",
         "review_due": t.review_due
     };
+    form = fresh;
+    baseForm = fresh;
     fAssignees = t.assignee_ids;
+    baseAssignees = t.assignee_ids;
+    switchTo = NO_SWITCH;
     dialogOpen = True;
+}
+
+impl BoardPage.formDirty -> bool {
+    if not dialogOpen {
+        return False;
+    }
+    for k in FORM_KEYS {
+        if str(form[k] or "") != str(baseForm[k] or "") {
+            return True;
+        }
+    }
+    now: list[str] = [a for a in fAssignees];
+    was: list[str] = [a for a in baseAssignees];
+    now.sort();
+    was.sort();
+    return ",".join(now) != ",".join(was);
+}
+
+impl BoardPage.resolveSwitch(save: bool) -> None {
+    if save {
+        await saveTask(True);
+    } else {
+        openSwitchTarget();
+    }
+}
+
+impl BoardPage.openSwitchTarget -> None {
+    target = switchTo;
+    switchTo = NO_SWITCH;
+    if target["kind"] == "new" {
+        showCreate(target["key"]);
+    } elif target["kind"] == "task" {
+        # The loaded row when there is one (a save may have refreshed it),
+        # else the row the click handed over (older history, a deep link).
+        row: any = switchRow.current;
+        for t in tasks + olderDone {
+            if t.id == target["id"] {
+                row = t;
+            }
+        }
+        if row {
+            showTask(row);
+        }
+    }
+}
+
+impl BoardPage.sheetOpenChange(o: bool) -> None {
+    dialogOpen = o;
+    if not o {
+        switchTo = NO_SWITCH;
+    }
 }
 
 # A write from inside the dialog (the checklist) reports the task's fresh
@@ -420,6 +513,20 @@ impl BoardPage.openEdit(t: TaskView) -> None {
 impl BoardPage.replaceRow(view: TaskView) -> None {
     tasks = [view if t.id == view.id else t for t in tasks];
     olderDone = [view if t.id == view.id else t for t in olderDone];
+}
+
+# The sheet's GetTask hands the open task's notes here: into the form and
+# its opened copy alike, so loading them never reads as an unsaved edit.
+impl BoardPage.absorbDetails(view: TaskView) -> None {
+    if view.id != editingId {
+        return;
+    }
+    updated = {** form};
+    updated["notes"] = view.notes;
+    form = updated;
+    rebased = {** baseForm};
+    rebased["notes"] = view.notes;
+    baseForm = rebased;
 }
 
 impl BoardPage.openTaskById(tid: str) -> None {
@@ -432,14 +539,14 @@ impl BoardPage.openTaskById(tid: str) -> None {
     }
 }
 
-impl BoardPage.saveTask -> None {
+impl BoardPage.saveTask(keepOpen: bool = False) -> None {
     title = form["title"].strip();
     if not title {
         return;
     }
     project = form["project"];
     if not project {
-        toast("Pick a project for this task");
+        toast.error("Pick a project for this task");
         return;
     }
     saving = True;
@@ -464,10 +571,11 @@ impl BoardPage.saveTask -> None {
                 if not onProject {
                     root spawn AssignToProject(member_id=aid, project_id=project);
                     added = added + 1;
+                    forgetWorkspace();
                 }
             }
             if added > 0 {
-                toast("Added " + str(added) + " assignee(s) to the project");
+                toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
         if editingId {
@@ -509,11 +617,15 @@ impl BoardPage.saveTask -> None {
                 project_id=project
             );
         }
-        dialogOpen = False;
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        if keepOpen and switchTo["kind"] {
+            openSwitchTarget();
+        } else {
+            dialogOpen = False;
+            switchTo = NO_SWITCH;
+        }
+        await reloadAll();
     } except Exception as e {
-        toast("Failed to save task");
+        toast.error("Failed to save task");
     }
     saving = False;
 }
@@ -526,10 +638,10 @@ impl BoardPage.deleteTask -> None {
     try {
         root spawn DeleteTask(task_id=editingId);
         dialogOpen = False;
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        switchTo = NO_SWITCH;
+        await reloadAll();
     } except Exception as e {
-        toast("Failed to delete task");
+        toast.error("Failed to delete task");
     }
     saving = False;
 }
@@ -611,7 +723,7 @@ impl BoardPage.mappedStatus(key: str) -> str {
 # Which column a task is drawn in. A task written before flow lines existed
 # (or whose step was deleted) has no step_id, so its status decides: it lands
 # in the first column of the matching kind.
-impl BoardPage.columnKeyOf(t: TaskView) -> str {
+impl BoardPage.columnKeyOf(t: TaskRow) -> str {
     keys = columnKeys();
     if t.step_id {
         for key in keys {
@@ -638,7 +750,11 @@ impl BoardPage.columnKeyOf(t: TaskView) -> str {
 }
 
 impl BoardPage.moveTo(
-    taskId: str, columnKey: str, anchorId: str = "", ahead: bool = False
+    taskId: str,
+    columnKey: str,
+    anchorId: str = "",
+    ahead: bool = False,
+    askDetails: bool = True
 ) -> None {
     # Optimistic: mutate the card in state and rebind; the server owns the
     # order. movesRef fences the poll so a stale fetch cannot snap the card
@@ -682,10 +798,18 @@ impl BoardPage.moveTo(
     }
     reorder = positioned and oldKey == columnKey;
     landing = mappedStatus(columnKey);
+    # An open sheet on this task follows the move, or its Save (which sends
+    # every field) would put the card back. The move is saved, not an edit.
+    if dialogOpen and editingId == taskId and not reorder {
+        setField("status", columnKey);
+        rebased = {** baseForm};
+        rebased["status"] = columnKey;
+        baseForm = rebased;
+    }
     # The rendered order is the array order, so a positioned drop splices
     # the row beside its anchor; an append keeps the sort_order patch.
-    row: list[TaskView] = [];
-    rest: list[TaskView] = [];
+    row: list[TaskRow] = [];
+    rest: list[TaskRow] = [];
     for t in working {
         if t.id == taskId {
             t.status = landing;
@@ -699,7 +823,7 @@ impl BoardPage.moveTo(
         }
     }
     if positioned and len(row) > 0 {
-        spliced: list[TaskView] = [];
+        spliced: list[TaskRow] = [];
         for t in rest {
             if ahead and t.id == anchorId {
                 spliced.append(row[0]);
@@ -751,9 +875,8 @@ impl BoardPage.moveTo(
         }
     }
     if failed {
-        toast("Move failed. Restoring the board.");
-        await loadAll();
-        await refreshOlder(fProject, fAssignee, fCategory);
+        toast.error("Move failed. Restoring the board.");
+        await reloadAll();
         return;
     }
     # Who the card went to, when the move handed it over. Read off the
@@ -770,9 +893,13 @@ impl BoardPage.moveTo(
         if len(after) == 1 and (len(before) != 1 or before[0] != after[0]) {
             handedTo = after[0];
         }
+        if dialogOpen and editingId == taskId {
+            fAssignees = landed[0].assignee_ids;
+            baseAssignees = landed[0].assignee_ids;
+        }
         # `tasks` read after the await is the pre-call snapshot, which is
         # exactly the list the optimistic patch produced; swap the row in.
-        swapped: list[TaskView] = [];
+        swapped: list[TaskRow] = [];
         for t in tasks {
             if t.id == taskId {
                 swapped.append(landed[0]);
@@ -787,20 +914,25 @@ impl BoardPage.moveTo(
     if reorder {
         return;
     }
-    # Every successful move confirms itself and offers the undo: a card can
-    # land out of sight (Hide Done, or a column below the fold), and the
-    # handoff dialog is skippable, so it cannot be the only feedback.
-    toast(
-        "Moved to " + label + (" · " + handedTo if handedTo else ""),
-        {
-            "description": title,
-            "action": {"label": "Undo", "onClick": lambda { moveTo(taskId, oldKey); }}
-        }
-    );
+    # A board move confirms itself with an undo: the card can land out of
+    # sight and the handoff dialog is skippable. A sheet move does not: its
+    # breadcrumb shows the step, and a toast would cover the sheet's Save.
+    if askDetails {
+        toast.success(
+            "Moved to " + label + (" · " + handedTo if handedTo else ""),
+            {
+                "description": title,
+                "action": {
+                    "label": "Undo",
+                    "onClick": lambda { moveTo(taskId, oldKey); }
+                }
+            }
+        );
+    }
     if cameFromHistory {
         await refreshOlder(fProject, fAssignee, fCategory);
     }
-    if columnKind(columnKey) in HANDOFF_KINDS {
+    if askDetails and columnKind(columnKey) in HANDOFF_KINDS {
         # A handoff or a stop also asks for the optional detail.
         mForm = BLANK_MOVE;
         moveStatus = label;
@@ -858,12 +990,18 @@ impl BoardPage.saveMoveInfo -> None {
         moveTaskId = "";
         await loadAll();
     } except Exception as e {
-        toast("Failed to save the handoff details");
+        toast.error("Failed to save the handoff details");
     }
     saving = False;
 }
 
-impl BoardPage.arrowMove(t: TaskView, columnKey: str) -> None {
+impl BoardPage.sheetMove(columnKey: str) -> None {
+    if editingId {
+        moveTo(editingId, columnKey, "", False, False);
+    }
+}
+
+impl BoardPage.arrowMove(t: TaskRow, columnKey: str) -> None {
     if columnKey {
         moveTo(t.id, columnKey);
     }
@@ -887,6 +1025,7 @@ impl BoardPage.syncGithub -> None {
         while more and rounds < SYNC_ROUNDS {
             rounds = rounds + 1;
             result = root spawn SyncGithub();
+            forgetWorkspace();
             payload = result.reports[0] if result.reports else None;
             if not payload or not payload["ok"] {
                 failure = str(payload["message"]) if payload else "Sync failed";
@@ -910,7 +1049,7 @@ impl BoardPage.syncGithub -> None {
         # picks the synced values up.
         await loadAll();
         if failure {
-            toast(failure);
+            toast.error(failure);
         } else {
             msg: str = "Synced " + str(linked) + " tasks";
             if added > 0 {
@@ -919,10 +1058,10 @@ impl BoardPage.syncGithub -> None {
             if moved > 0 {
                 msg = msg + " · " + str(moved) + " moved to done";
             }
-            toast(msg);
+            toast.success(msg);
         }
     } except Exception as e {
-        toast("Failed to sync with GitHub");
+        toast.error("Failed to sync with GitHub");
     }
     syncing = False;
     syncNote = "";
@@ -939,13 +1078,221 @@ impl BoardPage.createIssue(repoId: str) -> None {
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             opened = payload["task"];
-            toast("Opened issue #" + str(opened["gh_issue_number"]));
+            toast.success("Opened issue #" + str(opened["gh_issue_number"]));
             await loadAll();
         } else {
-            toast(str(payload["message"]) if payload else "Could not open the issue");
+            toast.error(
+                str(payload["message"]) if payload else "Could not open the issue"
+            );
         }
     } except Exception as e {
-        toast("Failed to open a GitHub issue");
+        toast.error("Failed to open a GitHub issue");
     }
     saving = False;
+}
+
+
+# ------------------------------------------------------------------- lanes
+
+impl BoardPage.scheduleMeasure -> None {
+    if frameRef.current {
+        return;
+    }
+    frameRef.current = window.requestAnimationFrame(
+        lambda {
+            frameRef.current = 0;
+            measureLanes();
+        }
+    );
+}
+
+impl BoardPage.measureLanes -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    w: any = window;
+    wide = bool(w.innerWidth >= 768);
+    box = el.getBoundingClientRect();
+    boxRight = float(box.right);
+    sheetX = sheetEdge();
+    if wide and sheetX > 0 and sheetX < boxRight {
+        boxRight = sheetX;
+    }
+    lanes: any = el.querySelectorAll("[data-lane]");
+    shown: list[str] = [];
+    best = "";
+    bestWidth = 0.0;
+    after = 0;
+    for i in range(int(lanes.length)) {
+        lane: any = lanes[i];
+        r = lane.getBoundingClientRect();
+        key = str(lane.getAttribute("data-lane"));
+        left = r.left if r.left > box.left else box.left;
+        right = r.right if r.right < boxRight else boxRight;
+        seen = right - left;
+        if r.width > 0 and seen >= r.width * 0.6 {
+            shown.append(key);
+        } elif r.left >= box.left {
+            after = after + 1;
+        }
+        if seen > bestWidth {
+            bestWidth = seen;
+            best = key;
+        }
+    }
+    joined = ",".join(shown);
+    if joined != viewKeys {
+        viewKeys = joined;
+    }
+    if after != hiddenAfter {
+        hiddenAfter = after;
+    }
+    if wide != wideView {
+        wideView = wide;
+    }
+    if best and best != activeLane {
+        activeLane = best;
+        if not wide {
+            # Keep the phone's current tab in sight inside its own row.
+            tab: any = document.querySelector('[data-step-tab="' + best + '"]');
+            row: any = tab.parentElement if tab else None;
+            if row {
+                at = tab.getBoundingClientRect().left - row.getBoundingClientRect().left
+                    + row.scrollLeft;
+                row.scrollTo({"left": at - 24, "behavior": "smooth"});
+            }
+        }
+    }
+    # On md+ the lanes fill the window below them, less the page's own
+    # bottom padding, so the page itself does not scroll.
+    height = 0;
+    if wide {
+        main: any = el.closest("main");
+        pad = 0.0;
+        if main {
+            pad = float(w.parseFloat(w.getComputedStyle(main).paddingBottom) or 0);
+        }
+        height = int(w.innerHeight - (box.top + w.scrollY) - pad);
+        if height < 320 {
+            height = 320;
+        }
+    }
+    if height != laneH {
+        laneH = height;
+    }
+}
+
+impl BoardPage.scrollToLane(key: str) -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    lane: any = el.querySelector('[data-lane="' + key + '"]');
+    if not lane {
+        return;
+    }
+    w: any = window;
+    still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    el.scrollTo({"left": lane.offsetLeft, "behavior": "auto" if still else "smooth"});
+}
+
+impl BoardPage.scrollToHidden -> None {
+    el: any = lanesRef.current;
+    if not el {
+        return;
+    }
+    box = el.getBoundingClientRect();
+    boxRight = float(box.right);
+    sheetX = sheetEdge();
+    if sheetX > 0 and sheetX < boxRight {
+        boxRight = sheetX;
+    }
+    lanes: any = el.querySelectorAll("[data-lane]");
+    for i in range(int(lanes.length)) {
+        lane: any = lanes[i];
+        r = lane.getBoundingClientRect();
+        if r.right > boxRight + 1 {
+            scrollToLane(str(lane.getAttribute("data-lane")));
+            return;
+        }
+    }
+}
+
+impl BoardPage.revealCard(tid: str) -> None {
+    el: any = lanesRef.current;
+    card: any = document.querySelector('[data-task-card="' + tid + '"]');
+    sheetX = sheetEdge();
+    if not el or not card or sheetX < 0 {
+        return;
+    }
+    w: any = window;
+    limit = sheetX - 16.0;
+    r = card.getBoundingClientRect();
+    if r.right > limit {
+        still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        el.scrollBy(
+            {"left": r.right - limit, "behavior": "auto" if still else "smooth"}
+        );
+    }
+}
+
+impl BoardPage.sheetEdge -> float {
+    sheet: any = document.querySelector("[data-task-sheet][data-state=open]");
+    w: any = window;
+    if not sheet or w.innerWidth < 768 {
+        return -1.0;
+    }
+    # offsetWidth and the inline right, not the rect: the sheet may still be
+    # sliding in.
+    right = float(w.parseFloat(sheet.style.right) or 0);
+    return float(document.documentElement.clientWidth)
+        - right
+        - float(sheet.offsetWidth);
+}
+
+impl BoardPage.stepCard(delta: int) -> None {
+    el: any = lanesRef.current;
+    if not el or not editingId {
+        return;
+    }
+    cards: any = el.querySelectorAll("[data-task-card]");
+    at = -1;
+    for i in range(int(cards.length)) {
+        if str(cards[i].getAttribute("data-task-card")) == editingId {
+            at = i;
+        }
+    }
+    to = at + delta;
+    if at < 0 or to < 0 or to >= int(cards.length) {
+        return;
+    }
+    card: any = cards[to];
+    nextId = str(card.getAttribute("data-task-card"));
+    # Over unsaved edits the sheet asks first and nothing moves yet.
+    if formDirty() {
+        openTaskById(nextId);
+        return;
+    }
+    active: any = document.activeElement;
+    # Focus follows only when it was on a card; typing focus stays in the sheet.
+    if active and active.hasAttribute("data-task-card") {
+        card.focus({"preventScroll": True});
+    }
+    card.scrollIntoView({"block": "nearest", "inline": "nearest"});
+    openTaskById(nextId);
+}
+
+impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
+    el: any = lanesRef.current;
+    if not el or not wideView {
+        return;
+    }
+    box = el.getBoundingClientRect();
+    x = float(e.clientX);
+    if x > float(box.right) - 64.0 {
+        el.scrollLeft = el.scrollLeft + 14;
+    } elif x < float(box.left) + 64.0 {
+        el.scrollLeft = el.scrollLeft - 14;
+    }
 }

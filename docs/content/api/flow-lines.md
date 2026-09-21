@@ -12,7 +12,8 @@ and handoffs. Source: `services/flowlines/flowlines.jac`.
 
 **Reports** `{"name": "...", "template_key": "..."}`; with no flow line yet,
 `{"name": "Flow line", "template_key": ""}`. An empty `template_key` means the
-steps were drawn from scratch.
+steps were drawn from scratch. [`GetWorkspace`](board.md#getworkspace) carries
+the same two values as `flow_name` and `template_key`.
 
 ::: walker RenameFlowLine h3
 
@@ -22,25 +23,35 @@ but still reports the current name (and creates the box if there was none).
 ::: walker GetFlowLine h3
 
 **Reports** one list of [`StepView`](types.md#stepview) in `sort_order`, each with
-`task_count` filled in (tasks placed by the board's fallback rules count too).
-With no flow line, `[]`.
+`task_count` filled in (tasks placed by the board's fallback rules count too)
+and `task_titles`, the first two titles in the step's panel order (what a node
+shows at the flow line page's closest zoom). With no flow line, `[]`.
 
+- The count is over the board's working set: open tasks plus Done tasks that
+  reached Done in the last `done_days` (default 7), so the done step counts
+  recent Done the way the board's column shows it, not the whole history. The
+  titles come from the same set, so they are the first two rows
+  [`ListStepTasks`](#liststeptasks) would page for that step.
 - `project_id` counts only that project's tasks. A foreign id still lists the
-  steps, with every count at 0.
-- `with_counts: false` skips the task walk (the board's poll uses it).
+  steps, with every count at 0 and no titles.
+- `with_counts: false` skips the task walk (the board's poll uses it): every
+  count is 0 and every `task_titles` empty.
 
 ::: walker ListStepTasks h3
 
 The flow line page's step panel: the tasks sitting on one step.
 
 **Reports** one [`TaskPage`](types.md#taskpage) ordered by `sort_order`:
-`page_size` defaults to 50 and is capped at 500, and `older` is always 0. An
-unknown or foreign `step_id` or `project_id` reports an empty page.
+`page_size` defaults to 50 and is capped at 500, and `older` is always 0. The
+rows come from the same working set `GetFlowLine` counts (`done_days`), so
+the panel and the node's count agree. An unknown or foreign `step_id` or
+`project_id` reports an empty page.
 
 ::: walker ApplyTemplate h3
 
-Seeds an empty flow line from a template in one call. The only template today
-is `jaseci`.
+Seeds an empty flow line from a template in one call. The templates today are
+`simple` (shown as Simple) and `jaseci` (shown as Software team); see
+[Templates](../concepts/flow-lines.md#templates).
 
 **Reports** one list of [`StepView`](types.md#stepview):
 
@@ -48,7 +59,7 @@ is `jaseci`.
 | --- | --- | --- |
 | Steps already exist | The existing steps | Nothing |
 | Unknown `template_key` | `[]` | The empty box only |
-| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ...; transitions with labels and carries; `template_key`; the template's roles (existing names kept) |
+| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ...; transitions with labels and carries; `template_key`; the template's roles, if it has any (existing names kept) |
 
 Existing tasks are not touched; tasks with no step start landing on the new
 steps through the status fallback.

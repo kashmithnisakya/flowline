@@ -30,12 +30,39 @@ supervisor configures multi-process mode (jaseci-labs/jac#9190); prefer
 
 | Logger | What it reports |
 | --- | --- |
-| `flowline.github` | Unbound installations, docs store failures, deliveries that raised, skipped issue state write-backs |
+| `flowline.github` | The scheduled sync's line per workspace, unbound installations, docs store failures, deliveries that raised, skipped issue state write-backs |
 | `flowline.assistant` | LLM failures, with the hint to check `OPENAI_API_KEY`, `LLM_MODEL` and the model account's credit |
 
 **GitHub deliveries.** The App's **Advanced** tab lists every delivery with its
 status, response body (`queued`, `echo`, `unknown_installation`...) and a
 **Redeliver** button. GitHub never retries on its own.
+
+## The scheduled GitHub sync
+
+No page load calls GitHub. The reconcile poll runs on a server schedule,
+`sync_connected_workspaces` in `services/github/schedule.jac`:
+
+| Setting | Value | Where |
+| --- | --- | --- |
+| Interval | every 5 minutes (`SYNC_INTERVAL_SECONDS`, 300) | one worker per tick across workers and pods, through the runtime's `sched:` lease on the Postgres store |
+| Per-workspace lease | `SYNC_LEASE_SECONDS`, 240 s | `sync:<root jid>` in the store's `kv_state`; a pass that finds it held skips the workspace |
+| Grace after connect | one interval | a workspace bound inside the last interval is left to its GitHub page; its first pass is the next tick |
+
+Each tick walks the `gh_installations` index (installation id to workspace
+root) and runs one `SyncGithub(auto=True)` pass in each workspace's own root:
+drain the webhook queue, then poll unless the workspace synced inside its
+cooldown (1 minute, or 15 while deliveries are flowing), then rewrite the open
+issue and pull request pages the GitHub page renders. The pass is bounded (5
+pages, 8 seconds); what is left carries to the next tick as `has_more`.
+
+The log carries one `flowline.github` line per workspace visited
+(`github sync: installation 1234: drained 0, added 1, ... lists 2`) and one
+warning per failure. **Sync now** and **Re-sync history** on `/github` still
+run the walker by hand, ignore the cooldown, and hold the workspace's lease for
+`SYNC_LEASE_SECONDS`, so the schedule stays out of a workspace someone is
+syncing. `FLOWLINE_SYNC_INTERVAL_SECONDS` in the pod environment overrides the
+interval (the CI serve job sets 30 to observe a pass); a deployment leaves it
+unset.
 
 ## Changing a running deployment
 
@@ -67,7 +94,7 @@ them through its own class registry. Treat a pin bump as a data migration:
 
 | Symptom | Look at |
 | --- | --- |
-| Board shows a reconnect banner | A GitHub call returned 401 or 404 and marked the connection invalid. Reconnect on the GitHub tab. |
+| The GitHub page shows a reconnect banner | A GitHub call returned 401 or 404 and marked the connection invalid. Reconnect from that banner. |
 | GitHub changes stopped arriving | The delivery log: `401` (secret mismatch), `415` (content type), `unknown_installation` (reconnect the workspace), or no deliveries at all (webhook URL). |
 | The assistant is "not available" | `flowline.assistant` in the logs. |
 | `500` `EXECUTION_ERROR` from a walker | An uncaught exception, with its traceback in the server log; usually a name missing from an import. `jac check` does not catch those, so reproduce with the API gate locally. |

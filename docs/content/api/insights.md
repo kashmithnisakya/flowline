@@ -19,9 +19,9 @@ Everything `/overview` renders, in one call.
 | `attention_total` | How many tasks need attention in all |
 | `members` | Every member (archived included), by name |
 | `projects` | Every project node (archived included), by name |
-| `review_queue` | Tasks in Review, longest waiting first |
-| `aging` | Open tasks untouched for 7 days or more, oldest first |
-| `blocked` | Blocked tasks with the reason from their latest Blocked log entry since `from_date` (or the task notes) |
+| `review_queue` | Tasks in Review, longest waiting first, at most `attention_size` |
+| `aging` | Open tasks untouched for 7 days or more, oldest first, at most `attention_size` |
+| `blocked` | Blocked tasks with the reason from their latest Blocked log entry since `from_date` (or the task notes), in the attention order, at most `attention_size` |
 
 `monday` anchors the week (today when empty). "Today" is the server's UTC day.
 The burn-up and throughput charts come from a separate call,
@@ -38,7 +38,8 @@ in the period as an activity line. This is exactly the object the
 !!! info "How the snapshot counts"
 
     - `done_in_period` counts tasks that moved to Done on or after `from_date`
-      (by `done_at`); a task created already Done counts nowhere.
+      (by `done_at`); a task created straight into Done counts nowhere, and
+      an imported closed issue counts on the day GitHub closed it.
     - People are matched to tasks and log entries by name, on the
       comma-joined assignee names.
     - Project stats cover active projects and match tasks by project name.

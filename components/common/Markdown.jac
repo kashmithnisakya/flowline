@@ -20,7 +20,7 @@ glob PROSE: str = (
          "[&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:font-medium "
          "[&_strong]:font-semibold [&_em]:italic "
          "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 "
-         "[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em] "
+         "[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[length:max(12px,0.9em)] "
          "[&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 "
          "[&_pre_code]:bg-transparent [&_pre_code]:p-0 "
          "[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground "

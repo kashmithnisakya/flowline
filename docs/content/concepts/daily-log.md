@@ -16,7 +16,15 @@ flowchart LR
 There is one `LogDay` per date under the `Logs` box, and each entry hangs off
 its day. Reading a date range asks the store for the days between two ISO
 dates (`days_between`), so a week costs the same however long the history
-grows.
+grows. Each day also keeps its tallies (`entry_total`, and `member_counts`:
+entries per person named on them) and each entry a unique `sort_key` (its
+stamp as digits, then its id), all written with the entry. A page of the log
+is cut in the store (days before the page are skipped on their counts and a
+day returns only its slice), and the log's counts read the tallies, never
+the entries. A day written before those fields existed is tallied once, on
+its first read, which also folds a backfill it holds: more than ten
+single-issue import lines for one repo and status become that day's batch
+line.
 
 ## Two writers
 
@@ -31,12 +39,17 @@ change, issue and PR links, and the project's name. Their `activity` reads:
 | Event | `activity` |
 | --- | --- |
 | `CreateTask` | `Added to Backlog` (the mapped status) |
-| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on a close-and-reopen repo |
+| `MoveTask` onto another column | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on an `auto_close` repo |
 | `UpdateTask` that changes status | `Moved to Done` |
-| A merged PR or closed issue on an auto-done repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
-| An issue imported or auto-filed | `Imported from GitHub org/repo #12` |
+| A merged PR or closed issue on an `auto_done` repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |
+| One issue imported or auto-filed in a batch | `Imported from GitHub org/repo #12` |
+| More than one in a batch (an import, a sync pass) | `Imported 40 issues from org/repo` (or `closed issues`), one line per day, repo and status; a later batch that day grows it |
 | An issue opened from a card | `Opened GitHub issue org/repo #12` |
 | A checklist item checked off | `Checked off: Draft the rollback steps (2/5)` |
+
+The batch line carries no task: `item_count` holds its number of issues, the
+count grows in place, and the log page folds it with single import lines for
+the same repo. A backfill of 1,400 issues is one row, not 1,400.
 
 A pure reorder inside a column writes nothing, and neither does deleting a
 task. `SetMoveInfo` (the reviewer, PR link or blocker note a handoff asks for)
@@ -68,9 +81,17 @@ new links and note.
 
 ## Where the log is read
 
-- `/log` pages entries for a date range (`ListLogEntries`, newest day first).
+- `/log` reads the selected week, plus the Friday to Sunday before it, with
+  `ListLogEntries`. **Day** shows the selected day as a written standup grouped
+  by what each entry means (Stuck, Handed off, Finished, In progress, To do)
+  and a timeline, newest first; **Week** shows people by weekday. The
+  one-line composer and the entry dialog write through `LogActivity`, which
+  needs a roster member, so the composer asks who.
+- The task sheet's **Travel so far** reads one task's entries
+  (`ListLogEntries` with `task_id`).
 - The Overview counts entries per week, per weekday and per person
-  (`LogCounts`, and `logs` inside `OverviewSnapshot`).
+  (`LogCounts`, and `logs` inside `OverviewSnapshot`), and reads this week's
+  entries for its moves to Done per day.
 - The assistant's snapshot includes every entry in the requested window as an
   activity line.
 - Insights use the latest `Blocked` entry's note as a blocked task's reason.

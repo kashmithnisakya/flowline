@@ -7,6 +7,7 @@ import os;
 import time;
 import base64;
 import secrets;
+import socket;
 import requests;
 import jwt;
 import json;
@@ -25,6 +26,8 @@ glob log: logging.Logger = logging.getLogger("flowline.github"),
      TOKEN_CACHE: dict[str, dict[str, any]] = {},
      INSTALL_INDEX: str = "gh_installations",
      DELIVERIES: str = "gh_deliveries",
+     REPO_LISTS: str = "gh_repo_lists",
+     SYNC_LEASE: str = "sync:",
      log: logging.Logger = logging.getLogger("flowline.github");
 
 
@@ -261,6 +264,38 @@ def root_for_installation(installation_id: int) -> str {
 }
 
 
+# Every bound installation with the workspace that holds it: the registry
+# the scheduled sync walks. A store hiccup reads as no workspaces.
+def bound_installations -> list[dict[str, any]] {
+    found: list[dict[str, any]] = [];
+    try {
+        db = open_docs_store();
+        if db is None {
+            return found;
+        }
+        rows = db.rows(
+            "SELECT id, doc FROM jac_docs WHERE collection = :c ORDER BY id",
+            {"c": INSTALL_INDEX}
+        );
+        for (rid, raw) in rows {
+            doc = raw if isinstance(raw, dict) else json.loads(str(raw));
+            key = str(rid);
+            found.append(
+                {
+                    "installation_id": int(key) if key.isdigit() else 0,
+                    "root_jid": str(doc.get("root_jid") or ""),
+                    "bound_at": str(doc.get("bound_at") or ""),
+                    "webhook_seen_at": str(doc.get("webhook_seen_at") or "")
+                }
+            );
+        }
+    } except Exception as e {
+        log.warning("installation index: listing failed: " + str(e));
+    }
+    return found;
+}
+
+
 # The login GitHub stamps on this app's own writes, so a delivery echoing
 # them can be told apart from a person's change.
 def bot_login -> str {
@@ -437,6 +472,139 @@ def installation_seen_at(installation_id: int) -> str {
     } except Exception as e {
         log.warning("installation index: seen lookup failed: " + str(e));
         return "";
+    }
+}
+
+
+# ------------------------------------------------------------ sync lease
+
+# One sync pass per workspace at a time, across workers and pods. The
+# schedule takes the lease for a pass and releases it; a manual sync leaves
+# it held, so the schedule stays out of a workspace someone is syncing by
+# hand until the lease expires. False when another owner holds it.
+def lease_owner -> str {
+    return socket.gethostname() + ":" + str(os.getpid());
+}
+
+
+def acquire_sync_lease(root_jid: str, owner: str, ttl_seconds: int) -> bool {
+    if not root_jid {
+        return False;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        return bool(db.kv_acquire_lease(SYNC_LEASE + root_jid, ttl_seconds, owner));
+    } except Exception as e {
+        log.warning("sync lease: acquire failed: " + str(e));
+        return False;
+    }
+}
+
+
+def release_sync_lease(root_jid: str, owner: str) {
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.kv_release_lease(SYNC_LEASE + root_jid, owner);
+    } except Exception as e {
+        log.warning("sync lease: release failed: " + str(e));
+    }
+}
+
+
+# ------------------------------------------------------------ repo lists
+
+# The issue and pull request pages the GitHub page renders, kept per repo
+# in the docs store: the sync writes them and a page load reads them, so no
+# page waits on GitHub. One row per repo jid, kind and state filter.
+def list_key(repo_id: str, kind: str, state: str) -> str {
+    return repo_id + ":" + kind + ":" + state;
+}
+
+
+def store_repo_list(
+    repo_id: str,
+    kind: str,
+    state: str,
+    items: list[dict[str, any]],
+    has_more: bool,
+    synced_at: str
+) -> bool {
+    doc = {
+        "repo_id": repo_id,
+        "kind": kind,
+        "state": state,
+        "synced_at": synced_at,
+        "has_more": has_more,
+        "items": items
+    };
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        db.rows(
+            "INSERT INTO jac_docs (collection, id, doc) "
+                + "VALUES (:c, :i, CAST(:d AS jsonb)) "
+                + "ON CONFLICT (collection, id) DO UPDATE SET doc = EXCLUDED.doc",
+            {"c": REPO_LISTS, "i": list_key(repo_id, kind, state), "d": json.dumps(doc)}
+        );
+        return True;
+    } except Exception as e {
+        log.warning("repo lists: store failed: " + str(e));
+        return False;
+    }
+}
+
+
+# The stored page, or {} when none is stored (or the store is away).
+def read_repo_list(repo_id: str, kind: str, state: str) -> dict[str, any] {
+    nothing: dict[str, any] = {};
+    if not repo_id {
+        return nothing;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return nothing;
+        }
+        rows = db.rows(
+            "SELECT doc FROM jac_docs WHERE collection = :c AND id = :i",
+            {"c": REPO_LISTS, "i": list_key(repo_id, kind, state)}
+        );
+        if not rows {
+            return nothing;
+        }
+        raw = rows[0][0];
+        return raw if isinstance(raw, dict) else json.loads(str(raw));
+    } except Exception as e {
+        log.warning("repo lists: read failed: " + str(e));
+        return nothing;
+    }
+}
+
+
+# A removed repo takes its stored pages with it.
+def drop_repo_lists(repo_id: str) {
+    if not repo_id {
+        return;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND doc->>'repo_id' = :r",
+            {"c": REPO_LISTS, "r": repo_id}
+        );
+    } except Exception as e {
+        log.warning("repo lists: drop failed: " + str(e));
     }
 }
 

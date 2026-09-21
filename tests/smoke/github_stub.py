@@ -43,6 +43,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _token(self):
+        # The bearer the app sent, so a gate can tell one installation's
+        # calls from another's (install tokens are stub-install-token-<id>).
+        auth = self.headers.get("Authorization") or ""
+        return auth[7:] if auth.startswith("Bearer ") else ""
+
     def _body(self):
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b""
@@ -58,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         with LOCK:
-            STATE["calls"].append(("GET", url.path))
+            STATE["calls"].append(("GET", url.path, self._token()))
             if url.path == "/_stub/state":
                 return self._send(200, STATE)
             if url.path == "/user/installations":
@@ -78,6 +84,19 @@ class Handler(BaseHTTPRequestHandler):
                 rows = sorted((i for i in items.values() if i["updated_at"] >= since),
                               key=lambda i: (i["updated_at"], i["number"]))
                 return self._send(200, rows if q.get("page", "1") == "1" else [])
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/pulls", url.path)
+            if m:
+                if m.group(1) not in STATE["repos"]:
+                    return self._send(404, {"message": "Not Found"})
+                return self._send(200, [])
+            if url.path == "/search/issues":
+                # Title search over the stub's issues, enough for the GitHub page's search box.
+                words = [w for w in q.get("q", "").split() if ":" not in w]
+                repos = [w[5:] for w in q.get("q", "").split() if w.startswith("repo:")]
+                rows = [i for r, items in STATE["repos"].items() if not repos or r in repos
+                        for i in items.values()
+                        if all(w.lower() in i["title"].lower() for w in words)]
+                return self._send(200, {"total_count": len(rows), "incomplete_results": False, "items": rows})
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)/sub_issues", url.path)
             if m:
                 return self._send(200, [])
@@ -91,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         body = self._body()
         with LOCK:
-            STATE["calls"].append(("POST", url.path))
+            STATE["calls"].append(("POST", url.path, self._token()))
             if url.path == "/_stub/reset":
                 STATE["installations"] = list(body.get("installations") or [])
                 STATE["repos"] = {}
@@ -124,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         body = self._body()
         with LOCK:
-            STATE["calls"].append(("PATCH", url.path))
+            STATE["calls"].append(("PATCH", url.path, self._token()))
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)", url.path)
             if m:
                 item = STATE["repos"].get(m.group(1), {}).get(int(m.group(2)))

@@ -62,16 +62,17 @@ be planned into iterations and followed on a twelve-week roadmap.
 
 -   :material-transit-connection-variant:{ .lg } **A flow line per organization**
 
-    Start from the Jaseci template or a blank canvas. Each step carries a
-    *kind* (start, active, handoff, blocked, done) behind the name you chose,
-    so renaming a step never changes how anything behaves.
+    Start from Simple, the Software team template or a blank canvas. Each
+    step carries a *kind* (start, active, handoff, blocked, done) behind the
+    name you chose, so renaming a step never changes how anything behaves.
 
     [:octicons-arrow-right-24: Flow lines](concepts/flow-lines.md)
 
 -   :material-notebook-edit-outline:{ .lg } **The board writes the log**
 
-    Creating a task and every move land in the activity feed with timestamps,
-    issue and PR links and who was involved.
+    Creating a task and every move land in the log with timestamps, issue and
+    PR links and who was involved, and `/log` reads each day back as a
+    written standup.
 
     [:octicons-arrow-right-24: The daily log](concepts/daily-log.md)
 

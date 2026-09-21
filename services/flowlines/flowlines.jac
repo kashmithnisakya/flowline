@@ -5,26 +5,30 @@ step and works there; the traversal from the caller's root is the isolation.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
 
+import from jaclang.lib.effects { effects }
 import from models {
     WorkflowStep,
     WorkflowSteps,
     Task,
     Role,
     StepView,
-    TaskView,
     TaskPage,
-    hydrate_views,
+    Project,
+    hydrate_rows,
     step_view,
     resolve,
     on_attached,
     owned,
-    all_tasks,
-    project_tasks,
+    working_tasks,
+    project_working,
+    tasks_on_step,
+    tasks_on_steps,
+    mismatched_on_step,
     steps_of,
     roles_box,
     steps_box
 }
-import from services.util { now_iso, page_bounds }
+import from services.util { now_iso, page_bounds, done_cutoff, ensure_tallies }
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
@@ -38,16 +42,29 @@ import from constants {
 # A step's kind IS the semantics every other part of the app reads, through
 # each task's `status`. Re-point the tasks sitting on this step whenever the
 # kind changes, or "done" work would keep reporting as "In Progress" to
-# insights, the digest and the assistant.
+# insights, the digest and the assistant. Only the mismatched rows load.
 def restatus_tasks(holder: Root, step: WorkflowStep) {
     landing = KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress";
-    target = jid(step);
     stamp = now_iso();
-    for t in all_tasks(holder) {
-        if t.step_id == target and t.status != landing {
-            t.set_status(landing, stamp);
-        }
+    for t in mismatched_on_step(holder, jid(step), landing) {
+        t.set_status(landing, stamp);
     }
+}
+
+
+# The tasks the flow line counts and lists: the board's working set (open
+# plus Done reached in the last `done_days`), for one project or all. The
+# done step therefore shows recent Done the way the board's column does.
+def flow_pool(holder: Root, project_id: str, done_days: int) -> list[Task] {
+    cutoff = done_cutoff(done_days);
+    if project_id {
+        p = resolve(project_id);
+        if not isinstance(p, Project) or not owned(holder, p) {
+            return [];
+        }
+        return project_working(p, cutoff);
+    }
+    return working_tasks(holder, cutoff);
 }
 
 
@@ -81,6 +98,12 @@ def safe_coord(v: float) -> float {
 }
 
 
+@effects(reads=["WorkflowSteps"], writes=[])
+def read_flow_line_meta(box: WorkflowSteps) -> dict[str, str] {
+    return {"name": box.name, "template_key": box.template_key};
+}
+
+
 walker GetFlowLineMeta {
     """Read-only: a GET must not write, so a workspace with no box yet
     reports the defaults without creating one."""
@@ -93,7 +116,7 @@ walker GetFlowLineMeta {
     }
 
     can read with WorkflowSteps entry {
-        report {"name": here.name, "template_key": here.template_key};
+        report read_flow_line_meta(here);
     }
 }
 
@@ -115,14 +138,79 @@ walker RenameFlowLine {
 }
 
 
+# How many titles a step carries beside its count: what a node shows at
+# the flow line's closest zoom.
+glob STEP_TITLES: int = 2;
+
+
+# The steps in order, each counting the tasks it holds when `with_counts`
+# and carrying the first STEP_TITLES titles in the panel's order. Declared
+# a pure read (the stamps are on a view, not a node) so the browser caches
+# GetFlowLine; a write anywhere invalidates it.
+@effects(reads=["WorkflowStep", "Task"], writes=[])
+def read_flow_line(
+    box: WorkflowSteps, holder: Root, project_id: str, with_counts: bool, done_days: int
+) -> list[StepView] {
+    views: list[StepView] = [];
+    line_steps = [box-->[?:WorkflowStep]];
+    for st in line_steps {
+        views.append(step_view(st, line_steps));
+    }
+    views.sort(key=lambda (s: StepView) { s.sort_order; });
+    if not with_counts {
+        return views;
+    }
+    # The one-time tally fill lives here, not in the walker: a call the
+    # effect pass cannot classify would cost the reader its cache verdict.
+    ensure_tallies(holder);
+    # Count into plain maps first, then stamp the views: mutating a
+    # view through a dict lookup is more than the checker can follow.
+    counts: dict[str, int] = {};
+    titles: dict[str, list[str]] = {};
+    known: list[str] = [];
+    first_of_kind: dict[str, str] = {};
+    for v in views {
+        counts[v.id] = 0;
+        titles[v.id] = [];
+        known.append(v.id);
+        if v.kind not in first_of_kind {
+            first_of_kind[v.kind] = v.id;
+        }
+    }
+    # The working set is loaded once for the counts; in the panel's order
+    # (jid, then sort_order, as ListStepTasks pages it) the first titles
+    # per landing step are the panel's first rows, with no query per step.
+    pool = flow_pool(holder, project_id, done_days);
+    pool.sort(key=lambda (t: Task) { jid(t); });
+    pool.sort(key=lambda (t: Task) { t.sort_order; });
+    for t in pool {
+        landing = landing_step(t, known, first_of_kind);
+        if landing {
+            counts[landing] = int(counts[landing]) + 1;
+            held = titles[landing];
+            if len(held) < STEP_TITLES {
+                held.append(t.title);
+            }
+        }
+    }
+    for v in views {
+        v.task_count = counts[v.id];
+        v.task_titles = titles[v.id];
+    }
+    return views;
+}
+
+
 walker GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
     the legacy status fallback) has one implementation for board and view.
-    `with_counts=False` skips the walk over every task: the board counts the
-    rows it already holds, so its 60 s poll need not pay for it."""
+    The count is over the working set (`done_days`, as on the board), so
+    only that is loaded. `with_counts=False` skips the walk: the board
+    counts the rows it already holds, so its 60 s poll need not pay for it."""
     has project_id: str = "",
         with_counts: bool = True,
+        done_days: int = 7,
         reports: list[list[StepView]] = [];
 
     can start with Root entry {
@@ -132,57 +220,28 @@ walker GetFlowLine {
     }
 
     can gather with WorkflowSteps entry {
-        views: list[StepView] = [];
-        line_steps = [here-->[?:WorkflowStep]];
-        for st in line_steps {
-            views.append(step_view(st, line_steps));
-        }
-        views.sort(key=lambda (s: StepView) { s.sort_order; });
-        if not self.with_counts {
-            report views;
-            disengage;
-        }
-        # Count into a plain map first, then stamp the views: mutating a
-        # view through a dict lookup is more than the checker can follow.
-        counts: dict[str, int] = {};
-        known: list[str] = [];
-        first_of_kind: dict[str, str] = {};
-        for v in views {
-            counts[v.id] = 0;
-            known.append(v.id);
-            if v.kind not in first_of_kind {
-                first_of_kind[v.kind] = v.id;
-            }
-        }
-        pool = (
-            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
+        report read_flow_line(
+            here, root, self.project_id, self.with_counts, self.done_days
         );
-        for t in pool {
-            landing = landing_step(t, known, first_of_kind);
-            if landing {
-                counts[landing] = int(counts[landing]) + 1;
-            }
-        }
-        for v in views {
-            v.task_count = counts[v.id];
-        }
-        report views;
     }
 }
 
 
 walker ListStepTasks {
     """One page of the work sitting on one step, for the panel the flow line
-    view opens. Placement reuses GetFlowLine's rule so list and count never
-    disagree; the walk touches node fields only and `to_view()` runs for the
-    page. `total` is the whole step, so the header can keep counting."""
+    view opens. Placement reuses GetFlowLine's rule over the same working
+    set (`done_days`) so list and count never disagree; the walk touches
+    node fields only and the page alone is hydrated. `total` is the whole
+    step, so the header can keep counting."""
     has step_id: str = "",
         project_id: str = "",
+        done_days: int = 7,
         page: int = 1,
         page_size: int = 0,
         reports: list[TaskPage] = [];
 
     can start with Root entry {
+        ensure_tallies(here);
         target = resolve(self.step_id);
         if isinstance(target, WorkflowStep) and owned(here, target) {
             visit [target];
@@ -204,10 +263,7 @@ walker ListStepTasks {
             }
         }
         picked: list[Task] = [];
-        pool = (
-            project_tasks(root, self.project_id) if self.project_id else all_tasks(root)
-        );
-        for t in pool {
+        for t in flow_pool(root, self.project_id, self.done_days) {
             if landing_step(t, known, first_of_kind) != wanted {
                 continue;
             }
@@ -218,7 +274,7 @@ walker ListStepTasks {
         picked.sort(key=lambda (t: Task) { jid(t); });
         picked.sort(key=lambda (t: Task) { t.sort_order; });
         report TaskPage(
-            rows=hydrate_views(root, picked[start:end]),
+            rows=hydrate_rows(root, picked[start:end]),
             page=p,
             page_size=size,
             has_more=len(picked) > end,
@@ -493,10 +549,8 @@ walker DeleteStep(find_step) {
         gone = jid(here);
         # Tasks keep their status, so they land by kind rather than vanishing
         # into whichever column happens to be first.
-        for t in all_tasks(holder) {
-            if t.step_id == gone {
-                t.step_id = "";
-            }
+        for t in tasks_on_step(holder, gone) {
+            t.step_id = "";
         }
         # An id in a field does not die with its node the way an edge did.
         for s in steps_of(holder) {
@@ -535,10 +589,8 @@ walker DeleteFlowLine {
         for s in steps {
             gone.append(jid(s));
         }
-        for t in all_tasks(root) {
-            if t.step_id and t.step_id in gone {
-                t.step_id = "";
-            }
+        for t in tasks_on_steps(root, gone) {
+            t.step_id = "";
         }
         for s in steps {
             del s;

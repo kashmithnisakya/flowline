@@ -33,12 +33,12 @@ Three consequences worth remembering:
 
 | Variable | Needed for | If empty or missing |
 | --- | --- | --- |
-| `HOST` | The public origin, **including the scheme** (`https://flowline.example.com`). Becomes the SSO host and the `/auth/callback` URL. | Falls back to `http://localhost:8000`. A value without a scheme breaks the sign-in round trip. |
+| `HOST` | The public origin, **including the scheme** (`https://flowline.example.com`). Becomes the SSO host, the `/auth/callback` URL and the link preview image URL. | Falls back to `http://localhost:8000`. A value without a scheme breaks the sign-in round trip, and one that is not the origin the app is served from hides the sign-in buttons. |
 | `OPENAI_API_KEY` | The [assistant](../api/assistant.md) (byLLM reads it from the environment) | The app runs; the assistant answers "not available right now" and the server log says why. |
 | `LLM_MODEL` | Choosing the assistant's model | `gpt-4o-mini` |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | [Google sign-in](sso.md) | Clicking the Google button explains that it is not configured. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | [Google sign-in](sso.md) | The sign-in page shows no Google button. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | [GitHub sign-in](sso.md) (an OAuth app, not the GitHub App) | Same as Google. |
-| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | The [GitHub integration](github-app.md) | The GitHub tab lists exactly which of these are missing instead of failing. |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | The [GitHub integration](github-app.md) | The GitHub page says GitHub is not set up on this server instead of failing; `GithubStatus` names the missing ones. |
 | `GITHUB_APP_WEBHOOK_SECRET` | Verifying signed webhook deliveries | **Required.** Set but empty, the server refuses to boot. |
 | `GRAFANA_ADMIN_PASSWORD` | The Grafana admin in a Kubernetes deploy with monitoring | The monitoring stack falls back to a well-known default password. |
 | `JAC_SERVE_WORKERS` | Worker processes for `jac run` | `jac.toml` says `2`; hot-reload mode needs `1`. |
@@ -64,7 +64,8 @@ Three consequences worth remembering:
 
 `[jac-shadcn]`, `[client.vite]`, `[client.app_meta_data]`
 :   The UI kit's style and theme, the Tailwind Vite plugin, and the page title,
-    description, theme colour and icon the client shell ships with.
+    description, theme colour, icon and link preview tags (`og_*`, `twitter_*`,
+    with `assets/brand/og-image.png` as the image) the client shell ships with.
 
 `[byllm]`, `[byllm.model]`, `[byllm.call_params]`
 :   The assistant's system prompt (answer only from the snapshot, never invent
@@ -77,7 +78,8 @@ Three consequences worth remembering:
 
 `[scale.sso]`, `[scale.sso.google]`, `[scale.sso.github]`
 :   The SSO host and client callback (both from `HOST`) and each provider's
-    client id and secret.
+    client id and secret (`${VAR:-}`, so an unset pair is empty and its button
+    stays hidden).
 
 `[scale.monitoring]`
 :   `/metrics`, per-walker metrics and a Prometheus plus Grafana pair in the

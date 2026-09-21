@@ -58,8 +58,23 @@ One box per kind sits under the root. Writers get or create it through a helper
 reads look it up and return nothing when it is absent, so a read never writes.
 Two overlapping first writes can leave two boxes of one kind, so the cross-kind
 readers (`projects_of`, `members_of`, `roles_of`, `steps_of`, `iterations_of`,
-`all_tasks`)
+the task readers)
 merge every box while writers always take the first.
+
+### The working set is a query, the totals are tallies
+
+The task readers push their predicates into the store's query, so a request
+loads only the rows it returns or counts over: `open_tasks`, `done_since`
+and `working_tasks` (the board's open plus recently Done rows), `created_since`
+for a chart's window, `done_before` for the "+N older" history, and the
+GitHub lookups by repo and number. All-time totals are kept on write instead
+of counted: `Project.task_total`, `done_total` and `seeded_done_total`
+(tasks created already Done, history rather than throughput), and
+`Projects.categories`. `ensure_tallies` fills them once for a project that
+has none yet (`tallies_at` empty) and every counting walker calls it first.
+A write made in a request is not visible to a pushed query later in the same
+request, only to the next one, so a walker that writes and then looks the
+same row up keeps it in a local instead.
 
 ### Containment is ownership
 
@@ -76,6 +91,7 @@ Some references are stored as jid strings on purpose:
 | --- | --- |
 | `Task.step_id` | Empty on tasks older than flow lines and on tasks whose step was deleted. The board falls back to `status`. |
 | `Task.iteration_id` | Keeps list rows free of edge hops. `DeleteIteration` clears it on every task that pointed at the iteration. |
+| `Task.project_id`, `assignee_ids` | The container project and the `AssignedTo` targets, kept in step with the edges at every write so a list row needs no hop. The edges stay the truth: `owned` climbs the container edge, `ArchiveMember` finds tasks through `AssignedTo`. |
 | `Task.checklist` | The card's own `{id, text, done}` items, written only by the checklist walkers. |
 | `WorkflowStep.transitions` | A list of `{to, label, carries}`. Cycles are allowed, so a step can point back upstream. Deleting a step strips its id from every other step's list. |
 | `Task.reviewer_id`, `reviewer_name` | A snapshot of who was asked to review. |

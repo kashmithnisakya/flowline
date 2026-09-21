@@ -11,6 +11,7 @@ import from models {
     Repo,
     Task,
     LogEntry,
+    TaskRow,
     TaskView,
     MemberView,
     GithubConnectionView,
@@ -42,6 +43,7 @@ import from services.tasks.tasks {
     TaskCounts,
     TaskHistory,
     GetTask,
+    ListTaskTitles,
     AddChecklistItem,
     SetChecklistItem,
     RemoveChecklistItem,
@@ -89,7 +91,10 @@ import from services.github.github {
     SetRepoAutoClose
 }
 import from services.github.events { GithubEvent, DrainGithubEvents }
+# The scheduled sync registers through this import like a walker does.
+import from services.github.schedule { sync_connected_workspaces }
 import from services.board.board { BoardSnapshot }
+import from services.workspace.workspace { GetWorkspace }
 import from services.iterations.iterations {
     ListIterations,
     SaveIteration,

@@ -4,39 +4,27 @@ services/insights/insights.jac). Everything traverses the caller's root directly
 
 import from models {
     Project,
-    Member,
     Task,
-    Repo,
-    Role,
-    WorkflowStep,
-    TaskView,
+    TaskRow,
     MemberView,
     RepoView,
     RoleView,
     StepView,
     IterationView,
-    iteration_view,
-    iterations_of,
-    member_view,
-    repo_view,
-    role_view,
-    step_view,
-    task_links,
-    views_from,
-    all_tasks,
-    projects_of,
-    members_of,
-    roles_of,
-    steps_of
+    GithubConnectionView,
+    hydrate_rows,
+    working_tasks,
+    tally_totals,
+    categories_of
 }
-import from services.util { page_bounds, done_cutoff, is_older, order_working }
-import from services.github.github { connection_of, connection_view }
+import from services.util { page_bounds, done_cutoff, order_working, ensure_tallies }
+import from services.workspace.workspace { workspace_view }
 
 obj BoardData {
     """One page of the board's working set, plus the workspace lists it
     renders. The workspace fields are filled only when `with_workspace` asks:
     they are edited on other pages, so the poll has no reason to refetch them."""
-    has rows: list[TaskView],
+    has rows: list[TaskRow],
         has_more: bool,
         older: int,
         categories: list[str],
@@ -46,14 +34,22 @@ obj BoardData {
         repos: list[RepoView],
         roles: list[RoleView],
         iterations: list[IterationView],
-        github_connected: bool;
+        github_connected: bool,
+        webhook_live: bool,
+        # The rest of WorkspaceView, so the board can prime the client's
+        # workspace cache from its own result.
+        flow_name: str,
+        template_key: str,
+        github: GithubConnectionView;
 }
 
 
 walker BoardSnapshot {
     """The board in one call. `with_workspace` adds the roster, flow line and
-    GitHub state the boot needs; the poll leaves it off and pays for the task
-    walk alone."""
+    GitHub state the boot needs; the poll leaves it off and pays for the
+    working set alone. Only the working set is loaded: `older` is the Done
+    tally less the Done rows the cutoff kept, and `categories` is the list
+    the projects' box keeps on write."""
     has page: int = 1,
         page_size: int = 500,
         done_days: int = 7,
@@ -61,30 +57,24 @@ walker BoardSnapshot {
         reports: list[BoardData] = [];
 
     can gather with Root entry {
+        ensure_tallies(here);
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         cutoff = done_cutoff(self.done_days);
-        picked: list[Task] = [];
+        picked = working_tasks(here, cutoff);
         older = 0;
-        cats: list[str] = [];
-        # Categories come out of the same walk that picks the page. The board
-        # only ever read `categories` off TaskCounts, whose project and member
-        # tallies it discarded.
-        for t in all_tasks(here) {
-            if t.category and t.category not in cats {
-                cats.append(t.category);
+        if cutoff {
+            recent_done = 0;
+            for t in picked {
+                if t.status == "Done" {
+                    recent_done = recent_done + 1;
+                }
             }
-            if is_older(t, cutoff) {
-                older = older + 1;
-                continue;
-            }
-            picked.append(t);
+            older = tally_totals(here)[1] - recent_done;
         }
-        cats.sort();
         # Sorts are stable, so the jid pass underneath the real key is what
         # keeps a row from swapping pages between two requests.
         picked.sort(key=lambda (t: Task) { jid(t); });
         order_working(picked);
-        links = task_links(here);
         members: list[MemberView] = [];
         projects: list[Project] = [];
         steps: list[StepView] = [];
@@ -92,44 +82,42 @@ walker BoardSnapshot {
         roles: list[RoleView] = [];
         iterations: list[IterationView] = [];
         connected = False;
+        live = False;
+        flow_name = "";
+        template_key = "";
+        github = GithubConnectionView();
+        # One definition of the lists and their order, shared with
+        # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
-            for m in members_of(here) {
-                members.append(member_view(m));
-            }
-            members.sort(key=lambda (m: MemberView) { m.name; });
-            projects = projects_of(here);
-            projects.sort(key=lambda (pr: Project) { pr.name; });
-            line_steps = steps_of(here);
-            for st in line_steps {
-                steps.append(step_view(st, line_steps));
-            }
-            steps.sort(key=lambda (s: StepView) { s.sort_order; });
-            for r in [here-->[?:Repo]] {
-                repos.append(repo_view(r));
-            }
-            repos.sort(key=lambda (rv: RepoView) { rv.full_name; });
-            for ro in roles_of(here) {
-                roles.append(role_view(ro));
-            }
-            roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });
-            for it in iterations_of(here) {
-                iterations.append(iteration_view(it));
-            }
-            iterations.sort(key=lambda (iv: IterationView) { iv.start_date; });
-            connected = connection_view(connection_of(here)).connected;
+            ws = workspace_view(here);
+            members = ws.members;
+            projects = ws.projects;
+            steps = ws.steps;
+            repos = ws.repos;
+            roles = ws.roles;
+            iterations = ws.iterations;
+            connected = ws.github_connected;
+            live = ws.webhook_live;
+            flow_name = ws.flow_name;
+            template_key = ws.template_key;
+            github = ws.github;
         }
         report BoardData(
-            rows=views_from(links, picked[start:end]),
+            rows=hydrate_rows(here, picked[start:end]),
             has_more=len(picked) > end,
             older=older,
-            categories=cats,
+            categories=categories_of(here),
             members=members,
             projects=projects,
             steps=steps,
             repos=repos,
             roles=roles,
             iterations=iterations,
-            github_connected=connected
+            github_connected=connected,
+            webhook_live=live,
+            flow_name=flow_name,
+            template_key=template_key,
+            github=github
         );
     }
 }

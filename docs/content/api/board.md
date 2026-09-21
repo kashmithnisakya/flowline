@@ -16,13 +16,14 @@ The page calls it two ways:
 | Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles, iterations and whether GitHub is connected |
 | Poll | `false` | Tasks and categories only; the workspace lists are `[]` and `github_connected` is `false` |
 
-- `rows` is one page of the **working set**: open tasks plus Done tasks updated
-  in the last `done_days` (default 7), ordered by `sort_order`. Tasks of
-  archived projects are included.
-- `older` counts the Done tasks the cutoff left out; `done_days <= 0` trims
-  nothing.
+- `rows` is one page of the **working set**: open tasks plus Done tasks that
+  reached Done in the last `done_days` (default 7), ordered by `sort_order`.
+  Tasks of archived projects are included. Only the working set is loaded.
+- `older` counts the Done tasks the cutoff left out (the Done tally less the
+  rows kept); `done_days <= 0` trims nothing.
 - `categories` covers **every** task, older ones included, so a category filter
-  built from it does not lose categories only old Done tasks carry.
+  built from it does not lose categories only old Done tasks carry. It is
+  the list the projects' box keeps on every category write.
 - There is no `total`, `page` or `page_size` in the report. Loop on
   `has_more`:
 
@@ -47,14 +48,27 @@ while more {
 [Where a task sits on the board](../concepts/flow-lines.md#where-a-task-sits-on-the-board).
 
 `github_connected` is true whenever an installation is stored, even one marked
-invalid; call [`GithubStatus`](github.md#githubstatus) for the detail.
+invalid; the full view is `github` on [`GetWorkspace`](#getworkspace) or
+[`GithubStatus`](github.md#githubstatus).
+
+## The workspace
+
+::: walker GetWorkspace
+
+**Reports** exactly one [`WorkspaceView`](types.md#workspaceview): the six
+lists `BoardSnapshot` carries with `with_workspace`, in the same order, plus
+the flow line's `flow_name` and `template_key` (what
+[`GetFlowLineMeta`](flow-lines.md#getflowlinemeta) reports) and the connection
+view `github` (what [`GithubStatus`](github.md#githubstatus) reports, no GitHub
+call). Every page other than the board opens with it, fired together with its
+own read, so a page never waits for one roster list after another.
 
 ## Deep links
 
 | URL | Opens |
 | --- | --- |
-| `/board?task=<task id>` | That card's dialog (fetched with [`GetTask`](tasks.md#gettask) when it is not in the working set) |
-| `/board?new=1` | The create-task dialog |
+| `/board?task=<task id>` | That card in the task sheet (fetched with [`GetTask`](tasks.md#gettask) when it is not in the working set) |
+| `/board?new=1` | The task sheet for a new task (setup lands here after applying a template) |
 
 An already mounted board listens for the `flowline:open-task` and
 `flowline:new-task` browser events instead; the command palette uses both.

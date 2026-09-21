@@ -2,6 +2,7 @@
 and works there: the traversal from the caller's root is the isolation, so
 only a jid-addressed row needs the owned() check."""
 
+import from jaclang.lib.effects { effects }
 import from models {
     Project,
     Projects,
@@ -12,8 +13,19 @@ import from models {
     owned,
     projects_box
 }
+import from services.util { now_iso }
 
 # ----------------------------------------------------------------- projects
+
+# Declared a pure read so the browser caches ListProjects; the walker body
+# holds nothing the effect pass cannot classify.
+@effects(reads=["Project"], writes=[])
+def read_projects(box: Projects) -> list[Project] {
+    rows = [box-->[?:Project]];
+    rows.sort(key=lambda (p: Project) { p.name; });
+    return rows;
+}
+
 
 walker ListProjects {
     has reports: list[list[Project]] = [];
@@ -28,9 +40,7 @@ walker ListProjects {
     # Rows live in a local, never a `has` field: a walker's public fields
     # are serialised into the response beside the report.
     can gather with Projects entry {
-        rows = [here-->[?:Project]];
-        rows.sort(key=lambda (p: Project) { p.name; });
-        report rows;
+        report read_projects(here);
     }
 }
 
@@ -69,8 +79,15 @@ walker SaveProject {
         }
     }
 
+    # A new project's tallies are exact at zero, so it is stamped here and
+    # ensure_tallies never loads it.
     can create with Projects entry {
-        fresh = here ++> Project(name=self.name.strip(), description=self.description);
+        fresh = here ++> Project(
+            name=self.name.strip(),
+            description=self.description,
+            tallies_at=now_iso(),
+            history_at=now_iso()
+        );
         on_attached(root, fresh);
         report fresh;
     }

@@ -4,7 +4,17 @@ anchor there would drag the wasm host into the browser bundle."""
 
 import datetime;
 import uuid;
-import from models { Task }
+import from models {
+    Task,
+    Member,
+    AssignedTo,
+    projects_of,
+    members_of,
+    seeded_done,
+    note_category,
+    history_days,
+    week_start
+}
 
 
 def now_iso -> str {
@@ -115,17 +125,104 @@ def done_day(t: Task) -> str {
 # Done that moved here, as opposed to a task created already Done (a closed
 # issue filed by a GitHub backfill): that one is history, not throughput.
 def moved_to_done(t: Task) -> bool {
-    return t.status == "Done" and not (t.done_at and t.done_at == t.created_at);
+    return t.status == "Done" and not seeded_done(t);
 }
 
 
-# A Done task last touched before the cutoff: history, not the working set.
-# Shared by the list walkers and the board so the split has one definition.
-def is_older(t: Task, cutoff: str) -> bool {
-    return t.status == "Done" and bool(cutoff) and t.updated_at[:10] < cutoff;
+# Tallies and link fields for every project that has none yet (an empty
+# `tallies_at`): one full load per such project, once. Every counting or
+# listing walker calls this first; a stamped project costs one field read.
+# Done rows from before `done_at` existed get it filled from done_day, so
+# the pushed date predicates see them.
+def ensure_tallies(holder: Root) -> None {
+    pending = [
+        p
+        for p in projects_of(holder)
+        if not p.tallies_at
+    ];
+    if not pending {
+        return;
+    }
+    assigned: dict[str, list[str]] = {};
+    for m in members_of(holder) {
+        for t in [m<-:AssignedTo:<-[?:Task]] {
+            key = jid(t);
+            if key not in assigned {
+                assigned[key] = [];
+            }
+            assigned[key].append(jid(m));
+        }
+    }
+    stamp = now_iso();
+    cats: list[str] = [];
+    for p in pending {
+        pid = jid(p);
+        total = 0;
+        done = 0;
+        seeded = 0;
+        for t in [p-->[?:Task]] {
+            total = total + 1;
+            if t.status == "Done" {
+                if not t.done_at {
+                    t.done_at = done_day(t);
+                }
+                done = done + 1;
+                if seeded_done(t) {
+                    seeded = seeded + 1;
+                }
+            }
+            if t.project_id != pid {
+                t.project_id = pid;
+            }
+            ids = assigned[jid(t)] if jid(t) in assigned else [];
+            if t.assignee_ids != ids {
+                t.assignee_ids = ids;
+            }
+            if t.category and t.category not in cats {
+                cats.append(t.category);
+            }
+        }
+        p.task_total = total;
+        p.done_total = done;
+        p.seeded_done_total = seeded;
+        p.tallies_at = stamp;
+    }
+    for c in cats {
+        note_category(holder, c);
+    }
 }
 
 
+# The weekly history of every project that has none yet (an empty
+# `history_at`): one full load per such project, once, after its tallies.
+# TaskHistory calls this first; the writes keep it from then on.
+def ensure_history(holder: Root) {
+    stamp = now_iso();
+    for p in projects_of(holder) {
+        if p.history_at {
+            continue;
+        }
+        added: dict[str, int] = {};
+        finished: dict[str, int] = {};
+        for t in [p-->[?:Task]] {
+            days = history_days(t);
+            for (counts, day) in [(added, days[0]), (finished, days[1])] {
+                week = week_start(day);
+                if week {
+                    counts[week] = (counts[week] if week in counts else 0) + 1;
+                }
+            }
+        }
+        p.week_added = added;
+        p.week_finished = finished;
+        p.history_at = stamp;
+    }
+}
+
+
+# The cutoff Done tasks fall behind is applied in the store's query
+# (`done_at < cutoff` in the models readers), the same test as done_day
+# once ensure_tallies has filled `done_at` on every Done row.
 # Board order: the drag order the user arranged. Callers sort by jid first,
 # so ties stay deterministic across two requests.
 def order_working(rows: list[Task]) {

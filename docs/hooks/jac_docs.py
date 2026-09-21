@@ -475,6 +475,9 @@ class Registry:
                 self.by_file[rel] = decls
                 for d in decls:
                     self.decls.setdefault((d.kind, d.name), d)
+        # main.jac also imports the scheduled sync function, which has no
+        # route; only the walkers need a page.
+        self.routed = {n: m for n, m in self.routed.items() if ("walker", n) in self.decls}
 
     def get(self, kind: str, name: str) -> Decl:
         found = self.decls.get((kind, name))
@@ -482,17 +485,18 @@ class Registry:
             raise PluginError(f"jac_docs: no {kind} named {name!r} in {', '.join(SOURCE_GLOBS)}")
         return found
 
-    def fields_of(self, walker: Decl) -> list[Field]:
-        # Base walker fields first, the way the runtime merges them.
+    def fields_of(self, decl: Decl) -> list[Field]:
+        # Base fields first, the way the runtime merges them: a walker's
+        # lookup base, or an obj's base (TaskView extends TaskRow).
         inherited: list[Field] = []
-        if walker.kind == "walker" and walker.base:
-            for base_name in [b.strip() for b in walker.base.split(",")]:
-                base = self.decls.get(("walker", base_name))
+        if decl.kind in ("walker", "obj") and decl.base:
+            for base_name in [b.strip() for b in decl.base.split(",")]:
+                base = self.decls.get((decl.kind, base_name))
                 if base:
                     for f in self.fields_of(base):
                         inherited.append(Field(f.name, f.type, f.default, f.doc, f.inherited_from or base_name))
-        own = {f.name for f in walker.fields}
-        return [f for f in inherited if f.name not in own] + walker.fields
+        own = {f.name for f in decl.fields}
+        return [f for f in inherited if f.name not in own] + decl.fields
 
 
 REGISTRY: Registry | None = None
@@ -604,8 +608,10 @@ def render_archetype(d: Decl, level: int, page, files: Files) -> list[str]:
     meta.append(f"<a class='jac-src' href='{source_url(d)}' title='View source'>{d.file}:{d.line}</a>")
     lines += ["<div class='jac-meta'>" + "".join(meta) + "</div>", ""]
     lines += doc_block(d.doc)
-    if d.fields:
-        lines += render_fields(d.fields, page, files, "Field")
+    assert REGISTRY is not None
+    fields = REGISTRY.fields_of(d) if d.kind == "obj" else d.fields
+    if fields:
+        lines += render_fields(fields, page, files, "Field")
     methods = [m for m in d.methods if m[1]]
     if methods:
         lines += ["| Method | Description |", "| --- | --- |"]
