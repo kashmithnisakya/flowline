@@ -16,8 +16,9 @@ what is on screen. The page is cut in the store, so a request loads its own
 rows, not the whole range, and `total` comes from the days' counts. An empty
 or inverted range, or a workspace with no log, reports an empty page.
 
-`task_id` (optional) keeps only that task's entries before paging, filtered in
-the store's query, so `total` and `has_more` count that task alone. The task sheet's **Travel so far** reads
+`task_id` (optional) keeps only that task's entries before paging, in one
+store query across the range's days (so a range of years costs the same as a
+week), and `total` and `has_more` count that task alone. The task sheet's **Travel so far** reads
 a task's history this way. An empty `task_id` returns every entry.
 
 ```bash
