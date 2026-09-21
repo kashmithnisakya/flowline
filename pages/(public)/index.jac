@@ -9,7 +9,6 @@ import from ...components.landing.Hero { Hero }
 import from ...components.landing.Tour { Tour }
 import from ...components.landing.Features { Features }
 import from ...components.landing.HowItWorks { HowItWorks }
-import from ...components.landing.CostMath { CostMath }
 import from ...components.landing.Faq { Faq }
 import from ...components.landing.SiteFooter { SiteFooter }
 
@@ -28,7 +27,6 @@ def:pub LandingPage -> JsxPage {
                 <Tour/>
                 <Features/>
                 <HowItWorks/>
-                <CostMath/>
                 <Faq/>
             </main>
             <SiteFooter loggedIn={loggedIn}/>
