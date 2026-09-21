@@ -19,6 +19,7 @@ import from models {
     days_between,
     day_entries,
     day_task_entries,
+    day_import_lines,
     entry_key,
     note_entry,
     forget_entry
@@ -307,6 +308,17 @@ walker LogActivity {
     }
 }
 
+# The log day for a date, made on first write.
+def log_day(holder: Root, date: str) -> LogDay {
+    days = days_between(holder, date, date);
+    if days {
+        return days[0];
+    }
+    day = logs_box(holder) ++> LogDay(date=date, entry_total=0);
+    on_attached(holder, day);
+    return day;
+}
+
 # Board moves write the log now: append one denormalized row describing a
 # task event to today's bucket. Called from the task walkers.
 def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> None {
@@ -314,13 +326,7 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
     if not today {
         return;
     }
-    days = days_between(holder, today, today);
-    if days {
-        day = days[0];
-    } else {
-        day = logs_box(holder) ++> LogDay(date=today, entry_total=0);
-        on_attached(holder, day);
-    }
+    day = log_day(holder, today);
     names: list[str] = [];
     tag_pool: list[str] = [];
     for a in [task->:AssignedTo:->] {
@@ -347,6 +353,76 @@ def record_task_event(holder: Root, task: Task, activity: str, stamp: str) -> No
         member_name=", ".join(names),
         tags=", ".join(tag_pool),
         project_name=projects[0].name if projects else ""
+    );
+    note_entry(day, row);
+}
+
+# Imported issues reach the log once per batch. A batch of one keeps its own
+# line (the task sheet's history shows it); a bigger one grows the day's
+# line for its repo and status, so a backfill of 1,400 issues is one row.
+def log_imports(holder: Root, fresh: list[Task], stamp: str) {
+    batches: dict[str, list[Task]] = {};
+    order: list[str] = [];
+    for t in fresh {
+        key = t.gh_repo + "|" + t.status;
+        if key not in batches {
+            batches[key] = [];
+            order.append(key);
+        }
+        batches[key].append(t);
+    }
+    for key in order {
+        batch = batches[key];
+        first = batch[0];
+        if len(batch) == 1 {
+            record_task_event(
+                holder,
+                first,
+                "Imported from GitHub "
+                    + first.gh_repo
+                    + " #"
+                    + str(first.gh_issue_number),
+                stamp
+            );
+        } else {
+            note_import_batch(holder, batch, stamp);
+        }
+    }
+}
+
+# "Imported 3 issues from org/repo", "closed issues" when they landed Done:
+# the sentence the log page folds single import lines into.
+def import_line(n: int, full_name: str, closed: bool) -> str {
+    return "Imported "
+        + str(n)
+        + (" closed issues" if closed else " issues")
+        + " from "
+        + full_name;
+}
+
+# Grow today's import line for the batch's repo and status, or start it.
+def note_import_batch(holder: Root, batch: list[Task], stamp: str) -> None {
+    first = batch[0];
+    closed = first.status == "Done";
+    day = log_day(holder, stamp[:10]);
+    for e in day_import_lines(day, first.gh_repo) {
+        if e.item_count > 0 and e.status == first.status {
+            e.item_count = e.item_count + len(batch);
+            e.activity = import_line(e.item_count, first.gh_repo, closed);
+            e.at = stamp;
+            e.sort_key = entry_key(stamp, e.date, jid(e));
+            return;
+        }
+    }
+    projects = [first<--[?:Project]];
+    row = day ++> LogEntry(
+        date=day.date,
+        at=stamp,
+        activity=import_line(len(batch), first.gh_repo, closed),
+        repo=first.gh_repo,
+        status=first.status,
+        project_name=projects[0].name if projects else "",
+        item_count=len(batch)
     );
     note_entry(day, row);
 }

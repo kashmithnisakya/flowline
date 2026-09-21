@@ -282,6 +282,11 @@ def main() -> int:
     s = walker("SyncGithub")
     check("poll back-fills the stub's issues", s.get("ok") and s.get("auto_added") == 3 and not s.get("failure"), s)
     check("  and stores the repo's open issue and pull request pages", s.get("lists") == 1, s)
+    imports = sorted((r.get("activity"), r.get("item_count"), bool(r.get("task_id")))
+                     for r in log_rows() if r.get("activity", "").startswith("Imported"))
+    check("  the log gets one line per batch: the two open issues as one, the lone closed one as its own",
+          imports == sorted([(f"Imported 2 issues from {REPO}", 2, False), (f"Imported from GitHub {REPO} #3", 0, True)]),
+          imports)
 
     # No walker a page load calls reaches GitHub: the board's snapshot, the
     # workspace read, the GitHub page's lists and the queue drain answer from

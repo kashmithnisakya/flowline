@@ -135,7 +135,8 @@ or `{"ok": false, "error": "not_found" | "project_required" | "not_connected", .
   land on the done step.
 - Title, body (first 2,000 characters), labels as tags, and assignees matched
   to members by `github_username` are copied. The log records
-  `Imported from GitHub org/repo #n`.
+  `Imported from GitHub org/repo #n` for a single issue, or grows the day's
+  `Imported N issues from org/repo` line for more.
 - `skipped` numbers are already held by a task; `failed` ones errored or are
   pull requests.
 

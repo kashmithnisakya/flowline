@@ -251,7 +251,11 @@ people it tracks are roster members.
   Both are kept on write by `note_entry` / `forget_entry` in `models.jac`,
   so a new writer of log entries must call them; a day from before them
   (`entry_total` -1) is keyed and counted once by `fill_day` on its first
-  read. `GetFlowLine` counts and
+  read. A GitHub import logs once per batch (`log_imports`, called at the
+  end of `ImportIssues`, a sync pass and a drain): one issue keeps its own
+  line, more grow the day's `Imported N issues from org/repo` line for that
+  repo and status (`item_count`, no task), which the log page folds with
+  the single lines. `GetFlowLine` counts and
   `ListStepTasks` lists the same working set (`done_days`), so a done step
   shows recent Done the way the board's column does; the count's pass over
   that set also keeps each step's first two titles (`StepView.task_titles`,

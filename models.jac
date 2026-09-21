@@ -379,7 +379,10 @@ node LogEntry {
         project_name: str = "",
         # entry_key(): the stamp as digits, then the jid. Unique, so a page of
         # a day is an ORDER BY plus OFFSET/LIMIT in the store.
-        sort_key: str = "";
+        sort_key: str = "",
+        # The issues an import line stands for ("Imported 12 issues from
+        # org/repo", one per day, repo and status); 0 on every other entry.
+        item_count: int = 0;
 }
 
 
@@ -825,6 +828,12 @@ def day_entries(day: LogDay, start: int, stop: int) -> list[LogEntry] {
 # One task's entries under a day, the filter in the store's query.
 def day_task_entries(day: LogDay, tid: str) -> list[LogEntry] {
     return [day-->[?:LogEntry, task_id==tid]];
+}
+
+
+# A day's import lines for one repo: the entries no single task owns.
+def day_import_lines(day: LogDay, full_name: str) -> list[LogEntry] {
+    return [day-->[?:LogEntry, repo==full_name, task_id==""]];
 }
 
 

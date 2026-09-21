@@ -212,6 +212,19 @@ def overdueText(days: int) -> str {
     return ("1 day" if days == 1 else str(days) + " days") + " overdue.";
 }
 
+# A batch import's one line for its repo and status (the server writes
+# "Imported N issues from org/repo" and keeps N in item_count).
+def isImportLine(e: LogEntry) -> bool {
+    return not e.task_id and e.item_count > 0;
+}
+
+# The repo an import line or a single imported issue came from.
+def importRepo(e: LogEntry) -> str {
+    return e.repo
+        if isImportLine(e)
+        else e.activity[len(IMPORT_PREFIX):].split(" #")[0];
+}
+
 # "Imported 3 issues from org/repo" ("closed issues" when they came in Done).
 def importedLine(n: int, repo: str, kind: str) -> str {
     return "Imported "
@@ -412,8 +425,14 @@ def buildSections(
         if e.date < since {
             continue;
         }
-        # The same note on two days of the window reads once, at its latest.
-        key = e.task_id or ("~" + e.member_name + "|" + e.activity.strip().lower());
+        # The same note on two days of the window reads once, at its latest;
+        # every import line counts, so each keeps its own key.
+        key = e.task_id
+            or (
+                ("#" + jid(e))
+                    if isImportLine(e)
+                    else ("~" + e.member_name + "|" + e.activity.strip().lower())
+            );
         if key not in latest {
             order.append(key);
             latest[key] = e;
@@ -433,15 +452,16 @@ def buildSections(
             continue;
         }
         # Imports fold per repo and per kind, so a closed issue reads as Finished.
-        if e.task_id and e.activity.startswith(IMPORT_PREFIX) {
-            ikey = kind + "|" + e.activity[len(IMPORT_PREFIX):].split(" #")[0];
+        if (e.task_id and e.activity.startswith(IMPORT_PREFIX)) or isImportLine(e) {
+            ikey = kind + "|" + importRepo(e);
             if ikey not in importCount {
                 importRepos.append(ikey);
                 importCount[ikey] = 0;
                 importFirst[ikey] = e;
                 importAt[ikey] = "";
             }
-            importCount[ikey] = importCount[ikey] + 1;
+            importCount[ikey] = importCount[ikey]
+                + (e.item_count if isImportLine(e) else 1);
             if (e.date + e.at) > importAt[ikey] {
                 importAt[ikey] = e.date + e.at;
             }
@@ -848,13 +868,17 @@ def timelineRows(
     rows: list[dict[str, any]] = [];
     folded: dict[str, dict[str, any]] = {};
     for e in ordered {
-        if fold and e.task_id and e.activity.startswith(IMPORT_PREFIX) {
-            repo = e.activity[len(IMPORT_PREFIX):].split(" #")[0];
+        if fold
+            and (
+                (e.task_id and e.activity.startswith(IMPORT_PREFIX)) or isImportLine(e)
+            ) {
+            repo = importRepo(e);
             kind = kindOf(e.status);
+            n = e.item_count if isImportLine(e) else 1;
             fkey = e.date + "|" + repo + "|" + kind;
             if fkey in folded {
                 grown = folded[fkey];
-                grown["count"] = grown["count"] + 1;
+                grown["count"] = grown["count"] + n;
                 grown["lead"] = importedLine(grown["count"], repo, kind);
                 grown["title"] = "";
                 grown["tail"] = "";
@@ -877,7 +901,7 @@ def timelineRows(
                 "notes": "",
                 "issue": issueLabel(e.issue_link) if e.issue_link else "",
                 "pr": "",
-                "count": 1,
+                "count": n,
                 "entry": e
             };
             folded[fkey] = row;
