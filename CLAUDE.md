@@ -142,7 +142,11 @@ people it tracks are roster members.
   `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
   `done_tasks` and `done_before` load history, and only the explicit
   history scopes of `ListTasks` (`older`, `done`, `all`, the palette's
-  search) call them. All-time totals are tallies kept on write:
+  search) call them, and not for an unfiltered page in updated order,
+  newest first (the table's default): `history_page` cuts that one in the
+  store (`recent_tasks` and friends, `-updated_at` with `[:end]`) and adds
+  every row stamped like the prefix's last (`tasks_stamped`), because a sync
+  pass stamps many rows alike and the store orders ties arbitrarily. All-time totals are tallies kept on write:
   `Project.task_total`, `done_total`, `seeded_done_total` (created already
   Done: history, not throughput) and `Projects.categories` (exact:
   `note_category` adds, `forget_category` drops after a two-row lookup).

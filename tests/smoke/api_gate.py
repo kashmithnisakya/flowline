@@ -425,6 +425,44 @@ def log_counts_suite(member_id, project_id, tag):
           item.get("reason") == f"waiting on keys {tag}" and item.get("since") == today.isoformat(), str(item)[:200])
 
 
+def history_pages_suite(project_id):
+    # An unfiltered history page in updated order is cut in the store. At any
+    # page size its pages must be the full history in (updated desc, id asc)
+    # order, whole workspace or under a project, with totals from the tallies.
+    rows = all_rows()
+
+    def expected(keep):
+        picked = sorted((r for r in rows if keep(r)), key=lambda r: r["id"])
+        return [r["id"] for r in sorted(picked, key=lambda r: r["updated_at"], reverse=True)]
+
+    def paged(body):
+        pages, page = [], 1
+        while page <= 200:
+            got = report("ListTasks", {**body, "page": page})
+            pages.append(got)
+            if not got.get("has_more"):
+                break
+            page += 1
+        return [r["id"] for p in pages for r in p.get("rows", [])], pages
+
+    newest = {"sort": "updated", "sort_dir": "desc"}
+    cases = [
+        ("all", {"scope": "all", **newest}, lambda r: True, len(rows)),
+        ("done", {"scope": "done"}, lambda r: r["status"] == "Done", sum(1 for r in rows if r["status"] == "Done")),
+        ("all under a project", {"scope": "all", "project_id": project_id, **newest},
+         lambda r: r["project_id"] == project_id, len(rows)),
+    ]
+    for label, body, keep, scope_total in cases:
+        want = expected(keep)
+        for size in (1, 3):
+            ids, pages = paged({**body, "page_size": size})
+            check(f"history: '{label}' pages of {size} are the history in updated order", ids == want,
+                  f"{len(ids)} rows vs {len(want)}")
+            check(f"history: '{label}' pages of {size} say total {len(want)} of {scope_total}",
+                  all(p.get("total") == len(want) and p.get("scope_total") == scope_total for p in pages),
+                  str([(p.get("total"), p.get("scope_total")) for p in pages][:4]))
+
+
 def effects_table(html: str) -> dict:
     # The shell carries the compiler's endpoint effects in its __jac_init__
     # JSON; the client runtime reads its cache verdicts from this table.
@@ -613,6 +651,7 @@ def main() -> int:
     parity_suite(project_id, member_id, tag)
     log_paging_suite(member_id)
     log_counts_suite(member_id, project_id, tag)
+    history_pages_suite(project_id)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))
