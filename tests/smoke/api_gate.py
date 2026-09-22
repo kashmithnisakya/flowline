@@ -230,9 +230,20 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     check(f"{label}: TaskCounts per-project tallies", got_projects == exp["projects"], f"{got_projects} vs {exp['projects']}")
     got_members = {m["member_id"]: {k: m[k] for k in ("open", "done_in_week")} for m in counts.get("members", [])}
     check(f"{label}: TaskCounts per-member tallies", got_members == exp["members"], f"{got_members} vs {exp['members']}")
-    check(f"{label}: TaskCounts done_by_week sums to this month's moves",
-          sum(counts.get("done_by_week", [])) == sum(1 for t in rows if moved_to_done(t) and done_day(t) >= weeks[-4] if weeks) if weeks else True,
-          f"{counts.get('done_by_week')}")
+    # Done per week comes from the weekly counts, so it must match both the
+    # brute-force pass and TaskHistory's last four weeks, and the Overview
+    # must answer the same numbers as TaskCounts.
+    check(f"{label}: TaskCounts done_by_week equals the brute-force weeks",
+          bool(weeks) and counts.get("done_by_week") == exp["history"]["finished"][-4:],
+          f"{counts.get('done_by_week')} vs {exp['history']['finished'][-4:]}")
+    snap = report("OverviewSnapshot", {"attention_size": 1}).get("counts", {})
+
+    def keyed(totals, field, key):
+        return {row[key]: {k: v for k, v in row.items() if not k.startswith("_")} for row in totals.get(field, [])}
+    same = {k: snap.get(k) == counts.get(k) for k in ("open", "overdue", "blocked", "done_by_week")}
+    same["projects"] = keyed(snap, "projects", "project_id") == keyed(counts, "projects", "project_id")
+    same["members"] = keyed(snap, "members", "member_id") == keyed(counts, "members", "member_id")
+    check(f"{label}: OverviewSnapshot counts equal TaskCounts", all(same.values()), f"{same}")
     brows, older, cats = board_rows()
     check(f"{label}: BoardSnapshot rows, older and categories",
           sorted(r["id"] for r in brows) == exp["board_ids"] and older == exp["older"] and cats == exp["categories"],

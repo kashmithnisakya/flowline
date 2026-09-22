@@ -620,8 +620,8 @@ obj TaskTotals {
     has open: int = 0,
         overdue: int = 0,
         blocked: int = 0,
-        # Done per week for the four weeks ending on the given Monday's week,
-        # oldest first. A Done task only remembers its last update.
+        # Tasks moved to Done per week for the four weeks ending in the given
+        # Monday's week, oldest first (a task created already Done is not).
         done_by_week: list[int] = [],
         projects: list[ProjectTally] = [],
         members: list[MemberTally] = [],

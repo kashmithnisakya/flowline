@@ -25,10 +25,16 @@ import from models {
     days_between,
     blocked_lines
 }
-import from services.util { now_iso, done_day, moved_to_done, ensure_tallies }
+import from services.util {
+    now_iso,
+    done_day,
+    moved_to_done,
+    ensure_tallies,
+    ensure_history
+}
 import from services.tasks.tasks {
     task_totals,
-    tally_since,
+    week_of,
     needs_attention,
     order_attention
 }
@@ -467,10 +473,11 @@ obj OverviewData {
 
 
 walker OverviewSnapshot {
-    """The whole Overview in one call. The open tasks and the four weeks of
-    Done are read once and every panel is computed from that, so the page
-    costs one round trip and never loads the history. The three queues
-    are capped at `attention_size`, in their own order."""
+    """The whole Overview in one call. The open tasks and this week's Done
+    are read once and every panel is computed from them; Done per week
+    comes from the projects' weekly counts, so the page costs one round trip
+    and never loads the history. The three queues are capped at
+    `attention_size`, in their own order."""
     has monday: str = "",
         from_date: str = "",
         attention_size: int = 8,
@@ -478,9 +485,10 @@ walker OverviewSnapshot {
 
     can build with Root entry {
         ensure_tallies(here);
+        ensure_history(here);
         today = _today();
         open = open_tasks(here);
-        recent = done_since(here, tally_since(self.monday));
+        week_done = done_since(here, week_of(self.monday));
         names = task_names(here);
         flagged = [
             t
@@ -500,7 +508,7 @@ walker OverviewSnapshot {
         projects.sort(key=lambda (p: Project) { p.name; });
         cap = self.attention_size;
         report OverviewData(
-            counts=task_totals(here, open, recent, names, self.monday),
+            counts=task_totals(here, open, week_done, names, self.monday),
             logs=log_totals(here, self.monday),
             attention=rows_from(names, flagged[:cap]),
             attention_total=len(flagged),
