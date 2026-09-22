@@ -55,6 +55,13 @@ cooldown (1 minute, or 15 while deliveries are flowing), then rewrite the open
 issue and pull request pages the GitHub page renders. The pass is bounded (5
 pages, 8 seconds); what is left carries to the next tick as `has_more`.
 
+A row whose workspace no longer exists, or no longer holds that installation,
+is dropped by the tick that finds it, along with its queued deliveries
+(`installation 1234 unbound: the workspace no longer holds it`). The delete
+names the root it read, so a workspace that took the installation over in the
+meantime keeps its row. An invalid connection (a suspended or revoked
+installation) keeps its row, so an `unsuspend` delivery still reaches it.
+
 The log carries one `flowline.github` line per workspace visited
 (`github sync: installation 1234: drained 0, added 1, ... lists 2`) and one
 warning per failure. **Sync now** and **Re-sync history** on `/github` still

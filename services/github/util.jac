@@ -236,6 +236,35 @@ def unbind_installation(installation_id: int) -> bool {
 }
 
 
+# Drop an installation's row only while it still names `root_jid`, so a
+# workspace that took the installation over in the meantime keeps it. True
+# when this call removed the row (its queued deliveries go with it).
+def release_binding(installation_id: int, root_jid: str) -> bool {
+    if installation_id <= 0 or not root_jid {
+        return False;
+    }
+    try {
+        db = open_docs_store();
+        if db is None {
+            return False;
+        }
+        gone = db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND id = :i "
+                + "AND doc->>'root_jid' = :r RETURNING id",
+            {"c": INSTALL_INDEX, "i": str(installation_id), "r": root_jid}
+        );
+        if not gone {
+            return False;
+        }
+        drop_deliveries(installation_id);
+        return True;
+    } except Exception as e {
+        log.warning("installation index: release failed: " + str(e));
+        return False;
+    }
+}
+
+
 # The root jid bound to an installation, or "" when none is. Never raises:
 # a store hiccup reads as unknown, and callers treat unknown as ignore.
 def root_for_installation(installation_id: int) -> str {
