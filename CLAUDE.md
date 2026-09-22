@@ -144,13 +144,30 @@ people it tracks are roster members.
   per-iteration lookups, the column readers (`step_column_peak` and
   friends, for the drag order) and the GitHub lookups (`tasks_by_issue`,
   `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
-  `done_tasks` and `done_before` load history, and only the explicit
-  history scopes of `ListTasks` (`older`, `done`, `all`, the palette's
-  search) call them, and not for an unfiltered page in updated order,
-  newest first (the table's default): `history_page` cuts that one in the
-  store (`recent_tasks` and friends, `-updated_at` with `[:end]`) and adds
-  every row stamped like the prefix's last (`tasks_stamped`), because a sync
-  pass stamps many rows alike and the store orders ties arbitrarily. All-time totals are tallies kept on write:
+  `done_tasks` and `done_before` load history, and only a search (`q`, the
+  palette too) or a `tag` filter on a history scope of `ListTasks` calls
+  them: the store has no substring or list-membership predicate yet
+  (jaseci-labs/jac#9413). Every other `older` / `done` / `all` page is
+  answered in the store by `services/tasks/history.jac`: scope and filters
+  become predicates, the sort an order ending in `Task.row_key` (the jid,
+  so a page cut is exact), `[start:end]` the page. A total comes from the
+  tallies; only under a filter is it `len()` of the reference, which on
+  0.37.18 reads the matching rows for a signed-in caller (the store counts
+  only without one, jaseci-labs/jac#9416), so the step sort walks columns
+  with LIMIT windows instead of counting them. The filter set is chosen per request, so it builds the query from
+  `jaclang.lib.jaclib` (`GraphQuery`, `QHop`, `QPred`, `QOrder`, `refs`),
+  the parts a graph literal compiles to, over a fixed list of fields. Sort
+  keys are fields kept by `Task.keep_keys` wherever title, category,
+  priority or due date is written (`CreateTask`, `UpdateTask`,
+  `file_issue_item`): `title_key` / `category_key` are `sort_text` (the
+  lowercase text's UTF-8 as hex, one order under any collation, the order a
+  Python sort of `.lower()` gives, which merging several parts needs),
+  `priority_rank`, `due_key` (undated last); `ensure_keys` fills a project
+  once (`Project.keys_at`), and a request that filled keys pages what it
+  loaded, since the store cannot see those writes until the next one. A
+  board column (the step sort and the `column` filter) is its own step plus,
+  in the first column of a kind, one part per status of that kind with every
+  current step id excluded (`board_columns`). All-time totals are tallies kept on write:
   `Project.task_total`, `done_total`, `seeded_done_total` (created already
   Done: history, not throughput), the Overview's weekly history
   (`Project.week_added` / `week_finished`, keyed by the week's Monday from

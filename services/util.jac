@@ -220,6 +220,27 @@ def ensure_history(holder: Root) {
 }
 
 
+# The tasks table's sort keys (Task.keep_keys) for every project that has
+# none yet (an empty `keys_at`): one full load per such project, once. True
+# when it filled any: a pushed query in this request cannot see the fields
+# yet, so the caller pages the loaded rows instead.
+def ensure_keys(holder: Root) -> bool {
+    stamp = now_iso();
+    filled = False;
+    for p in projects_of(holder) {
+        if p.keys_at {
+            continue;
+        }
+        for t in [p-->[?:Task]] {
+            t.keep_keys();
+        }
+        p.keys_at = stamp;
+        filled = True;
+    }
+    return filled;
+}
+
+
 # The cutoff Done tasks fall behind is applied in the store's query
 # (`done_at < cutoff` in the models readers), the same test as done_day
 # once ensure_tallies has filled `done_at` on every Done row.

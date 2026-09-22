@@ -107,7 +107,10 @@ node Project {
         # An empty `history_at` means not counted yet; ensure_history fills it.
         week_added: dict[str, int] = {},
         week_finished: dict[str, int] = {},
-        history_at: str = "";
+        history_at: str = "",
+        # When its tasks' sort keys (Task.keep_keys) were last filled; empty
+        # means never, and ensure_keys fills them from one full load.
+        keys_at: str = "";
 }
 
 # Roles are HasRole edges to Role nodes, never names on the member.
@@ -218,7 +221,24 @@ node Task {
         # with the edges at every write point so a list row needs no hop.
         # The edges stay the truth: `owned` climbs the container edge.
         project_id: str = "",
-        assignee_ids: list[str] = [];
+        assignee_ids: list[str] = [],
+        # The tasks table's sort keys, so the store can order and page the
+        # history: the jid (the tiebreak), title and category as sort_text,
+        # priority as urgency, the due date with undated last (keep_keys).
+        row_key: str = "",
+        title_key: str = "",
+        category_key: str = "",
+        priority_rank: int = 1,
+        due_key: str = "";
+
+    # Called wherever title, category, priority or due date is written.
+    def keep_keys {
+        self.row_key = jid(self);
+        self.title_key = sort_text(self.title);
+        self.category_key = sort_text(self.category);
+        self.priority_rank = {"High": 0, "Medium": 1, "Low": 2}.get(self.priority, 1);
+        self.due_key = self.due_date or "9999-12-31";
+    }
 
     # Every status write goes through here, so `done_at` stays true to the
     # move into Done (kept while the task stays Done, cleared when it
@@ -1134,67 +1154,20 @@ def project_done_before(p: Project, cutoff: str) -> list[Task] {
 }
 
 
-# The history in updated order, for a page the store cuts: the first `n`
-# rows, newest first, and every row stamped exactly `at` (the tie at a
-# page's end). "Done" is Done before `cutoff` (the done scope passes a date
-# no task reaches). Across the projects, or under one.
-def recent_tasks(holder: Root, n: int) -> list[Task] {
-    out: list[Task] = [];
+# How many Done tasks reached Done on or after `since`: len() of the pushed
+# reference, which reads only those rows (a count in the store once
+# jaseci-labs/jac#9416 lands).
+def done_since_count(holder: Root, since: str) -> int {
+    n = 0;
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, -updated_at]][:n]);
+        n = n + len([box-->[?:Project]-->[?:Task, status=="Done", done_at>=since]]);
     }
-    return out;
+    return n;
 }
 
 
-def tasks_stamped(holder: Root, at: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, updated_at==at]]);
-    }
-    return out;
-}
-
-
-def recent_done_before(holder: Root, cutoff: str, n: int) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n]
-        );
-    }
-    return out;
-}
-
-
-def done_before_stamped(holder: Root, cutoff: str, at: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]]
-        );
-    }
-    return out;
-}
-
-
-def project_recent(p: Project, n: int) -> list[Task] {
-    return [p-->[?:Task, -updated_at]][:n];
-}
-
-
-def project_stamped(p: Project, at: str) -> list[Task] {
-    return [p-->[?:Task, updated_at==at]];
-}
-
-
-def project_recent_done_before(p: Project, cutoff: str, n: int) -> list[Task] {
-    return [p-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n];
-}
-
-
-def project_done_before_stamped(p: Project, cutoff: str, at: str) -> list[Task] {
-    return [p-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]];
+def project_done_since_count(p: Project, since: str) -> int {
+    return len([p-->[?:Task, status=="Done", done_at>=since]]);
 }
 
 
@@ -1557,6 +1530,13 @@ def status_peak(holder: Root, col: str) -> float {
         }
     }
     return peak;
+}
+
+
+# A text's sort key: lowercase UTF-8 as hex, which orders by code point under
+# any database collation, the order a Python sort of `text.lower()` gives.
+def sort_text(text: str) -> str {
+    return text.lower().encode("utf-8").hex();
 }
 
 

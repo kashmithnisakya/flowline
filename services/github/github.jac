@@ -1103,6 +1103,7 @@ def file_issue_item(
         project_id=jid(target_project)
     );
     on_attached(holder, fresh);
+    fresh.keep_keys();
     count_task(target_project, fresh, 1);
     # Map GitHub assignees onto roster members by username. Anyone without
     # a match is simply left off; we never invent people.

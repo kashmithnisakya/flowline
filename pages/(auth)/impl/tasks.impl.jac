@@ -52,7 +52,8 @@ impl TasksPage.loadShared -> None {
 }
 
 impl TasksPage.loadTasks -> None {
-    # A step filter places rows by the flow line, so it waits for the steps.
+    # A step filter waits for the flow line, which confirms the step still
+    # exists (loadShared resets an unknown one); the server places the rows.
     if fStep != "All" and not readyRef.current {
         return;
     }
@@ -68,34 +69,26 @@ impl TasksPage.loadTasks -> None {
         # The scope's unfiltered count rides on every page (scope_total), so
         # "12 of 210" costs no second call.
         whole = -1;
-        if fStep != "All" or fPriority != "All" {
-            pool = await gatherPool(seq);
-            start = (page - 1) * PAGE_SIZE;
-            fetched = pool[start:start + PAGE_SIZE];
-            matched = len(pool);
-            more = len(pool) > start + PAGE_SIZE;
-            kept: any = poolRef.current;
-            whole = int(kept["scope_total"]) if kept else -1;
-        } else {
-            result = root spawn ListTasks(
-                scope=scope,
-                q=query,
-                project_id="" if fProject == "all" else fProject,
-                assignee_id="" if fAssignee == "All" else fAssignee,
-                category="" if fCategory == "All" else fCategory,
-                tag="" if fTag == "All" else fTag,
-                estimated="" if fEstimate == "All" else fEstimate,
-                sort=sort,
-                sort_dir=sortDir,
-                page=page,
-                page_size=PAGE_SIZE
-            );
-            data = result.reports[0] if result.reports else None;
-            fetched = data.rows if data else [];
-            matched = data.total if data else 0;
-            more = data.has_more if data else False;
-            whole = data.scope_total if data else -1;
-        }
+        result = root spawn ListTasks(
+            scope=scope,
+            q=query,
+            project_id="" if fProject == "all" else fProject,
+            assignee_id="" if fAssignee == "All" else fAssignee,
+            category="" if fCategory == "All" else fCategory,
+            tag="" if fTag == "All" else fTag,
+            estimated="" if fEstimate == "All" else fEstimate,
+            priority="" if fPriority == "All" else fPriority,
+            column="" if fStep == "All" else fStep,
+            sort=sort,
+            sort_dir=sortDir,
+            page=page,
+            page_size=PAGE_SIZE
+        );
+        data = result.reports[0] if result.reports else None;
+        fetched = data.rows if data else [];
+        matched = data.total if data else 0;
+        more = data.has_more if data else False;
+        whole = data.scope_total if data else -1;
         # A page past the end (an old link, or the last row deleted elsewhere)
         # steps back to the last page; the view effect reloads it.
         if reqRef.current == seq and len(fetched) == 0 and page > 1 and matched > 0 {
@@ -140,119 +133,6 @@ impl TasksPage.loadTasks -> None {
     }
 }
 
-# Every task the view matches once step and priority apply, read page by page
-# at the walker's largest size and kept until the filters or the data change.
-# A new sort re-sorts the kept rows. A step filter keys on the flow line too,
-# since placement depends on it.
-impl TasksPage.gatherPool(seq: int) -> list[TaskRow] {
-    keys = columnKeys();
-    sig = "|".join(
-        [
-            scope,
-            query,
-            fProject,
-            fAssignee,
-            fCategory,
-            fTag,
-            fEstimate,
-            fStep,
-            fPriority,
-            str(len(steps)) if fStep != "All" else ""
-        ]
-    );
-    order = sort + "|" + sortDir;
-    cached: any = poolRef.current;
-    if cached and cached["sig"] == sig {
-        kept: list[TaskRow] = cached["rows"];
-        if cached["order"] != order {
-            kept = sortPool(kept);
-            poolRef.current = {
-                "sig": sig,
-                "order": order,
-                "rows": kept,
-                "scope_total": cached["scope_total"]
-            };
-        }
-        return kept;
-    }
-    pool: list[TaskRow] = [];
-    whole = -1;
-    pg = 1;
-    more = True;
-    while more and pg <= GATHER_PAGES and reqRef.current == seq {
-        result = root spawn ListTasks(
-            scope=scope,
-            q=query,
-            project_id="" if fProject == "all" else fProject,
-            assignee_id="" if fAssignee == "All" else fAssignee,
-            category="" if fCategory == "All" else fCategory,
-            tag="" if fTag == "All" else fTag,
-            estimated="" if fEstimate == "All" else fEstimate,
-            sort=sort,
-            sort_dir=sortDir,
-            page=pg,
-            page_size=GATHER_SIZE
-        );
-        data = result.reports[0] if result.reports else None;
-        got: list[TaskRow] = data.rows if data else [];
-        if pg == 1 and data {
-            whole = data.scope_total;
-        }
-        for t in got {
-            if (fPriority == "All" or t.priority == fPriority)
-                and (fStep == "All" or columnKeyOf(t, keys) == fStep) {
-                pool.append(t);
-            }
-        }
-        more = data.has_more if data else False;
-        pg = pg + 1;
-    }
-    if reqRef.current == seq {
-        poolRef.current = {
-            "sig": sig,
-            "order": order,
-            "rows": pool,
-            "scope_total": whole
-        };
-    }
-    return pool;
-}
-
-# The walker's column sort (sort_tasks) over rows already in hand: a jid pass,
-# then the key. A descending pass runs on the reversed list and reverses back,
-# which keeps ties in jid order as Python's reverse=True does.
-impl TasksPage.sortPool(pool: list[TaskRow]) -> list[TaskRow] {
-    rows = [t for t in pool];
-    rows.sort(key=lambda (t: TaskRow) { t.id; });
-    desc = sortDir == "desc";
-    keys = columnKeys();
-    if sort == "step" {
-        rows.sort(key=lambda (t: TaskRow) { t.sort_order; });
-    }
-    if desc {
-        rows.reverse();
-    }
-    if sort == "step" {
-        rows.sort(key=lambda (t: TaskRow) { keys.index(columnKeyOf(t, keys)); });
-    } elif sort == "title" {
-        rows.sort(key=lambda (t: TaskRow) { t.title.lower(); });
-    } elif sort == "priority" {
-        rows.sort(
-            key=lambda (t: TaskRow) { PRIORITY_RANK[t.priority]
-                if t.priority in PRIORITY_RANK
-                else 1; }
-        );
-    } elif sort == "due" {
-        rows.sort(key=lambda (t: TaskRow) { t.due_date or "9999-12-31"; });
-    } else {
-        rows.sort(key=lambda (t: TaskRow) { t.updated_at; });
-    }
-    if desc {
-        rows.reverse();
-    }
-    return rows;
-}
-
 impl TasksPage.filtered -> bool {
     return bool(query)
         or fProject != "all"
@@ -262,11 +142,6 @@ impl TasksPage.filtered -> bool {
         or fCategory != "All"
         or fTag != "All"
         or fEstimate != "All";
-}
-
-# A write can change what any view matches: drop the kept pool.
-impl TasksPage.forget -> None {
-    poolRef.current = None;
 }
 
 impl TasksPage.sortBy(field: str) -> None {
@@ -659,7 +534,6 @@ impl TasksPage.dialogOpenChange(o: bool) -> None {
 # A checklist write reports the task's fresh view; the table row takes it.
 impl TasksPage.replaceRow(view: TaskView) -> None {
     rows = [view if t.id == view.id else t for t in rows];
-    poolRef.current = None;
 }
 
 # The sheet's GetTask hands the open task's notes to the form.
@@ -756,7 +630,6 @@ impl TasksPage.saveTask -> None {
             editTaskId = made.reports[0].id;
             creating = False;
             taskOpen = False;
-            forget();
             await loadTasks();
             for (i, t) in enumerate(rows) {
                 if t.id == editTaskId {
@@ -791,7 +664,6 @@ impl TasksPage.saveTask -> None {
             project_id=project
         );
         taskOpen = False;
-        forget();
         await loadTasks();
         # The saved row may have moved in the order; the cursor follows it.
         for (i, t) in enumerate(rows) {
@@ -814,7 +686,6 @@ impl TasksPage.deleteTask -> None {
     try {
         root spawn DeleteTask(task_id=editTaskId);
         taskOpen = False;
-        forget();
         # The last row of a later page: step back, and the effect reloads.
         if len(rows) == 1 and page > 1 {
             page = page - 1;
