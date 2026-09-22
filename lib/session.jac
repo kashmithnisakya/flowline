@@ -21,7 +21,9 @@ glob:pub LANES_KEY: str = "flowline-lanes",
      OVERVIEW_SHAPE_KEY: str = "flowline-overview-shape",
      LOG_SHAPE_KEY: str = "flowline-log-shape",
      ROADMAP_SHAPE_KEY: str = "flowline-roadmap-shape",
-     GITHUB_KEY: str = "flowline-github";
+     GITHUB_KEY: str = "flowline-github",
+     # The account's board filters as this browser last saw them (lib/filters).
+     BOARD_FILTERS_KEY: str = "flowline-board-filters";
 
 glob SESSION_KEYS: list[str] = [
          ORG_KEY,
@@ -30,7 +32,8 @@ glob SESSION_KEYS: list[str] = [
          OVERVIEW_SHAPE_KEY,
          LOG_SHAPE_KEY,
          ROADMAP_SHAPE_KEY,
-         GITHUB_KEY
+         GITHUB_KEY,
+         BOARD_FILTERS_KEY
      ],
      ME: dict[str, any] = {"promise": None, "data": None};
 

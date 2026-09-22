@@ -36,6 +36,7 @@ LIVE_READERS = [
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
     "SaveRole", "SaveStep", "SaveIteration", "AddRepo", "SyncGithub", "ApplyTemplate",
+    "SetBoardFilters", "SaveFilterSet", "DeleteFilterSet",
 ]
 
 
@@ -463,6 +464,93 @@ def history_pages_suite(project_id):
                   str([(p.get("total"), p.get("scope_total")) for p in pages][:4]))
 
 
+def sign_up(tag):
+    # A second account for the tenant checks: its token, or "" on failure.
+    email, password = f"ci-{tag}@flowline-ci.invalid", f"Ci-{tag}-Xy7!"
+    req("POST", "/user/register", {"identities": [{"type": "email", "value": email}],
+                                   "credential": {"type": "password", "password": password},
+                                   "profile": {"org_name": "CI Other"}})
+    _, _, raw = req("POST", "/user/login", {"identity": {"type": "email", "value": email},
+                                           "credential": {"type": "password", "password": password}})
+    return str(find_key(json.loads(raw) if raw else {}, "token", "access_token") or "")
+
+
+def filter_sets_suite(project_id, member_id, tag):
+    # Saved filters: sets validate and keep only the board's keys, the board's
+    # own filters round-trip through BoardSnapshot, a delete forgets the set
+    # as the board's, and another account can reach none of it.
+    global TOKEN
+
+    def sets():
+        return report("GetWorkspace").get("filter_sets", [])
+
+    def board():
+        b = report("BoardSnapshot", {"page_size": 1, "with_workspace": True})
+        return b.get("board_filters"), b.get("board_set"), b.get("board_saved")
+
+    check("filters: a fresh account has no sets and no board filters",
+          sets() == [] and board() == ({}, "", False), f"{sets()} {board()}")
+    for body, error in (({"name": "  ", "filters": {"priority": "High"}}, "invalid"),
+                        ({"name": "Nothing", "filters": {"project": "all", "bogus": "x"}}, "empty"),
+                        ({"name": "Elsewhere", "page": "log", "filters": {"priority": "High"}}, "invalid")):
+        got = report("SaveFilterSet", body)
+        check(f"filters: SaveFilterSet refuses {body['name']!r} as {error}",
+              got.get("ok") is False and got.get("error") == error, str(got))
+    mine = report("SaveFilterSet", {"name": "  Mine  ", "filters": {
+        "project": project_id, "priority": "High", "done": "hide", "tag": "All", "estimate": "maybe", "bogus": "x"}})
+    mine_id = (mine.get("set") or {}).get("id", "")
+    check("filters: a set keeps the board's keys set away from their default, trimmed name",
+          mine.get("ok") and mine["set"].get("name") == "Mine" and mine["set"].get("page") == "board"
+          and mine["set"].get("filters") == {"project": project_id, "priority": "High", "done": "hide"}, str(mine))
+    dup = report("SaveFilterSet", {"name": "MINE", "filters": {"priority": "Low"}})
+    check("filters: a name is unique on its page ignoring case", dup.get("error") == "duplicate", str(dup))
+    other = report("SaveFilterSet", {"name": "Z" * 80, "filters": {"assignee": member_id}})
+    other_id = (other.get("set") or {}).get("id", "")
+    check("filters: a long name is cut to 60 characters", other.get("ok") and len(other["set"]["name"]) == 60, str(other))
+    clash = report("SaveFilterSet", {"set_id": other_id, "name": "mine", "filters": {"assignee": member_id}})
+    check("filters: a rename cannot take another set's name", clash.get("error") == "duplicate", str(clash))
+    renamed = report("SaveFilterSet", {"set_id": other_id, "name": "Priya's work", "filters": {"assignee": member_id}})
+    check("filters: a set renames in place", renamed.get("ok") and renamed["set"].get("id") == other_id
+          and renamed["set"].get("name") == "Priya's work", str(renamed))
+    check("filters: GetWorkspace lists the sets by name",
+          [(s.get("name"), s.get("id")) for s in sets()] == [("Mine", mine_id), ("Priya's work", other_id)], str(sets()))
+    kept = report("SetBoardFilters", {"filters": {"project": project_id, "priority": "Low", "junk": "1"}, "set_id": mine_id})
+    check("filters: SetBoardFilters keeps the board's keys and a set of this account",
+          kept.get("filters") == {"project": project_id, "priority": "Low"} and kept.get("set_id") == mine_id, str(kept))
+    check("filters: BoardSnapshot carries the board's filters with the workspace",
+          board() == ({"project": project_id, "priority": "Low"}, mine_id, True), str(board()))
+    poll = report("BoardSnapshot", {"page_size": 1})
+    check("filters: the poll carries no filters", poll.get("board_saved") is False and poll.get("filter_sets") == [],
+          str({k: poll.get(k) for k in ("board_saved", "filter_sets")}))
+    gone = report("DeleteFilterSet", {"set_id": mine_id})
+    check("filters: DeleteFilterSet deletes the set", gone.get("deleted") == mine_id, str(gone))
+    check("filters: deleting the board's set forgets it and keeps the filters",
+          board() == ({"project": project_id, "priority": "Low"}, "", True)
+          and [s.get("id") for s in sets()] == [other_id], f"{board()} {sets()}")
+    again = report("DeleteFilterSet", {"set_id": mine_id})
+    check("filters: a deleted set is not found", again.get("error") == "not_found", str(again))
+    made = [report("SaveFilterSet", {"name": f"Set {i:02d}", "filters": {"priority": "High"}}) for i in range(49)]
+    full = report("SaveFilterSet", {"name": "One too many", "filters": {"priority": "High"}})
+    check("filters: a page holds 50 sets", all(m.get("ok") for m in made) and full.get("error") == "full",
+          f"{sum(1 for m in made if m.get('ok'))} {full}")
+    for m in made:
+        report("DeleteFilterSet", {"set_id": (m.get("set") or {}).get("id", "")})
+
+    home = TOKEN
+    TOKEN = sign_up(f"{tag}b")
+    if check("filters: a second account signs in", bool(TOKEN)):
+        check("filters: another account sees none of the sets", sets() == [], str(sets()))
+        for name, body in (("rename", {"set_id": other_id, "name": "Taken", "filters": {"priority": "High"}}),
+                           ("delete", {"set_id": other_id})):
+            got = report("SaveFilterSet" if name == "rename" else "DeleteFilterSet", body)
+            check(f"filters: another account cannot {name} a set", got.get("error") == "not_found", str(got))
+        took = report("SetBoardFilters", {"filters": {"priority": "High"}, "set_id": other_id})
+        check("filters: another account cannot point its board at a set", took.get("set_id") == "", str(took))
+    TOKEN = home
+    check("filters: the set is untouched", [(s.get("id"), s.get("name")) for s in sets()] == [(other_id, "Priya's work")],
+          str(sets()))
+
+
 def effects_table(html: str) -> dict:
     # The shell carries the compiler's endpoint effects in its __jac_init__
     # JSON; the client runtime reads its cache verdicts from this table.
@@ -634,7 +722,7 @@ def main() -> int:
     # flow line's record and the GitHub connection view, in one call.
     status, payload, reports = walker("GetWorkspace")
     ws = reports[0] if reports and isinstance(reports[0], dict) else {}
-    lists = ("members", "projects", "steps", "repos", "roles", "iterations")
+    lists = ("members", "projects", "steps", "repos", "roles", "iterations", "filter_sets")
     check("GetWorkspace reports the workspace lists",
           status == 200 and all(isinstance(ws.get(k), list) for k in lists)
           and isinstance(ws.get("github"), dict) and "flow_name" in ws, f"{status} {payload}")
@@ -652,6 +740,7 @@ def main() -> int:
     log_paging_suite(member_id)
     log_counts_suite(member_id, project_id, tag)
     history_pages_suite(project_id)
+    filter_sets_suite(project_id, member_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))

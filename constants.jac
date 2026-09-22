@@ -29,6 +29,21 @@ glob STATUSES: list[str] = [
      # What a transition carries: an issue (no code yet) or a PR (code,
      # waiting on a person). Empty is fine and means untagged.
      CARRY_KINDS: list[str] = ["issue", "pr"],
+     # The board's filters as the account and a saved set store them: each
+     # key with the value that means "no filter". A stored dict keeps only
+     # the keys set to something else; the title search is never stored.
+     BOARD_FILTERS: list[list[str]] = [
+         ["project", "all"],
+         ["assignee", "All"],
+         ["priority", "All"],
+         ["category", "All"],
+         ["tag", "All"],
+         ["estimate", "All"],
+         ["iteration", "All"],
+         ["done", "show"]
+     ],
+     # The pages a saved filter set can belong to.
+     FILTER_SET_PAGES: list[str] = ["board"],
      # Prebuilt flows, recommended first. The key persists on the flow line
      # (WorkflowSteps.template_key), so rename a template, never re-key it.
      # Roles, link_labels and link_carries are optional per template.

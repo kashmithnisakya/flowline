@@ -4,9 +4,9 @@ path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
 root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
-root ++> Logs ++> LogDay ++> LogEntry and root ++> Iterations ++> Iteration;
-repos and the GitHub connection hang off the root directly. `owned()` climbs
-those container edges.
+root ++> Logs ++> LogDay ++> LogEntry, root ++> Iterations ++> Iteration and
+root ++> FilterSets ++> FilterSet; repos and the GitHub connection hang off
+the root directly. `owned()` climbs those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -60,6 +60,7 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, Logs)
         or isinstance(owner, LogDay)
         or isinstance(owner, Iterations)
+        or isinstance(owner, FilterSets)
     );
 }
 
@@ -479,6 +480,24 @@ node Iteration {
 
 node Iterations {}
 
+# The board's filters as the account left them (`board`, only the keys set
+# away from their default in constants.BOARD_FILTERS), the saved set they
+# came from, and when they were last written ("" means never).
+node FilterSets {
+    has board: dict[str, str] = {},
+        board_set: str = "",
+        board_at: str = "";
+}
+
+# A named set of filters for one page, stored like FilterSets.board.
+node FilterSet {
+    has name: str,
+        page: str = "board",
+        filters: dict[str, str] = {},
+        created_at: str = "",
+        updated_at: str = "";
+}
+
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
 edge By: LogEntry --> Member {}
@@ -672,6 +691,17 @@ def iteration_view(it: Iteration) -> IterationView {
     );
 }
 
+obj FilterSetView {
+    has id: str,
+        name: str,
+        page: str,
+        filters: dict[str, str];
+}
+
+def filter_set_view(s: FilterSet) -> FilterSetView {
+    return FilterSetView(id=jid(s), name=s.name, page=s.page, filters=dict(s.filters));
+}
+
 def role_view(r: Role) -> RoleView {
     return RoleView(
         id=jid(r), name=r.name, blurb=r.blurb, color=r.color, sort_order=r.sort_order
@@ -804,6 +834,25 @@ def iterations_of(holder: Root) -> list[Iteration] {
     out: list[Iteration] = [];
     for box in [holder-->[?:Iterations]] {
         out.extend([box-->[?:Iteration]]);
+    }
+    return out;
+}
+
+
+def filter_sets_of(holder: Root) -> list[FilterSet] {
+    out: list[FilterSet] = [];
+    for box in [holder-->[?:FilterSets]] {
+        out.extend([box-->[?:FilterSet]]);
+    }
+    return out;
+}
+
+
+# One page's saved sets, the page pushed into the store's query.
+def page_filter_sets(holder: Root, which: str) -> list[FilterSet] {
+    out: list[FilterSet] = [];
+    for box in [holder-->[?:FilterSets]] {
+        out.extend([box-->[?:FilterSet, page==which]]);
     }
     return out;
 }
@@ -1748,6 +1797,17 @@ def iterations_box(holder: Root) -> Iterations {
         return found[0];
     }
     box = holder ++> Iterations();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def filter_sets_box(holder: Root) -> FilterSets {
+    found = [holder-->[?:FilterSets]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> FilterSets();
     on_attached(holder, box);
     return box;
 }

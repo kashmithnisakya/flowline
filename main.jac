@@ -101,6 +101,7 @@ import from services.iterations.iterations {
     DeleteIteration,
     RoadmapSnapshot
 }
+import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
 import from services.insights.insights { Digest, OverviewSnapshot }
 import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
 

@@ -13,7 +13,7 @@ The page calls it two ways:
 
 | Call | `with_workspace` | What comes back |
 | --- | --- | --- |
-| Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles, iterations and whether GitHub is connected |
+| Boot | `true` on the first page | Tasks plus members, projects, steps, repos, roles, iterations, the [saved filter sets](filters.md) and the board's stored filters, and whether GitHub is connected |
 | Poll | `false` | Tasks and categories only; the workspace lists are `[]` and `github_connected` is `false` |
 
 - `rows` is one page of the **working set**: open tasks plus Done tasks that
@@ -55,8 +55,9 @@ invalid; the full view is `github` on [`GetWorkspace`](#getworkspace) or
 
 ::: walker GetWorkspace
 
-**Reports** exactly one [`WorkspaceView`](types.md#workspaceview): the six
-lists `BoardSnapshot` carries with `with_workspace`, in the same order, plus
+**Reports** exactly one [`WorkspaceView`](types.md#workspaceview): the seven
+lists `BoardSnapshot` carries with `with_workspace` (the saved filter sets
+among them), in the same order, plus
 the flow line's `flow_name` and `template_key` (what
 [`GetFlowLineMeta`](flow-lines.md#getflowlinemeta) reports) and the connection
 view `github` (what [`GithubStatus`](github.md#githubstatus) reports, no GitHub

@@ -137,7 +137,8 @@ Before merging a change to walkers or `owned()`, run an API gate that signs up
 
 - cross-account reads return nothing;
 - foreign-jid `UpdateTask`, `MoveTask`, `DeleteTask`, `AssignToProject`,
-  `UpdateLogEntry`, `SaveProject` and `ArchiveMember` are no-ops;
+  `UpdateLogEntry`, `SaveProject`, `ArchiveMember`, `SaveFilterSet` and
+  `DeleteFilterSet` are no-ops, and `SetBoardFilters` stores no foreign set;
 - every list filter (`project_id`, `assignee_id`, `step_id`, `task_id`) yields
   nothing for a foreign id.
 
