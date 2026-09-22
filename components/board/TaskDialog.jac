@@ -952,29 +952,7 @@ def:pub TaskDialog(
                                     />
                                 </PropRow>
                             }}
-                            <PropRow label="Due">
-                                <DatePicker
-                                    value={form["due_date"]}
-                                    clearable={True}
-                                    className={GHOST_DATE
-                                        + (
-                                            " text-subtle!"
-                                                if not form["due_date"]
-                                                else ""
-                                        )}
-                                    onChange={lambda (d: str) { onField(
-                                        "due_date", d
-                                    ); }}
-                                />
-                            </PropRow>
-                            <PropRow
-                                label="Start date"
-                                top={bool(
-                                    form["start_date"]
-                                        and form["due_date"]
-                                        and form["start_date"] > form["due_date"]
-                                )}
-                            >
+                            <PropRow label="Start date">
                                 <DatePicker
                                     value={form["start_date"]}
                                     clearable={True}
@@ -986,6 +964,28 @@ def:pub TaskDialog(
                                         )}
                                     onChange={lambda (d: str) { onField(
                                         "start_date", d
+                                    ); }}
+                                />
+                            </PropRow>
+                            <PropRow
+                                label="Due"
+                                top={bool(
+                                    form["start_date"]
+                                        and form["due_date"]
+                                        and form["start_date"] > form["due_date"]
+                                )}
+                            >
+                                <DatePicker
+                                    value={form["due_date"]}
+                                    clearable={True}
+                                    className={GHOST_DATE
+                                        + (
+                                            " text-subtle!"
+                                                if not form["due_date"]
+                                                else ""
+                                        )}
+                                    onChange={lambda (d: str) { onField(
+                                        "due_date", d
                                     ); }}
                                 />
                                 {if form["start_date"]
