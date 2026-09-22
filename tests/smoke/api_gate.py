@@ -430,6 +430,21 @@ def log_counts_suite(member_id, project_id, tag):
     report("MoveTask", {"task_id": task.get("id", ""), "status": "Blocked"})
     report("SetMoveInfo", {"task_id": task.get("id", ""), "note": f"waiting on keys {tag}"})
     parity("after a move and its note")
+    # The assistant's snapshot counts the period from the days' tallies and
+    # carries its newest lines, oldest first.
+    rows = [r for p in log_pages({"from_date": starts[0], "to_date": days[6], "page_size": 500}) for r in p.get("rows", [])]
+    digest = report("Digest", {"from_date": starts[0], "to_date": days[6]})
+    counted = {}
+    for r in rows:
+        for name in [n.strip() for n in r.get("member_name", "").split(",") if n.strip()]:
+            counted[name] = counted.get(name, 0) + 1
+    got_people = {p["name"]: p["log_entries"] for p in digest.get("people", [])}
+    check("digest: the period's log counts equal a count of the entries",
+          digest.get("log_entries_in_period") == len(rows) and all(counted.get(n, 0) == c for n, c in got_people.items()),
+          f"{digest.get('log_entries_in_period')} vs {len(rows)}; {got_people} vs {counted}")
+    check("digest: activity is the newest lines, oldest first",
+          [a["what"] for a in digest.get("activity", [])] == [r["activity"] for r in rows[:200]][::-1],
+          f"{len(digest.get('activity', []))} lines")
     snap = report("OverviewSnapshot", {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
                                        "attention_size": 50})
     item = next((b for b in snap.get("blocked", []) if b.get("task_id") == task.get("id")), {})

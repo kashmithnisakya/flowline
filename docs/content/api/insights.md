@@ -32,16 +32,20 @@ The burn-up and throughput charts come from a separate call,
 
 **Reports** one [`Snapshot`](types.md#snapshot) for the period `from_date` to
 `to_date` (both default to today): headline counts, blocked and review queues,
-aging and overdue work, per-person and per-project stats, and every log entry
-in the period as an activity line. This is exactly the object the
-[assistant](assistant.md) is given.
+aging and overdue work, per-person and per-project stats, and the period's
+newest 200 log entries as activity lines, oldest first. This is exactly the
+object the [assistant](assistant.md) is given.
 
 !!! info "How the snapshot counts"
 
     - `done_in_period` counts tasks that moved to Done on or after `from_date`
       (by `done_at`); a task created straight into Done counts nowhere, and
       an imported closed issue counts on the day GitHub closed it.
-    - People are matched to tasks and log entries by name, on the
-      comma-joined assignee names.
+    - People are matched to tasks by id, and to log entries by name (a
+      line's comma-joined assignee names).
+    - `log_entries_in_period` and each person's `log_entries` come from the
+      days' counts, so they cover the whole period even when `activity`
+      carries only its newest 200 lines. Blocked reasons are read per
+      blocked task, not from the loaded lines.
     - Project stats cover active projects and match tasks by project name.
     - Only active members appear under `people`.

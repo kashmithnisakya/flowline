@@ -92,8 +92,8 @@ new links and note.
 - The Overview counts entries per week, per weekday and per person
   (`LogCounts`, and `logs` inside `OverviewSnapshot`), and reads this week's
   entries for its moves to Done per day.
-- The assistant's snapshot includes every entry in the requested window as an
-  activity line.
+- The assistant's snapshot counts the requested window from the days' counts
+  and carries its newest 200 entries as activity lines.
 - Insights use the latest `Blocked` entry's note as a blocked task's reason.
 
 The walkers are documented in the [Daily log API](../api/log.md).

@@ -125,6 +125,77 @@ def fold_imports(day: LogDay, rows: list[LogEntry]) -> list[LogEntry] {
 }
 
 
+# The days in [since, until], newest first; two days on one date (a racing
+# first write) keep one order between requests.
+def days_newest_first(holder: Root, since: str, until: str) -> list[LogDay] {
+    days = days_between(holder, since, until);
+    days.sort(key=lambda (d: LogDay) { jid(d); });
+    days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
+    return days;
+}
+
+
+# Rows [start, start + size) of `days` (newest first), each day newest stamp
+# first. Whole days before the window are skipped on their counts and each
+# day in it answers only its slice. A short slice means the count drifted,
+# so that day is counted again and paged from what it loaded.
+def range_rows(days: list[LogDay], start: int, size: int) -> list[LogEntry] {
+    loaded: dict[str, list[LogEntry]] = {};
+    for d in days {
+        if not d.tallied {
+            loaded[jid(d)] = fill_day(d);
+        }
+    }
+    rows: list[LogEntry] = [];
+    offset = start;
+    for d in days {
+        if len(rows) >= size {
+            break;
+        }
+        if offset < d.entry_total {
+            stop = min(d.entry_total, offset + size - len(rows));
+            part = day_slice(d, offset, stop, loaded);
+            # A recount can leave the day shorter than the offset.
+            if offset < d.entry_total {
+                rows.extend(part);
+                offset = 0;
+                continue;
+            }
+        }
+        offset = offset - d.entry_total;
+    }
+    return rows;
+}
+
+
+# How many entries the days hold, from their counts (range_rows fills a day
+# not yet counted, so call it first).
+def range_total(days: list[LogDay]) -> int {
+    total = 0;
+    for d in days {
+        total = total + d.entry_total;
+    }
+    return total;
+}
+
+
+# Rows [offset, stop) of one day: from the store, or from fill_day's load
+# when the day was counted in this request or the store came back short.
+def day_slice(
+    d: LogDay, offset: int, stop: int, loaded: dict[str, list[LogEntry]]
+) -> list[LogEntry] {
+    key = jid(d);
+    if key not in loaded {
+        part = day_entries(d, offset, stop);
+        if len(part) == stop - offset {
+            return part;
+        }
+        loaded[key] = fill_day(d);
+    }
+    return loaded[key][offset:stop];
+}
+
+
 walker ListLogEntries {
     """One page of the entries in [from_date, to_date], newest day first and
     newest stamp first within a day, so a later page lands under the rows on
@@ -154,68 +225,13 @@ walker ListLogEntries {
         if self.task_id {
             report self.task_page(root, p, size, start, end);
         } else {
-            days = days_between(root, self.from_date, self.to_date);
-            # Newest day first; two days on one date (a racing first write)
-            # keep one order between requests.
-            days.sort(key=lambda (d: LogDay) { jid(d); });
-            days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
-            report self.range_page(days, p, size, start, end);
+            days = days_newest_first(root, self.from_date, self.to_date);
+            rows = range_rows(days, start, size);
+            total = range_total(days);
+            report LogPage(
+                rows=rows, page=p, page_size=size, has_more=total > end, total=total
+            );
         }
-    }
-
-    # Whole days before the page are skipped on their counts and each day in
-    # it answers only its slice. A short slice means the count drifted, so
-    # that day is counted again and paged from what it loaded.
-    def range_page(
-        days: list[LogDay], p: int, size: int, start: int, end: int
-    ) -> LogPage {
-        loaded: dict[str, list[LogEntry]] = {};
-        for d in days {
-            if not d.tallied {
-                loaded[jid(d)] = fill_day(d);
-            }
-        }
-        rows: list[LogEntry] = [];
-        offset = start;
-        for d in days {
-            if len(rows) >= size {
-                break;
-            }
-            if offset < d.entry_total {
-                stop = min(d.entry_total, offset + size - len(rows));
-                part = self.day_slice(d, offset, stop, loaded);
-                # A recount can leave the day shorter than the offset.
-                if offset < d.entry_total {
-                    rows.extend(part);
-                    offset = 0;
-                    continue;
-                }
-            }
-            offset = offset - d.entry_total;
-        }
-        total = 0;
-        for d in days {
-            total = total + d.entry_total;
-        }
-        return LogPage(
-            rows=rows, page=p, page_size=size, has_more=total > end, total=total
-        );
-    }
-
-    # Rows [offset, stop) of one day: from the store, or from fill_day's load
-    # when the day was counted in this request or the store came back short.
-    def day_slice(
-        d: LogDay, offset: int, stop: int, loaded: dict[str, list[LogEntry]]
-    ) -> list[LogEntry] {
-        key = jid(d);
-        if key not in loaded {
-            part = day_entries(d, offset, stop);
-            if len(part) == stop - offset {
-                return part;
-            }
-            loaded[key] = fill_day(d);
-        }
-        return loaded[key][offset:stop];
     }
 
     # A task's rows (the task sheet's history): one query across the range's
