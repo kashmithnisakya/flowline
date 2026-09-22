@@ -5,7 +5,7 @@ and validation shows inline under the field it is about.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
-import from ...lib.session { forgetSession }
+import from ...lib.session { forgetSession, checkSession }
 import from ...components.auth.SsoButtons { SsoButtons }
 import from ...components.landing.Wordmark { Wordmark }
 import from ...components.ui.button { Button }
@@ -25,12 +25,20 @@ def:pub LoginPage -> JsxPage {
         busy: bool = False,
         emailError: str = "",
         passwordError: str = "",
-        error: str = "";
+        error: str = "",
+        # A stored token is checked before the page redirects on it, and the
+        # form waits for the answer, so a dead token never bounces through
+        # the board and a live one never flashes the form.
+        checking: bool = jacIsLoggedIn();
 
-    can with entry {
-        if jacIsLoggedIn() {
-            window.location.href = "/board";
-            return;
+    async can with entry {
+        if checking {
+            live = await checkSession();
+            if live {
+                window.location.href = "/board";
+                return;
+            }
+            checking = False;
         }
         # The landing page links here as /login?mode=signup.
         if "mode=signup" in str(window.location.search) {
@@ -50,6 +58,9 @@ def:pub LoginPage -> JsxPage {
 
     signup = mode == "signup";
     longEnough = len(password) >= MIN_PASSWORD;
+    if checking {
+        return <div className="min-h-svh bg-background" aria-busy="true"/>;
+    }
 
     return
         <div className="min-h-svh bg-background text-foreground">

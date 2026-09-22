@@ -5,8 +5,10 @@ impl BoardPage.boot -> None {
     # snapshot comes back with no projects.
     # No GitHub call rides on a board open: the server's schedule polls and
     # the DRAIN_MS timer applies deliveries while they are live.
+    # A 401 answers an empty snapshot and clears the token: that is a signed
+    # out visitor, not an empty workspace, and the route guard takes it.
     info = await loadBoard(True);
-    if info["ok"] and int(info["projects"]) == 0 {
+    if info["ok"] and int(info["projects"]) == 0 and jacIsLoggedIn() {
         window.location.href = "/setup";
         return;
     }
