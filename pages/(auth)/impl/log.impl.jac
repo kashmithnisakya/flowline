@@ -58,6 +58,30 @@ impl DailyLogPage.loadWeek -> None {
     }
 }
 
+# The week on screen is `monday`'s, it loaded, and its first page landed
+# less than WEEK_FRESH_MS ago.
+impl DailyLogPage.weekFresh(monday: str) -> bool {
+    if monday != loadedMonday or loadFailed {
+        return False;
+    }
+    d = new(Date);
+    age: float = (d.getTime() as float) - (weekAtRef.current or 0.0);
+    return age < WEEK_FRESH_MS;
+}
+
+# The poll (`always`) or a tab return (only once the week is stale): the
+# week on screen and the blocked list again, rows kept until they land.
+impl DailyLogPage.refreshWeek(always: bool) -> None {
+    if not selectedDate or loading {
+        return;
+    }
+    if not always and weekFresh(mondayOf(selectedDate)) {
+        return;
+    }
+    w: any = window;
+    await w.Promise.all([loadWeek(), loadBlocked()]);
+}
+
 # One page of the week's entries on top of `sofar`; when this request is
 # still the newest, the rows go on screen at once. Answers the rows so far
 # and whether the server has more.
@@ -73,6 +97,10 @@ impl DailyLogPage.weekPage(
     }
     gathered = sofar + got.rows;
     if weekReqRef.current == seq {
+        if pageNo == 1 {
+            d = new(Date);
+            weekAtRef.current = d.getTime();
+        }
         # Wire order is newest day first; the components order a day by
         # its stamps themselves.
         entries = [r for r in gathered];
@@ -287,8 +315,10 @@ impl DailyLogPage.createEntry(fields: dict[str, str]) -> bool {
             return False;
         }
         # A row for another day jumps there and the [selectedDate] effect
-        # fetches it; one for this day shows at once and survives a cached read.
+        # fetches it (the week is marked stale first, since a hop inside a
+        # fresh week only renders); one for this day shows at once.
         if fields["date"] != selectedDate {
+            weekAtRef.current = 0;
             selectedDate = fields["date"];
         } else {
             entries = entries + [added];

@@ -162,6 +162,18 @@ def run(page, tag: str) -> list[str]:
     page.get_by_role("link", name="Log", exact=True).click()
     expect(page.get_by_role("heading", name="Log", exact=True)).to_be_visible()
 
+    step("log: a day hop inside the loaded week makes no request")
+    page.wait_for_timeout(1500)
+    fetches: list[str] = []
+    page.on("request", lambda r: fetches.append(r.url) if r.url.endswith("/walker/ListLogEntries") else None)
+    label = page.locator('button[aria-pressed="false"]').filter(
+        has_text=re.compile(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d+")).first.get_attribute("aria-label")
+    day = page.locator(f'button[aria-label="{label}"]')
+    day.click()
+    expect(day).to_have_attribute("aria-pressed", "true")
+    page.wait_for_timeout(1500)
+    assert not fetches, f"a day hop fetched the week again: {fetches}"
+
     read_cache_once(page)
     github_install_once(page)
     return []
