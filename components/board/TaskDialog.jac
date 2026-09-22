@@ -482,9 +482,8 @@ def:pub TaskDialog(
         else "";
     hereColor = colors[hereIdx] if hereIdx >= 0 else "slate";
 
-    # The lanes picture's caption: which step of how many, who owns it, and
-    # who on this project holds that role (the person a move would hand to).
-    showLanes = editing and len(steps) > 0;
+    # Under the Step row: which step of how many, who owns it, and who on
+    # this project holds that role (the person a move would hand to).
     hereStep: list[StepView] = [
         s
         for s in steps
@@ -518,37 +517,6 @@ def:pub TaskDialog(
                         if len(held) > 0
                         else " · no one on this project"
                 );
-        }
-    }
-    # The route list in column order: each step with who owns it and who on
-    # this project holds that role.
-    routeSteps: list[StepView] = [];
-    routeWho: list[str] = [];
-    routePool = inProject if hasProject else members;
-    for k in columnKeys {
-        for s in steps {
-            if s.id == k {
-                owner = (s.owner or "").strip();
-                holders: list[str] = [];
-                for m in routePool {
-                    if owner and owner in m.roles {
-                        holders.append(m.name);
-                    }
-                }
-                who = "";
-                if owner == "anyone" {
-                    who = "anyone";
-                } elif owner {
-                    who = owner
-                        + (
-                            " · " + ", ".join(holders)
-                                if len(holders) > 0
-                                else " · no one on this project"
-                        );
-                }
-                routeSteps.append(s);
-                routeWho.append(who);
-            }
         }
     }
     # CreateTask takes no reviewer or pull request, so those rows wait for
@@ -778,7 +746,7 @@ def:pub TaskDialog(
                             />
                         </div>
                         <dl className="grid grid-cols-[minmax(0,1fr)] gap-y-px">
-                            <PropRow label="Step">
+                            <PropRow label="Step" top={bool(editing and whereLine)}>
                                 <Select
                                     value={hereKey}
                                     onValueChange={lambda (v: str) { onField(
@@ -802,6 +770,15 @@ def:pub TaskDialog(
                                         }}
                                     </SelectContent>
                                 </Select>
+                                {if editing and whereLine {
+                                    <p
+                                        key="where"
+                                        className="px-2 pb-1 text-xs text-muted-foreground"
+                                        title={whereLine}
+                                    >
+                                        {whereLine}
+                                    </p>
+                                }}
                             </PropRow>
                             <PropRow label="Project">
                                 <Select
@@ -1381,78 +1358,6 @@ def:pub TaskDialog(
                                 since={createdAt}
                                 refreshKey={historyKey}
                             />
-                        }}
-                        {if showLanes {
-                            <details
-                                key="lanes"
-                                className="group grid grid-cols-[minmax(0,1fr)] gap-2"
-                            >
-                                <summary
-                                    className="flex cursor-pointer list-none items-baseline gap-2 text-[13px] font-semibold [&::-webkit-details-marker]:hidden"
-                                >
-                                    <svg
-                                        width={12}
-                                        height={12}
-                                        viewBox="0 0 16 16"
-                                        aria-hidden="true"
-                                        className="shrink-0 self-center text-subtle transition-transform duration-150 group-open:rotate-90"
-                                    >
-                                        <path
-                                            d="m6 3.5 4.5 4.5L6 12.5"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={1.8}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                    <span className="shrink-0 whitespace-nowrap">
-                                        On the flow line
-                                    </span>
-                                    <span
-                                        className="min-w-0 truncate text-xs font-normal text-muted-foreground"
-                                        title={whereLine}
-                                    >
-                                        {whereLine}
-                                    </span>
-                                </summary>
-                                <ol className="mt-2 border-t" data-route-list="true">
-                                    {for (ri, rs) in enumerate(routeSteps) {
-                                        <li
-                                            key={rs.id}
-                                            aria-current={"step"
-                                                if rs.id == hereKey
-                                                else "false"}
-                                            className={"flex min-h-8 items-center gap-3 border-b px-1 py-1 text-[13px] "
-                                                + (
-                                                    "font-semibold text-foreground"
-                                                        if rs.id == hereKey
-                                                        else "text-muted-foreground"
-                                                )}
-                                        >
-                                            <StepName
-                                                name={rs.name}
-                                                color={rs.color}
-                                                className="shrink-0"
-                                            />
-                                            {if rs.id == hereKey {
-                                                <span
-                                                    key="here"
-                                                    className="shrink-0 text-xs font-normal text-muted-foreground"
-                                                >
-                                                    current
-                                                </span>
-                                            }}
-                                            <span
-                                                className="ml-auto min-w-0 truncate text-right text-xs font-normal text-muted-foreground"
-                                                title={routeWho[ri]}
-                                            >
-                                                {routeWho[ri]}
-                                            </span>
-                                        </li>
-                                    }}
-                                </ol>
-                            </details>
                         }}
                     </div>
                 </div>
