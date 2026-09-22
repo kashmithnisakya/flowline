@@ -568,29 +568,24 @@ walker ListTasks {
     }
 }
 
-# The Monday the Overview's four-week window ends in, and where it starts.
-def week_anchor(monday: str) -> str {
-    return monday if len(monday) >= 10 else today_iso();
+# The Monday of the week the Overview's window ends in: `monday` snapped to
+# its week, or this week's. The weekly counts are keyed by these Mondays.
+def week_of(monday: str) -> str {
+    anchor = monday if len(monday) >= 10 else today_iso();
+    return week_start(anchor) or anchor;
 }
 
 
-def tally_since(monday: str) -> str {
-    return shift_day(week_anchor(monday), -21);
-}
-
-
-# Every Overview number. `open` is every open task and `recent` the Done
-# tasks since tally_since(monday); the all-time totals per project come
-# from the tallies kept on write, so no history is loaded.
+# Every Overview number. `open` is every open task and `week_done` the Done
+# tasks since week_of(monday). Done per week is the projects' weekly counts
+# and the all-time totals their tallies, both kept on write, so the only
+# Done rows read are this week's (for who finished what).
 def task_totals(
-    holder: Root, open: list[Task], recent: list[Task], names: TaskNames, monday: str
+    holder: Root, open: list[Task], week_done: list[Task], names: TaskNames, monday: str
 ) -> TaskTotals {
-    week0 = week_anchor(monday);
+    week0 = week_of(monday);
     today = today_iso();
-    # Week bounds up front: shift_day parses a date, so calling it per task
-    # would be four parses per row.
     starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
-    ends = [shift_day(starts[i], 7) for i in range(4)];
     by_week = [0, 0, 0, 0];
     open_count = 0;
     overdue_count = 0;
@@ -625,28 +620,23 @@ def task_totals(
                 + 1;
         }
     }
-    for t in recent {
-        if not moved_to_done(t) {
+    for t in week_done {
+        if not moved_to_done(t) or done_day(t) < week0 {
             continue;
         }
-        day = done_day(t);
-        for i in range(4) {
-            if day >= starts[i] and day < ends[i] {
-                by_week[i] = by_week[i] + 1;
-            }
-        }
-        if day >= week0 {
-            for who in names.ids_of(t) {
-                done_by_member[who] = (
-                    done_by_member[who] if who in done_by_member else 0
-                )
-                    + 1;
-            }
+        for who in names.ids_of(t) {
+            done_by_member[who] = (done_by_member[who] if who in done_by_member else 0)
+                + 1;
         }
     }
     tallies: list[ProjectTally] = [];
     for pr in projects_of(holder) {
         pid = jid(pr);
+        for (i, week) in enumerate(starts) {
+            if week in pr.week_finished {
+                by_week[i] = by_week[i] + pr.week_finished[week];
+            }
+        }
         tallies.append(
             ProjectTally(
                 project_id=pid,
@@ -682,17 +672,18 @@ def task_totals(
 
 walker TaskCounts {
     """The Overview's numbers over the whole history: open tasks, Done per
-    week for the four weeks ending in `monday`'s week, and total/done per
-    project."""
+    week for the four weeks ending in `monday`'s week (from the weekly
+    counts), and total/done per project (from the tallies)."""
     has monday: str = "",
         reports: list[TaskTotals] = [];
 
     can count with Root entry {
         ensure_tallies(here);
+        ensure_history(here);
         report task_totals(
             here,
             open_tasks(here),
-            done_since(here, tally_since(self.monday)),
+            done_since(here, week_of(self.monday)),
             task_names(here),
             self.monday
         );
@@ -737,8 +728,7 @@ walker TaskHistory {
     # The window's Mondays, oldest first: the weeks the counts are kept by.
     def starts -> list[str] {
         count = min(max(self.weeks, 4), 52);
-        anchor = week_anchor(self.monday);
-        week0 = week_start(anchor) or anchor;
+        week0 = week_of(self.monday);
         return [shift_day(week0, -7 * (count - 1 - i)) for i in range(count)];
     }
 

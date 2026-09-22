@@ -23,7 +23,8 @@ Everything `/overview` renders, in one call.
 | `aging` | Open tasks untouched for 7 days or more, oldest first, at most `attention_size` |
 | `blocked` | Blocked tasks with the reason from their latest Blocked log entry since `from_date` (or the task notes), in the attention order, at most `attention_size` |
 
-`monday` anchors the week (today when empty). "Today" is the server's UTC day.
+`monday` anchors the week (this week when empty). "Today" is the server's UTC
+day. The open tasks and this week's Done are the only task rows it loads.
 The burn-up and throughput charts come from a separate call,
 [`TaskHistory`](tasks.md#taskhistory).
 

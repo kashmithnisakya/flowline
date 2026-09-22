@@ -155,7 +155,8 @@ people it tracks are roster members.
   Done: history, not throughput), the Overview's weekly history
   (`Project.week_added` / `week_finished`, keyed by the week's Monday from
   `history_days` and `week_start`, filled once per project by
-  `ensure_history`, which only `TaskHistory` calls, and moved by
+  `ensure_history`, which `TaskHistory`, `TaskCounts` and
+  `OverviewSnapshot` call, and moved by
   `shift_history` on the same writes plus the sync's `reseed`) and
   `Projects.categories` (exact: `note_category` adds, `forget_category`
   drops after a two-row lookup).

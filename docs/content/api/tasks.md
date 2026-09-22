@@ -99,10 +99,11 @@ at 500).
 **Reports** one [`TaskTotals`](types.md#tasktotals) over the whole history: open,
 overdue and blocked counts, Done per week for the four weeks ending in
 `monday`'s week (oldest first), per-project and per-member tallies, and every
-category in use. An empty `monday` counts from today. Only the open tasks and
-those four weeks of Done are loaded; each project's `total` and `done` are the
-tallies it keeps on write, and `categories` is the list the projects' box
-keeps.
+category in use. An empty `monday` means this week. Done per week is the sum
+of the projects' weekly counts (the ones [`TaskHistory`](#taskhistory) reads),
+and each project's `total` and `done` are the tallies it keeps on write, so
+only the open tasks and this week's Done (for each member's `done_in_week`)
+are loaded. `categories` is the list the projects' box keeps.
 
 ::: walker TaskHistory h3
 
@@ -115,9 +116,8 @@ totals at each week's end (tasks from before the window seed the totals).
 `project_id` narrows it to one project; a foreign id reports empty history.
 It reads each project's weekly counts, kept on every task write, so it costs
 the same whatever the window; a project's first call fills them from one
-full load, once. An empty `monday` means this week.
-Only the window's rows are loaded (created or reached Done since its first
-Monday); what came before is the project tallies less those rows.
+full load, once. An empty `monday` means this week. What came before the
+window is the project tallies less the window's counts.
 
 !!! info "What counts as finished"
 
