@@ -6,10 +6,12 @@ keeps two passes apart and yields to a manual sync."""
 
 import os;
 import from jaclang { JacRuntime as Jac }
+import from jaclang.runtime.exceptions { MissingAnchorError }
 import from models { GithubConnection }
 import from services.github.github { SyncGithub, SYNC_LEASE_SECONDS, connection_of }
 import from services.github.util {
     bound_installations,
+    release_binding,
     acquire_sync_lease,
     release_sync_lease,
     lease_owner,
@@ -36,19 +38,47 @@ def interval_seconds -> int {
 glob SYNC_INTERVAL_SECONDS: int = interval_seconds();
 
 
+# A binding outlives its workspace only when the root is gone or no longer
+# holds that installation (the connect race #187 fixed, a store reset). The
+# tick drops such a row instead of visiting it forever; an invalid
+# connection keeps its row, so an unsuspend delivery can still reach it.
+def drop_dead_binding(installation_id: int, root_jid: str, why: str) {
+    if release_binding(installation_id, root_jid) {
+        log.info(
+            "github sync: installation " + str(installation_id) + " unbound: " + why
+        );
+    }
+}
+
+
 # One pass in the workspace's own root: inside the walker `here` and `root`
 # are that root, so owned() and every helper work unchanged. Reports come
 # back on the walker; a failure is logged and the tick moves on.
 def sync_workspace(root_jid: str, installation_id: int) {
     where = "github sync: installation " + str(installation_id);
-    ctx = Jac.create_j_context(user_root=root_jid);
+    try {
+        ctx = Jac.create_j_context(user_root=root_jid);
+    } except MissingAnchorError {
+        drop_dead_binding(installation_id, root_jid, "its workspace no longer exists");
+        return;
+    } except Exception as e {
+        log.warning(where + " raised " + type(e).__name__ + ": " + str(e));
+        return;
+    }
     token = Jac.push_request_context(ctx);
     try {
-        # A pass on cooldown reports the previous stamp back; a pass that
-        # ran stamps a new one, even with nothing to poll.
         holder: any = ctx.get_root();
         c = connection_of(holder);
-        was = c.last_sync_at if isinstance(c, GithubConnection) else "";
+        if not isinstance(c, GithubConnection)
+            or c.installation_id != installation_id {
+            drop_dead_binding(
+                installation_id, root_jid, "the workspace no longer holds it"
+            );
+            return;
+        }
+        # A pass on cooldown reports the previous stamp back; a pass that
+        # ran stamps a new one, even with nothing to poll.
+        was = c.last_sync_at;
         pass_walker: any = SyncGithub(auto=True);
         w: any = Jac.spawn(pass_walker, holder);
         Jac.commit();

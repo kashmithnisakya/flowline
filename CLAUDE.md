@@ -393,7 +393,10 @@ released after the pass) and spawns `SyncGithub(auto=True)` inside a pushed
 context on that workspace's root (`Jac.create_j_context(user_root=jid)` +
 `push_request_context`; `here` and `root` in the walker are that root, so
 `owned()` works unchanged), commits, closes, and logs one `flowline.github`
-line per workspace with the counts. Schedule a function, never a walker: a
+line per workspace with the counts. A row whose root is gone
+(`MissingAnchorError` from `create_j_context`) or holds no connection for
+that installation is dropped there (`release_binding`, a delete that names
+the root it read); an invalid connection keeps its row for `unsuspend`. Schedule a function, never a walker: a
 decorated walker loses its `/walker/` route and logs a spurious error per
 fire on 0.37.18, and static fires do not serialise themselves, hence the
 lease. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
