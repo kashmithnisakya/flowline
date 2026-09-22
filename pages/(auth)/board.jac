@@ -12,7 +12,8 @@ import from ...models {
     StepView,
     RepoView,
     RoleView,
-    IterationView
+    IterationView,
+    FilterSetView
 }
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
@@ -32,7 +33,9 @@ import from ...services.tasks.tasks {
 }
 import from ...services.github.github { SyncGithub, CreateIssueFromTask }
 import from ...services.github.events { DrainGithubEvents }
+import from ...services.filters.filters { SetBoardFilters }
 import from ...components.board.FilterBar { FilterBar }
+import from ...components.board.FilterSets { FilterSetMenu }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
@@ -48,6 +51,13 @@ import from ...components.common.glyphs { Spinner }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
 import from ...lib.utils { fmtEstimate, parseEstimate }
+import from ...lib.filters {
+    filterKey,
+    filterValue,
+    trimFilters,
+    readBoardFilters,
+    keepBoardFilters
+}
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -108,6 +118,8 @@ glob SYNC_ROUNDS: int = 40,
      # are live (one keyed store read per tick, no GitHub call); a quiet
      # connection drains once per task poll instead.
      DRAIN_MS: int = 20000,
+     # A filter change reaches the account once the picking pauses this long.
+     SAVE_FILTERS_MS: int = 800,
      # The lane grid, shared by the lanes and their first-load skeleton.
      # Lanes are minmax(252px,1fr): they share the width when they all fit
      # and the grid scrolls sideways once seven of them no longer do. The
@@ -190,6 +202,15 @@ def:pub BoardPage -> JsxPage {
         # "All", "current" (whichever iterations hold today), "none" or a jid.
         fIteration: str = "All",
         fPriority: str = "All",
+        # The account's saved sets, the one the filters came from ("" none),
+        # its name as this browser last saw it (the first frame's label), and
+        # whether the account's filters have been taken: every change after
+        # that is saved, compared as filterKey + "|" + set on savedRef.
+        filterSets: list[FilterSetView] = [],
+        activeSet: str = "",
+        lastSetName: str = "",
+        filtersReady: bool = False,
+        savedRef: Ref[any] = Ref(),
         iterations: list[IterationView] = [],
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
@@ -235,14 +256,20 @@ def:pub BoardPage -> JsxPage {
 
     async can with entry {
         movesRef.current = 0;
-        stored = localStorage.getItem("flowline_project")
-            or localStorage.getItem("standup_project")
-            or "";
-        if stored {
-            fProject = stored;
-            # boot() runs in this same tick, where `fProject` still reads
-            # "all"; the ref carries the effective filter across.
-            filterRef.current = stored + "|All|All";
+        # The first frame shows the filters this browser last saw; the
+        # account's own replace them when page 1 lands. Before any were
+        # kept, the project filter the board used to keep per browser.
+        kept = readBoardFilters();
+        if kept["ok"] {
+            adoptFilters(kept["filters"], kept["set"]);
+            lastSetName = kept["name"];
+        } else {
+            stored = localStorage.getItem("flowline_project")
+                or localStorage.getItem("standup_project")
+                or "";
+            if stored {
+                adoptFilters({"project": stored}, "");
+            }
         }
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
@@ -353,6 +380,8 @@ def:pub BoardPage -> JsxPage {
             };
             window.addEventListener("keydown", onKey);
             return lambda {
+                # A change still inside its pause is saved on the way out.
+                persistFilters();
                 window.removeEventListener("resize", onResize);
                 window.removeEventListener("keydown", onKey);
                 window.removeEventListener("focus", onFocus);
@@ -378,6 +407,32 @@ def:pub BoardPage -> JsxPage {
             return lambda { if timer { window.clearTimeout(timer); }};
         },
         [ghConnected, webhookLive, loading, drainTick]
+    );
+
+    # Every filter change after the account's filters were taken reaches
+    # the account, once the picking pauses.
+    useEffect(
+        lambda {
+            timer: any = 0;
+            if filtersReady {
+                timer = window.setTimeout(
+                    lambda { persistFilters(); }, SAVE_FILTERS_MS
+                );
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
+        },
+        [
+            filtersReady,
+            activeSet,
+            fProject,
+            fAssignee,
+            fCategory,
+            fTag,
+            fEstimate,
+            fIteration,
+            fPriority,
+            hideDone
+        ]
     );
 
     # Measure after the lanes lay out, and again whenever what sits above
@@ -470,6 +525,18 @@ def:pub BoardPage -> JsxPage {
     def setCategoryFilter(v: str) -> None;
     def filtersOn(pid: str, who: str, cat: str) -> bool;
     def clearFilters -> None;
+    # The saved filters: the filters on screen in their stored form, taking
+    # a stored dict (a set, the account's, this browser's copy), dropping
+    # values that name a row gone from the lists, and saving to the account.
+    def boardFilters -> dict[str, str];
+    def adoptFilters(filters: dict[str, str], setId: str) -> None;
+    def takeAccountFilters(data: any) -> None;
+    def dropStaleFilters -> None;
+    async def persistFilters -> None;
+    def applySet(view: FilterSetView) -> None;
+    def showAllTasks -> None;
+    def absorbSet(view: FilterSetView) -> None;
+    def dropSet(setId: str) -> None;
     # Lane geometry: which lanes are on screen, the lane height on md+, and
     # scrolling a lane (or the first one past the edge) into view.
     def measureLanes -> None;
@@ -542,6 +609,14 @@ def:pub BoardPage -> JsxPage {
     # Normalised search query, matched against the title and the issue/PR
     # numbers, so typing digits finds "#412" and typing words finds a title.
     bq = boardQuery.strip().lower();
+
+    # The filters on screen as a saved set stores them, and the board's sets.
+    nowFilters = boardFilters();
+    boardSets: list[FilterSetView] = [
+        s
+        for s in filterSets
+        if s.page == "board"
+    ];
 
     # One filter predicate for both the working set and the older-Done list,
     # so a new condition is added once. hideDone and the older-list's own
@@ -831,6 +906,23 @@ def:pub BoardPage -> JsxPage {
         <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-h-9 flex-wrap items-center gap-3">
                 <h1 className="page-title">Board</h1>
+                {if loading or (not noFlowLine and not nothingLoaded) {
+                    <FilterSetMenu
+                        key="sets"
+                        sets={boardSets}
+                        activeId={activeSet}
+                        filters={nowFilters}
+                        projects={projects}
+                        members={members}
+                        iterations={iterations}
+                        onApply={applySet}
+                        onAll={showAllTasks}
+                        onSaved={absorbSet}
+                        onDeleted={dropSet}
+                        loading={loading}
+                        lastName={lastSetName}
+                    />
+                }}
                 {if loading or (not noFlowLine and not nothingLoaded) {
                     <div key="actions" className="ml-auto flex items-center gap-2">
                         {if ghConnected {

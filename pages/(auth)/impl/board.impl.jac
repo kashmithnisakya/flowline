@@ -87,7 +87,6 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         fetchedTasks: list[TaskRow] = [];
         olderUnfiltered = 0;
         cats: list[str] = [];
-        fetchedProjects: list[Project] = [];
         pageNo = 1;
         more = True;
         gotPage = False;
@@ -105,7 +104,6 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 olderUnfiltered = data.older;
                 cats = data.categories;
                 if withWorkspace and pageNo == 1 {
-                    fetchedProjects = data.projects;
                     connected = data.github_connected;
                     live = data.webhook_live;
                     projectCount = len(data.projects);
@@ -113,6 +111,10 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                     rememberWorkspace(data);
                     if loadReqRef.current == seq {
                         absorbWorkspace(data);
+                        if not filtersReady {
+                            takeAccountFilters(data);
+                        }
+                        dropStaleFilters();
                     }
                 }
                 # The working set is one sort_order run, so a later page
@@ -151,23 +153,6 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         loadedAt = ("0" + hh if len(hh) < 2 else hh)
             + ":"
             + ("0" + mm if len(mm) < 2 else mm);
-        # A stale persisted filter (archived project) would show an empty
-        # board with no hint, reset it to "all".
-        stored = localStorage.getItem("flowline_project")
-            or localStorage.getItem("standup_project")
-            or "";
-        if withWorkspace and stored and stored != "all" {
-            found = False;
-            for pr in fetchedProjects {
-                if jid(pr) == stored and pr.active {
-                    found = True;
-                }
-            }
-            if not found {
-                localStorage.setItem("flowline_project", "all");
-                fProject = "all";
-            }
-        }
     } except Exception as e {
         # No toast: the page itself says so (full panel with nothing on
         # screen, a strip with data still showing), and a toast per failed
@@ -192,6 +177,7 @@ impl BoardPage.absorbWorkspace(data: any) -> None {
     repos = data.repos;
     roleRows = data.roles;
     iterations = data.iterations;
+    filterSets = data.filter_sets;
     ghConnected = data.github_connected;
     webhookLive = data.webhook_live;
     try {
@@ -215,24 +201,27 @@ impl BoardPage.filtersOn(pid: str, who: str, cat: str) -> bool {
     return pid != "all" or who != "All" or cat != "All";
 }
 
+# Back to everything: no filter, no saved set, the Done window shown.
 impl BoardPage.clearFilters -> None {
     boardQuery = "";
-    fAssignee = "All";
-    fCategory = "All";
-    fTag = "All";
-    fEstimate = "All";
-    fIteration = "All";
-    fPriority = "All";
-    fProject = "all";
-    localStorage.setItem("flowline_project", "all");
-    refreshOlder("all", "All", "All");
+    adoptFilters({}, "");
 }
 
 impl BoardPage.setProjectFilter(v: str) -> None {
-    # The new value is handed to refreshOlder rather than read back: a
-    # `has` assigned here is still the old value for the rest of this call.
     fProject = v;
-    localStorage.setItem("flowline_project", v);
+    # A person who is not on the newly picked project cannot stay the
+    # filter: the assignee menu no longer lists them.
+    if v != "all" and fAssignee != "All" {
+        onProject = False;
+        for m in members {
+            if m.id == fAssignee and v in m.project_ids {
+                onProject = True;
+            }
+        }
+        if not onProject {
+            fAssignee = "All";
+        }
+    }
     refreshOlder(v, fAssignee, fCategory);
 }
 
@@ -244,6 +233,166 @@ impl BoardPage.setAssigneeFilter(v: str) -> None {
 impl BoardPage.setCategoryFilter(v: str) -> None {
     fCategory = v;
     refreshOlder(fProject, fAssignee, v);
+}
+
+impl BoardPage.boardFilters -> dict[str, str] {
+    return trimFilters(
+        {
+            "project": fProject,
+            "assignee": fAssignee,
+            "priority": fPriority,
+            "category": fCategory,
+            "tag": fTag,
+            "estimate": fEstimate,
+            "iteration": fIteration,
+            "done": "hide" if hideDone else "show"
+        }
+    );
+}
+
+# Every filter from a stored dict (a key it lacks is off) and the set they
+# came from. The title search is left alone: it is never stored.
+impl BoardPage.adoptFilters(filters: dict[str, str], setId: str) -> None {
+    pid = filterValue(filters, "project");
+    who = filterValue(filters, "assignee");
+    cat = filterValue(filters, "category");
+    fProject = pid;
+    fAssignee = who;
+    fCategory = cat;
+    fPriority = filterValue(filters, "priority");
+    fTag = filterValue(filters, "tag");
+    fEstimate = filterValue(filters, "estimate");
+    fIteration = filterValue(filters, "iteration");
+    hideDone = filterValue(filters, "done") == "hide";
+    activeSet = setId;
+    refreshOlder(pid, who, cat);
+}
+
+# The first page with the workspace: the account's filters replace this
+# browser's copy, and from here on every change is saved. An account that
+# never saved any keeps what the entry applied, and saves it.
+impl BoardPage.takeAccountFilters(data: any) -> None {
+    if data.board_saved {
+        adoptFilters(data.board_filters, data.board_set);
+        savedRef.current = filterKey(data.board_filters) + "|" + data.board_set;
+        name = "";
+        for s in data.filter_sets {
+            if s.id == data.board_set {
+                name = s.name;
+            }
+        }
+        keepBoardFilters(data.board_filters, data.board_set, name);
+    } else {
+        savedRef.current = "|";
+    }
+    filtersReady = True;
+}
+
+# A filter naming a project that is archived, a person no longer on the
+# roster (or not on the filtered project) or a deleted iteration would show
+# an empty board, or an id in its menu: it is dropped instead.
+impl BoardPage.dropStaleFilters -> None {
+    pid = fProject;
+    who = fAssignee;
+    if pid != "all" {
+        known = False;
+        for p in projects {
+            if jid(p) == pid and p.active {
+                known = True;
+            }
+        }
+        if not known {
+            pid = "all";
+        }
+    }
+    if who != "All" {
+        known = False;
+        for m in members {
+            if m.id == who and m.active and (pid == "all" or pid in m.project_ids) {
+                known = True;
+            }
+        }
+        if not known {
+            who = "All";
+        }
+    }
+    if fIteration not in ["All", "current", "none"] {
+        known = False;
+        for it in iterations {
+            if it.id == fIteration {
+                known = True;
+            }
+        }
+        if not known {
+            fIteration = "All";
+        }
+    }
+    if pid != fProject or who != fAssignee {
+        fProject = pid;
+        fAssignee = who;
+        refreshOlder(pid, who, fCategory);
+    }
+}
+
+# Save the filters on screen to the account, unless they are what it
+# already holds. This browser keeps a copy for its next first frame.
+impl BoardPage.persistFilters -> None {
+    if not filtersReady {
+        return;
+    }
+    now = boardFilters();
+    stamp = filterKey(now) + "|" + activeSet;
+    if stamp == (savedRef.current or "") {
+        return;
+    }
+    savedRef.current = stamp;
+    name = "";
+    for s in filterSets {
+        if s.id == activeSet {
+            name = s.name;
+        }
+    }
+    keepBoardFilters(now, activeSet, name);
+    try {
+        root spawn SetBoardFilters(filters=now, set_id=activeSet);
+    } except Exception as e {
+        # Quiet: the next change saves the whole set again.
+        savedRef.current = "";
+    }
+}
+
+impl BoardPage.applySet(view: FilterSetView) -> None {
+    adoptFilters(view.filters, view.id);
+    dropStaleFilters();
+}
+
+impl BoardPage.showAllTasks -> None {
+    adoptFilters({}, "");
+}
+
+# A saved or renamed set: into the list in name order, and the one the
+# filters now come from.
+impl BoardPage.absorbSet(view: FilterSetView) -> None {
+    rows: list[FilterSetView] = [
+        s
+        for s in filterSets
+        if s.id != view.id
+    ];
+    rows.append(view);
+    rows.sort(key=lambda (s: FilterSetView) { s.name.lower(); });
+    filterSets = rows;
+    activeSet = view.id;
+}
+
+impl BoardPage.dropSet(setId: str) -> None {
+    filterSets = [
+        s
+        for s in filterSets
+        if s.id != setId
+    ];
+    if activeSet == setId {
+        activeSet = "";
+    }
 }
 
 impl BoardPage.toggleOlder -> None {

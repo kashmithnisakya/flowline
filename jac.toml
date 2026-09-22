@@ -160,6 +160,8 @@ default = "server"
 # Pure client metadata (colour tables, colorKey). With no server def:pub in
 # it the module would infer server and every plain import of it fail E5082.
 "components.flowlines.kinds" = "client"
+# Filter keys, summaries and this browser's copy of the board's filters.
+"lib.filters" = "client"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
@@ -169,6 +171,7 @@ default = "server"
 models = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"
+"services.filters.filters" = "server"
 "services.flowlines.flowlines" = "server"
 "services.github.events" = "server"
 "services.github.github" = "server"

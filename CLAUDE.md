@@ -73,7 +73,9 @@ people it tracks are roster members.
   the days in a date range, filtered in the store's query) and
   `root ++> Iterations ++> Iteration` (time boxes; a task points at one
   through its `iteration_id` field, like `step_id`, and `DeleteIteration`
-  clears it); `Repo` and `GithubConnection` hang off the root directly.
+  clears it) and `root ++> FilterSets ++> FilterSet` (named filter sets;
+  the box also holds the board's own filters); `Repo` and
+  `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
   `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
@@ -93,9 +95,11 @@ people it tracks are roster members.
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `iterations` (iteration CRUD and `RoadmapSnapshot`),
+  `iterations` (iteration CRUD and `RoadmapSnapshot`), `filters` (the
+  saved-filter writers),
   `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
-  roles, iterations, flow line meta and GitHub connection in one read;
+  roles, iterations, saved filter sets, flow line meta and GitHub
+  connection in one read;
   `BoardSnapshot` fills its workspace fields from the same
   `workspace_view` helper, so there is one definition of those lists), and
   `github` with `github.jac`, `events.jac`, `schedule.jac` (the scheduled
@@ -220,9 +224,9 @@ people it tracks are roster members.
   writes roster data calls `forgetWorkspace()` right after the write, before
   its refetch** (members, projects, roles, iterations, steps and
   transitions, the template and flow line name, repos and their switches,
-  the GitHub connection, a sync, an assignment to a project, the org
-  rename through `patchProfile`); a new writer must do the same or the
-  next page shows the old roster for a minute. Recognition can vary between
+  the GitHub connection, a sync, an assignment to a project, a saved
+  filter set, the org rename through `patchProfile`); a new writer must do
+  the same or the next page shows the old roster for a minute. Recognition can vary between
   builds, so `tests/smoke/api_gate.py` asserts the served table per build
   (the readers cacheable, the task lists not, the mutators writing) and
   `browser_gate.py` counts the requests (board, tasks, roadmap, board make
@@ -537,6 +541,17 @@ File-based routing with route groups:
   `LIVE_WINDOW_MINUTES`, or a drain that just landed rows), otherwise once
   per poll ahead of the refresh. It never spawns `SyncGithub` on open: the
   server schedule polls (see the GitHub section above).
+- **The board's filters live on the account.** `SetBoardFilters` saves
+  them 800 ms after a change (and on unmount); `BoardSnapshot` with
+  `with_workspace` carries them back, and the board takes them on its first
+  load only, so a later `loadAll` never reverts a change in flight. A
+  stored dict keeps only the keys set away from their default
+  (`BOARD_FILTERS` in `constants.jac`), so a new board filter needs a key
+  there plus a line in `boardFilters`, `adoptFilters` and `filterSummary`
+  (`lib/filters.jac`), or it neither saves nor restores. `lib/filters` also
+  keeps this browser's copy for the first frame and writes
+  `flowline_project`, which the flow line page opens on. Named sets are
+  `components/board/FilterSets.jac`; the title search is never saved.
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead
@@ -642,9 +657,10 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   the wordmark and then the name. A page renders its loaded frame with
   skeleton rows on the first data load only, sized by per-browser caches of
   the last visit (the `*_KEY` globs in `lib/session.jac`: lanes, overview,
-  log, roadmap, GitHub; the log writes today's view and the roadmap the
-  unfiltered one). `forgetSession` clears every cache when a session starts
-  or ends, so another account never inherits a name or a shape. The swap to
+  log, roadmap, GitHub, the board's filters; the log writes today's view
+  and the roadmap the unfiltered one). `forgetSession` clears every cache
+  when a session starts or ends, so another account never inherits a name
+  or a shape. The swap to
   the content goes through `components/common/Reveal` (a 150ms cross-fade in
   one grid cell, so no frame in between is blank; the frame comes back if
   `ready` drops with nothing on screen, a retry after a failed first load)
@@ -711,6 +727,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   mount run, and the re-render's changed deps run it again (the log page
   fetched its week twice, #225). A value known at render time is the `has`
   default (`selectedDate: str = todayIso()`), never an entry assignment.
+- **Open a dialog from a menu item only once the menu has closed.** The
+  menu's exit animation delays its unmount, and the unmount pulls focus out
+  of a dialog opened in `onSelect`, so the next keys land on `<body>`.
+  Record the ask in `onSelect` and open it from the content's
+  `onCloseAutoFocus` in a `setTimeout(0)` (`FilterSets.jac`).
 - **A Radix `Select` shows its placeholder only for the value `""`.** A
   sentinel such as `"none"` with no matching item renders an empty
   trigger and no muted styling. Seed `""` for "nothing picked" (project on

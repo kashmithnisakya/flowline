@@ -11,6 +11,8 @@ import from models {
     RoleView,
     StepView,
     IterationView,
+    FilterSetView,
+    FilterSets,
     GithubConnectionView,
     hydrate_rows,
     working_tasks,
@@ -40,14 +42,20 @@ obj BoardData {
         # workspace cache from its own result.
         flow_name: str,
         template_key: str,
-        github: GithubConnectionView;
+        github: GithubConnectionView,
+        filter_sets: list[FilterSetView],
+        # The board's filters as the account left them (FilterSets.board),
+        # the saved set they came from, and whether they were ever saved.
+        board_filters: dict[str, str],
+        board_set: str,
+        board_saved: bool;
 }
 
 
 walker BoardSnapshot {
-    """The board in one call. `with_workspace` adds the roster, flow line and
-    GitHub state the boot needs; the poll leaves it off and pays for the
-    working set alone. Only the working set is loaded: `older` is the Done
+    """The board in one call. `with_workspace` adds the roster, flow line,
+    GitHub state and saved filters the boot needs; the poll leaves it off and
+    pays for the working set alone. Only the working set is loaded: `older` is the Done
     tally less the Done rows the cutoff kept, and `categories` is the list
     the projects' box keeps on write."""
     has page: int = 1,
@@ -86,6 +94,10 @@ walker BoardSnapshot {
         flow_name = "";
         template_key = "";
         github = GithubConnectionView();
+        filter_sets: list[FilterSetView] = [];
+        board_filters: dict[str, str] = {};
+        board_set = "";
+        board_saved = False;
         # One definition of the lists and their order, shared with
         # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
@@ -101,6 +113,13 @@ walker BoardSnapshot {
             flow_name = ws.flow_name;
             template_key = ws.template_key;
             github = ws.github;
+            filter_sets = ws.filter_sets;
+            # A read never makes the box; writers take the first one.
+            for box in [here-->[?:FilterSets]][:1] {
+                board_filters = dict(box.board);
+                board_set = box.board_set;
+                board_saved = bool(box.board_at);
+            }
         }
         report BoardData(
             rows=hydrate_rows(here, picked[start:end]),
@@ -117,7 +136,11 @@ walker BoardSnapshot {
             webhook_live=live,
             flow_name=flow_name,
             template_key=template_key,
-            github=github
+            github=github,
+            filter_sets=filter_sets,
+            board_filters=board_filters,
+            board_set=board_set,
+            board_saved=board_saved
         );
     }
 }

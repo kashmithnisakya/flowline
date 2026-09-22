@@ -34,6 +34,8 @@ write.
 
 ::: obj WorkspaceView h3
 
+::: obj FilterSetView h3
+
 ## Iterations
 
 ::: obj IterationView h3
