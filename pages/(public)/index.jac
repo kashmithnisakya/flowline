@@ -4,6 +4,7 @@ call to action pointing at their board. Every section renders on load.
 """
 
 import from "@jac/runtime" { jacIsLoggedIn }
+import from ...lib.session { checkSession }
 import from ...components.landing.SiteNav { SiteNav }
 import from ...components.landing.Hero { Hero }
 import from ...components.landing.Tour { Tour }
@@ -15,8 +16,13 @@ import from ...components.landing.SiteFooter { SiteFooter }
 def:pub LandingPage -> JsxPage {
     has loggedIn: bool = False;
 
-    can with entry {
+    # A stored token shows the app links at once; a token the server no
+    # longer takes turns them back into sign-in links.
+    async can with entry {
         loggedIn = jacIsLoggedIn();
+        if loggedIn {
+            loggedIn = await checkSession();
+        }
     }
 
     return

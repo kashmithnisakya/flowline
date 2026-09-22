@@ -481,7 +481,11 @@ File-based routing with route groups:
   and reads it once per page load: `fetchMe` keeps the in-flight promise and
   the answer in module state, `fetchProfile` / `fetchOrgName` and the
   layout's `loadMe` go through it, and `patchProfile` or `forgetSession`
-  drops it.
+  drops it. `jacIsLoggedIn()` only sees that a token is stored, so a 401
+  from `/user/me` ends the session (`forgetSession` + `jacLogout`, keeping
+  the `flowline_session` marker for the login page's "expired" note), and
+  `/login` and the landing page ask `checkSession()` before trusting a
+  token; the board sends a visitor to `/setup` only while signed in.
   **`lib/dates.jac`** owns the calendar rules (`todayIso`, `daysUntil`,
   `dueTone`, `dueLabel`): the card, the lane header and the overview all
   derive "overdue" from it, so change it there or nowhere.
