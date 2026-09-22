@@ -548,7 +548,12 @@ File-based routing with route groups:
   `webhook_live` (the workspace view: a delivery inside the server's
   `LIVE_WINDOW_MINUTES`, or a drain that just landed rows), otherwise once
   per poll ahead of the refresh. It never spawns `SyncGithub` on open: the
-  server schedule polls (see the GitHub section above).
+  server schedule polls (see the GitHub section above). `/log` keeps the
+  same beat: a day hop inside the loaded week renders from state unless
+  that week is older than `WEEK_FRESH_MS` (60 s, `weekFresh`), the week and
+  the blocked list are fetched again every 60 s while the tab is visible
+  and on a stale tab return, and a write fetches (a write for another day
+  zeroes `weekAtRef` first, since the hop alone would not).
 - **The board's filters live on the account.** `SetBoardFilters` saves
   them 800 ms after a change (and on unmount); `BoardSnapshot` with
   `with_workspace` carries them back, and the board takes them on its first

@@ -65,6 +65,10 @@ def cachedLogShape -> dict[str, any] {
     }
 }
 
+# How long a loaded week counts as current: a day hop inside it renders from
+# what is on screen, and the poll refetches it on this beat.
+glob WEEK_FRESH_MS: int = 60000;
+
 glob DAY_LONG: list[str] = [
          "Sunday",
          "Monday",
@@ -213,6 +217,9 @@ def:pub DailyLogPage -> JsxPage {
         # also holds when the fetch stopped early.
         weekStreaming: bool = False,
         weekReqRef: Ref[any] = Ref(),
+        # When the newest week load's first page landed (ms); 0 marks the
+        # week stale, so the next hop into it fetches.
+        weekAtRef: Ref[any] = Ref(),
         # Tasks blocked right now, so today's Stuck is not limited to what
         # the loaded log shows; `blockedLive` is False until that call lands.
         blockedTasks: list[TaskRow] = [],
@@ -225,11 +232,35 @@ def:pub DailyLogPage -> JsxPage {
         # day stays up (aria-busy) until the new week lands.
         focusRef: Ref[any] = Ref();
 
+    # A hop to another week, or into a week loaded over a poll ago (or that
+    # failed), fetches; a hop inside the current week only renders.
     async can with [selectedDate] entry {
-        if selectedDate {
+        if selectedDate and not weekFresh(mondayOf(selectedDate)) {
             loadWeek();
         }
     }
+
+    # Others write the log too (a colleague's note, a GitHub import), so the
+    # week on screen is fetched again every WEEK_FRESH_MS while the tab is
+    # visible, and on a tab return once it is older than that.
+    useEffect(
+        lambda {
+            onTick = lambda {
+                page: any = document;
+                if page.visibilityState == "visible" {
+                    refreshWeek(True);
+                }
+            };
+            onFocus = lambda { refreshWeek(False); };
+            timer = window.setInterval(onTick, WEEK_FRESH_MS);
+            window.addEventListener("focus", onFocus);
+            return lambda {
+                window.clearInterval(timer);
+                window.removeEventListener("focus", onFocus);
+            };
+        },
+        []
+    );
 
     streaming = weekStreaming and weekLoaded < weekTotal;
     useEffect(
@@ -246,6 +277,8 @@ def:pub DailyLogPage -> JsxPage {
     );
 
     async def loadWeek -> None;
+    def weekFresh(monday: str) -> bool;
+    async def refreshWeek(always: bool) -> None;
     async def weekPage(
         seq: int,
         monday: str,
