@@ -8,7 +8,6 @@ import from models {
     Member,
     Task,
     LogDay,
-    LogEntry,
     TaskRow,
     TaskTotals,
     LogTotals,
@@ -32,10 +31,12 @@ import from services.tasks.tasks {
     needs_attention,
     order_attention
 }
-import from services.log.log { log_totals }
+import from services.log.log { log_totals, days_newest_first, range_rows, range_total }
 
 glob ACTIVE_STATUSES: list[str] = ["In Progress", "Review", "Changes Requested"],
-     STALE_AFTER_DAYS: int = 7;
+     STALE_AFTER_DAYS: int = 7,
+     # The newest log lines a snapshot carries; the counts cover the period.
+     ACTIVITY_LINES: int = 200;
 
 # ------------------------------------------------------------------ view objs
 
@@ -120,6 +121,9 @@ obj Snapshot {
         activity: list[ActivityLine];
 }
 
+sem Snapshot.log_entries_in_period = "How many log lines the period holds in all.";
+sem Snapshot.activity = "The period's newest log lines, at most 200, oldest first.";
+
 # --------------------------------------------------------------- date helpers
 
 # ISO dates are lexicographically ordered, so plain string compares work for
@@ -149,44 +153,6 @@ def _today -> str {
 # Each takes the caller's root and traverses it directly. No walker spawns.
 # Every queue here is open work, so the readers load the open tasks and the
 # Done tasks of the period; the all-time totals come from the tallies.
-
-def _entries_between(holder: Root, from_date: str, to_date: str) -> list[LogEntry] {
-    rows: list[LogEntry] = [];
-    for day in days_between(holder, from_date, to_date) {
-        for row in [day-->[?:LogEntry]] {
-            rows.append(row);
-        }
-    }
-    rows.sort(key=lambda (r: LogEntry) { r.at or r.date; });
-    return rows;
-}
-
-# The reason a task is blocked lives on the log row that recorded the move, not
-# on Task.notes (which the handoff dialog may leave untouched).
-def _blocked_reason(entries: list[LogEntry], task_id: str) -> tuple[str, str] {
-    reason = "";
-    since = "";
-    for row in entries {
-        if row.task_id == task_id and row.status == "Blocked" {
-            reason = row.notes;
-            since = row.at or row.date;
-        }
-    }
-    return (reason, since);
-}
-
-# Each blocked task's reason and since, from log rows already loaded.
-def _reasons_from(
-    entries: list[LogEntry], open: list[Task]
-) -> dict[str, tuple[str, str]] {
-    out: dict[str, tuple[str, str]] = {};
-    for t in open {
-        if t.status == "Blocked" {
-            out[jid(t)] = _blocked_reason(entries, jid(t));
-        }
-    }
-    return out;
-}
 
 # The same from the store: one query per blocked task for its Blocked lines
 # in [since, until], the latest stamp winning. No blocked task, no read.
@@ -338,10 +304,24 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         for p in projects_of(holder)
         if p.active
     ];
-    entries = _entries_between(holder, from_date, to_date);
+    # The period's log from the store: its counts from the days' tallies,
+    # and only the newest ACTIVITY_LINES lines, oldest first for reading.
+    days = days_newest_first(holder, from_date, to_date);
+    entries = range_rows(days, 0, ACTIVITY_LINES);
+    entries.reverse();
+    logged = range_total(days);
+    logged_by: dict[str, int] = {};
+    for day in days {
+        for name in day.member_counts {
+            logged_by[name] = (logged_by[name] if name in logged_by else 0)
+                + day.member_counts[name];
+        }
+    }
     names = task_names(holder);
 
-    blocked = _blocked_items(open, names, _reasons_from(entries, open));
+    blocked = _blocked_items(
+        open, names, _reasons_between(holder, open, from_date, to_date)
+    );
     review_queue = _review_items(open, names, today);
     aging = _aging_items(open, names, today);
     overdue = _overdue_items(open, names, today);
@@ -368,13 +348,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
                         if mid in t.assignee_ids
                     ]
                 ),
-                log_entries=len(
-                    [
-                        e
-                        for e in entries
-                        if shown in e.member_name
-                    ]
-                ),
+                log_entries=logged_by[shown] if shown in logged_by else 0,
                 blocked=len(
                     [
                         t
@@ -438,7 +412,7 @@ def build_snapshot(holder: Root, from_date: str, to_date: str) -> Snapshot {
         active_projects=len(projects),
         open_tasks=len(open),
         done_in_period=len(done_period),
-        log_entries_in_period=len(entries),
+        log_entries_in_period=logged,
         blocked=blocked,
         review_queue=review_queue,
         aging=aging,
