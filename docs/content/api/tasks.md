@@ -24,6 +24,10 @@ capped at 500.
   anywhere (newest update breaks ties).
 - `iteration_id` keeps tasks planned into that iteration; `"none"` keeps
   tasks in no iteration.
+- `priority` keeps one priority. `column` keeps one board column: a step
+  jid, or a status when the workspace has no flow line. It places tasks by
+  the board's rule, so a task with no current step counts in the first
+  column of its status's kind. An unknown column matches nothing.
 - `sort` (`title`, `priority`, `step`, `category`, `estimate`, `due`,
   `created`, `updated`) with `sort_dir` (`asc`/`desc`) overrides the scope's
   order; the table view uses it. `step` follows the board: column order
@@ -39,11 +43,15 @@ capped at 500.
   loaded the whole scope; under a `project_id` or `category` filter it is a
   tally (`done`, `all`, `older`) or one more pushed read of the live scope.
 - The scope and a `category` filter run in the store's query, so a working
-  page loads the working set alone. An unfiltered `older`, `done` or `all`
-  page in updated order, newest first (the table's default) is cut in the
-  store too: it loads the rows up to the page's end, and `total` comes from
-  the tallies. Any other sort, a search or a filter loads the history the
-  page is taken from.
+  page loads the working set alone. An `older`, `done` or `all` page is
+  answered in the store for every `sort` and every filter except `q` and
+  `tag`: it loads its own rows, and `total` comes from the tallies. Under a
+  filter the total counts the matching rows, which the runtime still reads
+  to count ([jaseci-labs/jac#9416](https://github.com/jaseci-labs/jac/issues/9416)),
+  so a narrow filter is cheap and a broad one costs its matches. A search or a `tag` filter loads the
+  history the page is taken from, since the store cannot match part of a
+  title or one item of a list
+  ([jaseci-labs/jac#9413](https://github.com/jaseci-labs/jac/issues/9413)).
 - A foreign or unknown `project_id` or `assignee_id` matches nothing.
 
 ```bash

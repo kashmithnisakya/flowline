@@ -2,6 +2,7 @@
 
 import from models {
     Project,
+    Projects,
     Member,
     Task,
     TaskView,
@@ -38,14 +39,8 @@ import from models {
     project_done_since,
     project_done_before,
     project_done_before_in,
-    recent_tasks,
-    tasks_stamped,
-    recent_done_before,
-    done_before_stamped,
-    project_recent,
-    project_stamped,
-    project_recent_done_before,
-    project_done_before_stamped,
+    done_since_count,
+    project_done_since_count,
     project_working,
     step_column_peak,
     step_column_below,
@@ -82,8 +77,19 @@ import from services.util {
     done_day,
     moved_to_done,
     ensure_tallies,
-    ensure_history
+    ensure_history,
+    ensure_keys
 }
+import from services.tasks.history {
+    HistoryBase,
+    Column,
+    SORT_FIELDS,
+    board_columns,
+    sorted_window,
+    column_window,
+    parts_count
+}
+import from jaclang.lib.jaclib { QPred }
 import from services.log.log { record_task_event, sync_task_links }
 import from services.github.util { sync_issue_state }
 import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
@@ -170,12 +176,12 @@ def order_attention(rows: list[Task]) {
 
 
 glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2},
+     # A date no done_at reaches: the done scope is Done before it.
      FAR_FUTURE: str = "9999-12-31";
 
-# A date no done_at reaches: the done scope is Done before it.
 # A task's board column as a number, by the board's placement rule: its own
 # step, else the status itself (no flow line), else the first column of its
-# status's kind. `rank` and `kind_rank` come from sort_tasks.
+# status's kind. `rank` and `kind_rank` come from column_ranks.
 def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int {
     if t.step_id in rank {
         return rank[t.step_id];
@@ -188,6 +194,37 @@ def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int
 }
 
 
+# The board's column keys in order (canvas x, ties by sort_order; without a
+# flow line the columns are STATUSES) with each key's rank and each kind's
+# first column, for column_rank.
+def column_ranks(holder: Root) -> tuple[list[str], dict[str, int], dict[str, int]] {
+    order = steps_of(holder);
+    order.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
+    order.sort(key=lambda (s: WorkflowStep) { s.x; });
+    keys: list[str] = [];
+    rank: dict[str, int] = {};
+    kind_rank: dict[str, int] = {};
+    for (i, s) in enumerate(order) {
+        keys.append(jid(s));
+        rank[jid(s)] = i;
+        if s.kind not in kind_rank {
+            kind_rank[s.kind] = i;
+        }
+    }
+    if len(order) == 0 {
+        for (i, st) in enumerate(STATUSES) {
+            keys.append(st);
+            rank[st] = i;
+            kind = STATUS_KIND[st] if st in STATUS_KIND else "active";
+            if kind not in kind_rank {
+                kind_rank[kind] = i;
+            }
+        }
+    }
+    return (keys, rank, kind_rank);
+}
+
+
 # The table view's user-chosen column sort, over node fields only so it runs
 # on the full match set before paging. Priority sorts by urgency; step sorts
 # in board column order, cards in board order within a column; undated tasks
@@ -195,28 +232,7 @@ def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int
 def sort_tasks(holder: Root, rows: list[Task], field: str, reverse: bool) {
     rows.sort(key=lambda (t: Task) { jid(t); });
     if field == "step" {
-        # The board's column order: canvas x, ties by sort_order. Without a
-        # flow line the columns are STATUSES in order.
-        order = steps_of(holder);
-        order.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
-        order.sort(key=lambda (s: WorkflowStep) { s.x; });
-        rank: dict[str, int] = {};
-        kind_rank: dict[str, int] = {};
-        for (i, s) in enumerate(order) {
-            rank[jid(s)] = i;
-            if s.kind not in kind_rank {
-                kind_rank[s.kind] = i;
-            }
-        }
-        if len(order) == 0 {
-            for (i, st) in enumerate(STATUSES) {
-                rank[st] = i;
-                kind = STATUS_KIND[st] if st in STATUS_KIND else "active";
-                if kind not in kind_rank {
-                    kind_rank[kind] = i;
-                }
-            }
-        }
+        (keys, rank, kind_rank) = column_ranks(holder);
         rows.sort(key=lambda (t: Task) { t.sort_order; });
         rows.sort(
             key=lambda (t: Task) { column_rank(t, rank, kind_rank); }, reverse=reverse
@@ -252,13 +268,13 @@ walker ListTasks {
     behind its "+N older" ("older": Done before that cutoff, newest first),
     every Done task ("done"), what the Overview calls needs-attention
     (blocked first, then most overdue) ("attention"), or everything ("all").
-    The scope and a category filter are pushed into the store's query, so a
-    working page loads the working set alone; the history scopes load what
-    they page over. `q` and the other filters read node fields on those
-    rows. `older` on an unfiltered working page counts the Done rows the
-    cutoff left out, from the project tallies, so the board's "+N older"
-    needs no second call. Every ordering ends in the jid so two rows that
-    tie on the sort key cannot swap between one page and the next."""
+    A history scope with no title search or tag filter pages in the store
+    (services/tasks/history.jac): scope, filters and sort become the query,
+    so a page loads its own rows. The live scopes, and a search or tag
+    filter, page their loaded pool. `older` on an unfiltered working page
+    counts the Done rows the cutoff left out, from the project tallies. Every
+    ordering ends in the jid so two rows that tie on the sort key cannot
+    swap between one page and the next."""
     has scope: str = "working",
         q: str = "",
         project_id: str = "",
@@ -270,6 +286,10 @@ walker ListTasks {
         estimated: str = "",
         # An iteration jid, "none" for tasks in no iteration, or "" for any.
         iteration_id: str = "",
+        # A priority, and a board column (a step jid, or a status when the
+        # workspace has no flow line), each "" for any.
+        priority: str = "",
+        column: str = "",
         # The table view's column sort; empty keeps the scope's own order.
         sort: str = "",
         sort_dir: str = "asc",
@@ -279,111 +299,175 @@ walker ListTasks {
         reports: list[TaskPage] = [];
 
     # A project filter visits that project and pages its own children;
-    # otherwise the page is built over every project from the root.
+    # otherwise the page is built over every project from the root. Keys
+    # filled in this request are invisible to a pushed query until the next
+    # one, so that request pages what ensure_keys loaded.
     can start with Root entry {
         ensure_tallies(here);
+        fresh = ensure_keys(here);
         if self.project_id {
             p = resolve(self.project_id);
-            if isinstance(p, Project) and owned(here, p) {
-                visit [p];
-            } else {
+            if not (isinstance(p, Project) and owned(here, p)) {
                 report self.page_of(here, [], []);
+            } elif fresh {
+                report self.page_of(here, self.pool_of(here, [p]), [p]);
+            } else {
+                visit [p];
             }
         } else {
-            cut = self.history_page(here, []);
+            cut = None if fresh else self.store_page(here, []);
             report cut or self.page_of(here, self.pool_of(here, []), []);
         }
     }
 
     can gather with Project entry {
-        cut = self.history_page(root, [here]);
+        cut = self.store_page(root, [here]);
         report cut or self.page_of(root, self.pool_of(root, [here]), [here]);
         disengage;
     }
 
-    # An unfiltered history page in updated order, newest first (the table's
-    # default), is cut in the store: the rows up to the page's end plus every
-    # row that ties with the last of them, so it matches a full load exactly.
-    # Anything else answers None and pages the loaded pool.
-    def history_page(holder: Root, projects: list[Project]) -> TaskPage | None {
-        newest = (self.sort == "updated" and self.sort_dir == "desc")
-            or (not self.sort and self.scope in ["older", "done"]);
-        filtered = bool(
-            self.q.strip()
-                or self.category
-                or self.tag
-                or self.estimated
-                or self.iteration_id
-                or self.assignee_id
-        );
-        cutoff = FAR_FUTURE if self.scope == "done" else done_cutoff(self.done_days);
-        if not newest
-            or filtered
-            or self.scope not in ["older", "done", "all"]
-            or (self.scope == "older" and not cutoff) {
+    # A history scope without a title search or a tag filter, paged in the
+    # store: its rows, and its total from the tallies or from counts in the
+    # store. Anything else answers None and pages the loaded pool.
+    def store_page(holder: Root, projects: list[Project]) -> TaskPage | None {
+        if self.scope not in ["older", "done", "all"] or self.q.strip() or self.tag {
             return None;
         }
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
-        rows = self.recent(holder, projects, cutoff, end);
-        if len(rows) >= end and len(rows) > 0 {
-            held = [jid(t) for t in rows];
-            for t in self.stamped(
-                holder, projects, cutoff, rows[len(rows) - 1].updated_at
-            ) {
-                if jid(t) not in held {
-                    rows.append(t);
-                }
-            }
+        cutoff = done_cutoff(self.done_days) if self.scope == "older" else FAR_FUTURE;
+        whole = self.history_total(holder, [], cutoff);
+        empty = TaskPage(
+            rows=[], page=p, page_size=size, has_more=False, total=0, scope_total=whole
+        );
+        base = self.history_base(holder, projects, cutoff);
+        if base is None or not cutoff {
+            return empty;
         }
-        rows.sort(key=lambda (t: Task) { jid(t); });
-        rows.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
-        total = self.history_total(holder, projects, cutoff);
+        columns: list[Column] = [];
+        parts: list[list[QPred]] = [[]];
+        if self.sort == "step" or self.column {
+            columns = board_columns(holder);
+        }
+        if self.column {
+            columns = [
+                c
+                for c in columns
+                if c.key == self.column
+            ];
+            if len(columns) == 0 {
+                return empty;
+            }
+            parts = columns[0].parts;
+        }
+        rows: list[Task] = [];
+        if self.sort == "step" {
+            rows = column_window(base, columns, self.sort_dir == "desc", start, end);
+        } else {
+            (field, desc) = self.store_order();
+            rows = sorted_window(base, parts, field, desc, start, end);
+        }
+        # Every column together is the whole query, so only a column filter
+        # counts its parts; with no filter the tallies answer.
+        total = self.history_total(holder, projects, cutoff)
+            if not self.narrowed()
+            else parts_count(base, parts);
         return TaskPage(
-            rows=hydrate_rows(holder, rows[start:end]),
+            rows=hydrate_rows(holder, rows),
             page=p,
             page_size=size,
             has_more=total > end,
             total=total,
-            scope_total=self.history_total(holder, [], cutoff) if projects else total
+            scope_total=whole
         );
     }
 
-    # The scope's first `n` rows in updated order, and the rows stamped `at`.
-    def recent(
-        holder: Root, projects: list[Project], cutoff: str, n: int
-    ) -> list[Task] {
-        if self.scope == "all" {
-            return project_recent(projects[0], n)
-                if projects
-                else recent_tasks(holder, n);
+    # Where the store's query starts and what every row must meet: the
+    # scope and the filters. An assignee starts from the member, back over
+    # AssignedTo; a foreign or unknown one, or no projects box, is None.
+    def history_base(
+        holder: Root, projects: list[Project], cutoff: str
+    ) -> HistoryBase | None {
+        preds: list[QPred] = [];
+        if self.scope != "all" {
+            preds.append(QPred(field="status", op="==", value="Done"));
         }
-        return project_recent_done_before(projects[0], cutoff, n)
-            if projects
-            else recent_done_before(holder, cutoff, n);
+        if self.scope == "older" {
+            preds.append(QPred(field="done_at", op="<", value=cutoff));
+        }
+        if self.category {
+            preds.append(QPred(field="category", op="==", value=self.category));
+        }
+        if self.priority {
+            preds.append(QPred(field="priority", op="==", value=self.priority));
+        }
+        if self.estimated == "yes" {
+            preds.append(QPred(field="estimate", op=">", value=0.0));
+        } elif self.estimated == "no" {
+            preds.append(QPred(field="estimate", op="<=", value=0.0));
+        }
+        if self.iteration_id == "none" {
+            preds.append(QPred(field="iteration_id", op="==", value=""));
+        } elif self.iteration_id {
+            preds.append(QPred(field="iteration_id", op="==", value=self.iteration_id));
+        }
+        if self.assignee_id {
+            m = resolve(self.assignee_id);
+            if not isinstance(m, Member) or not owned(holder, m) {
+                return None;
+            }
+            if projects {
+                preds.append(
+                    QPred(field="project_id", op="==", value=jid(projects[0]))
+                );
+            }
+            return HistoryBase(origin=[m], via="member", preds=preds);
+        }
+        if projects {
+            return HistoryBase(origin=[projects[0]], via="project", preds=preds);
+        }
+        boxes = [holder-->[?:Projects]];
+        if not boxes {
+            return None;
+        }
+        return HistoryBase(origin=[boxes[0]], via="box", preds=preds);
     }
 
-    def stamped(
-        holder: Root, projects: list[Project], cutoff: str, at: str
-    ) -> list[Task] {
-        if self.scope == "all" {
-            return project_stamped(projects[0], at)
-                if projects
-                else tasks_stamped(holder, at);
+    # The table's column sort, else the scope's own order: newest update
+    # first for the Done history, board order for everything.
+    def store_order -> tuple[str, bool] {
+        if self.sort {
+            field = SORT_FIELDS[self.sort]
+                if self.sort in SORT_FIELDS
+                else "updated_at";
+            return (field, self.sort_dir == "desc");
         }
-        return project_done_before_stamped(projects[0], cutoff, at)
-            if projects
-            else done_before_stamped(holder, cutoff, at);
+        if self.scope in ["older", "done"] {
+            return ("updated_at", True);
+        }
+        return ("sort_order", False);
+    }
+
+    # Any filter besides a project visit, which the tallies already answer.
+    def narrowed -> bool {
+        return bool(
+            self.category
+                or self.priority
+                or self.estimated
+                or self.iteration_id
+                or self.assignee_id
+                or self.column
+        );
     }
 
     # The scope's size from the tallies: every task, every Done task, or the
-    # Done tasks less those reached since the cutoff.
+    # Done tasks less a count in the store of those reached since the cutoff.
     def history_total(holder: Root, projects: list[Project], cutoff: str) -> int {
         if projects {
             pr = projects[0];
             if self.scope == "all" {
                 return pr.task_total;
             }
-            return pr.done_total - len(project_done_since(pr, cutoff))
+            return pr.done_total - project_done_since_count(pr, cutoff)
                 if self.scope == "older"
                 else pr.done_total;
         }
@@ -391,7 +475,7 @@ walker ListTasks {
         if self.scope == "all" {
             return totals[0];
         }
-        return totals[1] - len(done_since(holder, cutoff))
+        return totals[1] - done_since_count(holder, cutoff)
             if self.scope == "older"
             else totals[1];
     }
@@ -438,15 +522,9 @@ walker ListTasks {
         needle = self.q.lower().strip();
         today = today_iso();
         cutoff = done_cutoff(self.done_days);
-        filtered = bool(
-            needle
-                or self.category
-                or self.tag
-                or self.estimated
-                or self.iteration_id
-                or self.project_id
-                or self.assignee_id
-        );
+        filtered = bool(needle or self.tag or self.project_id or self.narrowed());
+        # A column filter places each row by the board's rule.
+        (keys, rank, kind_rank) = column_ranks(holder) if self.column else ([], {}, {});
         picked: list[Task] = [];
         recent_done = 0;
         for t in pool {
@@ -471,6 +549,12 @@ walker ListTasks {
             if self.iteration_id
                 and self.iteration_id != "none"
                 and t.iteration_id != self.iteration_id {
+                continue;
+            }
+            if self.priority and t.priority != self.priority {
+                continue;
+            }
+            if self.column and keys[column_rank(t, rank, kind_rank)] != self.column {
                 continue;
             }
             if self.scope == "attention" and not needs_attention(t, today) {
@@ -533,7 +617,7 @@ walker ListTasks {
             } elif self.scope == "all" {
                 return tally_totals(holder)[0];
             } elif self.scope == "older" {
-                return tally_totals(holder)[1] - len(done_since(holder, cutoff))
+                return tally_totals(holder)[1] - done_since_count(holder, cutoff)
                     if cutoff
                     else 0;
             }
@@ -843,6 +927,7 @@ walker CreateTask {
             project_id=jid(here)
         );
         on_attached(holder, fresh);
+        fresh.keep_keys();
         fresh.assignee_ids = link_assignees(holder, fresh, self.assignee_ids);
         count_task(here, fresh, 1);
         note_category(holder, fresh.category);
@@ -928,6 +1013,7 @@ walker UpdateTask(find_task) {
         here.priority = self.priority;
         here.set_status(landing, now_iso());
         here.due_date = self.due_date;
+        here.keep_keys();
         here.start_date = iso_day(self.start_date);
         here.iteration_id = owned_iteration(holder, self.iteration_id);
         here.notes = self.notes;

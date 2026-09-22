@@ -79,14 +79,15 @@ walker SaveProject {
         }
     }
 
-    # A new project's tallies are exact at zero, so it is stamped here and
-    # ensure_tallies never loads it.
+    # A new project's tallies and keys are exact at zero, so it is stamped
+    # here and ensure_tallies / ensure_keys never load it.
     can create with Projects entry {
         fresh = here ++> Project(
             name=self.name.strip(),
             description=self.description,
             tallies_at=now_iso(),
-            history_at=now_iso()
+            history_at=now_iso(),
+            keys_at=now_iso()
         );
         on_attached(root, fresh);
         report fresh;

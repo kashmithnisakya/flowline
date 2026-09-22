@@ -33,13 +33,8 @@ glob SCOPE_KEYS: list[str] = ["working", "done", "all", "attention"],
      # Only the table's sortable headers: an old ?sort=estimate link falls back
      # to the default rather than ordering by a column nobody can see.
      SORT_KEYS: list[str] = ["title", "step", "priority", "due", "updated"],
-     PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2},
      PRIORITY_KEYS: list[str] = ["All", "High", "Medium", "Low"],
      PAGE_SIZE: int = 50,
-     # Step and priority are filtered here, over every matching page read at
-     # the walker's largest page size (ListTasks has no such filters yet).
-     GATHER_SIZE: int = 500,
-     GATHER_PAGES: int = 40,
      # The board's task form and handoff kinds, so the dialog opened here is
      # the board's dialog with the board's fields.
      BLANK_TASK: dict[str, str] = {
@@ -180,8 +175,6 @@ def:pub TasksPage -> JsxPage {
         stickyTop: int = 0,
         # Only the newest fetch may paint: filter and page changes race.
         reqRef: Ref[any] = Ref(),
-        # The step/priority match set for one view, with its scope_total.
-        poolRef: Ref[any] = Ref(),
         # Set once the members, projects and flow line have loaded.
         readyRef: Ref[any] = Ref();
 
@@ -236,10 +229,7 @@ def:pub TasksPage -> JsxPage {
 
     async def loadShared -> None;
     async def loadTasks -> None;
-    async def gatherPool(seq: int) -> list[TaskRow];
-    def sortPool(pool: list[TaskRow]) -> list[TaskRow];
     def filtered -> bool;
-    def forget -> None;
     def sortBy(field: str) -> None;
     def chooseScope(value: str) -> None;
     def pickProject(value: str) -> None;

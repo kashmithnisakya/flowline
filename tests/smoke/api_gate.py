@@ -464,6 +464,114 @@ def history_pages_suite(project_id):
                   str([(p.get("total"), p.get("scope_total")) for p in pages][:4]))
 
 
+def history_store_suite(project_id, member_id):
+    # The history scopes page in the store for every sort and filter but a
+    # search or a tag. Each page run must equal a Python sort of the whole
+    # history (ties by id), with totals, across titles that differ only in
+    # case, accents and punctuation; a search takes the loaded path.
+    far, rank = "9999-12-31", {"High": 0, "Medium": 1, "Low": 2}
+    it = report("SaveIteration", {"name": "Store sprint", "start_date": "2026-09-01",
+                                  "end_date": "2026-09-30"}).get("id", "")
+    titles = ["alpha", "Alpha-2", "ábaco", "Zeta", "zeta!", "émile", "Émile", "beta", "Beta",
+              "_under", "123 go", "ümlaut", "alpha"]
+    cats = ["bug", "Bug", "Feature", "", "feature"]
+    for i, title in enumerate(titles):
+        t = report("CreateTask", {
+            "title": title, "category": cats[i % 5], "priority": ["High", "Medium", "Low"][i % 3],
+            "due_date": "" if i % 3 == 0 else f"2026-10-{10 + i:02d}", "estimate": [0.0, 1.5, 3.0][i % 3],
+            "assignee_ids": [member_id] if i % 2 else [], "project_id": project_id,
+            "iteration_id": it if i % 4 == 0 else ""})
+        if i % 3 == 1:
+            report("MoveTask", {"task_id": t.get("id", ""), "status": "Done"})
+        elif i % 5 == 2:
+            report("MoveTask", {"task_id": t.get("id", ""), "status": "Blocked"})
+    rows = all_rows()
+    tallied = sum(p["total"] for p in report("TaskCounts").get("projects", []))
+    check("store history: the paged history holds every task once",
+          len(rows) == tallied == len({r["id"] for r in rows}), f"{len(rows)} rows, {tallied} tallied")
+    steps = report("GetFlowLine", {"with_counts": False}) or []
+    order = sorted(sorted(steps, key=lambda s: s["sort_order"]), key=lambda s: s["x"])
+    keys = [s["id"] for s in order]
+    first_kind = {}
+    for i, s in enumerate(order):
+        first_kind.setdefault(s["kind"], i)
+
+    def column(r):
+        if r["step_id"] in keys:
+            return keys.index(r["step_id"])
+        return first_kind.get(STATUS_KIND.get(r["status"], "active"), 0)
+    key_of = {
+        "title": lambda r: r["title"].lower(), "category": lambda r: r["category"].lower(),
+        "priority": lambda r: rank.get(r["priority"], 1), "estimate": lambda r: r["estimate"],
+        "due": lambda r: r["due_date"] or far, "created": lambda r: r["created_at"],
+        "updated": lambda r: r["updated_at"],
+    }
+
+    def expected(keep, sort, desc, scope):
+        out = sorted((r for r in rows if keep(r)), key=lambda r: r["id"])
+        if sort == "step":
+            out.sort(key=lambda r: r["sort_order"])
+            out.sort(key=column, reverse=desc)
+        elif sort:
+            out.sort(key=key_of[sort], reverse=desc)
+        elif scope == "done":
+            out.sort(key=lambda r: r["updated_at"], reverse=True)
+        else:
+            out.sort(key=lambda r: r["sort_order"])
+        return [r["id"] for r in out]
+
+    def paged(body):
+        ids, pages, page = [], [], 1
+        while page <= 100:
+            got = report("ListTasks", {**body, "page": page, "page_size": 4})
+            pages.append(got)
+            ids.extend(r["id"] for r in got.get("rows", []))
+            if not got.get("has_more"):
+                break
+            page += 1
+        return ids, pages
+    done = lambda r: r["status"] == "Done"
+    blocked_col = keys[column(next(r for r in rows if r["status"] == "Blocked"))]
+    filters = [
+        ("no filter", {}, lambda r: True),
+        ("category", {"category": "bug"}, lambda r: r["category"] == "bug"),
+        ("priority", {"priority": "High"}, lambda r: r["priority"] == "High"),
+        ("estimated", {"estimated": "yes"}, lambda r: r["estimate"] > 0),
+        ("unestimated", {"estimated": "no"}, lambda r: r["estimate"] <= 0),
+        ("no iteration", {"iteration_id": "none"}, lambda r: not r["iteration_id"]),
+        ("iteration", {"iteration_id": it}, lambda r: r["iteration_id"] == it),
+        ("assignee", {"assignee_id": member_id}, lambda r: member_id in r["assignee_ids"]),
+        ("column", {"column": blocked_col}, lambda r: keys[column(r)] == blocked_col),
+        ("project and assignee", {"project_id": project_id, "assignee_id": member_id},
+         lambda r: r["project_id"] == project_id and member_id in r["assignee_ids"]),
+        ("priority and column", {"priority": "Low", "column": blocked_col},
+         lambda r: r["priority"] == "Low" and keys[column(r)] == blocked_col),
+    ]
+    cases = [("all", "", sort, desc, {}, lambda r: True) for sort in [""] + list(key_of) + ["step"]
+             for desc in (False, True)]
+    cases += [("all", name, sort, desc, body, keep) for name, body, keep in filters[1:]
+              for sort, desc in (("title", False), ("step", True), ("due", True))]
+    cases += [("done", name, sort, False, body, keep) for name, body, keep in filters[:3]
+              for sort in ("", "priority", "step")]
+    bad = []
+    for scope, name, sort, desc, body, keep in cases:
+        want = expected(lambda r: (scope == "all" or done(r)) and keep(r), sort, desc, scope)
+        ids, pages = paged({"scope": scope, "sort": sort, "sort_dir": "desc" if desc else "asc", **body})
+        whole = len(rows) if scope == "all" else sum(1 for r in rows if done(r))
+        if ids != want or any(p.get("total") != len(want) or p.get("scope_total") != whole for p in pages):
+            bad.append(f"{scope}/{name}/{sort or 'default'}/{'desc' if desc else 'asc'}: "
+                       f"{len(ids)} vs {len(want)}, totals {[p.get('total') for p in pages][:2]}")
+    check(f"store history: {len(cases)} sort and filter runs page exactly as a full sort", not bad, bad[:4])
+    ids, pages = paged({"scope": "all", "q": "a", "priority": "High", "column": blocked_col, "sort": "title"})
+    want = expected(lambda r: "a" in r["title"].lower() and r["priority"] == "High"
+                    and keys[column(r)] == blocked_col, "title", False, "all")
+    check("store history: a search with priority and column filters (loaded path) agrees", ids == want,
+          f"{ids} vs {want}")
+    empty = report("ListTasks", {"scope": "all", "column": "no-such-column", "page_size": 5})
+    check("store history: an unknown column matches nothing", empty.get("total") == 0 and not empty.get("rows"),
+          str(empty)[:200])
+
+
 def sign_up(tag):
     # A second account for the tenant checks: its token, or "" on failure.
     email, password = f"ci-{tag}@flowline-ci.invalid", f"Ci-{tag}-Xy7!"
@@ -740,6 +848,7 @@ def main() -> int:
     log_paging_suite(member_id)
     log_counts_suite(member_id, project_id, tag)
     history_pages_suite(project_id)
+    history_store_suite(project_id, member_id)
     filter_sets_suite(project_id, member_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
