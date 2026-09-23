@@ -1,7 +1,8 @@
 """The flow line above the board: every step as a node (swatch, name, count)
 joined by wires in column order. A node whose lane is scrolled out of view is
-dimmed, and selecting a node brings its lane in. On phones the same list is a
-row of step tabs, one lane at a time."""
+dimmed, the open task's step wears the ring its card wears, and selecting a
+node brings its lane in. On phones the same list is a row of step tabs, one
+lane at a time."""
 
 import from .MoveMenu { swatchFor }
 
@@ -13,6 +14,8 @@ def:pub RouteStrip(
     # Keys whose lane is mostly on screen, and the one most on screen.
     inView: list[str],
     active: str,
+    # The step the open task sits in, ringed like its card ("" for none).
+    current: str,
     # Lanes past the right edge, for the "N more steps" hint.
     hiddenAfter: int,
     onPick: Callable[[str], None],
@@ -68,11 +71,17 @@ def:pub RouteStrip(
                         key={key}
                         type="button"
                         title={"Go to " + labels[i]}
-                        className={"inline-flex shrink-0 items-center gap-[7px] rounded-md border px-2 py-1 text-[12.5px] font-semibold whitespace-nowrap transition-colors duration-150 hover:border-input "
+                        aria-current={"step" if key == current and current else None}
+                        className={"inline-flex shrink-0 items-center gap-[7px] rounded-md border px-2 py-1 text-[12.5px] font-semibold whitespace-nowrap transition-colors duration-150 "
                             + (
                                 "bg-card text-foreground"
                                     if key in inView
                                     else "bg-transparent text-muted-foreground"
+                            )
+                            + (
+                                " border-primary ring-1 ring-primary hover:border-primary"
+                                    if key == current and current
+                                    else " hover:border-input"
                             )}
                         onClick={lambda { onPick(key); }}
                     >
