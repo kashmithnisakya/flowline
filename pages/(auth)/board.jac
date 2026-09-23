@@ -779,10 +779,17 @@ def:pub BoardPage -> JsxPage {
     selectedId = editingId if dialogOpen else "";
     editingCreated = "";
     editingUpdated = "";
+    # The lane the open task sits in, for the step strip's ring. The saved
+    # row decides it, so an unsaved Step pick does not move the ring off the
+    # card. (The lane itself comes into view already: the card takes focus.)
+    openLane = "";
     for t in tasks + olderDone {
         if t.id == editingId {
             editingCreated = t.created_at;
             editingUpdated = t.updated_at;
+            if dialogOpen {
+                openLane = columnKeyOf(t);
+            }
         }
     }
     switchLabel = "";
@@ -1083,6 +1090,7 @@ def:pub BoardPage -> JsxPage {
                                 counts={laneCounts}
                                 inView={inView}
                                 active={activeLane}
+                                current={openLane}
                                 hiddenAfter={hiddenAfter}
                                 onPick={scrollToLane}
                                 onMore={scrollToHidden}
@@ -1124,6 +1132,7 @@ def:pub BoardPage -> JsxPage {
                                 counts={laneCounts}
                                 inView={inView}
                                 active={activeLane}
+                                current=""
                                 hiddenAfter={0}
                                 onPick={scrollToLane}
                                 onMore={scrollToHidden}
