@@ -85,7 +85,7 @@ def:pub Features -> JsxElement {
                     <article
                         key={f.key}
                         id={f.key}
-                        className={"bento-tile scroll-mt-20 " + f.span}
+                        className={"bento-tile reveal scroll-mt-20 " + f.span}
                     >
                         <span className="tile-icon" aria-hidden="true">
                             <HugeiconsIcon icon={f.icon} size={20} strokeWidth={1.8}/>

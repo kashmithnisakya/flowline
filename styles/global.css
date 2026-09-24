@@ -323,6 +323,20 @@
             radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 58%),
             radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 10%, transparent), transparent 60%);
     }
+    /* A faint grid under the glows, fading out before it reaches an edge, so
+       the hero has texture rather than flat colour. Decorative and masked,
+       so it never competes with the text sitting on it. */
+    .hero-atmosphere::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(to right, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px),
+            linear-gradient(to bottom, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px);
+        background-size: 56px 56px;
+        -webkit-mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
+        mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
+    }
     .dark .hero-atmosphere {
         background:
             radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 58%),
@@ -706,6 +720,24 @@
 .hm-line:nth-child(1) { animation: hm-line-1 12s linear infinite; }
 .hm-line:nth-child(2) { animation: hm-line-2 12s linear infinite; }
 .hm-line:nth-child(3) { animation: hm-line-3 12s linear infinite; }
+
+/* ---- Scroll reveal. Only the hero animated, on load, which left every
+   section below it dead on the page. Each marked block now rises as it
+   enters the viewport, driven by the scroll position rather than a timer,
+   so nothing runs off screen and there is no observer to wire up.
+
+   Gated twice on purpose: `@supports` so a browser without scroll-driven
+   animation simply renders the content (never hidden, just unanimated), and
+   `no-preference` so the reduced-motion block never has to undo it. */
+@supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .reveal {
+            animation: rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            animation-timeline: view();
+            animation-range: entry 0% entry 55%;
+        }
+    }
+}
 
 /* The hero glows drift, very slowly, so the atmosphere is alive without
    anything appearing to move. Translate and opacity only: growing a

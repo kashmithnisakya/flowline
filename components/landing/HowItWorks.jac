@@ -3,7 +3,7 @@ sign-up sentence names providers only once the sign-in page has seen them."""
 
 import from ..auth.SsoButtons { SignUpMethods }
 
-glob STEP_CARD: str = "bento-tile scroll-mt-20";
+glob STEP_CARD: str = "bento-tile reveal scroll-mt-20";
 
 def:pub HowItWorks -> JsxElement {
     return

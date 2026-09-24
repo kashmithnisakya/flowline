@@ -25,7 +25,7 @@ def:pub TourFilm -> JsxElement {
             >
                 The board, a task and its checklist, the flow line behind it, the tasks table, the roadmap, its travel so far and the Overview.
             </p>
-            <figure className="hero-frame mt-8 overflow-hidden border bg-card">
+            <figure className="hero-frame reveal mt-8 overflow-hidden border bg-card">
                 <img
                     src={DEMO_SRC}
                     alt={DEMO_ALT}

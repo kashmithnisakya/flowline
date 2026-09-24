@@ -9,7 +9,7 @@ import from .TourOverview { TourOverview }
 def TourRow(title: str, body: str, children: any = None) -> JsxElement {
     return
         <div
-            className="grid gap-5 border-t py-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] xl:gap-10"
+            className="reveal grid gap-5 border-t py-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] xl:gap-10"
         >
             <div className="grid content-start gap-2">
                 <h3 className="text-lg leading-snug font-semibold">{title}</h3>

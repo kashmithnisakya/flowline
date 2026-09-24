@@ -12,7 +12,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
     return
         <footer className="landing-wrap pt-16 pb-10 sm:pt-24">
             <div
-                className="cta-band grid gap-5 px-6 py-10 sm:px-10 sm:py-14 lg:px-14 lg:py-16"
+                className="cta-band reveal grid gap-5 px-6 py-10 sm:px-10 sm:py-14 lg:px-14 lg:py-16"
             >
                 <p className="section-eyebrow">Open source, MIT licensed</p>
                 <h2

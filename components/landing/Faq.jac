@@ -52,7 +52,7 @@ def:pub Faq -> JsxElement {
                     <details
                         key={f.q}
                         open={i < 2}
-                        className="bento-tile group cursor-pointer gap-0 py-4"
+                        className="bento-tile reveal group cursor-pointer gap-0 py-4"
                     >
                         <summary
                             className="flex cursor-pointer list-none items-start justify-between gap-6 text-left [&::-webkit-details-marker]:hidden"
