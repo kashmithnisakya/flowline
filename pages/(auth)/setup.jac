@@ -381,7 +381,7 @@ def:pub SetupPage -> JsxPage {
                                         value={mRole}
                                         autoComplete="off"
                                         onChange={lambda (e: ChangeEvent) { mRole = e.target.value; }}
-                                        placeholder="Builder"
+                                        placeholder="Model Pilot Engineer"
                                         className="h-9"
                                     />
                                 </div>
