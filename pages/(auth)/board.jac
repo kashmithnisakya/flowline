@@ -62,7 +62,7 @@ import from ...lib.filters {
     readBoardFilters,
     keepBoardFilters
 }
-import from ...components.flowlines.kinds { DOT_FILL, colorKey }
+import from ...components.flowlines.kinds { DOT_FILL, colorKey, moveRefusal }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",

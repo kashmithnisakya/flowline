@@ -17,6 +17,7 @@ import from ...services.flowlines.flowlines {
     LinkTransition,
     LabelTransition,
     UnlinkTransition,
+    SetStepRules,
     RenameFlowLine,
     ListStepTasks
 }
@@ -50,7 +51,13 @@ import from ...components.flowlines.geometry {
     NODE_W,
     NODE_H
 }
-import from ...components.flowlines.kinds { KIND_LABEL, KIND_TONE, DOT_FILL, colorKey }
+import from ...components.flowlines.kinds {
+    KIND_LABEL,
+    KIND_TONE,
+    DOT_FILL,
+    colorKey,
+    moveRefusal
+}
 import from ...components.common.KindGlyph { KindGlyph }
 import from ...components.ui.button { Button }
 import from ...components.ui.input { Input }
@@ -138,10 +145,9 @@ def:pub FlowLinePage -> JsxPage {
         selectedId: str = "",
         connectFrom: str = "",
         selectedEdge: str = "",
-        # What the selected transition's label says while it is being typed,
-        # re-seeded from the edge on every selection.
-        edgeDraft: str = "",
-        edgeCarry: str = "",
+        # The selected transition's draft (label, carries, trigger,
+        # trigger_label), re-seeded from the edge on every selection.
+        edgeForm: dict[str, str] = {},
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,
         confirmDelete: bool = False,
@@ -347,8 +353,10 @@ def:pub FlowLinePage -> JsxPage {
     async def deleteFlowLine -> None;
     async def linkSteps(fromId: str, toId: str) -> None;
     async def deleteEdge(fromId: str, toId: str) -> None;
-    def selectEdge(key: str, said: str, carried: str) -> None;
-    async def commitEdgeLabel(fromId: str, toId: str, said: str, carried: str) -> None;
+    def selectEdge(key: str, fields: dict[str, str]) -> None;
+    def editEdge(key: str, value: str) -> None;
+    async def commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> None;
+    async def commitRule(key: str, on: bool) -> None;
     def selectStep(stepId: str) -> None;
     def armConnect -> None;
     def clearCanvas -> None;
@@ -923,12 +931,10 @@ def:pub FlowLinePage -> JsxPage {
                                                 onSelect={selectStep
                                                     if editing
                                                     else peekStep}
-                                                edgeDraft={edgeDraft}
-                                                edgeCarry={edgeCarry}
+                                                edgeForm={edgeForm}
                                                 onSelectEdge={selectEdge}
-                                                onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
-                                                onEdgeCarry={lambda (v: str) { edgeCarry = v; }}
-                                                onSaveEdgeLabel={commitEdgeLabel}
+                                                onEdgeField={editEdge}
+                                                onSaveEdge={commitEdge}
                                                 onDeleteEdge={deleteEdge}
                                                 onCanvasClick={clearCanvas
                                                     if editing
@@ -1064,6 +1070,7 @@ def:pub FlowLinePage -> JsxPage {
                                                     onCancelConnect={lambda { connectFrom = ""; }}
                                                     onDelete={deleteStep}
                                                     onUnlink={deleteEdge}
+                                                    onRule={commitRule}
                                                 />
                                             } else {
                                                 <div

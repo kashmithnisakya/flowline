@@ -18,12 +18,13 @@ import from .geometry {
     placeChips
 }
 import from .lanes { LANE_LABEL_W, laneRects, laneWires }
-import from .kinds { DOT_FILL, CARRY_LABEL, colorKey }
+import from .kinds { DOT_FILL, CARRY_LABEL, colorKey, triggerNote }
+import from .EdgeEditor { EdgeEditor }
 import from .StepNode { StepNode }
 import from ..ui.button { Button }
-import from ..ui.input { Input }
 
-glob CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
+glob EDGE_EDITOR_H: float = 310.0,
+     CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
      NAME_FONT: str = "600 12.5px 'Geist Variable', Arial, sans-serif",
      META_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
      COUNT_FONT: str = "12px 'Geist Mono Variable', Menlo, monospace",
@@ -102,14 +103,25 @@ def bandAnchors(anchors: list[list[float]], lo: float, hi: float) -> list[list[f
 }
 
 
+# A drawn transition's stored fields, the edge editor's starting draft.
+def edgeFields(l: dict[str, any]) -> dict[str, str] {
+    return {
+        "label": str(l["label"]),
+        "carries": str(l["carries"]),
+        "trigger": str(l["trigger"]),
+        "trigger_label": str(l["trigger_label"])
+    };
+}
+
+
 def:pub FlowCanvas(
     steps: list[StepView],
     live: dict[str, list[float]] = {},
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
-    edgeDraft: str = "",
-    edgeCarry: str = "",
+    # The selected transition's draft: label, carries, trigger, trigger_label.
+    edgeForm: dict[str, str] = {},
     zoom: float = 1.0,
     panX: float = 0.0,
     panY: float = 0.0,
@@ -130,10 +142,9 @@ def:pub FlowCanvas(
     layoutRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
-    onSelectEdge: Callable[[str, str, str], None] = None,
-    onEdgeDraft: Callable[[str], None] = None,
-    onEdgeCarry: Callable[[str], None] = None,
-    onSaveEdgeLabel: Callable[[str, str, str, str], None] = None,
+    onSelectEdge: Callable[[str, dict[str, str]], None] = None,
+    onEdgeField: Callable[[str, str], None] = None,
+    onSaveEdge: Callable[[str, str, dict[str, str]], None] = None,
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None,
     onAddStep: Callable[[], None] = None
@@ -286,7 +297,13 @@ def:pub FlowCanvas(
                         "my": mid[1],
                         "back": target.sort_order < s.sort_order,
                         "label": s.next_labels[i] if i < len(s.next_labels) else "",
-                        "carries": s.next_carries[i] if i < len(s.next_carries) else ""
+                        "carries": s.next_carries[i] if i < len(s.next_carries) else "",
+                        "trigger": s.next_triggers[i]
+                            if i < len(s.next_triggers)
+                            else "",
+                        "trigger_label": s.next_trigger_labels[i]
+                            if i < len(s.next_trigger_labels)
+                            else ""
                     }
                 );
             }
@@ -299,8 +316,12 @@ def:pub FlowCanvas(
         carried = str(l["carries"]);
         said = str(l["label"]);
         tag = CARRY_LABEL[carried] if carried in CARRY_LABEL else "";
-        text = tag + (" · " if tag and said else "") + said;
+        # A transition that moves work on its own says so after its words.
+        auto = " · auto" if l["trigger"] else "";
+        text = tag + (" · " if tag and said else "") + said + auto;
         l["tag"] = tag;
+        l["auto"] = auto;
+        l["note"] = triggerNote(str(l["trigger"]), str(l["trigger_label"]));
         l["text"] = text if showChips and selectedEdge != l["key"] else "";
         l["cw"] = textWidth(text, CHIP_FONT, 6.2) + CHIP_PAD_X * 2.0 + 1.0
             if text
@@ -389,19 +410,26 @@ def:pub FlowCanvas(
     }
     edgeFromName = "";
     edgeToName = "";
-    edgeSaid = "";
-    edgeHad = "";
+    edgeHad = False;
+    # The editor opens below the arrow, lifted as far as it must be to stay
+    # inside the viewport: the canvas clips what overflows, Save included.
+    edgeTop = 0.0;
     if activeFound {
+        edgeTop = float(activeEdge["my"]) + panY + 14.0;
+        pane: any = viewportRef.current if viewportRef else None;
+        paneH = float(pane.clientHeight) if pane else 0.0;
+        if paneH > 0.0 and edgeTop + EDGE_EDITOR_H > paneH {
+            edgeTop = paneH - EDGE_EDITOR_H - 8.0;
+        }
+        if edgeTop < 8.0 {
+            edgeTop = 8.0;
+        }
         edgeFromName = byId[activeEdge["from"]].name;
         edgeToName = byId[activeEdge["to"]].name;
-        edgeSaid = activeEdge["label"];
-        edgeHad = str(activeEdge["carries"]);
+        edgeHad = bool(
+            activeEdge["label"] or activeEdge["carries"] or activeEdge["trigger"]
+        );
     }
-    carryPicks: list[dict[str, str]] = [
-        {"key": "", "text": "None"},
-        {"key": "issue", "text": "Issue"},
-        {"key": "pr", "text": "PR"}
-    ];
     connecting = bool(connectFrom);
 
     # Lane bands and labels in viewport px: the bands follow the pan, the
@@ -508,9 +536,7 @@ def:pub FlowCanvas(
                                     }}
                                     onClick={lambda (e: MouseEvent) {
                                         e.stopPropagation();
-                                        onSelectEdge(
-                                            l["key"], l["label"], str(l["carries"])
-                                        );
+                                        onSelectEdge(l["key"], edgeFields(l));
                                     }}
                                 />
                             }}
@@ -551,9 +577,7 @@ def:pub FlowCanvas(
                                 onClick={lambda (e: MouseEvent) { if editing
                                     and onSelectEdge {
                                     e.stopPropagation();
-                                    onSelectEdge(
-                                        l["key"], l["label"], str(l["carries"])
-                                    );
+                                    onSelectEdge(l["key"], edgeFields(l));
                                 }}}
                             >
                                 {if l["tag"] {
@@ -562,6 +586,15 @@ def:pub FlowCanvas(
                                     </span>
                                 }}
                                 {l["label"]}
+                                {if l["auto"] {
+                                    <span
+                                        key="auto"
+                                        className="text-primary"
+                                        title={l["note"]}
+                                    >
+                                        {l["auto"]}
+                                    </span>
+                                }}
                             </span>
                         }}
                         {if selectedEdge == l["key"] {
@@ -695,109 +728,25 @@ def:pub FlowCanvas(
                 </div>
             }}
             {if activeFound {
-                <div
+                <EdgeEditor
                     key="edgeeditor"
-                    className="absolute z-40 w-64 -translate-x-1/2 rounded-xl border bg-popover p-2.5 shadow-lg"
-                    style={{
-                        "left": str(float(activeEdge["mx"]) + panX) + "px",
-                        "top": str(float(activeEdge["my"]) + panY + 14.0) + "px"
-                    }}
-                    onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
-                    onPointerDown={lambda (e: any) { e.stopPropagation(); }}
-                >
-                    <div
-                        className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground"
-                    >
-                        <span className="truncate">{edgeFromName}</span>
-                        <span aria-hidden="true">→</span>
-                        <span className="truncate">{edgeToName}</span>
-                    </div>
-                    <Input
-                        autoFocus={True}
-                        value={edgeDraft}
-                        placeholder="What has to be true to move on"
-                        className="h-8 text-[13px]"
-                        onChange={lambda (e: any) { if onEdgeDraft {
-                            onEdgeDraft(e.target.value);
-                        }}}
-                        onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onSaveEdgeLabel {
-                            onSaveEdgeLabel(
-                                activeEdge["from"],
-                                activeEdge["to"],
-                                edgeDraft,
-                                edgeCarry
-                            );
-                        }}}
-                    />
-                    <div className="mt-2 flex items-center gap-1">
-                        <span className="mr-1 text-xs text-muted-foreground">
-                            Carries
-                        </span>
-                        {for pick in carryPicks {
-                            <button
-                                key={pick["text"]}
-                                type="button"
-                                aria-pressed={edgeCarry == pick["key"]}
-                                className={"rounded-sm border px-1.5 py-0.5 text-xs transition-colors "
-                                    + (
-                                        "border-input bg-muted font-semibold text-foreground"
-                                            if edgeCarry == pick["key"]
-                                            else "border-transparent text-muted-foreground hover:text-foreground"
-                                    )}
-                                onClick={lambda { if onEdgeCarry {
-                                    onEdgeCarry(pick["key"]);
-                                }}}
-                            >
-                                {pick["text"]}
-                            </button>
-                        }}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-1">
-                        <Button
-                            size="sm"
-                            onClick={lambda { if onSaveEdgeLabel {
-                                onSaveEdgeLabel(
-                                    activeEdge["from"],
-                                    activeEdge["to"],
-                                    edgeDraft,
-                                    edgeCarry
-                                );
-                            }}}
-                        >
-                            Save
-                        </Button>
-                        <div className="flex items-center gap-1">
-                            {if edgeSaid or edgeHad {
-                                <Button
-                                    key="clear"
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Take the wording and the tag off this transition, keep the transition"
-                                    className="text-muted-foreground"
-                                    onClick={lambda { if onSaveEdgeLabel {
-                                        onSaveEdgeLabel(
-                                            activeEdge["from"], activeEdge["to"], "", ""
-                                        );
-                                    }}}
-                                >
-                                    Clear
-                                </Button>
-                            }}
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                title="Remove this transition"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={lambda { if onDeleteEdge {
-                                    onDeleteEdge(activeEdge["from"], activeEdge["to"]);
-                                }}}
-                            >
-                                Delete
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                    fromName={edgeFromName}
+                    toName={edgeToName}
+                    form={edgeForm}
+                    left={float(activeEdge["mx"]) + panX}
+                    top={edgeTop}
+                    clearable={edgeHad}
+                    onField={onEdgeField}
+                    onSave={lambda { if onSaveEdge {
+                        onSaveEdge(activeEdge["from"], activeEdge["to"], edgeForm);
+                    }}}
+                    onClear={lambda { if onSaveEdge {
+                        onSaveEdge(activeEdge["from"], activeEdge["to"], {});
+                    }}}
+                    onDelete={lambda { if onDeleteEdge {
+                        onDeleteEdge(activeEdge["from"], activeEdge["to"]);
+                    }}}
+                />
             }}
         </div>;
 }

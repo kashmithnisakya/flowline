@@ -349,6 +349,21 @@ it was really closed and ages out of the board like any other task;
 `SyncGithub(full=True)` re-walks a repo and corrects rows an earlier import
 stamped with the sync time.
 
+**The flow line automates itself.** A step's entry rules
+(`needs_due_date`, `needs_pr`, `WorkflowStep.refusal`) gate every move onto
+it: `MoveTask` / `UpdateTask` keep the step and report `TaskView.refused`,
+`CreateTask` creates nothing, and the pages check first with
+`moveRefusal` (`components/flowlines/kinds.jac`). A transition's `trigger`
+(`TRANSITION_TRIGGERS`: `label` with its `trigger_label`, `pr_merged`,
+`changes_requested`) moves a task out of the step it leaves when the sync or
+a drain sees the fact: `follow_trigger` / `land_on_step` in
+`services/tasks/tasks.jac` (a drag's landing, hand-off and log line), called
+from `services/github/github.jac`. Labels fire on being newly added
+(`Task.gh_labels` / `pr_labels` hold what was seen), a PR links to the task
+whose issue its body closes (`pr_task`), and a merge a `pr_merged` arrow
+takes skips the repo's `auto_done`. `tests/smoke/automation_gate.py` drives
+all of it against the stub.
+
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first group
 of that kind (the board's `columnKeyOf`, the roadmap's `stepGroups`); an org with no flow line at all falls back to `STATUSES`. Both

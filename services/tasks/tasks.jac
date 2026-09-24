@@ -136,6 +136,100 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
     return holders;
 }
 
+# What a move onto a step does beyond the step: the step's owner takes the
+# task (`handed`, from handoff_target), and a move across Done writes back
+# to GitHub. Returns the log line's tail, "" when neither applied.
+def landing_tail(holder: Root, t: Task, handed: list[Member], was: str) -> str {
+    tail = "";
+    if handed {
+        target = handed[0];
+        already = [t->:AssignedTo:->];
+        if len(already) != 1 or jid(already[0]) != jid(target) {
+            t.assignee_ids = link_assignees(holder, t, [jid(target)]);
+            tail = tail + " · " + target.full_name();
+        }
+    }
+    if (t.status == "Done") != (was == "Done") {
+        wrote = sync_issue_state(holder, t, t.status == "Done", t.updated_at);
+        if wrote {
+            tail = tail + " · " + wrote;
+        }
+    }
+    return tail;
+}
+
+# Move `t` to the end of `step`'s column as a drag there would, and log why.
+# `peaks` keeps each column's top per step id across one pass: a pushed
+# query does not see this request's writes, so two landings would tie.
+def land_on_step(
+    holder: Root,
+    t: Task,
+    step: WorkflowStep,
+    why: str,
+    stamp: str,
+    peaks: dict[str, float]
+) {
+    sid = jid(step);
+    if sid not in peaks {
+        top = step_column_peak(holder, sid);
+        peaks[sid] = top[0].sort_order if top else 0.0;
+    }
+    peaks[sid] = peaks[sid] + 1024.0;
+    handed = handoff_target(holder, t, step);
+    was = t.status;
+    t.step_id = sid;
+    t.set_status(
+        KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress", stamp
+    );
+    t.sort_order = peaks[sid];
+    t.updated_at = stamp;
+    tail = landing_tail(holder, t, handed, was);
+    record_task_event(holder, t, "Moved to " + step.name + " · " + why + tail, stamp);
+}
+
+# A GitHub fact the flow line can act on: follow the first transition out
+# of the task's step whose trigger is `trigger` (for "label", one waiting
+# for a label in `added`). A target whose entry rule turns the task away
+# keeps it where it is, and the log says why. True when the task moved.
+def follow_trigger(
+    holder: Root,
+    t: Task,
+    trigger: str,
+    added: list[str],
+    why: str,
+    stamp: str,
+    peaks: dict[str, float]
+) -> bool {
+    source = resolve(t.step_id) if t.step_id else None;
+    if not isinstance(source, WorkflowStep) or not owned(holder, source) {
+        return False;
+    }
+    fresh = [a.strip().lower() for a in added];
+    for tr in source.transitions {
+        if tr.get("trigger", "") != trigger {
+            continue;
+        }
+        if trigger == "label"
+            and tr.get("trigger_label", "").strip().lower() not in fresh {
+            continue;
+        }
+        target = resolve(tr["to"]);
+        if not isinstance(target, WorkflowStep) or not owned(holder, target) {
+            continue;
+        }
+        refused = target.refusal(t.due_date, t.pr_link);
+        if refused {
+            record_task_event(
+                holder, t, "Stayed on " + source.name + " · " + refused, stamp
+            );
+            return False;
+        }
+        land_on_step(holder, t, target, why, stamp, peaks);
+        return True;
+    }
+    return False;
+}
+
 # -------------------------------------------------------------------- tasks
 
 # How well a title matches a search: exact, then prefix, then anywhere. Lower
@@ -874,6 +968,12 @@ walker CreateTask {
                 step = self.step_id;
             }
         }
+        # A step's entry rule holds from the first write: a new task has no
+        # PR, so a step that needs one is never where work starts.
+        chosen = resolve(step) if step else None;
+        if isinstance(chosen, WorkflowStep) and chosen.refusal(self.due_date, "") {
+            disengage;
+        }
         # The end of the column: its top card, one bounded query.
         top = (
             step_column_peak(holder, step) if step else status_column_peak(holder, col)
@@ -963,15 +1063,28 @@ walker UpdateTask(find_task) {
         # `here` is the task; `root` is the caller's own root.
         holder = root;
         landing = self.status;
+        refused = "";
+        was_step = here.step_id;
+        # A change of step meets the target's entry rule with the due date
+        # and PR link this same save writes; a refused step stays put.
         if self.step_id {
             mapped = status_for_step(holder, self.step_id);
-            if mapped {
+            target = resolve(self.step_id);
+            if mapped
+                and self.step_id != here.step_id
+                and isinstance(target, WorkflowStep) {
+                refused = target.refusal(self.due_date, self.pr_link.strip());
+            }
+            if refused {
+                landing = here.status;
+            } elif mapped {
                 landing = mapped;
                 here.step_id = self.step_id;
             }
         }
         was = here.status;
-        moved = landing and landing != was;
+        # Two steps can share a kind, so a new step is a move on its own.
+        moved = (landing and landing != was) or here.step_id != was_step;
         here.title = self.title;
         was_category = here.category;
         here.category = self.category;
@@ -1010,7 +1123,9 @@ walker UpdateTask(find_task) {
             }
         }
         if moved {
-            line = "Moved to " + here.status;
+            now_on = resolve(here.step_id) if here.step_id else None;
+            line = "Moved to "
+                + (now_on.name if isinstance(now_on, WorkflowStep) else here.status);
             # A move always crosses Done or not; only crossing it writes back.
             if here.status == "Done" or was == "Done" {
                 wrote = sync_issue_state(
@@ -1022,7 +1137,9 @@ walker UpdateTask(find_task) {
             }
             record_task_event(holder, here, line, here.updated_at);
         }
-        report here.to_view();
+        view = here.to_view();
+        view.refused = refused;
+        report view;
         disengage;
     }
 }
@@ -1248,6 +1365,7 @@ walker MoveTask(find_task) {
         # Read before step_id is rewritten below: a positioned drop in the
         # card's own column stays a reorder for the writes further down.
         positioned = bool(self.before_id or self.after_id);
+        was_step = here.step_id;
         reorder = False;
         # Who the move hands the task to: one member, or empty. A list, not
         # an Optional: the checker does not narrow `Member | None` through
@@ -1262,11 +1380,19 @@ walker MoveTask(find_task) {
             }
             landing = mapped;
             reorder = positioned and self.step_id == here.step_id;
-            # Only a CHANGE of step is a hand-off. Re-dropping a card in its
-            # own column (a reorder) must not reassign it.
+            # Only a CHANGE of step is a hand-off, and only a change meets
+            # the step's entry rule. Re-dropping a card in its own column (a
+            # reorder) must not reassign it.
             if self.step_id != here.step_id {
                 step = resolve(self.step_id);
                 if isinstance(step, WorkflowStep) {
+                    refused = step.refusal(here.due_date, here.pr_link);
+                    if refused {
+                        view = here.to_view();
+                        view.refused = refused;
+                        report view;
+                        disengage;
+                    }
                     handed = handoff_target(holder, here, step);
                 }
             }
@@ -1287,29 +1413,13 @@ walker MoveTask(find_task) {
             here.updated_at = now_iso();
         }
         # A hand-off replaces the assignees: the card changes hands, it does
-        # not gain a hand. The log line names who it went to.
-        note = "Moved to " + label;
-        took = False;
-        if handed {
-            target = handed[0];
-            already = [here->:AssignedTo:->];
-            if len(already) != 1 or jid(already[0]) != jid(target) {
-                here.assignee_ids = link_assignees(holder, here, [jid(target)]);
-                note = note + " · " + target.full_name();
-                took = True;
-            }
-        }
-        # Crossing Done is the one move that writes back to GitHub, for repos
-        # that opted in: landing closes the issue, leaving reopens it. The
-        # write rides on the move's own log line.
-        if (landing == "Done") != (was == "Done") {
-            wrote = sync_issue_state(holder, here, landing == "Done", here.updated_at);
-            if wrote {
-                note = note + " · " + wrote;
-            }
-        }
-        if landing != was or took {
-            record_task_event(holder, here, note, here.updated_at);
+        # not gain a hand. The tail names who it went to and any write-back
+        # a move across Done made, on the move's own log line.
+        tail = landing_tail(holder, here, handed, was);
+        if landing != was or tail or here.step_id != was_step {
+            record_task_event(
+                holder, here, "Moved to " + label + tail, here.updated_at
+            );
         }
         report here.to_view();
         disengage;

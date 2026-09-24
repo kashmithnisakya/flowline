@@ -21,8 +21,9 @@ the board's columns become those steps, each in its own colour.
 Setup takes three steps: name the workspace and its first project, add people
 (or skip), then pick how work moves. **Simple** (recommended) is To do, Doing,
 Review and Done, with Review able to send work back to Doing. **Software team**
-is seven steps from writing the issue to done, with an architecture step for
-big changes, loops back from review and four roles. **Draw my own** goes to
+is seven steps across four roles from the GitHub issue pool to done: GitHub
+labels, a linked PR, a review and a merge move work along it, and steps can
+require a due date or a PR before work enters them. **Draw my own** goes to
 the flow line page so you draw the steps yourself. A template opens the board
 with a new task ready to type.
 

@@ -311,6 +311,14 @@ impl FlowLinePage.saveTask -> None {
     fromStep = peekId;
     landedName = stepName(landing);
     pid = projectId;
+    refusal = moveRefusal(
+        steps, landing, fromStep, taskForm["due_date"], taskForm["pr"]
+    );
+    if refusal {
+        toast.error(refusal);
+        taskSaving = False;
+        return;
+    }
     try {
         if project {
             added = 0;
@@ -331,7 +339,7 @@ impl FlowLinePage.saveTask -> None {
                 toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
-        root spawn UpdateTask(
+        saved = root spawn UpdateTask(
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
@@ -359,7 +367,9 @@ impl FlowLinePage.saveTask -> None {
         # ListStepTasks, so a save has to refresh both.
         await reload(pid);
         await refreshPeek(fromStep, pid);
-        if landing != fromStep and landedName {
+        if len(saved.reports or []) > 0 and saved.reports[0].refused {
+            toast.error(saved.reports[0].refused);
+        } elif landing != fromStep and landedName {
             toast.success("Saved · moved to " + landedName);
         }
     } except Exception as e {
@@ -700,40 +710,71 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
     }
 }
 
-impl FlowLinePage.selectEdge(key: str, said: str, carried: str) -> None {
+impl FlowLinePage.selectEdge(key: str, fields: dict[str, str]) -> None {
     # Seeding the draft from the edge is what makes the editor an edit
     # rather than a retype.
     selectedEdge = key;
-    edgeDraft = said;
-    edgeCarry = carried;
+    edgeForm = fields;
 }
 
-impl FlowLinePage.commitEdgeLabel(
-    fromId: str, toId: str, said: str, carried: str
-) -> None {
-    # An empty `said` is a clear, not a no-op, which is why this goes through
-    # LabelTransition rather than re-drawing the arrow.
+impl FlowLinePage.editEdge(key: str, value: str) -> None {
+    drafted = {** edgeForm};
+    drafted[key] = value;
+    edgeForm = drafted;
+}
+
+impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> None {
+    # Every field goes together and an empty one clears, which is why this
+    # goes through LabelTransition rather than re-drawing the arrow.
     try {
         result = root spawn LabelTransition(
-            from_id=fromId, to_id=toId, label=said, carries=carried
+            from_id=fromId,
+            to_id=toId,
+            label=fields["label"] or "",
+            carries=fields["carries"] or "",
+            trigger=fields["trigger"] or "",
+            trigger_label=fields["trigger_label"] or ""
         );
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             forgetWorkspace();
-            edgeDraft = payload["label"];
-            edgeCarry = payload["carries"];
             selectedEdge = "";
+            edgeForm = {};
             await reload(projectId);
             toast.success(
-                "Label removed"
-                    if not payload["label"] and not payload["carries"]
-                    else "Label saved"
+                "Transition cleared"
+                    if not payload["label"]
+                        and not payload["carries"]
+                        and not payload["trigger"]
+                    else "Transition saved"
             );
+        } elif payload and payload["message"] {
+            toast.error(payload["message"]);
         } else {
-            toast.error("Could not update that label");
+            toast.error("Could not update that transition");
         }
     } except Exception as e {
-        toast.error("Could not update that label");
+        toast.error("Could not update that transition");
+    }
+}
+
+impl FlowLinePage.commitRule(key: str, on: bool) -> None {
+    current = [
+        s
+        for s in steps
+        if s.id == selectedId
+    ];
+    if len(current) == 0 {
+        return;
+    }
+    due = on if key == "needs_due_date" else current[0].needs_due_date;
+    pr = on if key == "needs_pr" else current[0].needs_pr;
+    try {
+        root spawn SetStepRules(step_id=selectedId, needs_due_date=due, needs_pr=pr);
+        forgetWorkspace();
+        await reload(projectId);
+    } except Exception as e {
+        toast.error("Failed to update the step");
     }
 }
 

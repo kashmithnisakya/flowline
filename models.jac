@@ -203,6 +203,10 @@ node Task {
         # event. The card's assignees are the roster's and stay the
         # workspace's to set; these say what GitHub thinks.
         gh_assignees: list[str] = [],
+        # GitHub's labels on the issue and on the linked PR, refreshed by the
+        # sync. A label trigger fires on one newly added to either.
+        gh_labels: list[str] = [],
+        pr_labels: list[str] = [],
         # The linked PR's review conversation: "requested" from a review
         # request, then the verdict a review submits. Its own clock, because
         # the PR's updated_at does not move when someone reviews it.
@@ -459,10 +463,27 @@ node WorkflowStep {
         sort_order: float = 0.0,
         # Outgoing transitions in draw order, one per target step:
         # {"to": step jid, "label": what has to be true to cross, "carries":
-        # "issue" | "pr" | ""}. Cycles are allowed; self-loops are refused.
+        # "issue" | "pr" | "", "trigger": a TRANSITION_TRIGGERS value,
+        # "trigger_label": the label a "label" trigger waits for}. Self-loops are refused.
         transitions: list[dict[str, str]] = [],
+        # Entry rules: no task lands here, by hand or by a trigger, without
+        # a due date or a linked PR.
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         created_at: str = "",
         updated_at: str = "";
+
+    # Why a task with this due date and PR link may not land here, or ""
+    # when it may.
+    def refusal(due_date: str, pr_link: str) -> str {
+        if self.needs_due_date and not due_date {
+            return self.name + " needs a due date";
+        }
+        if self.needs_pr and not pr_link {
+            return self.name + " needs a linked PR";
+        }
+        return "";
+    }
 }
 
 # Boxes, one of each per root, made on first write by the *_box helpers.
@@ -563,7 +584,10 @@ obj TaskView(TaskRow) {
         gh_synced_at: str = "",
         gh_assignees: list[str] = [],
         pr_review_state: str = "",
-        checklist: list[dict[str, any]] = [];
+        checklist: list[dict[str, any]] = [],
+        # Set when a write asked for a step whose entry rule the task fails:
+        # the step stayed, and this says why.
+        refused: str = "";
 }
 
 # A task by id and title, for the assistant's citations: nothing else rides.
@@ -714,11 +738,15 @@ obj StepView {
         sort_order: float,
         owner: str = "",
         blurb: str = "",
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids, all three read off the step's field.
+        # Index-aligned with next_ids, all read off the step's field.
         next_labels: list[str] = [],
         next_carries: list[str] = [],
+        next_triggers: list[str] = [],
+        next_trigger_labels: list[str] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0,
@@ -1830,11 +1858,15 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
     next_ids: list[str] = [];
     next_labels: list[str] = [];
     next_carries: list[str] = [];
+    next_triggers: list[str] = [];
+    next_trigger_labels: list[str] = [];
     for t in s.transitions {
         if t["to"] in known {
             next_ids.append(t["to"]);
             next_labels.append(t["label"]);
             next_carries.append(t["carries"]);
+            next_triggers.append(t.get("trigger", ""));
+            next_trigger_labels.append(t.get("trigger_label", ""));
         }
     }
     return StepView(
@@ -1844,13 +1876,17 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
         color=s.color,
         owner=s.owner,
         blurb=s.blurb,
+        needs_due_date=s.needs_due_date,
+        needs_pr=s.needs_pr,
         x=s.x,
         y=s.y,
         sort_order=s.sort_order,
         prev_ids=prev_ids,
         next_ids=next_ids,
         next_labels=next_labels,
-        next_carries=next_carries
+        next_carries=next_carries,
+        next_triggers=next_triggers,
+        next_trigger_labels=next_trigger_labels
     );
 }
 

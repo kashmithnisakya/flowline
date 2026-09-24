@@ -29,6 +29,11 @@ glob STATUSES: list[str] = [
      # What a transition carries: an issue (no code yet) or a PR (code,
      # waiting on a person). Empty is fine and means untagged.
      CARRY_KINDS: list[str] = ["issue", "pr"],
+     # What moves a task along a transition on its own, from the step the
+     # arrow leaves: a GitHub label added to the issue or its PR (the
+     # transition's `match` names it), the PR merging, a review asking for
+     # changes. Empty means only a person moves it.
+     TRANSITION_TRIGGERS: list[str] = ["", "label", "pr_merged", "changes_requested"],
      # The board's filters as the account and a saved set store them: each
      # key with the value that means "no filter". A stored dict keeps only
      # the keys set to something else; the title search is never stored.
@@ -88,131 +93,115 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Software team",
-             "description": "Seven steps from writing the issue to done, with a design step for big changes and loops back from review. Adds four roles.",
-             # The four Jaseci roles. ApplyTemplate seeds these as Role
-             # nodes (editable org data from then on); colors match the
-             # step each role owns so the Roles tab echoes the canvas.
+             "description": "Seven steps from the GitHub issue pool to Done: validate, pick, review the PR, then oversight decides. GitHub labels and merges move the work. Adds four roles.",
+             # The four roles. ApplyTemplate seeds these as Role nodes
+             # (editable org data from then on); colors match the step each
+             # role owns so the Roles tab echoes the canvas.
              "roles": [
                  {
                      "name": "Product Engineer",
-                     "blurb": "Triages, reviews, merges.",
+                     "blurb": "Validates issues, reviews PRs.",
                      "color": "indigo"
                  },
                  {
                      "name": "Model Pilot Engineer",
-                     "blurb": "Implements. Many PRs, fast.",
+                     "blurb": "Picks issues and ships the PRs.",
                      "color": "amber"
                  },
                  {
                      "name": "Architect",
-                     "blurb": "Designs the approach for big changes.",
+                     "blurb": "Makes the design decisions for big changes.",
                      "color": "slate"
                  },
                  {
                      "name": "Model Oversight Engineer",
-                     "blurb": "Final pass. Decides done.",
+                     "blurb": "Checks merged work. Decides done.",
                      "color": "rose"
                  }
              ],
-             # Triage is `start`, not `handoff`: triaged-but-unstarted work
-             # must report Backlog, not Review. Two start steps is fine; the
-             # no-step fallback lands on the first of the kind (Specify).
+             # Unassigned and Validated are both `start`: validated but
+             # unpicked work is still Backlog. Validated needs a due date and
+             # Issues with PRs a linked PR, whether a label or a person moves it.
              "steps": [
                  {
-                     "name": "Specify",
+                     "name": "Unassigned issues",
                      "kind": "start",
                      "color": "sky",
                      "owner": "anyone",
-                     "blurb": "write the issue, anyone",
+                     "blurb": "the issue pool, synced from GitHub",
                      "x": 60.0,
                      "y": 40.0
                  },
                  {
-                     "name": "Triage",
+                     "name": "Validated",
                      "kind": "start",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "sets priority, nothing skips this",
+                     "blurb": "ready to create PRs",
+                     "needs_due_date": True,
                      "x": 60.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Architecturing",
+                     "name": "Picked",
+                     "kind": "active",
+                     "color": "amber",
+                     "owner": "Model Pilot Engineer",
+                     "blurb": "one engineer; a linked PR is fetched",
+                     "x": 400.0,
+                     "y": 480.0
+                 },
+                 {
+                     "name": "Design decision",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
                      "blurb": "big changes only",
                      "x": 400.0,
-                     "y": 560.0
+                     "y": 700.0
                  },
                  {
-                     "name": "Implement",
-                     "kind": "active",
-                     "color": "amber",
-                     "owner": "Model Pilot Engineer",
-                     "blurb": "drive the model, add tests",
-                     "x": 740.0,
-                     "y": 430.0
-                 },
-                 {
-                     "name": "Review & merge",
+                     "name": "Issues with PRs",
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "nothing passes without this",
-                     "x": 860.0,
+                     "blurb": "PR open, in review",
+                     "needs_pr": True,
+                     "x": 740.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Refactor",
-                     "kind": "active",
+                     "name": "PR merged",
+                     "kind": "handoff",
                      "color": "rose",
                      "owner": "Model Oversight Engineer",
-                     "blurb": "decides done",
-                     "x": 1210.0,
-                     "y": 560.0
+                     "blurb": "is the solution right?",
+                     "x": 1080.0,
+                     "y": 480.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
                      "owner": "Model Oversight Engineer",
-                     "blurb": "terminal",
-                     "x": 1560.0,
-                     "y": 560.0
+                     "blurb": "correct, no polish needed",
+                     "x": 1420.0,
+                     "y": 480.0
                  }
              ],
-             # Forward first, then the send-back: review that can only
-             # approve is a review nobody needs. Merged work has no direct
-             # road to Done - it goes through Model Oversight Engineer, which is what marks it.
-             "links": [
-                 [0, 1],
-                 [1, 0],
-                 [1, 2],
-                 [1, 3],
-                 [2, 3],
-                 [3, 4],
-                 [4, 3],
-                 [4, 5],
-                 [5, 6]
-             ],
-             # Kept short: two of these share a pair of steps, and long chips
-             # collide. Index-aligned with `links`, as is `link_carries`.
+             "links": [[0, 1], [1, 2], [2, 3], [3, 2], [2, 4], [4, 2], [4, 5], [5, 6]],
+             # Index-aligned with `links`, as are the carries and triggers.
              "link_labels": [
-                 "to PE first",
-                 "PE too",
-                 "needs architecturing",
-                 "small, straight to build",
-                 "approach agreed",
-                 "ready and tested",
-                 "big changes, back to builder",
-                 "merged",
-                 "decides & marks done"
+                 "validated, with priority",
+                 "picked",
+                 "needs a design decision",
+                 "decision made",
+                 "ready to review",
+                 "changes requested",
+                 "PR merged",
+                 "correct, no polish"
              ],
-             # What crosses each arrow: an issue until there is code, a PR
-             # after. Read the legend under the canvas.
              "link_carries": [
-                 "issue",
                  "issue",
                  "issue",
                  "issue",
@@ -221,7 +210,20 @@ glob STATUSES: list[str] = [
                  "pr",
                  "pr",
                  "pr"
-             ]
+             ],
+             # What moves a task along the arrow without a person (see
+             # TRANSITION_TRIGGERS); `link_matches` names the label.
+             "link_triggers": [
+                 "label",
+                 "",
+                 "",
+                 "",
+                 "label",
+                 "changes_requested",
+                 "pr_merged",
+                 ""
+             ],
+             "link_matches": ["validated", "", "", "", "ready-to-review", "", "", ""]
          }
      ],
      # Kind -> legacy status. A move writes both, so insights, GitHub sync
