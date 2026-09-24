@@ -393,6 +393,30 @@
         background: color-mix(in oklab, var(--primary) 10%, var(--card));
         color: var(--primary);
     }
+    /* The board stacks its steps, so consecutive groups are joined by a short
+       wire in the gap between them: the page is a flow line, and stacked
+       blocks alone do not say so. Sits under the chevron column (16px), and
+       is decorative, so it never shows to a screen reader. */
+    .step-group + .step-group {
+        position: relative;
+    }
+    .step-group + .step-group::before {
+        content: "";
+        position: absolute;
+        left: 1rem;
+        top: -1.5rem;
+        height: 1.5rem;
+        width: 2px;
+        border-radius: 9999px;
+        background: linear-gradient(
+            to bottom,
+            transparent,
+            color-mix(in oklab, var(--wire) 55%, transparent) 35%,
+            color-mix(in oklab, var(--wire) 55%, transparent) 65%,
+            transparent
+        );
+    }
+
     /* The closing call to action: one lit panel, so the page opens and closes
        on the same note. Glows sit on the card, not the ground, and stay at
        10% for the same contrast reason as the atmosphere. */

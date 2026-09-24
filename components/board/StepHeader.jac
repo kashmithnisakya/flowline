@@ -17,7 +17,7 @@ def:pub StepHeader(
     ink = stepInk(color);
     return
         <div
-            className={"flex min-h-14 items-center gap-3 rounded-2xl py-2 pr-2 pl-2.5 "
+            className={"sticky top-14 z-20 flex min-h-12 items-center gap-3 rounded-2xl py-2 pr-2 pl-2.5 md:top-0 "
                 + stepWash(color)}
         >
             <button
