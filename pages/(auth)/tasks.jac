@@ -1,7 +1,8 @@
 """flowline - Tasks (/tasks): a flat, sortable, filterable table over the whole
 task set, the cross-column view the board cannot give. A row (or New task)
 opens the board's task dialog in place, and scope, filters, sort and page live
-in the URL, so a reload, the back button or a shared link keeps the view."""
+in the URL, so a reload, the back button or a shared link keeps the view. A
+view can be saved under a name; /tasks?view=<id> opens a saved one."""
 
 import from "react" { useEffect }
 import from ...models {
@@ -11,7 +12,8 @@ import from ...models {
     TaskView,
     StepView,
     RoleView,
-    IterationView
+    IterationView,
+    FilterSetView
 }
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 import from ...services.tasks.tasks { ListTasks, CreateTask, UpdateTask, DeleteTask }
@@ -20,6 +22,8 @@ import from ...services.projects.projects { AssignToProject }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.tasks.TaskTable { TaskTable }
 import from ...components.tasks.TaskToolbar { TaskToolbar, ScopeSwitch }
+import from ...components.common.FilterSets { FilterSetMenu }
+import from ...lib.filters { filterKey, filterValue, trimFilters }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...lib.utils { fmtEstimate, parseEstimate }
 import from "sonner" { toast }
@@ -176,7 +180,13 @@ def:pub TasksPage -> JsxPage {
         # Only the newest fetch may paint: filter and page changes race.
         reqRef: Ref[any] = Ref(),
         # Set once the members, projects and flow line have loaded.
-        readyRef: Ref[any] = Ref();
+        readyRef: Ref[any] = Ref(),
+        # Every saved set (this page shows its own), the one the view came
+        # from, and a set a /tasks?view=<id> link asked for: the table waits
+        # for it rather than painting the URL's view first.
+        filterSets: list[FilterSetView] = [],
+        activeSet: str = "",
+        pendingView: str = urlParam("view", "");
 
     async can with entry {
         loadShared();
@@ -242,6 +252,16 @@ def:pub TasksPage -> JsxPage {
     def typeSearch(value: str) -> None;
     def commitSearch -> None;
     def clearFilters -> None;
+    # Saved views: the view in its stored form, taking a set (and a linked
+    # one), back to the default view, the list after a save or delete, and
+    # dropping values that name a row gone from the lists.
+    def viewFilters -> dict[str, str];
+    def applySet(view: FilterSetView) -> None;
+    def openLinkedView -> None;
+    def showDefault -> None;
+    def absorbSet(view: FilterSetView) -> None;
+    def dropSet(setId: str) -> None;
+    def dropStaleFilters -> None;
     def goPage(delta: int) -> None;
     def writeUrl -> None;
     def handleKey(e: any) -> None;
@@ -302,6 +322,17 @@ def:pub TasksPage -> JsxPage {
             handoffKeys.append(key);
         }
     }
+    # The step names a saved view's summary shows, once the flow line is in.
+    stepPairs: list[list[str]] = [];
+    for (ci, key) in enumerate(colKeys) {
+        stepPairs.append([key, colLabels[ci]]);
+    }
+    pageSets: list[FilterSetView] = [
+        s
+        for s in filterSets
+        if s.page == "tasks"
+    ];
+    nowView = viewFilters();
     taskCreated: str = "";
     taskUpdated: str = "";
     taskPrState: str = "";
@@ -373,6 +404,26 @@ def:pub TasksPage -> JsxPage {
         <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h1 className="page-title">Tasks</h1>
+                <FilterSetMenu
+                    page="tasks"
+                    sets={pageSets}
+                    activeId={activeSet}
+                    filters={nowView}
+                    projects={projects}
+                    members={members}
+                    iterations={iterations}
+                    steps={stepPairs if stepsLoaded else []}
+                    onApply={applySet}
+                    onAll={showDefault}
+                    onSaved={absorbSet}
+                    onDeleted={dropSet}
+                    loading={not workspaceReady}
+                    emptyLabel="Default view"
+                    customLabel="Custom view"
+                    saveSubject="this view"
+                    saveNote=""
+                    linkTo="/tasks?view="
+                />
                 <div className="max-sm:order-last">
                     <ScopeSwitch scope={scope} onScope={chooseScope}/>
                 </div>

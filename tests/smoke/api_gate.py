@@ -670,6 +670,29 @@ def filter_sets_suite(project_id, member_id, tag):
     for m in made:
         report("DeleteFilterSet", {"set_id": (m.get("set") or {}).get("id", "")})
 
+    # The tasks table keeps its own keys (scope, search, sort) and its own
+    # names: a board set's name can repeat there, and a board key cannot.
+    table = report("SaveFilterSet", {"name": "Priya's work", "page": "tasks", "filters": {
+        "scope": "done", "priority": "High", "q": "  login  ", "sort": "due", "dir": "asc",
+        "iteration": "current", "done": "hide"}})
+    table_id = (table.get("set") or {}).get("id", "")
+    check("filters: a tasks set keeps the table's keys, a board set's name can repeat there",
+          table.get("ok") and table["set"].get("page") == "tasks" and table["set"].get("filters") == {
+              "scope": "done", "priority": "High", "q": "login", "sort": "due", "dir": "asc"}, str(table))
+    odd = report("SaveFilterSet", {"name": "Odd", "page": "tasks", "filters": {
+        "scope": "everything", "sort": "size", "dir": "sideways", "estimate": "no"}})
+    check("filters: a tasks value outside its words is dropped",
+          odd.get("ok") and odd["set"].get("filters") == {"estimate": "no"}, str(odd))
+    again = report("SaveFilterSet", {"name": "PRIYA'S WORK", "page": "tasks", "filters": {"priority": "Low"}})
+    check("filters: a name is still unique within the tasks page", again.get("error") == "duplicate", str(again))
+    kept = report("SetBoardFilters", {"filters": {"scope": "done", "q": "login", "priority": "High"}})
+    check("filters: the board keeps none of the table's keys", kept.get("filters") == {"priority": "High"}, str(kept))
+    check("filters: GetWorkspace lists both pages' sets",
+          sorted((s.get("page"), s.get("name")) for s in sets())
+          == [("board", "Priya's work"), ("tasks", "Odd"), ("tasks", "Priya's work")], str(sets()))
+    report("DeleteFilterSet", {"set_id": (odd.get("set") or {}).get("id", "")})
+    report("DeleteFilterSet", {"set_id": table_id})
+
     home = TOKEN
     TOKEN = sign_up(f"{tag}b")
     if check("filters: a second account signs in", bool(TOKEN)):

@@ -1,8 +1,8 @@
 """The workspace read: the roster, projects, flow line, repos, roles,
 iterations, saved filter sets and GitHub connection every page renders
-beside its own rows,
-in one call. BoardSnapshot fills its workspace fields from the same helper,
-so the board and the other pages never disagree on a sort."""
+beside its own rows, in one call. BoardSnapshot fills its workspace fields
+from the same helper, so the board and the other pages never disagree on a
+sort."""
 
 import from jaclang.lib.effects { effects }
 import from models {

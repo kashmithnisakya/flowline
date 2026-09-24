@@ -42,8 +42,27 @@ glob STATUSES: list[str] = [
          ["iteration", "All"],
          ["done", "show"]
      ],
-     # The pages a saved filter set can belong to.
-     FILTER_SET_PAGES: list[str] = ["board"],
+     # The tasks table's view, stored the same way: its URL's keys less the
+     # page number, so a saved set carries the scope, the search and the sort.
+     TASKS_FILTERS: list[list[str]] = [
+         ["scope", "working"],
+         ["project", "all"],
+         ["assignee", "All"],
+         ["step", "All"],
+         ["priority", "All"],
+         ["category", "All"],
+         ["tag", "All"],
+         ["estimate", "All"],
+         ["q", ""],
+         ["sort", "updated"],
+         ["dir", "desc"]
+     ],
+     # Each page a saved filter set can belong to, with its keys.
+     FILTER_TABLES: dict[str, list[list[str]]] = {
+         "board": BOARD_FILTERS,
+         "tasks": TASKS_FILTERS
+     },
+     FILTER_SET_PAGES: list[str] = ["board", "tasks"],
      # Prebuilt flows, recommended first. The key persists on the flow line
      # (WorkflowSteps.template_key), so rename a template, never re-key it.
      # Roles, link_labels and link_carries are optional per template.
