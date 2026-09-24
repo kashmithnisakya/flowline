@@ -20,13 +20,8 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                 >
                     Draw your flow line this afternoon.
                 </h2>
-                <p
-                    className="max-w-[56ch] text-[15px] leading-relaxed text-muted-foreground"
-                >
-                    Name the steps your team already uses. The board becomes those steps, and the log starts writing itself.
-                </p>
                 <div
-                    className="mt-1 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5"
+                    className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
                 >
                     <Button
                         asChild={True}

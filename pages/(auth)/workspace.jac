@@ -1,7 +1,7 @@
 """flowline - Workspace (/workspace): everything you configure, in one frame.
-A rail of sections (organization, people, projects, roles, preferences) beside
-one content column; /settings redirects here for preferences and GitHub lives
-at /github, so old ?tab=github links forward there."""
+A rail of sections (organization, people, projects, roles, GitHub,
+preferences) beside one content column. /github renders this page on the
+GitHub section, since the GitHub App sends its install round trip there."""
 
 import from "@jac/runtime" { useLocation }
 import from "react" { useEffect }
@@ -23,6 +23,7 @@ import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.PreferencesSection { PreferencesSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
 import from ...components.workspace.RolesSection { RolesSection }
+import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.workspace.SectionHeader { SectionHeader }
 import from ...components.workspace.WorkspaceRail { WorkspaceRail }
 import from ...components.workspace.icons { IconPlus, IconSearch }
@@ -45,6 +46,7 @@ glob BLANK_MEMBER: dict[str, str] = {
          ["people", "People"],
          ["projects", "Projects"],
          ["roles", "Roles"],
+         ["github", "GitHub"],
          ["preferences", "Preferences"]
      ];
 
@@ -63,6 +65,9 @@ def tabFromSearch(search: str) -> str {
 
 def initialTab -> str {
     w: any = window;
+    if str(w.location.pathname) == "/github" {
+        return "github";
+    }
     return tabFromSearch(str(w.location.search)) or "organization";
 }
 
@@ -95,14 +100,6 @@ def:pub WorkspacePage -> JsxPage {
     location = useLocation();
 
     async can with entry {
-        # GitHub lives at /github now, so github tab links and App-install
-        # round trips forward there, query intact.
-        w: any = window;
-        params: any = new(w.URLSearchParams, w.location.search);
-        if params.get("tab") == "github" or params.get("installation_id") {
-            w.location.replace("/github" + str(w.location.search));
-            return;
-        }
         loadAll();
     }
 
@@ -311,9 +308,11 @@ def:pub WorkspacePage -> JsxPage {
                                 onChanged={loadAll}
                                 onPeople={lambda { selectTab("people"); }}
                             />
+                        } elif tab == "github" {
+                            <GithubSection key="github"/>
                         } else {
                             <PreferencesSection key="preferences"/>
-                        }    }
+                        }     }
                     </div>
                 </div>
             </div>

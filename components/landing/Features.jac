@@ -1,8 +1,6 @@
-"""What else ships, as a bento grid of true sentences. Each tile names a real
+"""What else ships, as a bento grid of true sentences. Each row names a real
 capability and the condition it depends on (the assistant needs a configured
-model, the GitHub automations are per repository and off by default). The two
-flagship tiles run wider than the rest, so the grid ranks the capabilities
-instead of flattening them into equal rows.
+model, the GitHub automations are per repository and off by default).
 """
 
 import from "@hugeicons/react" { HugeiconsIcon }
@@ -27,7 +25,7 @@ glob FEATURES: list[Feature] = [
          Feature(
              key="github",
              label="GitHub",
-             body="Install the GitHub App on the repositories you pick. Issues become cards, a card's details show its pull request's state, and GitHub's updates reach an open board in under half a minute. Per repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue.",
+             body="Install the GitHub App on the repositories you pick. Issues become tasks, a task's details show its pull request's state, and GitHub's updates reach an open board in under half a minute. Per repository you can let a merged pull request or closed issue move its task to Done, and let Done close the issue.",
              icon=GithubIcon,
              span="lg:col-span-4"
          ),
@@ -41,21 +39,21 @@ glob FEATURES: list[Feature] = [
          Feature(
              key="overview",
              label="Overview",
-             body="Needs attention, the review queue, burn-up and throughput, counted from the board and the log rather than typed in.",
+             body="What needs someone now, this week's figures, burn-up and done per week, counted from the board rather than typed in.",
              icon=Analytics01Icon,
              span="lg:col-span-2"
          ),
          Feature(
-             key="plan",
-             label="Iterations and roadmap",
-             body="Give cards start and due dates, plan them into iterations, and follow the work on a twelve-week roadmap.",
+             key="roadmap",
+             label="Roadmap",
+             body="Give tasks start and due dates and follow them on a twelve-week roadmap, grouped by step.",
              icon=Calendar03Icon,
              span="lg:col-span-4"
          ),
          Feature(
              key="checklists",
              label="Checklists",
-             body="Break a card into a checklist. Each item you tick off writes its own line in the log.",
+             body="Break a task into a checklist. Its row shows how far along it is, and each item you tick off lands in the task's travel so far.",
              icon=CheckListIcon,
              span="lg:col-span-3"
          ),

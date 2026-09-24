@@ -1,6 +1,6 @@
-"""Landing hero: the one idea (draw the steps, the board and the log follow)
-with the moving figure beside it, then the proof bar and the playable demo at
-full container width.
+"""Landing hero: the one idea (draw the steps, the board follows) with the
+moving figure beside it, then the proof bar and the playable demo at full
+container width.
 
 From lg the section is a two column grid: text left, the looping figure right.
 Below that it stacks, text first. The text block rises into place in a short
@@ -38,13 +38,13 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                         >
                             Draw how your team works.
                             <span className="block text-muted-foreground">
-                                The board and the daily log follow.
+                                The board follows, step by step.
                             </span>
                         </h1>
                         <p
                             className="rise rise-3 max-w-[54ch] text-[17px] leading-relaxed text-muted-foreground"
                         >
-                            Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on.
+                            Name your steps once. The board stacks your work under them, every move lands in the task's own history, and linked GitHub issues can move tasks when you turn that on.
                         </p>
                         <div
                             className="rise rise-4 mt-1 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5"

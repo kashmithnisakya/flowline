@@ -9,7 +9,7 @@ obj QA {
 glob FAQS: list[QA] = [
          QA(
              q="Does it connect to GitHub?",
-             a="Yes. Install the GitHub App on the repositories you pick to import issues as cards and see the state of their pull requests. GitHub tells Flowline about changes as they happen. For each repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue. Both stay off until you turn them on. There is no Slack, Teams or mobile app today."
+             a="Yes. Install the GitHub App on the repositories you pick to import issues as tasks and see the state of their pull requests. GitHub tells Flowline about changes as they happen. For each repository you can let a merged pull request or closed issue move its task to Done, and let Done close the issue. Both stay off until you turn them on. There is no Slack, Teams or mobile app today."
          ),
          QA(
              q="Where does my data live?",
@@ -17,19 +17,19 @@ glob FAQS: list[QA] = [
          ),
          QA(
              q="Do my teammates need their own accounts?",
-             a="No. One account runs the workspace. Teammates are people you add and assign cards to, so nobody else has a password to forget."
+             a="No. One account runs the workspace. Teammates are people you add and assign tasks to, so nobody else has a password to forget."
          ),
          QA(
              q="Can two people manage the same workspace?",
              a="Not yet. Today one account is one workspace, which is what keeps workspaces isolated from each other."
          ),
          QA(
-             q="Do we have to use the same columns as everyone else?",
-             a="No. You draw the flow line: name the steps your team uses and connect them however work moves, loops included. The board's columns are those steps. Start from the Simple template if you would rather not draw."
+             q="Do we have to use the same steps as everyone else?",
+             a="No. You draw the flow line: name the steps your team uses and connect them however work moves, loops included. The board groups the work under those steps, in order. Start from the Simple template if you would rather not draw."
          ),
          QA(
              q="Can we import from another tool?",
-             a="Only from GitHub: issues from the repositories you connect become cards. Everything else starts clean."
+             a="Only from GitHub: issues from the repositories you connect become tasks. Everything else starts clean."
          )
      ];
 

@@ -119,7 +119,7 @@ def:pub LoginPage -> JsxPage {
                     aria-labelledby={"tab-signup" if signup else "tab-login"}
                 >
                     <h1
-                        className="mt-7 text-[30px] leading-[1.12] font-bold tracking-[-0.025em]"
+                        className="mt-7 text-[28px] leading-[1.15] font-bold tracking-[-0.01em]"
                     >
                         {"Start your first flow line."
                             if signup

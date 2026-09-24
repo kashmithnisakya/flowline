@@ -50,13 +50,13 @@ hide:
 
 ## What flowline does
 
-Most tools hand every team the same columns. In flowline a team draws the
+Most tools hand every team the same stages. In flowline a team draws the
 steps it really uses, connects them however work moves (loops and branches
-included), and **the board becomes those steps**. Every move the board makes
-lands in a written daily log, so the standup note is already there. Work can
-be planned into iterations and followed on a twelve-week roadmap.
+included), and **the board becomes those steps**: one project's work, stacked
+step by step down the page. Every move lands in the task's activity log, so
+the standup note is already there. Dated tasks are followed on a roadmap.
 
-![A tour of flowline: sign in to the board, open a task, tick a checklist item and move it on, then the flow line behind the board, the tasks table, the roadmap, the log it wrote and the Overview](gifs/flowline-demo.gif){ .fl-demo loading=lazy }
+<!-- The demo GIF (gifs/flowline-demo.gif) shows the pre-redesign app; re-record it before embedding it again. -->
 
 <div class="grid cards fl-features" markdown>
 
@@ -68,13 +68,13 @@ be planned into iterations and followed on a twelve-week roadmap.
 
     [:octicons-arrow-right-24: Flow lines](concepts/flow-lines.md)
 
--   :material-notebook-edit-outline:{ .lg } **The board writes the log**
+-   :material-notebook-edit-outline:{ .lg } **Task events write the log**
 
     Creating a task and every move land in the log with timestamps, issue and
-    PR links and who was involved, and `/log` reads each day back as a
-    written standup.
+    PR links and who was involved. A task's sheet shows its travel so far, and
+    the Overview counts the week.
 
-    [:octicons-arrow-right-24: The daily log](concepts/daily-log.md)
+    [:octicons-arrow-right-24: The activity log](concepts/activity-log.md)
 
 -   :material-github:{ .lg } **GitHub, live**
 

@@ -70,7 +70,7 @@ def:pub SsoCallbackPage -> JsxPage {
                 {if failure {
                     <div key="failed" role="alert" className="grid gap-3">
                         <h1
-                            className="flex items-center gap-2 text-[30px] leading-[1.12] font-bold tracking-[-0.025em]"
+                            className="flex items-center gap-2 text-[28px] leading-[1.15] font-bold tracking-[-0.01em]"
                         >
                             <WarnIcon size={22} className="shrink-0 text-destructive"/>
                             Could not sign you in

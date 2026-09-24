@@ -1,10 +1,10 @@
 /* flowline docs theme. Colours mirror styles/global.css: a neutral ground with
    white surfaces and one rust primary in light, charcoal with a brighter rust
-   in dark. Archivo for text and headings, IBM Plex Mono for code. */
-@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&display=swap");
+   in dark. Geist for text and headings, Geist Mono for code, as in the app
+   (the theme's font setting loads both). */
 
 :root {
-  --fl-display: "Archivo", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --fl-display: "Geist", "Helvetica Neue", Arial, system-ui, sans-serif;
   --fl-radius: 0.7rem;
   --fl-step-sky: #2e6c97;
   --fl-step-indigo: #5550ac;
@@ -38,7 +38,7 @@
   --md-footer-bg-color--dark: #0d100f;
   --md-footer-fg-color: #f2f3f1;
   --md-admonition-bg-color: #ffffff;
-  --md-mermaid-font-family: "Archivo", system-ui, sans-serif;
+  --md-mermaid-font-family: "Geist", system-ui, sans-serif;
   --md-mermaid-node-bg-color: #ffffff;
   --md-mermaid-node-fg-color: #161a18;
   --md-mermaid-edge-color: #6f7672;
@@ -90,7 +90,7 @@
   --md-footer-bg-color: #0d100f;
   --md-footer-bg-color--dark: #080a09;
   --md-admonition-bg-color: #191d1b;
-  --md-mermaid-font-family: "Archivo", system-ui, sans-serif;
+  --md-mermaid-font-family: "Geist", system-ui, sans-serif;
   --md-mermaid-node-bg-color: #191d1b;
   --md-mermaid-node-fg-color: #e4e8e5;
   --md-mermaid-edge-color: #7c8580;
@@ -139,8 +139,7 @@
 }
 
 .md-typeset h1 {
-  font-weight: 750;
-  font-stretch: 112%;
+  font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--md-default-fg-color);
 }
@@ -319,7 +318,6 @@
   font-size: clamp(1.7rem, 3.4vw, 2.6rem);
   line-height: 1.06;
   font-weight: 760;
-  font-stretch: 115%;
   letter-spacing: -0.035em;
   color: var(--fl-hero-fg);
 }
@@ -402,13 +400,14 @@
   user-select: none;
 }
 
-/* The miniature board: the Simple template's four steps with a few cards. As
-   on the real board, a lane's colour is its 2px rule; cards stay neutral. */
+/* The miniature board: the Simple template's four steps stacked top to
+   bottom under a flow line strip. As on the real board, a step's header is a
+   tinted bar with a solid badge, and its tasks are neutral rows. */
 .fl-board {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
   padding: 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 1rem;
@@ -417,39 +416,50 @@
   transform: perspective(1400px) rotateY(-7deg) rotateX(3deg);
 }
 
+.fl-strip {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.fl-strip span {
+  flex: 1;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--lane);
+  opacity: 0.8;
+}
+
 .fl-lane {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 
 .fl-lane__head {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 2px solid var(--lane);
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--lane) 22%, transparent);
+}
+
+.fl-lane__head b {
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.2rem;
+  background: var(--lane);
+  color: #14161a;
   font-size: 0.52rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fl-hero-fg);
-}
-
-.fl-lane__head::before {
-  content: "";
-  flex: none;
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 2px;
-  background: var(--lane);
 }
 
 .fl-card {
-  padding: 0.45rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 0.3rem;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -457,14 +467,14 @@
 
 .fl-card i {
   display: block;
+  flex: 3;
   height: 0.28rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.42);
 }
 
 .fl-card i + i {
-  width: 62%;
-  margin-top: 0.28rem;
+  flex: 1;
   background: rgba(255, 255, 255, 0.18);
 }
 
@@ -492,11 +502,7 @@
 }
 
 @media screen and (max-width: 30em) {
-  .fl-board {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .fl-lane:nth-child(n + 4) {
+  .fl-lane:nth-child(n + 5) {
     display: none;
   }
 }

@@ -1,5 +1,5 @@
-"""The hero's moving figure: one card travelling the flow line while the log
-writes itself underneath. It is the product's one idea in miniature, so it
+"""The hero's moving figure: one task travelling the flow line while its
+travel writes itself underneath. It is the product's one idea in miniature, so it
 shows the real step kinds and the real colours rather than a generic loop.
 
 Decorative, and marked so: the playable board below is the thing a reader can
@@ -52,7 +52,7 @@ def:pub HeroMotion -> JsxElement {
                 </div>
             </div>
             <div className="mt-5 border-t pt-3">
-                <p className="meta font-mono">Today</p>
+                <p className="meta font-mono">Travel so far</p>
                 <ul className="mt-2 grid gap-1.5">
                     {for l in LINES {
                         <li

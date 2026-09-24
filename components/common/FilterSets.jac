@@ -1,13 +1,12 @@
-"""Saved filters for one page (the board, the tasks table): a menu beside the
-page title that names what is on screen (a saved set, that set marked
-edited, or the page's labels for a custom and an empty view), switches
-between the sets, and saves, renames, deletes or links to one. Its writes go
-straight to their walkers; the page owns the filters themselves."""
+"""The board's saved filters: a menu beside the title that names what is on
+screen (a saved set, that set marked edited, or a custom or empty view),
+switches between the sets, and saves, renames or deletes one. Its writes go
+straight to their walkers; the board owns the filters themselves."""
 
 import from "sonner" { toast }
-import from ...models { Project, MemberView, IterationView, FilterSetView }
+import from ...models { MemberView, FilterSetView }
 import from ...services.filters.filters { SaveFilterSet, DeleteFilterSet }
-import from ...lib.filters { filterKey, filterSummary, withoutProject }
+import from ...lib.filters { filterKey, filterSummary }
 import from ...lib.workspace { forgetWorkspace }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
@@ -78,27 +77,14 @@ def:pub FilterSetMenu(
     sets: list[FilterSetView],
     activeId: str,
     filters: dict[str, str],
-    projects: list[Project],
     members: list[MemberView],
-    iterations: list[IterationView],
     onApply: Callable[[FilterSetView], None],
     onAll: Callable[[], None],
     onSaved: Callable[[FilterSetView], None],
     onDeleted: Callable[[str], None],
     # The first load: no sets yet, so the trigger names what this browser saw.
     loading: bool = False,
-    lastName: str = "",
-    # The page the sets belong to, its step keys and names for the summary,
-    # what the trigger says with nothing set and with an unsaved view, what
-    # the save dialog says it saves (and leaves out), and the link prefix a
-    # set is opened by ("" offers no link).
-    page: str = "board",
-    steps: list[list[str]] = [],
-    emptyLabel: str = "All tasks",
-    customLabel: str = "Filtered",
-    saveSubject: str = "the board's filters",
-    saveNote: str = "The title search is not saved.",
-    linkTo: str = ""
+    lastName: str = ""
 ) -> JsxElement {
     # `naming` is "new" or "rename" while the name dialog is open; the set a
     # rename or delete acts on is held by id from the moment it is asked for.
@@ -113,17 +99,10 @@ def:pub FilterSetMenu(
         targetId: str = "",
         confirming: bool = False;
 
-    # On the board the project is the scope, not a filter: a set is compared
-    # without it unless the set itself pins one (a set saved before the
-    # scope), and "no filters" means none besides the project. The tasks
-    # table keeps the project as a filter, so its sets compare whole.
-    scoped = page == "board";
-    nowKey = filterKey(withoutProject(filters, page) if scoped else filters, page);
-    nowPinned = filterKey(filters, page);
+    nowKey = filterKey(filters);
 
     def same(s: FilterSetView) -> bool {
-        pinned = not scoped or ("project" in s.filters and bool(s.filters["project"]));
-        return filterKey(s.filters, page) == (nowPinned if pinned else nowKey);
+        return filterKey(s.filters) == nowKey;
     }
     # The set the filters came from, and the set they equal right now (that
     # one first, else any set with the same filters).
@@ -146,7 +125,7 @@ def:pub FilterSetMenu(
     }
     edited = bool(active) and not shown;
     target: any = shown or active;
-    label = emptyLabel;
+    label = "All tasks";
     if shown {
         label = shown.name;
     } elif active {
@@ -154,7 +133,7 @@ def:pub FilterSetMenu(
     } elif loading and lastName {
         label = lastName;
     } elif nowKey {
-        label = customLabel;
+        label = "Filtered";
     }
     picked = shown.id if shown else ("all" if not nowKey else "");
     targetName = target.name if target else "";
@@ -208,10 +187,7 @@ def:pub FilterSetMenu(
         ok = False;
         try {
             result = root spawn SaveFilterSet(
-                set_id=setId,
-                name=name,
-                page=page,
-                filters=withoutProject(values, page) if scoped else values
+                set_id=setId, name=name, page="board", filters=values
             );
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
@@ -282,27 +258,14 @@ def:pub FilterSetMenu(
     }
 
     def summaryOf(values: dict[str, str]) -> str {
-        return filterSummary(values, projects, members, iterations, page, steps);
+        return filterSummary(values, members);
     }
 
-    async def copyLink {
-        if not target {
-            return;
-        }
-        w: any = window;
-        link = str(w.location.origin) + linkTo + target.id;
-        try {
-            await w.navigator.clipboard.writeText(link);
-            toast.success("Link copied");
-        } except Exception as e {
-            toast.error("Could not copy the link");
-        }
-    }
-
-    namingNote = "Saves " + saveSubject + ": " + summaryOf(filters) + ".";
-    if saveNote {
-        namingNote = namingNote + " " + saveNote;
-    }
+    namingNote = (
+        "Saves the board's filters: "
+        + summaryOf(filters)
+        + ". The title search is not saved."
+    );
     if naming == "rename" and held {
         namingNote = "Keeps its filters: " + summaryOf(held.filters) + ".";
     }
@@ -316,7 +279,7 @@ def:pub FilterSetMenu(
                     aria-label={"Saved filters: "
                         + label
                         + (", edited" if edited else "")}
-                    className="toolbar-filter h-8! max-w-[min(20rem,48vw)] gap-1.5! px-2! text-[13.5px]! disabled:opacity-100"
+                    className="toolbar-filter max-w-[min(20rem,48vw)] gap-1.5! px-2! text-[13.5px]! disabled:opacity-100"
                 >
                     <Bookmark filled={bool(shown) or edited}/>
                     <span className="truncate">{label}</span>
@@ -343,7 +306,7 @@ def:pub FilterSetMenu(
                     </DropdownMenuLabel>
                     <DropdownMenuRadioGroup value={picked} onValueChange={pick}>
                         <DropdownMenuRadioItem value="all">
-                            {emptyLabel}
+                            All tasks
                         </DropdownMenuRadioItem>
                         {for s in sets {
                             <DropdownMenuRadioItem
@@ -396,13 +359,6 @@ def:pub FilterSetMenu(
                         >
                             <span className="truncate">
                                 {"Save changes to “" + active.name + "”"}
-                            </span>
-                        </DropdownMenuItem>
-                    }}
-                    {if target and linkTo {
-                        <DropdownMenuItem key="link" onSelect={lambda { copyLink(); }}>
-                            <span className="truncate">
-                                {"Copy link to “" + targetName + "”"}
                             </span>
                         </DropdownMenuItem>
                     }}

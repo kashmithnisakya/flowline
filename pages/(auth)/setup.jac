@@ -213,7 +213,7 @@ def:pub SetupPage -> JsxPage {
                             className="grid gap-5"
                         >
                             <h1
-                                className="text-2xl leading-tight font-[750] tracking-[-0.01em] [font-stretch:115%]"
+                                className="text-2xl leading-tight font-[750] tracking-[-0.01em]"
                             >
                                 Name your workspace
                             </h1>
@@ -309,7 +309,7 @@ def:pub SetupPage -> JsxPage {
                         <div key="people" className="grid gap-5">
                             <div className="grid gap-2">
                                 <h1
-                                    className="text-2xl leading-tight font-[750] tracking-[-0.01em] [font-stretch:115%]"
+                                    className="text-2xl leading-tight font-[750] tracking-[-0.01em]"
                                 >
                                     {"Who works on "
                                         + (projectName.strip() or "this project")
@@ -471,7 +471,7 @@ def:pub SetupPage -> JsxPage {
                         >
                             <div className="grid gap-2">
                                 <h1
-                                    className="text-2xl leading-tight font-[750] tracking-[-0.01em] [font-stretch:115%]"
+                                    className="text-2xl leading-tight font-[750] tracking-[-0.01em]"
                                 >
                                     How does work move?
                                 </h1>

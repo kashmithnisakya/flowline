@@ -1,7 +1,7 @@
-"""flowline - GitHub page (/github): the App installation, the repositories it
-reads and what each one is allowed to do on its own. GitHub sends the install
-round trip back to this URL as query params, so the mount handler finishes it
-first and scrubs the params (the nonce is one-shot).
+"""The Workspace's GitHub section: the App installation, the repositories it
+reads and what each one may do on its own. GitHub sends the install round
+trip to /github, which renders this section, so the mount handler finishes
+it first and scrubs the params (the nonce is one-shot).
 """
 
 import from ...lib.session { GITHUB_KEY }
@@ -205,13 +205,13 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     # bookmarked or shared and survives a refresh.
     can with (repoId, tab, searchQuery) entry {
         w: any = window;
-        if str(w.location.pathname) == "/github" and repoId {
-            qs = "?repo=" + repoId + "&tab=" + tab;
+        if repoId {
+            qs = "?tab=github&repo=" + repoId + "&view=" + tab;
             if searchQuery {
                 qs = qs + "&q=" + encodeURIComponent(searchQuery);
             }
             blank: dict[str, any] = {};
-            w.history.replaceState(blank, "", "/github" + qs);
+            w.history.replaceState(blank, "", "/workspace" + qs);
         }
     }
 
@@ -425,7 +425,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     return
         <div className="flex w-full flex-col gap-5">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <h1 className="page-title">GitHub</h1>
+                <h1 className="page-title text-xl">GitHub</h1>
                 {if connected and not loading {
                     <div
                         key="conn"

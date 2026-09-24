@@ -1,4 +1,4 @@
-"""Implementations for the GitHub page. Every walker except GithubStatus
+"""Implementations for the GitHub section. Every walker except GithubStatus
 answers one envelope dict, so handlers read `payload["ok"]` and surface
 `payload["message"]`: only the server knows why GitHub said no.
 """
@@ -16,7 +16,7 @@ impl GithubSection.boot -> None {
     # Deep links restore the triage view before any data loads: the repo,
     # the tab, and a committed search all round-trip through the URL.
     wantRepo = params.get("repo") or "";
-    wantTab = params.get("tab") or "";
+    wantTab = params.get("view") or "";
     wantQuery = params.get("q") or "";
     if wantRepo {
         repoId = wantRepo;
@@ -30,7 +30,7 @@ impl GithubSection.boot -> None {
     }
     if installation and state and not INSTALL_ONCE["pending"] {
         blank: dict[str, any] = {};
-        window.history.replaceState(blank, "", window.location.pathname);
+        window.history.replaceState(blank, "", "/workspace?tab=github");
         installId = 0;
         try {
             installId = int(installation);

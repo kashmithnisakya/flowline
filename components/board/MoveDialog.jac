@@ -3,7 +3,7 @@ ETA and PR link; Blocked and Changes Requested ask for a note.
 """
 
 import from ...models { MemberView }
-import from ..log.DatePicker { DatePicker }
+import from ..common.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.dialog {
     Dialog,

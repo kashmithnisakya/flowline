@@ -1,39 +1,62 @@
-"""The recorded product tour, between the interactive hero board and the
-capability grid. The file is 1.8 MB, so it is lazy and carries its intrinsic
-size: nothing is fetched until a reader scrolls near it, and the frame holds
-its space before it arrives so the page never jumps.
+"""The flow line across the top of a sample board: every step as a pill with
+its count, joined by arrows, and a note for the loop back. It wraps rather
+than scrolls, so a phone sees the whole line."""
 
-The asset lives in `assets/`, which is served at `/static/`; `/assets/*` is
-Vite's at build time, so the src must be the `/static/` spelling.
-"""
+import from ..common.StepBadge { stepWash, stepInk, stepSolid }
 
-glob DEMO_SRC: str = "/static/demo/flowline-demo.gif",
-     DEMO_ALT: str = "A recorded tour of Flowline: signing in to the board, opening a task, ticking a checklist item and moving it on, then the flow line behind the board, the tasks table, the roadmap, the log it wrote and the Overview.";
-
-def:pub DemoStrip -> JsxElement {
+def:pub DemoStrip(
+    steps: list[dict[str, any]], counts: list[int], loop: str = ""
+) -> JsxElement {
     return
-        <section id="demo" className="landing-wrap scroll-mt-16 pt-16 sm:pt-24">
-            <p className="section-eyebrow">The whole thing, moving</p>
-            <h2
-                className="mt-3 max-w-[28ch] text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.025em]"
-            >
-                One pass through the app
-            </h2>
-            <p
-                className="mt-3 max-w-[62ch] text-base leading-relaxed text-muted-foreground"
-            >
-                The board, a task and its checklist, the flow line behind it, the tasks table, the roadmap, the log it wrote and the Overview.
-            </p>
-            <figure className="hero-frame mt-8 overflow-hidden border bg-card">
-                <img
-                    src={DEMO_SRC}
-                    alt={DEMO_ALT}
-                    width={1280}
-                    height={800}
-                    loading="lazy"
-                    decoding="async"
-                    className="block h-auto w-full"
-                />
-            </figure>
-        </section>;
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+            {for (i, step) in enumerate(steps) {
+                <span key={step["name"]} className="flex items-center gap-1">
+                    {if i > 0 {
+                        <svg
+                            key="arrow"
+                            width={16}
+                            height={10}
+                            viewBox="0 0 16 10"
+                            aria-hidden="true"
+                            className="text-wire"
+                        >
+                            <path
+                                d="M1 5h12M9.5 1.5 13 5 9.5 8.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.5}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </svg>
+                    }}
+                    <span
+                        className={"flex h-8 items-center gap-2 rounded-full pr-3 pl-1 text-[13px] font-semibold whitespace-nowrap "
+                            + stepWash(step["color"])
+                            + " "
+                            + stepInk(step["color"])}
+                    >
+                        <span
+                            className={"flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 font-mono text-xs text-step-solid-fg "
+                                + stepSolid(step["color"])}
+                        >
+                            {str(counts[i])}
+                        </span>
+                        {step["name"]}
+                    </span>
+                </span>
+            }}
+            {if loop {
+                <span
+                    key="loop"
+                    className="ml-2 inline-flex items-center gap-1.5 font-mono text-xs whitespace-nowrap text-subtle"
+                >
+                    <i
+                        aria-hidden="true"
+                        className="inline-block w-[22px] border-t-2 border-dashed border-wire"
+                    ></i>
+                    {loop}
+                </span>
+            }}
+        </div>;
 }
