@@ -32,8 +32,10 @@ glob STATUSES: list[str] = [
      # The board's filters as the account and a saved set store them: each
      # key with the value that means "no filter". A stored dict keeps only
      # the keys set to something else; the title search is never stored.
+     # `project` is the board's scope, not a filter: empty means the default
+     # project, and a saved set carries no project (lib/filters).
      BOARD_FILTERS: list[list[str]] = [
-         ["project", "all"],
+         ["project", ""],
          ["assignee", "All"],
          ["priority", "All"],
          ["category", "All"],

@@ -15,20 +15,24 @@ import from models {
     FilterSets,
     GithubConnectionView,
     hydrate_rows,
-    working_tasks,
-    tally_totals,
-    categories_of
+    project_working,
+    default_project,
+    categories_of,
+    resolve,
+    owned
 }
 import from services.util { page_bounds, done_cutoff, order_working, ensure_tallies }
 import from services.workspace.workspace { workspace_view }
 
 obj BoardData {
-    """One page of the board's working set, plus the workspace lists it
-    renders. The workspace fields are filled only when `with_workspace` asks:
-    they are edited on other pages, so the poll has no reason to refetch them."""
+    """One page of one project's working set, plus the workspace lists the
+    board renders. `project_id` is the project the page was scoped to (the
+    default when the request named none). The workspace fields are filled
+    only when `with_workspace` asks: the poll has no reason to refetch them."""
     has rows: list[TaskRow],
         has_more: bool,
         older: int,
+        project_id: str,
         categories: list[str],
         members: list[MemberView],
         projects: list[Project],
@@ -53,14 +57,18 @@ obj BoardData {
 
 
 walker BoardSnapshot {
-    """The board in one call. `with_workspace` adds the roster, flow line,
-    GitHub state and saved filters the boot needs; the poll leaves it off and
-    pays for the working set alone. Only the working set is loaded: `older` is the Done
-    tally less the Done rows the cutoff kept, and `categories` is the list
-    the projects' box keeps on write."""
+    """One project's board in one call. `project_id` picks the project; an
+    empty, foreign, archived or unknown id falls back to the caller's own
+    default project (the earliest created), and the report says which was
+    used. `with_workspace` adds the roster, flow line, GitHub state and saved
+    filters the boot needs; the poll leaves it off and pays for the working
+    set alone. Only that set is loaded: `older` is the project's Done tally
+    less the Done rows the cutoff kept, and `categories` is the workspace
+    list the projects' box keeps on write."""
     has page: int = 1,
         page_size: int = 500,
         done_days: int = 7,
+        project_id: str = "",
         with_workspace: bool = False,
         reports: list[BoardData] = [];
 
@@ -68,16 +76,29 @@ walker BoardSnapshot {
         ensure_tallies(here);
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         cutoff = done_cutoff(self.done_days);
-        picked = working_tasks(here, cutoff);
-        older = 0;
-        if cutoff {
-            recent_done = 0;
-            for t in picked {
-                if t.status == "Done" {
-                    recent_done = recent_done + 1;
-                }
+        scoped: Project | None = None;
+        if self.project_id {
+            found = resolve(self.project_id);
+            if isinstance(found, Project) and owned(here, found) and found.active {
+                scoped = found;
             }
-            older = tally_totals(here)[1] - recent_done;
+        }
+        if scoped is None {
+            scoped = default_project(here);
+        }
+        picked: list[Task] = [];
+        older = 0;
+        if scoped is not None {
+            picked = project_working(scoped, cutoff);
+            if cutoff {
+                recent_done = 0;
+                for t in picked {
+                    if t.status == "Done" {
+                        recent_done = recent_done + 1;
+                    }
+                }
+                older = scoped.done_total - recent_done;
+            }
         }
         # Sorts are stable, so the jid pass underneath the real key is what
         # keeps a row from swapping pages between two requests.
@@ -125,6 +146,7 @@ walker BoardSnapshot {
             rows=hydrate_rows(here, picked[start:end]),
             has_more=len(picked) > end,
             older=older,
+            project_id=jid(scoped) if scoped is not None else "",
             categories=categories_of(here),
             members=members,
             projects=projects,

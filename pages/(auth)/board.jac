@@ -53,6 +53,7 @@ import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
 import from ...lib.utils { fmtEstimate, parseEstimate }
 import from ...lib.filters {
+    defaultProject,
     filterKey,
     filterValue,
     trimFilters,
@@ -193,7 +194,13 @@ def:pub BoardPage -> JsxPage {
         # The newest snapshot load owns the state: an older one still paging
         # neither paints its pages nor fetches the rest.
         loadReqRef: Ref[any] = Ref(),
-        fProject: str = "all",
+        # The project on screen: the board's scope, one project always. ""
+        # only until page 1 says which one the server opened on.
+        fProject: str = "",
+        # The project the loaded rows belong to. While it differs from
+        # fProject a switch is in flight, and the rows on screen stay
+        # rather than blanking until the new set lands.
+        loadedProject: str = "",
         fAssignee: str = "All",
         fCategory: str = "All",
         # A tag the card must carry, or "All"; the estimate filter is "All",
@@ -212,6 +219,9 @@ def:pub BoardPage -> JsxPage {
         lastSetName: str = "",
         filtersReady: bool = False,
         savedRef: Ref[any] = Ref(),
+        # A project the flow line page picked since this browser last kept
+        # the account's filters: it replaces the account's on page 1.
+        pickedRef: Ref[any] = Ref(),
         iterations: list[IterationView] = [],
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
@@ -261,16 +271,24 @@ def:pub BoardPage -> JsxPage {
         # account's own replace them when page 1 lands. Before any were
         # kept, the project filter the board used to keep per browser.
         kept = readBoardFilters();
+        stored = localStorage.getItem("flowline_project")
+            or localStorage.getItem("standup_project")
+            or "";
         if kept["ok"] {
-            adoptFilters(kept["filters"], kept["set"]);
-            lastSetName = kept["name"];
-        } else {
-            stored = localStorage.getItem("flowline_project")
-                or localStorage.getItem("standup_project")
-                or "";
-            if stored {
-                adoptFilters({"project": stored}, "");
+            filters: dict[str, str] = kept["filters"];
+            # The two keys are written together, so a different project
+            # under flowline_project is the flow line page's later pick:
+            # it wins, and is saved as the account's like any change.
+            if stored and stored != filterValue(filters, "project") {
+                picked = {** filters};
+                picked["project"] = stored;
+                filters = picked;
+                pickedRef.current = stored;
             }
+            adoptFilters(filters, kept["set"]);
+            lastSetName = kept["name"];
+        } elif stored {
+            adoptFilters({"project": stored}, "");
         }
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
@@ -524,7 +542,7 @@ def:pub BoardPage -> JsxPage {
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
     def setCategoryFilter(v: str) -> None;
-    def filtersOn(pid: str, who: str, cat: str) -> bool;
+    def filtersOn(who: str, cat: str) -> bool;
     def clearFilters -> None;
     # The saved filters: the filters on screen in their stored form, taking
     # a stored dict (a set, the account's, this browser's copy), dropping
@@ -642,7 +660,7 @@ def:pub BoardPage -> JsxPage {
             or (bool(issueTail) and bq in issueTail.lower())
             or (bool(prTail) and bq in prTail.lower());
         return hit
-            and (fProject == "all" or t.project_id == fProject)
+            and (not fProject or loadedProject != fProject or t.project_id == fProject)
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)

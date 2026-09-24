@@ -92,9 +92,19 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         pageNo = 1;
         more = True;
         gotPage = False;
+        # The project this load is for. Page 1 names the one the server
+        # opened on when none was known (or the pick was stale), and the
+        # later pages ask for it by id. When the account's filters, taken
+        # on page 1, name another project, the load starts over on it, once.
+        pid = fProject;
+        wantWorkspace = withWorkspace;
+        restarted = False;
         while more and pageNo <= 20 and loadReqRef.current == seq {
             bResult = root spawn BoardSnapshot(
-                page=pageNo, page_size=500, with_workspace=withWorkspace and pageNo == 1
+                page=pageNo,
+                page_size=500,
+                project_id=pid,
+                with_workspace=wantWorkspace and pageNo == 1
             );
             data = bResult.reports[0] if bResult.reports else None;
             if not data {
@@ -105,7 +115,14 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 more = data.has_more;
                 olderUnfiltered = data.older;
                 cats = data.categories;
-                if withWorkspace and pageNo == 1 {
+                restart = False;
+                if pageNo == 1 {
+                    pid = data.project_id;
+                    if loadReqRef.current == seq and fProject != pid {
+                        fProject = pid;
+                    }
+                }
+                if wantWorkspace and pageNo == 1 {
                     connected = data.github_connected;
                     live = data.webhook_live;
                     projectCount = len(data.projects);
@@ -117,12 +134,23 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                             takeAccountFilters(data);
                         }
                         dropStaleFilters();
+                        restart = bool(fProject) and fProject != pid and not restarted;
                     }
                 }
-                # The working set is one sort_order run, so a later page
-                # lands under the cards already in its lanes: nothing moves.
-                if paintPages and loadReqRef.current == seq and not movesRef.current {
+                if restart {
+                    restarted = True;
+                    pid = fProject;
+                    wantWorkspace = False;
+                    fetchedTasks = [];
+                    more = True;
+                    pageNo = 0;
+                } elif paintPages
+                    and loadReqRef.current == seq
+                    and not movesRef.current {
+                    # The working set is one sort_order run, so a later page
+                    # lands under the cards already in its lanes: nothing moves.
                     tasks = fetchedTasks;
+                    loadedProject = pid;
                     knownCategories = cats;
                     loading = False;
                     retrying = False;
@@ -133,6 +161,7 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         truncated = more;
         if not movesRef.current and loadReqRef.current == seq {
             tasks = fetchedTasks;
+            loadedProject = pid;
             workingTruncated = truncated;
             # An empty answer must not wipe the category list the filter bar
             # is built from: an empty page keeps the list it already had.
@@ -142,8 +171,12 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
             # A filtered fetch owns the count while filters are on; the poll
             # only refreshes the unfiltered one. The stamp, not the `has`
             # fields, says which filters are live: on the boot path the
-            # entry ability set them in this same tick.
-            if not filterRef.current or filterRef.current == "all|All|All" {
+            # entry ability set them in this same tick. Its project part is
+            # not compared: the snapshot's count is this project's already.
+            stamp = str(filterRef.current or "");
+            parts = stamp.split("|");
+            if not stamp
+                or (len(parts) == 3 and parts[1] == "All" and parts[2] == "All") {
                 olderTotal = olderUnfiltered;
             }
         }
@@ -199,8 +232,10 @@ impl BoardPage.retryLoad -> None {
     await loadAll();
 }
 
-impl BoardPage.filtersOn(pid: str, who: str, cat: str) -> bool {
-    return pid != "all" or who != "All" or cat != "All";
+# The history filters: the project is the scope, and the snapshot's `older`
+# is that project's count already.
+impl BoardPage.filtersOn(who: str, cat: str) -> bool {
+    return who != "All" or cat != "All";
 }
 
 # Back to everything: no filter, no saved set, the Done window shown.
@@ -209,11 +244,16 @@ impl BoardPage.clearFilters -> None {
     adoptFilters({}, "");
 }
 
+# Another project: its working set is fetched (the board holds one
+# project's), and the cards on screen stay until it lands.
 impl BoardPage.setProjectFilter(v: str) -> None {
+    if not v or v == fProject {
+        return;
+    }
     fProject = v;
     # A person who is not on the newly picked project cannot stay the
     # filter: the assignee menu no longer lists them.
-    if v != "all" and fAssignee != "All" {
+    if fAssignee != "All" {
         onProject = False;
         for m in members {
             if m.id == fAssignee and v in m.project_ids {
@@ -224,7 +264,10 @@ impl BoardPage.setProjectFilter(v: str) -> None {
             fAssignee = "All";
         }
     }
+    # The other project's history count must not stand under this one.
+    olderTotal = -1;
     refreshOlder(v, fAssignee, fCategory);
+    loadBoard(False);
 }
 
 impl BoardPage.setAssigneeFilter(v: str) -> None {
@@ -255,7 +298,10 @@ impl BoardPage.boardFilters -> dict[str, str] {
 # Every filter from a stored dict (a key it lacks is off) and the set they
 # came from. The title search is left alone: it is never stored.
 impl BoardPage.adoptFilters(filters: dict[str, str], setId: str) -> None {
-    pid = filterValue(filters, "project");
+    # A dict without a project keeps the one on screen: the project is the
+    # board's scope, and a set (or "all tasks") does not move it.
+    before = fProject;
+    pid = filterValue(filters, "project") or before;
     who = filterValue(filters, "assignee");
     cat = filterValue(filters, "category");
     fProject = pid;
@@ -268,6 +314,11 @@ impl BoardPage.adoptFilters(filters: dict[str, str], setId: str) -> None {
     hideDone = filterValue(filters, "done") == "hide";
     activeSet = setId;
     refreshOlder(pid, who, cat);
+    # A set that pins another project on a loaded board fetches it; on the
+    # boot path the load in flight takes the new project itself.
+    if pid != before and not loading {
+        loadBoard(False);
+    }
 }
 
 # The first page with the workspace: the account's filters replace this
@@ -287,6 +338,16 @@ impl BoardPage.takeAccountFilters(data: any) -> None {
     } else {
         savedRef.current = "|";
     }
+    # The flow line page's later pick outranks the account's copy; the
+    # save effect writes it to the account once the picking pauses.
+    wanted = str(pickedRef.current or "");
+    if wanted {
+        pickedRef.current = "";
+        if wanted != fProject {
+            fProject = wanted;
+            refreshOlder(wanted, fAssignee, fCategory);
+        }
+    }
     filtersReady = True;
 }
 
@@ -296,7 +357,7 @@ impl BoardPage.takeAccountFilters(data: any) -> None {
 impl BoardPage.dropStaleFilters -> None {
     pid = fProject;
     who = fAssignee;
-    if pid != "all" {
+    if pid {
         known = False;
         for p in projects {
             if jid(p) == pid and p.active {
@@ -304,13 +365,13 @@ impl BoardPage.dropStaleFilters -> None {
             }
         }
         if not known {
-            pid = "all";
+            pid = defaultProject(projects);
         }
     }
     if who != "All" {
         known = False;
         for m in members {
-            if m.id == who and m.active and (pid == "all" or pid in m.project_ids) {
+            if m.id == who and m.active and (not pid or pid in m.project_ids) {
                 known = True;
             }
         }
@@ -409,7 +470,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
     # Filters go to the server here (unlike the working set) because the
     # history is paged: a page filtered on the client would run short and
     # its total would lie.
-    if olderRef.current {
+    if olderRef.current or not pid {
         return;
     }
     olderRef.current = True;
@@ -424,7 +485,7 @@ impl BoardPage.loadOlder(page: int, pid: str, who: str, cat: str) -> None {
     try {
         result = root spawn ListTasks(
             scope="older",
-            project_id=pid if pid != "all" else "",
+            project_id=pid,
             assignee_id=who if who != "All" else "",
             category=cat if cat != "All" else "",
             page=page,
@@ -456,7 +517,7 @@ impl BoardPage.refreshOlder(pid: str, who: str, cat: str) -> None {
     olderPage = 0;
     olderMore = False;
     filterRef.current = pid + "|" + who + "|" + cat;
-    if filtersOn(pid, who, cat) {
+    if filtersOn(who, cat) {
         olderTotal = -1;
     }
     if showAllDone {
@@ -533,12 +594,7 @@ impl BoardPage.showCreate(inKey: str = "") -> None {
     keys = columnKeys();
     landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
     # A task always has a project: the filtered one, else the first active.
-    firstProject = "";
-    for pr in projects {
-        if pr.active and not firstProject {
-            firstProject = jid(pr);
-        }
-    }
+    firstProject = defaultProject(projects);
     # A board filtered to an iteration plans the new task into it.
     planned = "none";
     for it in iterations {
@@ -555,7 +611,7 @@ impl BoardPage.showCreate(inKey: str = "") -> None {
     # No due date: a quick capture must not be born due today.
     fresh = {
         ** BLANK_TASK,
-        "project": fProject if fProject != "all" else firstProject,
+        "project": fProject or firstProject,
         "status": landing,
         "iteration": planned
     };

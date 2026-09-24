@@ -94,6 +94,10 @@ node Project {
     has name: str,
         description: str = "",
         active: bool = True,
+        # When it was made (SaveProject stamps it); the board and the flow
+        # line open on the earliest. Empty on a project from before the
+        # stamp, which sorts first, by name.
+        created_at: str = "",
         # All-time tallies kept on every task write, so no count loads the
         # history. `seeded_done_total` is the Done tasks created already
         # Done (history, not throughput). An empty `tallies_at` means never
@@ -829,6 +833,22 @@ def projects_of(holder: Root) -> list[Project] {
         out.extend([box-->[?:Project]]);
     }
     return out;
+}
+
+
+# The project the board and the flow line open on when none is picked: the
+# earliest-created active one (created_at, then name, then jid; stable
+# passes, the last one primary). None when no project is active.
+def default_project(holder: Root) -> Project | None {
+    live = [
+        p
+        for p in projects_of(holder)
+        if p.active
+    ];
+    live.sort(key=lambda (p: Project) { jid(p); });
+    live.sort(key=lambda (p: Project) { p.name.lower(); });
+    live.sort(key=lambda (p: Project) { p.created_at; });
+    return live[0] if live else None;
 }
 
 

@@ -7,7 +7,7 @@ straight to their walkers; the page owns the filters themselves."""
 import from "sonner" { toast }
 import from ...models { Project, MemberView, IterationView, FilterSetView }
 import from ...services.filters.filters { SaveFilterSet, DeleteFilterSet }
-import from ...lib.filters { filterKey, filterSummary }
+import from ...lib.filters { filterKey, filterSummary, withoutProject }
 import from ...lib.workspace { forgetWorkspace }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
@@ -113,7 +113,18 @@ def:pub FilterSetMenu(
         targetId: str = "",
         confirming: bool = False;
 
-    nowKey = filterKey(filters, page);
+    # On the board the project is the scope, not a filter: a set is compared
+    # without it unless the set itself pins one (a set saved before the
+    # scope), and "no filters" means none besides the project. The tasks
+    # table keeps the project as a filter, so its sets compare whole.
+    scoped = page == "board";
+    nowKey = filterKey(withoutProject(filters, page) if scoped else filters, page);
+    nowPinned = filterKey(filters, page);
+
+    def same(s: FilterSetView) -> bool {
+        pinned = not scoped or ("project" in s.filters and bool(s.filters["project"]));
+        return filterKey(s.filters, page) == (nowPinned if pinned else nowKey);
+    }
     # The set the filters came from, and the set they equal right now (that
     # one first, else any set with the same filters).
     active: any = None;
@@ -123,12 +134,12 @@ def:pub FilterSetMenu(
         }
     }
     shown: any = None;
-    if active and filterKey(active.filters, page) == nowKey {
+    if active and same(active) {
         shown = active;
     }
     if not shown and nowKey {
         for s in sets {
-            if not shown and filterKey(s.filters, page) == nowKey {
+            if not shown and same(s) {
                 shown = s;
             }
         }
@@ -197,7 +208,10 @@ def:pub FilterSetMenu(
         ok = False;
         try {
             result = root spawn SaveFilterSet(
-                set_id=setId, name=name, page=page, filters=values
+                set_id=setId,
+                name=name,
+                page=page,
+                filters=withoutProject(values, page) if scoped else values
             );
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
