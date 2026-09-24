@@ -175,7 +175,7 @@ def TourRow(title: str, body: str, children: any = None) -> JsxElement {
             className="grid gap-5 border-t py-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] xl:gap-10"
         >
             <div className="grid content-start gap-2">
-                <h3 className="text-lg leading-snug font-semibold [font-stretch:108%]">
+                <h3 className="text-lg leading-snug font-semibold tracking-[-0.01em]">
                     {title}
                 </h3>
                 <p
@@ -387,9 +387,10 @@ def LogLedger -> JsxElement {
 
 def:pub Tour -> JsxElement {
     return
-        <section id="tour" className="landing-wrap scroll-mt-16 pt-14 sm:pt-20">
+        <section id="tour" className="landing-wrap scroll-mt-16 pt-16 sm:pt-24">
+            <p className="section-eyebrow">The tour</p>
             <h2
-                className="max-w-[28ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
+                className="mt-3 max-w-[28ch] text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.025em]"
             >
                 One flow line, three views of the same work
             </h2>

@@ -215,7 +215,7 @@ def:pub HeroBoard(loggedIn: bool = False) -> JsxElement {
             <div
                 role="group"
                 aria-label="Sample board you can try"
-                className="overflow-hidden rounded-xl border bg-card"
+                className="hero-frame overflow-hidden border bg-card"
             >
                 <div className="flex items-center overflow-x-auto border-b px-4 py-3">
                     {for (i, step) in enumerate(ROUTE) {

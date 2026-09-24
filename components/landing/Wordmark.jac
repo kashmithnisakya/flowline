@@ -29,7 +29,7 @@ def:pub Wordmark(className: str = "") -> JsxElement {
         <span className={"inline-flex items-center gap-2 " + className}>
             <RouteMark/>
             <span
-                className="text-base leading-none font-extrabold tracking-[-0.01em] text-foreground [font-stretch:125%]"
+                className="text-[17px] leading-none font-extrabold tracking-[-0.02em] text-foreground"
             >
                 flowline
             </span>

@@ -20,7 +20,7 @@ def ThemeSwatch(kind: str) -> JsxElement {
     if kind == "light" {
         return
             <span
-                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-black/15 bg-[#F2F3F1] p-1"
+                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-black/15 bg-[#ECEEEA] p-1"
                 aria-hidden="true"
             >
                 <span className="h-1 w-3 rounded-full bg-[#BF3F0B]"/>
@@ -29,7 +29,7 @@ def ThemeSwatch(kind: str) -> JsxElement {
     if kind == "dark" {
         return
             <span
-                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-white/20 bg-[#111413] p-1"
+                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-white/20 bg-[#0E1110] p-1"
                 aria-hidden="true"
             >
                 <span className="h-1 w-3 rounded-full bg-[#F0702E]"/>
@@ -40,10 +40,10 @@ def ThemeSwatch(kind: str) -> JsxElement {
             className="flex h-[18px] w-7 shrink-0 overflow-hidden rounded-xs border border-black/15"
             aria-hidden="true"
         >
-            <span className="flex flex-1 items-end bg-[#F2F3F1] p-1">
+            <span className="flex flex-1 items-end bg-[#ECEEEA] p-1">
                 <span className="h-1 w-2 rounded-full bg-[#BF3F0B]"/>
             </span>
-            <span className="flex flex-1 items-end bg-[#111413] p-1">
+            <span className="flex flex-1 items-end bg-[#0E1110] p-1">
                 <span className="h-1 w-2 rounded-full bg-[#F0702E]"/>
             </span>
         </span>;

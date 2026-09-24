@@ -7,22 +7,30 @@ import from ..ui.button { Button }
 import from .Wordmark { Wordmark }
 
 glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
-     NAV_LINK: str = "text-[13.5px] text-muted-foreground transition-colors hover:text-foreground",
+     NAV_LINK: str = "rounded-full px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground",
      MENU_LINK: str = "flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground";
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
     has menuOpen: bool = False;
 
     return
-        <header className="sticky top-0 z-30 border-b bg-background">
+        <header
+            className="sticky top-0 z-30 border-b border-border/50 bg-background/70 backdrop-blur-xl"
+        >
             <nav
                 aria-label="Site"
-                className="landing-wrap flex h-14 items-center gap-6"
+                className="landing-wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4"
             >
-                <a href="/" aria-label="flowline home" className="shrink-0 rounded-sm">
+                <a
+                    href="/"
+                    aria-label="flowline home"
+                    className="justify-self-start rounded-sm"
+                >
                     <Wordmark/>
                 </a>
-                <div className="hidden items-center gap-5 md:flex">
+                <div
+                    className="glass-pill hidden items-center gap-0.5 px-1.5 py-1 md:flex"
+                >
                     <a href="#tour" className={NAV_LINK}>Tour</a>
                     <a href="#github" className={NAV_LINK}>GitHub</a>
                     <a href="#faq" className={NAV_LINK}>FAQ</a>
@@ -35,9 +43,14 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                         Source
                     </a>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="flex items-center gap-2 justify-self-end">
                     {if loggedIn {
-                        <Button key="app" asChild={True} size="sm">
+                        <Button
+                            key="app"
+                            asChild={True}
+                            size="sm"
+                            className="rounded-full"
+                        >
                             <a href="/board">Go to your board</a>
                         </Button>
                     } else {
@@ -46,11 +59,11 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                                 asChild={True}
                                 variant="ghost"
                                 size="sm"
-                                className="hidden text-muted-foreground md:inline-flex"
+                                className="hidden rounded-full text-muted-foreground md:inline-flex"
                             >
                                 <a href="/login">Sign in</a>
                             </Button>
-                            <Button asChild={True} size="sm">
+                            <Button asChild={True} size="sm" className="rounded-full">
                                 <a href="/login?mode=signup">
                                     <span className="sm:hidden">Create workspace</span>
                                     <span className="hidden sm:inline">
@@ -92,7 +105,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                 <div
                     key="menu"
                     id="site-menu"
-                    className="grid gap-0.5 border-t px-2 py-2 md:hidden"
+                    className="grid gap-0.5 border-t bg-background/95 px-2 py-2 backdrop-blur-xl md:hidden"
                 >
                     <a
                         href="#tour"

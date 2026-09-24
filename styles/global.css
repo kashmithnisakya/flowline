@@ -15,24 +15,24 @@
        primary for the main action, today and selection. Names stay shadcn's
        so the registry primitives restyle without edits. */
     color-scheme: light;
-    --background: #F2F3F1;          /* ground */
-    --foreground: #161A18;
+    --background: #ECEEEA;          /* ground */
+    --foreground: #121614;
     --card: #FFFFFF;                /* surface: cards, panels, tables */
-    --card-foreground: #161A18;
+    --card-foreground: #121614;
     --popover: #FFFFFF;
-    --popover-foreground: #161A18;
+    --popover-foreground: #121614;
     --primary: #BF3F0B;             /* rust; white label 5.3:1 */
     --primary-foreground: #FFFFFF;
-    --secondary: #E7EAE6;           /* inset fill */
-    --secondary-foreground: #161A18;
-    --muted: #E7EAE6;
-    --muted-foreground: #4F5753;
-    --subtle: #636B67;              /* captions, placeholders */
-    --accent: #E2E6E1;              /* hover and selected row */
-    --accent-foreground: #161A18;
+    --secondary: #E2E6E0;           /* inset fill */
+    --secondary-foreground: #121614;
+    --muted: #E2E6E0;
+    --muted-foreground: #4B534F;
+    --subtle: #5C6460;              /* captions, placeholders */
+    --accent: #DDE2DB;              /* hover and selected row */
+    --accent-foreground: #121614;
     --destructive: #B3261E;         /* andon: blocked, overdue, destructive */
-    --border: #D3D8D2;              /* hairline */
-    --input: #78807B;               /* control edge, 3:1 on surface and ground */
+    --border: #CBD1C9;              /* hairline */
+    --input: #767E79;               /* control edge, 3:1 on surface and ground */
     --ring: #BF3F0B;
     --success: #1C6E45;
     --warning: #8A5A00;
@@ -66,47 +66,47 @@
     --chart-3: var(--step-amber);
     --chart-4: var(--step-sky);
     --chart-5: var(--step-rose);
-    --radius: 4px;
+    --radius: 6px;
     /* Flow line canvas height. The diagram and the panel beside it are flex
        siblings, so both need the same height from one place. */
     --canvas-h: max(26rem, calc(100dvh - 15rem));
     --sidebar: #FFFFFF;
-    --sidebar-foreground: #161A18;
+    --sidebar-foreground: #121614;
     --sidebar-primary: #BF3F0B;
     --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #E2E6E1;
-    --sidebar-accent-foreground: #161A18;
-    --sidebar-border: #D3D8D2;
+    --sidebar-accent: #DDE2DB;
+    --sidebar-accent-foreground: #121614;
+    --sidebar-border: #CBD1C9;
     --sidebar-ring: #BF3F0B;
     /* Only floating layers cast a shadow: menus (float-1) and dialogs,
        sheets, the palette and toasts (float-2). Resting surfaces use borders. */
-    --float-1: 0 1px 2px rgb(22 26 24 / 0.06), 0 4px 12px -2px rgb(22 26 24 / 0.12);
-    --float-2: 0 1px 2px rgb(22 26 24 / 0.06), 0 8px 24px rgb(22 26 24 / 0.10), 0 16px 40px -8px rgb(22 26 24 / 0.18);
-    --scrim: rgb(17 20 19 / 0.45);
+    --float-1: 0 1px 2px rgb(18 22 20 / 0.05), 0 4px 10px -2px rgb(18 22 20 / 0.08), 0 8px 20px -6px rgb(18 22 20 / 0.10);
+    --float-2: 0 1px 2px rgb(18 22 20 / 0.05), 0 8px 20px -4px rgb(18 22 20 / 0.10), 0 24px 48px -12px rgb(18 22 20 / 0.18);
+    --scrim: rgb(18 22 20 / 0.45);
 }
 
 .dark {
     /* Same system on a charcoal ground; the primary brightens and takes a
        dark label. Native chrome (scrollbars, form controls) follows the theme. */
     color-scheme: dark;
-    --background: #111413;
-    --foreground: #E4E8E5;
-    --card: #191D1B;
-    --card-foreground: #E4E8E5;
-    --popover: #191D1B;
-    --popover-foreground: #E4E8E5;
+    --background: #0E1110;
+    --foreground: #E6EAE7;
+    --card: #181C1A;
+    --card-foreground: #E6EAE7;
+    --popover: #181C1A;
+    --popover-foreground: #E6EAE7;
     --primary: #F0702E;
     --primary-foreground: #1B0B02;
-    --secondary: #1F2421;
-    --secondary-foreground: #E4E8E5;
-    --muted: #1F2421;
-    --muted-foreground: #A0A8A4;
-    --subtle: #8F9793;
-    --accent: #232826;
-    --accent-foreground: #E4E8E5;
+    --secondary: #1E2320;
+    --secondary-foreground: #E6EAE7;
+    --muted: #1E2320;
+    --muted-foreground: #A4ACA8;
+    --subtle: #939B97;
+    --accent: #242A27;
+    --accent-foreground: #E6EAE7;
     --destructive: #FF7B6E;
-    --border: #2D3330;
-    --input: #6E7772;
+    --border: #2F3532;
+    --input: #727B76;
     --ring: #F0702E;
     --success: #56C28C;
     --warning: #E3AB48;
@@ -118,16 +118,16 @@
     --step-rose: #D98BC2;     --step-rose-ink: #E6A8D3;
     --step-emerald: #79C08E;  --step-emerald-ink: #98D0A7;
     --step-slate: #A3ABA7;    --step-slate-ink: #BCC3BF;
-    --sidebar: #191D1B;
-    --sidebar-foreground: #E4E8E5;
+    --sidebar: #181C1A;
+    --sidebar-foreground: #E6EAE7;
     --sidebar-primary: #F0702E;
     --sidebar-primary-foreground: #1B0B02;
-    --sidebar-accent: #232826;
-    --sidebar-accent-foreground: #E4E8E5;
-    --sidebar-border: #2D3330;
+    --sidebar-accent: #242A27;
+    --sidebar-accent-foreground: #E6EAE7;
+    --sidebar-border: #2F3532;
     --sidebar-ring: #F0702E;
-    --float-1: 0 1px 2px rgb(0 0 0 / 0.40), 0 4px 12px -2px rgb(0 0 0 / 0.45);
-    --float-2: 0 1px 2px rgb(0 0 0 / 0.40), 0 12px 32px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.55);
+    --float-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 10px -2px rgb(0 0 0 / 0.40), 0 8px 20px -6px rgb(0 0 0 / 0.45);
+    --float-2: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -4px rgb(0 0 0 / 0.45), 0 24px 48px -12px rgb(0 0 0 / 0.55);
     --scrim: rgb(0 0 0 / 0.6);
 }
 
@@ -197,16 +197,18 @@
     --color-foreground: var(--foreground);
     --color-background: var(--background);
     /* Explicit radius scale: the registry's rounded-lg (buttons, inputs,
-       selects) lands on 4px and rounded-xl (dialogs) on 6px. Cards, badges
-       and menus are pinned in the registry block below. */
-    --radius-xs: 2px;
-    --radius-sm: 3px;
-    --radius-md: 4px;
-    --radius-lg: 4px;
-    --radius-xl: 6px;
-    --radius-2xl: 6px;
-    --radius-3xl: 8px;
-    --radius-4xl: 8px;
+       selects) lands on 6px and rounded-xl (dialogs) on 10px. Cards, badges
+       and menus are pinned in the registry block below. The scale steps by
+       role, not evenly: controls 6, cards 8, floating layers 10 and up, so
+       a menu always reads rounder than the control that opened it. */
+    --radius-xs: 3px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 6px;
+    --radius-xl: 10px;
+    --radius-2xl: 12px;
+    --radius-3xl: 14px;
+    --radius-4xl: 16px;
     /* Resting shadows are gone: the small steps resolve to nothing, and the
        larger ones are the two floating levels. */
     --shadow-2xs: 0 0 #0000;
@@ -248,9 +250,10 @@
 }
 
 @layer components {
-    /* In-app page title: 24px Archivo at a 112% width. */
+    /* In-app page title: 24px Archivo at a 112% width, tracking tightened
+       to -0.02em so the wide cut still reads as one word at display size. */
     .page-title {
-        @apply font-display text-2xl leading-tight font-bold tracking-[-0.01em];
+        @apply font-display text-2xl leading-tight font-bold tracking-[-0.02em];
         font-stretch: 112%;
     }
     /* One muted line under a page title. */
@@ -259,7 +262,7 @@
     }
     /* Section and panel title: 16px, weight 650, 108% width. */
     .section-title {
-        @apply font-display text-base leading-snug;
+        @apply font-display text-base leading-snug tracking-[-0.01em];
         font-weight: 650;
         font-stretch: 108%;
     }
@@ -275,13 +278,13 @@
     .num {
         @apply font-mono tabular-nums;
     }
-    /* A resting surface: card fill, hairline border, 4px radius, no shadow. */
+    /* A resting surface: card fill, hairline border, 6px radius, no shadow. */
     .surface {
         @apply rounded-md border bg-card text-card-foreground;
     }
     /* A single filter row between hairlines; wraps on narrow screens. */
     .toolbar {
-        @apply flex flex-wrap items-center gap-2 border-y bg-card px-4 py-2;
+        @apply flex flex-wrap items-center gap-2 border-y bg-card px-4 py-2.5;
     }
     /* Step colour swatch: a 10px square; pair with bg-step-<key>. */
     .step-swatch {
@@ -292,6 +295,109 @@
        header share it. */
     .landing-wrap {
         @apply mx-auto w-full max-w-[1760px] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20;
+    }
+    /* ---- Landing atmosphere. The hero sits on light rather than the flat
+       ground: two soft glows in the app's own colours (rust warm on the left,
+       the sky step colour as a cool counterweight on the right) that fade out
+       before the first section, so only the hero is lit. Worst case under a
+       glow peak, body text still clears AA on the tinted result. */
+    .hero-atmosphere {
+        position: absolute;
+        inset-inline: 0;
+        top: 0;
+        z-index: -10;
+        height: min(46rem, 88vh);
+        pointer-events: none;
+        background:
+            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 58%),
+            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 14%, transparent), transparent 60%),
+            linear-gradient(to bottom, color-mix(in oklab, var(--card) 55%, transparent), transparent 55%);
+    }
+    .dark .hero-atmosphere {
+        background:
+            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 58%),
+            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 18%, transparent), transparent 60%),
+            linear-gradient(to bottom, color-mix(in oklab, var(--card) 38%, transparent), transparent 55%);
+    }
+    /* A glass capsule: the hero eyebrow, the nav's link group and the ghost
+       call to action. The 62% card fill carries the text contrast by itself,
+       so the blur is decoration and a browser without backdrop-filter loses
+       nothing that matters. */
+    .glass-pill {
+        border-radius: 9999px;
+        border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+        background: color-mix(in oklab, var(--card) 62%, transparent);
+        -webkit-backdrop-filter: blur(14px) saturate(150%);
+        backdrop-filter: blur(14px) saturate(150%);
+    }
+    /* The hero's product preview reads as a floating screenshot, so it is the
+       one resting surface allowed a shadow. */
+    .hero-frame {
+        border-radius: 18px;
+        box-shadow: var(--float-2);
+    }
+    /* A section's small label, above its heading. Mono and rust so a reader
+       scanning the page can tell the sections apart without reading them;
+       sentence case, like every other label in the app. */
+    .section-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--primary);
+    }
+    .section-eyebrow::before {
+        content: "";
+        width: 0.375rem;
+        height: 0.375rem;
+        border-radius: 9999px;
+        background: currentColor;
+    }
+    /* A bento tile. The landing's feature grid is tiles of uneven width
+       rather than a ruled list, so the flagship capabilities read as bigger
+       than the supporting ones. Resting state is still a hairline; the
+       shadow only appears under the pointer. */
+    .bento-tile {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--card);
+        padding: 1.25rem;
+        transition:
+            border-color 160ms ease,
+            box-shadow 160ms ease;
+    }
+    .bento-tile:hover {
+        border-color: color-mix(in oklab, var(--primary) 38%, var(--border));
+        box-shadow: var(--float-1);
+    }
+    /* The rust chip a tile's icon sits in. */
+    .tile-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 10px;
+        border: 1px solid color-mix(in oklab, var(--primary) 22%, transparent);
+        background: color-mix(in oklab, var(--primary) 10%, var(--card));
+        color: var(--primary);
+    }
+    /* The closing call to action: one contrasting panel, lit by the same two
+       glows as the hero so the page opens and closes on the same note. */
+    .cta-band {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background:
+            radial-gradient(42rem 22rem at 18% 0%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 62%),
+            radial-gradient(38rem 20rem at 84% 110%, color-mix(in oklab, var(--step-sky) 14%, transparent), transparent 64%),
+            var(--card);
+        box-shadow: var(--float-1);
     }
 }
 
@@ -305,7 +411,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    height: 30px;
+    height: 32px;
     padding-inline: 0.5rem;
     border: 1px solid transparent;
     border-radius: var(--radius-md);
@@ -314,6 +420,7 @@
     font-size: 13px;
     font-weight: 500;
     width: auto;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .toolbar-filter:hover {
     background-color: var(--accent);
@@ -335,7 +442,7 @@
 }
 .data-table th {
     height: auto;
-    padding: 8px 12px;
+    padding: 9px 14px;
     border-bottom: 1px solid var(--border);
     color: var(--muted-foreground);
     font-size: 12.5px;
@@ -346,7 +453,7 @@
     white-space: nowrap;
 }
 .data-table td {
-    padding: 9px 12px;
+    padding: 11px 14px;
     font-size: 13.5px;
     vertical-align: middle;
 }
@@ -355,6 +462,9 @@
 }
 .data-table tbody tr:last-child {
     border-bottom: 0;
+}
+.data-table tbody tr {
+    transition: background-color 120ms ease;
 }
 .data-table tbody tr:hover {
     background-color: var(--accent);
@@ -371,9 +481,11 @@
 /* ---- Registry restyle (components/ui/ is import-only, so these data-slot
    hooks are the sanctioned path). Unlayered so they beat the primitives'
    utilities: radius per role, hairline rings, flat scrim, quiet fills. */
-[data-slot="card"],
 [data-slot="badge"] {
     border-radius: var(--radius-md);
+}
+[data-slot="card"] {
+    border-radius: 8px;
 }
 [data-slot="card"],
 [data-slot="dialog-content"],
@@ -485,6 +597,125 @@
     to { transform: translateX(100%); }
 }
 
+/* Landing entrance: content rises once, on load, in a short stagger. The
+   backwards fill keeps each element in its start state through its delay, so
+   nothing flashes in before its turn. */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.rise {
+    animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.rise-1 { animation-delay: 60ms; }
+.rise-2 { animation-delay: 140ms; }
+.rise-3 { animation-delay: 220ms; }
+.rise-4 { animation-delay: 300ms; }
+.rise-5 { animation-delay: 400ms; }
+
+/* ---- Hero motion: one card's trip along the flow line, on a 12s loop, with
+   the log writing itself underneath. The figure is decorative (the playable
+   board sits below it), so under reduced motion every animation collapses to
+   its final frame, which is a complete picture: the card on Done and the log
+   fully written.
+
+   The card rides a four column track with no gap, so its wrapper is exactly
+   one column wide and translateX(100%) is exactly one step. The step pills
+   share one keyframe and are phased apart by negative delays, so each lights
+   only while the card is with it. */
+@keyframes hm-travel {
+    0%, 16% { transform: translateX(0); }
+    25%, 41% { transform: translateX(100%); }
+    50%, 66% { transform: translateX(200%); }
+    75%, 100% { transform: translateX(300%); }
+}
+
+@keyframes hm-lit {
+    0%, 22% {
+        border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+        background: color-mix(in oklab, var(--primary) 12%, var(--card));
+        color: var(--foreground);
+    }
+    30%, 100% {
+        border-color: var(--border);
+        background: var(--card);
+        color: var(--muted-foreground);
+    }
+}
+
+/* One keyframe per line, each holding its line hidden until the card reaches
+   the step that writes it: Build at 25% of the loop, Review at 50%, Done at
+   75%. Phasing these with delays instead would not work, since a shared
+   keyframe's hidden window is far shorter than the wait. */
+@keyframes hm-line-1 {
+    0%, 24% {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    29%, 100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes hm-line-2 {
+    0%, 49% {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    54%, 100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes hm-line-3 {
+    0%, 74% {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    79%, 100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.hm-track {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.hm-card {
+    grid-column: 1;
+    animation: hm-travel 12s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.hm-step {
+    animation: hm-lit 12s linear infinite;
+}
+.hm-step:nth-child(2) { animation-delay: -9s; }
+.hm-step:nth-child(3) { animation-delay: -6s; }
+.hm-step:nth-child(4) { animation-delay: -3s; }
+.hm-line:nth-child(1) { animation: hm-line-1 12s linear infinite; }
+.hm-line:nth-child(2) { animation: hm-line-2 12s linear infinite; }
+.hm-line:nth-child(3) { animation: hm-line-3 12s linear infinite; }
+
+/* The hero glows drift, very slowly and by a few percent, so the atmosphere
+   is alive without anything appearing to move. */
+@keyframes drift {
+    50% {
+        opacity: 0.86;
+        transform: translate3d(0, -1.5%, 0);
+    }
+}
+.hero-atmosphere {
+    animation: drift 24s ease-in-out infinite;
+    will-change: transform;
+}
+
 /* Motion is for state changes only, and none of it survives reduced motion
    (a spinner still turns: it is the only sign that work is in flight). */
 @media (prefers-reduced-motion: reduce) {
@@ -496,7 +727,9 @@
     *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
         transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
     }
     [data-slot="skeleton"]::after {
         animation: none !important;

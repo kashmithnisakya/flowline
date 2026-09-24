@@ -8,8 +8,8 @@ glob THEME_KEY: str = "flowline-theme",
      THEME_KEY_OLD: str = "standup-theme",
      THEME_PREFS: list[str] = ["light", "dark", "system"],
      # The page ground per theme, for the browser's own chrome on phones.
-     GROUND_LIGHT: str = "#F2F3F1",
-     GROUND_DARK: str = "#111413";
+     GROUND_LIGHT: str = "#ECEEEA",
+     GROUND_DARK: str = "#0E1110";
 
 # Paint the theme at module-import time, before React mounts anything;
 # the layout re-applies it on mount for good measure.

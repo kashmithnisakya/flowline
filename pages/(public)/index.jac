@@ -8,6 +8,7 @@ import from ...lib.session { checkSession }
 import from ...components.landing.SiteNav { SiteNav }
 import from ...components.landing.Hero { Hero }
 import from ...components.landing.Tour { Tour }
+import from ...components.landing.DemoStrip { DemoStrip }
 import from ...components.landing.Features { Features }
 import from ...components.landing.HowItWorks { HowItWorks }
 import from ...components.landing.Faq { Faq }
@@ -31,6 +32,7 @@ def:pub LandingPage -> JsxPage {
             <main>
                 <Hero loggedIn={loggedIn}/>
                 <Tour/>
+                <DemoStrip/>
                 <Features/>
                 <HowItWorks/>
                 <Faq/>

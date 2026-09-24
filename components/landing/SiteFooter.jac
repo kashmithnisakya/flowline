@@ -1,4 +1,6 @@
-"""A plain closing call to action, then the site footer."""
+"""The closing call to action as one lit panel, then the site footer. The
+panel carries the same two glows as the hero, so the page opens and closes on
+the same note."""
 
 import from ..ui.button { Button }
 import from .Wordmark { Wordmark }
@@ -9,18 +11,26 @@ glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
 def:pub SiteFooter(loggedIn: bool) -> JsxElement {
     return
         <footer className="landing-wrap pt-16 pb-10 sm:pt-24">
-            <div className="grid gap-5">
+            <div
+                className="cta-band grid gap-5 px-6 py-10 sm:px-10 sm:py-14 lg:px-14 lg:py-16"
+            >
+                <p className="section-eyebrow">Open source, MIT licensed</p>
                 <h2
-                    className="max-w-[24ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
+                    className="max-w-[24ch] text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.025em]"
                 >
                     Draw your flow line this afternoon.
                 </h2>
+                <p
+                    className="max-w-[56ch] text-[15px] leading-relaxed text-muted-foreground"
+                >
+                    Name the steps your team already uses. The board becomes those steps, and the log starts writing itself.
+                </p>
                 <div
-                    className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"
+                    className="mt-1 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5"
                 >
                     <Button
                         asChild={True}
-                        className="h-11 w-full px-5 text-[15px] font-semibold sm:w-auto"
+                        className="h-12 w-full rounded-full px-7 text-[15px] font-semibold shadow-[var(--float-1)] sm:w-auto"
                     >
                         <a href={"/board" if loggedIn else "/login?mode=signup"}>
                             {"Go to your board"
@@ -32,7 +42,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                         href={REPO_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm font-semibold underline-offset-4 hover:underline"
+                        className="glass-pill inline-flex h-12 items-center justify-center px-6 text-sm font-semibold text-foreground transition-colors hover:text-primary"
                     >
                         Read the source
                     </a>
