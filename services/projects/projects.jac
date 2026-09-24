@@ -85,6 +85,7 @@ walker SaveProject {
         fresh = here ++> Project(
             name=self.name.strip(),
             description=self.description,
+            created_at=now_iso(),
             tallies_at=now_iso(),
             history_at=now_iso(),
             keys_at=now_iso()

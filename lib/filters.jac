@@ -2,7 +2,9 @@
 their default, as the server keeps them), a comparable key and a one-line
 summary of a set, per page (FILTER_TABLES; the board unless a page is
 named), and this browser's copy of the account's board filters, which
-paints the first frame before the board's first page lands."""
+paints the first frame before the board's first page lands. On the board
+the project is the scope, not a filter: `defaultProject` is the one it opens
+on, and a board set is compared and stored without it (`withoutProject`)."""
 
 import from ..constants { FILTER_TABLES }
 import from ..models { Project, MemberView, IterationView }
@@ -45,6 +47,33 @@ def:pub trimFilters(picked: dict[str, str], page: str = "board") -> dict[str, st
         value = picked[pair[0]] if pair[0] in picked else "";
         if value and value != pair[1] {
             kept[pair[0]] = value;
+        }
+    }
+    return kept;
+}
+
+# The project the board and the flow line open on when none is picked: the
+# earliest-created active one, the server's `default_project` rule (stable
+# passes: jid, name, then created_at as the primary key). "" without one.
+def:pub defaultProject(projects: list[Project]) -> str {
+    live = [
+        p
+        for p in projects
+        if p.active
+    ];
+    live.sort(key=lambda (p: Project) { jid(p); });
+    live.sort(key=lambda (p: Project) { p.name.lower(); });
+    live.sort(key=lambda (p: Project) { p.created_at; });
+    return jid(live[0]) if len(live) > 0 else "";
+}
+
+# The same filters with the project left out: what a board set keeps and
+# what it is compared against, since the project is the board's scope.
+def:pub withoutProject(filters: dict[str, str], page: str = "board") -> dict[str, str] {
+    kept: dict[str, str] = {};
+    for pair in keysOf(page) {
+        if pair[0] != "project" and pair[0] in filters and filters[pair[0]] {
+            kept[pair[0]] = filters[pair[0]];
         }
     }
     return kept;

@@ -59,15 +59,18 @@ def optionLabel(options: list[list[str]], value: str) -> str {
 }
 
 # A ghost trigger that turns into "Label: value ×" once a value is picked.
+# `fixed` is a scope, not a filter: the trigger names the pick and never
+# offers to clear it (the board's project).
 def FilterMenu(
     label: str,
     value: str,
     allValue: str,
     options: list[list[str]],
-    onChange: Callable[[str], None]
+    onChange: Callable[[str], None],
+    fixed: bool = False
 ) -> JsxElement {
-    active = value != allValue;
-    shown = optionLabel(options, value);
+    active = value != allValue and not fixed;
+    shown = optionLabel(options, value) if value else label;
     return
         <DropdownMenu>
             {if active {
@@ -103,8 +106,12 @@ def FilterMenu(
                     </button>
                 </span>
             } else {
-                <DropdownMenuTrigger key="off" className="toolbar-filter">
-                    {label}
+                <DropdownMenuTrigger
+                    key="off"
+                    className="toolbar-filter"
+                    data-active={"true" if fixed else "false"}
+                >
+                    {shown if fixed else label}
                     <Chevron/>
                 </DropdownMenuTrigger>
             } }
@@ -179,9 +186,9 @@ def:pub FilterBar(
     shownMembers = [
         m
         for m in members
-        if project == "all" or project in m.project_ids
+        if not project or project in m.project_ids
     ];
-    projectOptions: list[list[str]] = [["all", "All projects"]];
+    projectOptions: list[list[str]] = [];
     for p in projects {
         projectOptions.append([jid(p), p.name]);
     }
@@ -250,7 +257,6 @@ def:pub FilterBar(
 
     picked = 0;
     for on in [
-        project != "all",
         assignee != "All",
         priority != "All",
         category != "All",
@@ -352,9 +358,10 @@ def:pub FilterBar(
                 <FilterMenu
                     label="Project"
                     value={project}
-                    allValue="all"
+                    allValue=""
                     options={projectOptions}
                     onChange={onProject}
+                    fixed={True}
                 />
                 <FilterMenu
                     label="Assignee"

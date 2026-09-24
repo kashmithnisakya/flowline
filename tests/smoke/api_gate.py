@@ -125,14 +125,16 @@ def all_rows():
         page += 1
 
 
-def board_rows():
-    rows, page, older, cats = [], 1, None, None
+def board_rows(project_id=""):
+    # One project's board (the default project when none is named), with
+    # the project the server scoped it to.
+    rows, page, older, cats, scoped = [], 1, None, None, None
     while True:
-        b = report("BoardSnapshot", {"page": page, "page_size": 500})
+        b = report("BoardSnapshot", {"page": page, "page_size": 500, "project_id": project_id})
         rows.extend(b.get("rows", []))
-        older, cats = b.get("older"), b.get("categories")
+        older, cats, scoped = b.get("older"), b.get("categories"), b.get("project_id")
         if not b.get("has_more"):
-            return rows, older, cats
+            return rows, older, cats, scoped
         page += 1
 
 
@@ -215,7 +217,10 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     rows = all_rows()
     counts = report("TaskCounts")
     history = report("TaskHistory")
-    steps = report("GetFlowLine", {"with_counts": True}) or []
+    # The flow line counts one project, like the board: per project, then
+    # summed against the brute-force pass over every row.
+    lines = {pid: report("GetFlowLine", {"with_counts": True, "project_id": pid}) or [] for pid in project_ids}
+    steps = lines[project_ids[0]]
     weeks = history.get("weeks", [])
     exp = brute_force(rows, steps, project_ids, member_ids, today, cutoff, weeks)
     ok_links = all(t["project_id"] == expected_links[t["id"]][0] and sorted(t["assignee_ids"]) == sorted(expected_links[t["id"]][1])
@@ -244,20 +249,40 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     same["projects"] = keyed(snap, "projects", "project_id") == keyed(counts, "projects", "project_id")
     same["members"] = keyed(snap, "members", "member_id") == keyed(counts, "members", "member_id")
     check(f"{label}: OverviewSnapshot counts equal TaskCounts", all(same.values()), f"{same}")
-    brows, older, cats = board_rows()
-    check(f"{label}: BoardSnapshot rows, older and categories",
+    brows, older, cats = [], 0, None
+    for pid in project_ids:
+        rows_p, older_p, cats, scoped = board_rows(pid)
+        brows.extend(rows_p)
+        older += older_p
+        check(f"{label}: BoardSnapshot scopes to the project it was asked for",
+              scoped == pid and all(r["project_id"] == pid for r in rows_p), (scoped, pid, len(rows_p)))
+    check(f"{label}: BoardSnapshot rows, older and categories, summed over the projects",
           sorted(r["id"] for r in brows) == exp["board_ids"] and older == exp["older"] and cats == exp["categories"],
           f"{len(brows), older, cats} vs {len(exp['board_ids']), exp['older'], exp['categories']}")
+    first_rows, first_older, _, scoped = board_rows("")
+    check(f"{label}: BoardSnapshot with no project opens on the earliest-created one",
+          scoped == project_ids[0] and sorted(r["id"] for r in first_rows) == sorted(r["id"] for r in brows if r["project_id"] == project_ids[0]),
+          (scoped, project_ids[0], len(first_rows)))
+    foreign_rows, _, _, scoped = board_rows("n:Project:00000000-0000-4000-8000-000000000000")
+    check(f"{label}: BoardSnapshot with an unknown project falls back to the default project",
+          scoped == project_ids[0] and len(foreign_rows) == len(first_rows), (scoped, len(foreign_rows)))
     got_history = {k: history.get(k) for k in ("added", "finished", "scope", "done")}
     check(f"{label}: TaskHistory added/finished/scope/done", got_history == exp["history"], f"{got_history} vs {exp['history']}")
-    got_counts = {s["id"]: s["task_count"] for s in steps}
-    check(f"{label}: GetFlowLine step counts", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    got_counts = {}
+    for pid in project_ids:
+        for s in lines[pid]:
+            got_counts[s["id"]] = got_counts.get(s["id"], 0) + s["task_count"]
+    check(f"{label}: GetFlowLine step counts, summed over the projects", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    default_line = report("GetFlowLine", {"with_counts": True}) or []
+    check(f"{label}: GetFlowLine with no project counts the earliest-created one",
+          [(s["id"], s["task_count"]) for s in default_line] == [(s["id"], s["task_count"]) for s in steps], (default_line, steps))
     # The titles ride on the flow line so the page's close zoom makes no
-    # request: per step, the first two rows the panel would page.
-    got_titles = {s["id"]: s.get("task_titles") for s in steps}
-    exp_titles = {s["id"]: [t["title"] for t in (report("ListStepTasks", {"step_id": s["id"], "page_size": 2}) or {}).get("rows", [])]
-                  for s in steps}
-    check(f"{label}: GetFlowLine step titles are the panel's first two", got_titles == exp_titles, f"{got_titles} vs {exp_titles}")
+    # request: per step and project, the first two rows the panel would page.
+    for pid in project_ids:
+        got_titles = {s["id"]: s.get("task_titles") for s in lines[pid]}
+        exp_titles = {s["id"]: [t["title"] for t in (report("ListStepTasks", {"step_id": s["id"], "page_size": 2, "project_id": pid}) or {}).get("rows", [])]
+                      for s in lines[pid]}
+        check(f"{label}: GetFlowLine step titles are the panel's first two", got_titles == exp_titles, f"{got_titles} vs {exp_titles}")
     totals = {sc: report("ListTasks", {"scope": sc, "page_size": 1}) for sc in ("working", "older", "done", "attention", "all")}
     got_totals = {sc: totals[sc].get("total") for sc in totals}
     exp_totals = {sc: exp[sc] for sc in totals}

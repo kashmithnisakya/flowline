@@ -44,6 +44,11 @@ def clean_filters(page: str, raw: dict[str, str]) -> dict[str, str] {
         if not value or value == pair[1] {
             continue;
         }
+        # The project is the board's scope; "all" was its every-project
+        # value before the board showed one project, and means unset.
+        if key == "project" and value == "all" {
+            continue;
+        }
         if key in FILTER_CHOICES and value not in FILTER_CHOICES[key] {
             continue;
         }

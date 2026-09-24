@@ -19,7 +19,7 @@ import from models {
     resolve,
     on_attached,
     owned,
-    working_tasks,
+    default_project,
     project_working,
     tasks_on_step,
     tasks_on_steps,
@@ -52,19 +52,21 @@ def restatus_tasks(holder: Root, step: WorkflowStep) {
 }
 
 
-# The tasks the flow line counts and lists: the board's working set (open
-# plus Done reached in the last `done_days`), for one project or all. The
-# done step therefore shows recent Done the way the board's column does.
+# The tasks the flow line counts and lists: one project's working set (open
+# plus Done reached in the last `done_days`), the board's scope. An empty
+# `project_id` is the default project, as on the board; a foreign or
+# unknown id is nothing.
 def flow_pool(holder: Root, project_id: str, done_days: int) -> list[Task] {
     cutoff = done_cutoff(done_days);
-    if project_id {
-        p = resolve(project_id);
-        if not isinstance(p, Project) or not owned(holder, p) {
-            return [];
-        }
-        return project_working(p, cutoff);
+    if not project_id {
+        first = default_project(holder);
+        return project_working(first, cutoff) if first is not None else [];
     }
-    return working_tasks(holder, cutoff);
+    p = resolve(project_id);
+    if not isinstance(p, Project) or not owned(holder, p) {
+        return [];
+    }
+    return project_working(p, cutoff);
 }
 
 

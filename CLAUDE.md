@@ -139,8 +139,8 @@ people it tracks are roster members.
   `!=`, `<`, `<=`, `>`, `>=`, a comma is AND, a trailing field name or
   `-field` orders, `[:n]` bounds; no OR, and a left side must be a declared
   field name, else E5094). The readers in `models.jac` are those queries:
-  `open_tasks`, `done_since`, `done_before`, `working_tasks` (the board's
-  working set), their `project_*` twins, the per-step and
+  `open_tasks`, `done_since`, `done_before`, `working_tasks` (the working set across projects; the board reads
+  its project's `project_working`), their `project_*` twins, the per-step and
   per-iteration lookups, the column readers (`step_column_peak` and
   friends, for the drag order) and the GitHub lookups (`tasks_by_issue`,
   `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
@@ -350,6 +350,35 @@ Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first column
 of that kind; an org with no flow line at all falls back to `STATUSES`. Both
 fallbacks are load-bearing: do not assume a task has a step.
+
+### The board and the flow line show one project
+
+Neither page has an "all projects" view; `/tasks`, `/roadmap` and
+`/overview` keep theirs. `BoardSnapshot`, `GetFlowLine` and `ListStepTasks`
+take `project_id`, and an empty id is the default project:
+`default_project(root)` in `models.jac`, the earliest-created active one
+(`Project.created_at`, stamped by `SaveProject`; a project from before the
+stamp sorts first, then name, then jid). `BoardSnapshot` answers the
+default for a foreign, archived or unknown id too and reports the project
+it used (`BoardData.project_id`), so the board's first page never waits for
+the project list; the flow line readers answer nothing for a foreign id,
+like every list filter. The client's copy of the rule is
+`defaultProject(projects)` in `lib/filters.jac` (the stale-filter check,
+the new-task sheet, the flow line page naming what the server opened on).
+The project is the board's **scope, not a filter**: `BOARD_FILTERS` keeps
+it under `project` with an empty default, so the account's filters carry
+the last pick, but a saved set is compared and stored without it
+(`withoutProject`), the filter bar does not count it, and clearing filters
+or applying a set that names none keeps the project on screen. Picking
+another project fetches its working set (`setProjectFilter` calls
+`loadBoard`), and `loadBoard` restarts once when the account's filters
+taken on page 1 name another project. The cards on screen stay until the
+new set lands: `matches` filters rows by project only while
+`loadedProject` (the project the loaded rows belong to) equals `fProject`,
+else every card would blank for the length of the fetch. The two
+pages share the pick through `flowline_project` in localStorage (board to
+flow line, as before). The API gate's parity suite reads both walkers per
+project and sums them.
 
 ### Security model: the one thing not to regress
 
@@ -804,7 +833,8 @@ walkers or `owned()`. The repo's `tests/smoke/api_gate.py` carries the
 tally parity suite: tasks across statuses, projects, members and
 categories, some created Done and some moved there, then deletes and a
 re-parent, and `TaskCounts`, `BoardSnapshot`, `TaskHistory`, `GetFlowLine`
-counts and `ListTasks` totals must equal a brute-force pass over
+counts (the board and the flow line per project, summed) and `ListTasks`
+totals must equal a brute-force pass over
 `ListTasks(scope="all")` each time. Run it after touching a tally write
 point or a reader.
 

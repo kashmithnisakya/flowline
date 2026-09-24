@@ -29,6 +29,7 @@ import from ...services.flowlines.flowlines {
     ListStepTasks
 }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
+import from ...lib.filters { defaultProject }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,
@@ -134,9 +135,10 @@ def:pub FlowLinePage -> JsxPage {
         # "lanes" a computed swimlane layout (lane = owner role, column =
         # flow depth). Persisted per browser; editing always uses flow.
         lineView: str = "flow",
-        # Shared with the board through one localStorage key, so the project
-        # you are looking at follows you between the two tabs.
-        projectId: str = "all",
+        # The project on screen, one always: shared with the board through
+        # one localStorage key, so the project you are looking at follows
+        # you between the two tabs. "" until the default is known.
+        projectId: str = "",
         loading: bool = True,
         # The first read produced nothing: the page says so itself, with a
         # retry, rather than offering the template picker over a real line.
@@ -441,7 +443,7 @@ def:pub FlowLinePage -> JsxPage {
         );
     }
 
-    peekScope = "across all projects";
+    peekScope = "in this project";
     for p in activeProjects {
         if jid(p) == projectId {
             peekScope = "in " + p.name;
@@ -657,17 +659,15 @@ def:pub FlowLinePage -> JsxPage {
                             value={lineView}
                         />
                     }}
-                    <Select value="all">
+                    <Select value="" disabled={True}>
                         <SelectTrigger
                             className="toolbar-filter max-w-48"
-                            data-active="false"
+                            data-active="true"
                             aria-label="Project"
                         >
-                            <SelectValue placeholder="All projects"/>
+                            <SelectValue placeholder="Project"/>
                         </SelectTrigger>
-                        <SelectContent position="popper">
-                            <SelectItem value="all">All projects</SelectItem>
-                        </SelectContent>
+                        <SelectContent position="popper"></SelectContent>
                     </Select>
                     <div className="ml-auto flex shrink-0 items-center gap-3">
                         {if not showList {
@@ -830,17 +830,12 @@ def:pub FlowLinePage -> JsxPage {
                                 >
                                     <SelectTrigger
                                         className="toolbar-filter max-w-48"
-                                        data-active={"true"
-                                            if projectId != "all"
-                                            else "false"}
+                                        data-active="true"
                                         aria-label="Project"
                                     >
-                                        <SelectValue placeholder="All projects"/>
+                                        <SelectValue placeholder="Project"/>
                                     </SelectTrigger>
                                     <SelectContent position="popper">
-                                        <SelectItem value="all">
-                                            All projects
-                                        </SelectItem>
                                         {for p in activeProjects {
                                             <SelectItem key={jid(p)} value={jid(p)}>
                                                 {p.name}

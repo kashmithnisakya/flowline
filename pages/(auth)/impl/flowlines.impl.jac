@@ -9,7 +9,7 @@ impl FlowLinePage.boot -> None {
     stored = localStorage.getItem("flowline_project")
         or localStorage.getItem("standup_project")
         or "";
-    picked = stored or "all";
+    picked = stored;
     projectId = picked;
     storedView = localStorage.getItem("flowline_wf_view")
         or localStorage.getItem("standup_wf_view")
@@ -20,6 +20,22 @@ impl FlowLinePage.boot -> None {
     # The workspace lists and the flow line go out together; neither waits.
     w: any = window;
     await w.Promise.all([loadShared(), reload(picked)]);
+    # No stored pick: the server opened on the default project, so name it.
+    # A pick that is no longer active is replaced, which reloads the line.
+    known = False;
+    for p in projects {
+        if jid(p) == projectId and p.active {
+            known = True;
+        }
+    }
+    if not known {
+        fallback = defaultProject(projects);
+        if projectId {
+            await selectProject(fallback);
+        } else {
+            projectId = fallback;
+        }
+    }
 }
 
 impl FlowLinePage.loadShared -> None {
@@ -38,7 +54,7 @@ impl FlowLinePage.loadShared -> None {
 
 impl FlowLinePage.reload(pid: str) -> None {
     try {
-        result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
+        result = root spawn GetFlowLine(project_id=pid);
         fresh: list[StepView] = result.reports[0] if result.reports else [];
         steps = fresh;
         loadTitles(fresh);
@@ -94,10 +110,7 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
         step = 1;
         while step <= wanted and step <= 20 {
             result = root spawn ListStepTasks(
-                step_id=stepId,
-                project_id=pid if pid and pid != "all" else "",
-                page=step,
-                page_size=50
+                step_id=stepId, project_id=pid, page=step, page_size=50
             );
             got = result.reports[0] if result.reports else None;
             if not got {
@@ -129,10 +142,7 @@ impl FlowLinePage.morePeek -> None {
     have = [t for t in peekTasks];
     try {
         result = root spawn ListStepTasks(
-            step_id=stepId,
-            project_id=pid if pid and pid != "all" else "",
-            page=wanted,
-            page_size=50
+            step_id=stepId, project_id=pid, page=wanted, page_size=50
         );
         got = result.reports[0] if result.reports else None;
         if got and peekRef.current == stepId {
