@@ -1,5 +1,5 @@
-"""Toolbar controls for the flow line page: a segmented switch and the zoom
-group. One height (30px) so the toolbar reads as a single row."""
+"""Toolbar controls for the flow line page: a segmented pill switch and the
+zoom group. One height (30px) so the toolbar reads as a single row."""
 
 import from ..ui.skeleton { Skeleton }
 
@@ -16,7 +16,7 @@ def:pub Segmented(
         <div
             role="group"
             aria-label={label}
-            className={"inline-flex h-[30px] shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5 "
+            className={"inline-flex h-[30px] shrink-0 items-center gap-0.5 rounded-full bg-muted p-0.5 "
                 + className}
         >
             {for opt in options {
@@ -25,9 +25,9 @@ def:pub Segmented(
                     type="button"
                     aria-pressed={value == opt["value"]}
                     aria-label={opt["aria"] if "aria" in opt else None}
-                    className={"h-full rounded-sm px-2.5 text-[12.5px] transition-colors duration-150 "
+                    className={"h-full rounded-full px-3 text-[12.5px] transition-colors duration-150 "
                         + (
-                            "bg-muted font-semibold text-foreground"
+                            "bg-card font-semibold text-foreground shadow-xs"
                                 if value == opt["value"]
                                 else "text-muted-foreground hover:text-foreground"
                         )}
@@ -56,13 +56,14 @@ def:pub ZoomControls(
         <div
             role="group"
             aria-label="Zoom"
-            className={"flex shrink-0 items-center gap-0.5 " + className}
+            className={"flex h-[30px] shrink-0 items-center gap-0.5 rounded-full bg-muted p-0.5 "
+                + className}
         >
             <button
                 type="button"
                 aria-label="Zoom out"
                 title="Zoom out (-)"
-                className="flex size-[30px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex size-[26px] items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
                 onClick={lambda { if onOut { onOut(); }}}
             >
                 <svg
@@ -82,7 +83,7 @@ def:pub ZoomControls(
                 type="button"
                 title="Zoom to 100%"
                 data-zoom={None if pending else pct}
-                className="num h-[30px] min-w-12 rounded-md px-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="num h-full min-w-12 rounded-full px-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
                 onClick={lambda { if onActual { onActual(); }}}
             >
                 {if pending {
@@ -95,7 +96,7 @@ def:pub ZoomControls(
                 type="button"
                 aria-label="Zoom in"
                 title="Zoom in (+)"
-                className="flex size-[30px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex size-[26px] items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
                 onClick={lambda { if onIn { onIn(); }}}
             >
                 <svg
@@ -114,7 +115,7 @@ def:pub ZoomControls(
             <button
                 type="button"
                 title="Fit the whole flow line (F)"
-                className="ml-1 inline-flex h-[30px] items-center gap-1.5 rounded-md border bg-card px-2.5 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-accent"
+                className="ml-0.5 inline-flex h-full items-center gap-1.5 rounded-full bg-card px-3 text-[12.5px] font-semibold text-foreground shadow-xs transition-colors hover:bg-accent"
                 onClick={lambda { if onFit { onFit(); }}}
             >
                 <svg

@@ -1,286 +1,83 @@
 """The Overview's worklist: what needs someone now, grouped by why. The page
-builds the groups as dicts (key, label, glyph, alarm, rows, more, moreLabel;
-`more` -1 means an unknown number) and each row (id, title, meta, note,
-noteWarn, names, time, late, kind, kindLabel) links to its card."""
+builds each group (key, label, tone, rows, more, moreLabel) and each row (id,
+title, meta, note, noteWarn, names, time, late, step). `placeholder` draws
+skeleton groups shaped like the last visit (`placeholderRows`)."""
 
 import from "@jac/runtime" { Link }
-import from ..common.KindGlyph { KindGlyph }
-import from ..common.Avatar { AvatarStack }
+import from .Panel { Panel }
+import from .NeedsGroup { NeedsGroup }
 import from ..ui.skeleton { Skeleton }
 
-glob SHOW_MAX: int = 6,
-     # Title widths for the placeholder rows, so they read as a list.
-     PH_WIDTHS: list[str] = ["w-3/5", "w-2/5", "w-1/2", "w-[70%]"];
-
-def GroupGlyph(glyph: str) -> JsxElement {
-    if glyph == "calendar" {
-        return
-            <svg
-                className="shrink-0"
-                width={14}
-                height={14}
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-            >
-                <rect
-                    x={2.5}
-                    y={3.5}
-                    width={11}
-                    height={10}
-                    rx={1.5}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                />
-                <path
-                    d="M2.5 6.5h11M5.5 2v3M10.5 2v3"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                />
-            </svg>;
-    }
-    if glyph == "quiet" {
-        return
-            <svg
-                className="shrink-0"
-                width={14}
-                height={14}
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-            >
-                <circle
-                    cx={8}
-                    cy={8}
-                    r={5.75}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                />
-                <path
-                    d="M8 4.8V8l2.2 1.4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
-            </svg>;
-    }
-    return <KindGlyph kind={glyph}/>;
-}
-
-# The line under a group for rows it does not list: past the cap, or
-# counted on the board but not held by the page.
-def moreText(g: dict[str, any]) -> str {
-    capped = len(g["rows"]) - SHOW_MAX if len(g["rows"]) > SHOW_MAX else 0;
-    if g["more"] < 0 and capped > 0 {
-        return str(capped) + "+ more " + g["moreLabel"] + "on the board";
-    }
-    if g["more"] < 0 {
-        return "More " + g["moreLabel"] + "on the board";
-    }
-    extra = capped + g["more"];
-    if len(g["rows"]) == 0 {
-        return str(extra) + " " + g["moreLabel"] + "on the board";
-    }
-    return "+" + str(extra) + " more " + g["moreLabel"] + "on the board";
+def Placeholder(rows: int) -> JsxElement {
+    return
+        <div>
+            <Skeleton className="h-6 w-24 rounded-full"/>
+            {for i in range(rows) {
+                <div key={str(i)} className="flex items-center gap-3 py-2">
+                    <Skeleton className="size-8 shrink-0 rounded-full"/>
+                    <div className="flex-1 space-y-1.5">
+                        <Skeleton
+                            className={"h-3.5 " + ("w-3/5" if i % 2 else "w-2/5")}
+                        />
+                        <Skeleton className="h-3 w-24"/>
+                    </div>
+                    <Skeleton className="h-3 w-12"/>
+                </div>
+            }}
+        </div>;
 }
 
 def:pub NeedsYou(
     groups: list[dict[str, any]],
-    total: int,
     pending: bool = False,
-    totalPlus: bool = False,
     failNote: str = "",
     onRetry: any = None,
-    # The first load: the same frame with skeleton groups, one per entry of
-    # `placeholderRows` with that many rows (the shape the last visit had).
     placeholder: bool = False,
-    placeholderRows: list[int] = [4]
+    placeholderRows: list[int] | None = None
 ) -> JsxElement {
+    link = <Link
+        to="/board"
+        className="text-sm text-primary underline underline-offset-[3px] hover:decoration-2"
+    >
+        Open the board
+    </Link>;
     return
-        <section
-            className="surface min-w-0"
-            aria-labelledby="needs-you"
-            aria-busy={placeholder}
-        >
-            <div className="flex items-baseline gap-2 px-3.5 pt-3 pb-2">
-                <h2 id="needs-you" className="section-title text-[15px]">Needs you</h2>
-                {if placeholder {
-                    <Skeleton key="n" className="h-3 w-4 self-center"/>
-                } else {
-                    <span key="n" className="num text-xs text-subtle">
-                        {str(total) + ("+" if totalPlus else "")}
-                    </span>
-                } }
-                <Link
-                    to="/board"
-                    className="ml-auto text-[12.5px] text-primary underline underline-offset-[3px] hover:decoration-2"
-                >
-                    Open on the board
-                </Link>
-            </div>
-            {for (gi, n) in enumerate(placeholderRows if placeholder else []) {
-                <div
-                    key={"ph" + str(gi)}
-                    className={"px-3.5 pb-2 "
-                        + ("border-t pt-2" if gi > 0 else "pt-0.5")}
-                >
-                    <div className="flex h-[27px] items-center gap-1.5">
-                        <Skeleton className="size-3.5 rounded-full"/>
-                        <Skeleton className="h-3 w-16"/>
-                    </div>
-                    <ul>
-                        {for i in range(n) {
-                            <li key={str(i)} className={"border-t" if i > 0 else ""}>
-                                <div
-                                    className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-2 py-1.5"
-                                >
-                                    <div className="flex h-5 items-center gap-2">
-                                        <Skeleton
-                                            className={"h-3.5 "
-                                                + PH_WIDTHS[(gi + i) % 4]}
-                                        />
-                                        <Skeleton className="h-3 w-16"/>
-                                    </div>
-                                    <Skeleton className="size-6 rounded-full"/>
-                                    <Skeleton className="h-3 w-12"/>
-                                </div>
-                            </li>
-                        }}
-                    </ul>
-                </div>
-            }}
-            {for (gi, g) in enumerate(groups) {
-                <div
-                    key={g["key"]}
-                    className={"px-3.5 pb-2 "
-                        + ("border-t pt-2" if gi > 0 else "pt-0.5")}
-                    role="group"
-                    aria-label={g["label"]}
-                >
-                    <h3
-                        className={"flex items-center gap-1.5 py-1 text-[12.5px] "
-                            + (
-                                "font-semibold text-destructive"
-                                    if g["alarm"]
-                                    else "font-normal text-muted-foreground"
-                            )}
+        <Panel id="needs-you" title="Needs someone now" aside={link} busy={placeholder}>
+            <div className="space-y-5">
+                {for (gi, n) in enumerate(
+                    (placeholderRows or [4]) if placeholder else []
+                ) {
+                    <Placeholder key={"ph" + str(gi)} rows={n}/>
+                }}
+                {for g in groups {
+                    <NeedsGroup key={g["key"]} group={g}/>
+                }}
+                {if failNote {
+                    <p
+                        key="fail"
+                        className="text-sm text-muted-foreground"
+                        role="status"
                     >
-                        <GroupGlyph glyph={g["glyph"]}/>
-                        {g["label"]}
-                    </h3>
-                    <ul>
-                        {for (i, r) in enumerate(g["rows"]) {
-                            if i < SHOW_MAX {
-                                <li
-                                    key={r["id"]}
-                                    className={"border-t" if i > 0 else ""}
-                                >
-                                    <Link
-                                        to={"/board?task=" + r["id"]}
-                                        className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm px-2 py-1.5 text-[13.5px] hover:bg-accent"
-                                    >
-                                        <span className="min-w-0 sm:truncate">
-                                            <span
-                                                className="block truncate sm:inline max-sm:line-clamp-2 max-sm:whitespace-normal"
-                                            >
-                                                {if r["kind"] {
-                                                    <span
-                                                        key="kind"
-                                                        className="mr-1.5 inline-flex align-[-2px] text-subtle"
-                                                        role="img"
-                                                        aria-label={r["kindLabel"]}
-                                                        title={r["kindLabel"]}
-                                                    >
-                                                        <KindGlyph kind={r["kind"]}/>
-                                                    </span>
-                                                }}
-                                                {r["title"]}
-                                            </span>
-                                            <span
-                                                className="block truncate text-xs text-muted-foreground sm:ml-1.5 sm:inline"
-                                            >
-                                                {r["meta"]}
-                                                {(
-                                                    " · "
-                                                        if r["meta"] and r["note"]
-                                                        else ""
-                                                )}
-                                                <span
-                                                    className={"text-warning"
-                                                        if r["noteWarn"]
-                                                        else ""}
-                                                >
-                                                    {r["note"]}
-                                                </span>
-                                            </span>
-                                        </span>
-                                        <span className="flex justify-end">
-                                            {if len(r["names"]) > 0 {
-                                                <AvatarStack
-                                                    key="who"
-                                                    names={r["names"]}
-                                                />
-                                            }}
-                                        </span>
-                                        <time
-                                            className={"num whitespace-nowrap text-right text-[12.5px] "
-                                                + (
-                                                    "font-semibold text-destructive"
-                                                        if r["late"]
-                                                        else "text-muted-foreground"
-                                                )}
-                                        >
-                                            {r["time"]}
-                                        </time>
-                                    </Link>
-                                </li>
-                            }
+                        {failNote + " "}
+                        {if onRetry {
+                            <button
+                                key="retry"
+                                type="button"
+                                className="text-primary underline underline-offset-[3px] hover:decoration-2"
+                                onClick={lambda { onRetry(); }}
+                            >
+                                Try again
+                            </button>
                         }}
-                    </ul>
-                    {if len(g["rows"]) > SHOW_MAX or g["more"] != 0 {
-                        <Link
-                            key="more"
-                            to="/board"
-                            className={"block pt-1.5 text-xs text-muted-foreground hover:text-foreground "
-                                + ("border-t" if len(g["rows"]) > 0 else "")}
-                        >
-                            {moreText(g)}
-                        </Link>
-                    }}
-                </div>
-            }}
-            {if failNote {
-                <p
-                    key="fail"
-                    className={"flex flex-wrap items-baseline gap-x-2 px-3.5 pb-3 text-[13px] text-muted-foreground "
-                        + ("border-t pt-2.5" if len(groups) > 0 else "pt-0.5")}
-                    role="status"
-                >
-                    {failNote}
-                    {if onRetry {
-                        <button
-                            key="retry"
-                            type="button"
-                            className="text-primary underline underline-offset-[3px] hover:decoration-2"
-                            onClick={lambda { onRetry(); }}
-                        >
-                            Try again
-                        </button>
-                    }}
-                </p>
-            }}
-            {if len(groups) == 0 and not failNote and not placeholder {
-                <p
-                    key="clear"
-                    className="px-3.5 pt-0.5 pb-3.5 text-[13.5px] text-muted-foreground"
-                >
-                    {"Checking what is due this week."
-                        if pending
-                        else "Nothing is overdue, blocked, waiting on review or due this week."}
-                </p>
-            }}
-        </section>;
+                    </p>
+                }}
+                {if len(groups) == 0 and not failNote and not placeholder {
+                    <p key="clear" className="text-sm text-muted-foreground">
+                        {"Checking what is due this week."
+                            if pending
+                            else "Nothing is overdue, blocked, waiting on review or due this week."}
+                    </p>
+                }}
+            </div>
+        </Panel>;
 }

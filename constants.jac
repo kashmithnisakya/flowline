@@ -32,39 +32,18 @@ glob STATUSES: list[str] = [
      # The board's filters as the account and a saved set store them: each
      # key with the value that means "no filter". A stored dict keeps only
      # the keys set to something else; the title search is never stored.
-     # `project` is the board's scope, not a filter: empty means the default
-     # project, and a saved set carries no project (lib/filters).
+     # The project is the scope every page shares (lib/project), not a filter.
      BOARD_FILTERS: list[list[str]] = [
-         ["project", ""],
          ["assignee", "All"],
          ["priority", "All"],
          ["category", "All"],
          ["tag", "All"],
          ["estimate", "All"],
-         ["iteration", "All"],
          ["done", "show"]
      ],
-     # The tasks table's view, stored the same way: its URL's keys less the
-     # page number, so a saved set carries the scope, the search and the sort.
-     TASKS_FILTERS: list[list[str]] = [
-         ["scope", "working"],
-         ["project", "all"],
-         ["assignee", "All"],
-         ["step", "All"],
-         ["priority", "All"],
-         ["category", "All"],
-         ["tag", "All"],
-         ["estimate", "All"],
-         ["q", ""],
-         ["sort", "updated"],
-         ["dir", "desc"]
-     ],
      # Each page a saved filter set can belong to, with its keys.
-     FILTER_TABLES: dict[str, list[list[str]]] = {
-         "board": BOARD_FILTERS,
-         "tasks": TASKS_FILTERS
-     },
-     FILTER_SET_PAGES: list[str] = ["board", "tasks"],
+     FILTER_TABLES: dict[str, list[list[str]]] = {"board": BOARD_FILTERS},
+     FILTER_SET_PAGES: list[str] = ["board"],
      # Prebuilt flows, recommended first. The key persists on the flow line
      # (WorkflowSteps.template_key), so rename a template, never re-key it.
      # Roles, link_labels and link_carries are optional per template.

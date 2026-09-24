@@ -1,8 +1,8 @@
 # Tasks
 
-Tasks are the cards on the board. Every write keeps the task's
-flow line step and its legacy status in step, and every column change lands in
-the daily log. Source: `services/tasks/tasks.jac`.
+Tasks are the rows on the board. Every write keeps the task's
+flow line step and its legacy status in step, and every move to another step
+lands in the [activity log](../concepts/activity-log.md). Source: `services/tasks/tasks.jac`.
 { .fl-lede }
 
 ## Reading
@@ -10,7 +10,8 @@ the daily log. Source: `services/tasks/tasks.jac`.
 ::: walker ListTasks h3
 
 **Reports** one [`TaskPage`](types.md#taskpage): `page_size` defaults to 50 and is
-capped at 500.
+capped at 500. The command palette's search, the assistant, the Overview and
+the board's older Done history read it.
 
 | `scope` | Rows | Order |
 | --- | --- | --- |
@@ -22,17 +23,15 @@ capped at 500.
 
 - `q` matches titles case-insensitively, ranked exact match, then prefix, then
   anywhere (newest update breaks ties).
-- `iteration_id` keeps tasks planned into that iteration; `"none"` keeps
-  tasks in no iteration.
-- `priority` keeps one priority. `column` keeps one board column: a step
+- `priority` keeps one priority. `column` keeps one board step group: a step
   jid, or a status when the workspace has no flow line. It places tasks by
-  the board's rule, so a task with no current step counts in the first
-  column of its status's kind. An unknown column matches nothing.
+  the board's rule, so a task with no current step counts in the first step
+  of its status's kind. An unknown value matches nothing.
 - `sort` (`title`, `priority`, `step`, `category`, `estimate`, `due`,
   `created`, `updated`) with `sort_dir` (`asc`/`desc`) overrides the scope's
-  order; the table view uses it. `step` follows the board: column order
-  (canvas `x`, then `sort_order`, with the same placement fallbacks), then
-  board order within a column.
+  order. `step` follows the board: step order (canvas `x`, then
+  `sort_order`, with the same placement fallbacks), then board order within
+  a step.
 - `older` is only filled on an unfiltered `working` page: it counts the Done
   rows the cutoff left out (the Done tally less the rows the page kept), so
   a view can say how many it is not showing without a second call. Any
@@ -70,7 +69,7 @@ curl -X POST $BASE/walker/ListTasks -H "Authorization: Bearer $TOKEN" \
         "due_date": "2026-09-18", "assignee_ids": ["<member-id>"],
         "assignee_names": ["Priya Raman"], "project_id": "<project-id>",
         "project_name": "Docs site", "tags": ["q3"], "estimate": 3.0,
-        "iteration_id": "<iteration-id>", "start_date": "2026-09-15",
+        "start_date": "2026-09-15",
         "note_lead": "Rollback first, then the schema.", "checklist_done": 1, "checklist_total": 3,
         "gh_repo": "", "gh_issue_number": 0, "pr_state": ""
       }
@@ -88,7 +87,7 @@ and [`GetTask`](#gettask) has the rest.
 ::: walker GetTask h3
 
 The task in full: what the task sheet loads when it opens, and a deep link to a
-card the board's working set does not hold (older history or a search hit).
+task the board's working set does not hold (older history or a search hit).
 
 **Reports** one [`TaskView`](types.md#taskview), every `TaskRow` field plus
 `notes`, the `checklist` items and the GitHub-only fields (`gh_assignees`,
@@ -106,8 +105,9 @@ at 500).
 
 **Reports** one [`TaskTotals`](types.md#tasktotals) over the whole history: open,
 overdue and blocked counts, Done per week for the four weeks ending in
-`monday`'s week (oldest first), per-project and per-member tallies, and every
-category in use. An empty `monday` means this week. Done per week is the sum
+`monday`'s week (oldest first), moves to Done on each day of that week
+(`done_by_day`, Monday first; a task created already Done is not counted),
+per-project and per-member tallies, and every category in use. An empty `monday` means this week. Done per week is the sum
 of the projects' weekly counts (the ones [`TaskHistory`](#taskhistory) reads),
 and each project's `total` and `done` are the tallies it keeps on write, so
 only the open tasks and this week's Done (for each member's `done_in_week`)
@@ -145,9 +145,8 @@ archived. Every task needs a project.
 
 - With a valid `step_id`, the task goes on that step and `status` is set from
   the step's kind; otherwise `status` (default `Backlog`) is used with no step.
-- `start_date` is stored as an ISO day (or `""`), and `iteration_id` only when
-  it names an owned iteration.
-- The card is appended to the end of its column.
+- `start_date` is stored as an ISO day (or `""`).
+- The task is appended to the end of its step.
 - Assignees that are not owned members are skipped.
 - Logs `Added to <status>`.
 
@@ -157,14 +156,13 @@ curl -X POST $BASE/walker/CreateTask -H "Authorization: Bearer $TOKEN" \
   -d '{"title": "Write the migration plan", "project_id": "<project-id>",
        "priority": "High", "step_id": "<step-id>", "assignee_ids": ["<member-id>"],
        "due_date": "2026-09-18", "start_date": "2026-09-15",
-       "iteration_id": "<iteration-id>", "tags": ["q3"], "estimate": 3}'
+       "tags": ["q3"], "estimate": 3}'
 ```
 
 ::: walker UpdateTask h3
 
 The task sheet's save. **It replaces every editable field**, so send the full
-form, not a patch: a caller that omits `start_date` or `iteration_id` clears
-them. The checklist is the exception; only the [checklist walkers](#checklist)
+form, not a patch: a caller that omits `start_date` clears it. The checklist is the exception; only the [checklist walkers](#checklist)
 write it.
 
 **Reports** the updated [`TaskView`](types.md#taskview).
@@ -173,7 +171,7 @@ write it.
   the current step and uses `status` as given.
 - `assignee_ids` replaces all assignees. A `reviewer_id` that is not an owned
   member clears the reviewer.
-- A different owned `project_id` moves the card to that project; an empty or
+- A different owned `project_id` moves the task to that project; an empty or
   foreign one leaves it where it is.
 - A status change logs `Moved to <status>`. A change that crosses Done keeps a
   linked GitHub issue in step on repos with `auto_close` on: landing on
@@ -181,21 +179,21 @@ write it.
 
 ::: walker MoveTask h3
 
-The endpoint behind a board drag and drop and the Move menu. The server
-decides where the card lands.
+The endpoint behind the board's Move menu, a drag onto a step group and the M
+key. The server decides where the task lands.
 
 **Reports** the moved [`TaskView`](types.md#taskview).
 **No-op when** `step_id` is set but is not an owned step.
 
-- With `step_id`, the card moves onto that step and gets its mapped status;
+- With `step_id`, the task moves onto that step and gets its mapped status;
   `step_name` is only the label written to the log. Without it, a legacy
-  status-only move clears the card's step.
-- `before_id` or `after_id` places the card beside that card in the target
-  column; a stale anchor appends to the end.
-- A positioned drop in the card's **own** column is a pure reorder: no status
+  status-only move clears the task's step.
+- `before_id` or `after_id` places the task beside that task in the target
+  step; a stale anchor appends to the end.
+- A positioned drop in the task's **own** step is a pure reorder: no status
   write, no handoff, no log entry, no `updated_at` bump.
 - Moving onto a different step whose owner role has exactly one holder on the
-  task's project hands the card to that person.
+  task's project hands the task to that person.
 - Crossing Done keeps a linked issue in step on `auto_close` repos:
   landing closes it (`· closed org/repo #12` on the log line), leaving reopens
   it (`· reopened org/repo #12`).
@@ -215,7 +213,7 @@ design: anything empty stays untouched.
 **Reports** the updated [`TaskView`](types.md#taskview).
 
 - `note` is **prepended** to the task's notes as `**YYYY-MM-DD:** note`, so a
-  blocked card's excerpt leads with the reason; resubmitting the same line is a
+  blocked task's excerpt leads with the reason; resubmitting the same line is a
   no-op.
 - The same day's move entry in the log is patched with the new links and note.
 

@@ -13,11 +13,11 @@
       <div class="fl-hero__copy">
         <p class="fl-eyebrow">Documentation &middot; Jac {{ config.extra.jac_version }}</p>
         <h1 class="fl-hero__title" id="fl-hero-title">
-          Draw how your team works.<br><em>The board and the daily log follow.</em>
+          Draw how your team works.<br><em>The board and the log follow.</em>
         </h1>
         <p class="fl-hero__lede">
-          flowline is a kanban board that follows the flow line your team
-          actually uses, and a daily log it writes for you. Built entirely in
+          flowline lays each project's work along the flow line your team
+          actually uses, and logs every move a task makes. Built entirely in
           Jac. Run it locally, learn the graph it stores, call every walker,
           and ship it to jachammer.
         </p>
@@ -30,24 +30,25 @@
       </div>
       <div class="fl-hero__art" aria-hidden="true">
         <div class="fl-board">
+          <div class="fl-strip">
+            <span class="fl-lane--sky"></span><span class="fl-lane--indigo"></span><span class="fl-lane--rose"></span><span class="fl-lane--emerald"></span>
+          </div>
           <div class="fl-lane fl-lane--sky">
-            <div class="fl-lane__head">To do</div>
-            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-lane__head"><b>To do</b></div>
             <div class="fl-card"><i></i><i></i></div>
             <div class="fl-card"><i></i><i></i></div>
           </div>
           <div class="fl-lane fl-lane--indigo">
-            <div class="fl-lane__head">Doing</div>
+            <div class="fl-lane__head"><b>Doing</b></div>
             <div class="fl-card fl-card--hot"><i></i><i></i></div>
             <div class="fl-card"><i></i><i></i></div>
           </div>
           <div class="fl-lane fl-lane--rose">
-            <div class="fl-lane__head">Review</div>
+            <div class="fl-lane__head"><b>Review</b></div>
             <div class="fl-card"><i></i><i></i></div>
           </div>
           <div class="fl-lane fl-lane--emerald">
-            <div class="fl-lane__head">Done</div>
-            <div class="fl-card"><i></i><i></i></div>
+            <div class="fl-lane__head"><b>Done</b></div>
             <div class="fl-card"><i></i><i></i></div>
           </div>
         </div>

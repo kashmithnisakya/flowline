@@ -1,6 +1,7 @@
 # Architecture
 
-flowline is a multi-tenant kanban board and daily log, written as
+flowline is a multi-tenant work tracker that follows a team's own flow line
+and keeps an activity log of every task, written as
 one Jac project. A graph-native backend of walkers and a React client compile
 from the same source tree and are served by one `jac run`
 process.
@@ -46,7 +47,7 @@ still has to be followed by hand.
 | Path | Holds |
 | --- | --- |
 | `models.jac` | Every `node`, `edge` and `obj` archetype, plus the graph helpers (`owned`, the `*_box` get-or-create helpers, the `*_of` readers, the pushed task readers such as `open_tasks` and `done_since`, the tally helpers, `hydrate_rows`). Nothing else, and no Python imports. |
-| `services/<section>/` | The API, one folder per section: `projects`, `roster`, `tasks`, `board`, `log`, `flowlines`, `iterations`, `insights`, `assistant`, `github`. `services/util.jac` holds shared server-only helpers such as `now_iso` and `page_bounds`. |
+| `services/<section>/` | The API, one folder per section: `projects`, `roster`, `tasks`, `board`, `log`, `flowlines`, `roadmap`, `filters`, `workspace`, `insights`, `assistant`, `github`. `services/util.jac` holds shared server-only helpers such as `now_iso` and `page_bounds`. |
 | `constants.jac` | The vocabularies shared by client dropdowns and server validation: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_STATUS`, `FLOW_LINE_TEMPLATES` and friends. |
 | `main.jac` | The entry point. **Its import list is the router**: a walker missing from it returns 404. |
 
@@ -90,8 +91,8 @@ walker ListMembers {
   a `GET`-style call never writes.
 - A write visits `members_box(here)`, which creates the box on first use.
 - A jid-addressed walker resolves the id, checks `owned`, then visits the row.
-  The lookup bases `find_task`, `find_step`, `find_project`, `find_member`
-  and `find_log_entry` do exactly that.
+  The lookup bases `find_task`, `find_step`, `find_project` and
+  `find_member` do exactly that.
 - Only aggregators that page or sort across kinds (`BoardSnapshot`,
   `OverviewSnapshot`, `TaskCounts`, `ListTasks` without a project,
   `SyncGithub`) stay on the root and use the `*_of` readers.
@@ -142,24 +143,31 @@ File-based routing under `pages/`, with route groups:
 | `/` | `pages/(public)/index.jac` | Public landing page |
 | `/login` | `pages/(public)/login.jac` | Public; `?mode=signup` opens sign-up |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | Receives `?token=` from SSO |
-| `/board`, `/tasks`, `/roadmap`, `/log`, `/overview`, `/flowlines`, `/workspace`, `/github`, `/setup` | `pages/(auth)/...` | Signed in |
-| `/settings`, `/projects`, `/roster`, `/workflow` | `pages/(auth)/...` | Redirects for old links (`/settings` to `/workspace?tab=preferences`) |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace`, `/setup` | `pages/(auth)/...` | Signed in |
+| `/github` | `pages/(auth)/github.jac` | Signed in; the GitHub App's callback and setup URL, rendered as Workspace on its GitHub section |
 
 - `pages/layout.jac` is path-aware: the app chrome renders only for signed-in,
-  non-public paths. It is a top bar grouped into the daily views (Board,
-  Tasks, Roadmap, Log, Overview) and the setup pages (Flow line, Workspace,
-  GitHub), the ⌘K palette, and Ask, docked as a column at 1280px and up and a
-  sheet below. Phones get a tab bar with More instead. `/setup` gets only the
-  mark and Sign out.
+  non-public paths. At `md` and up it is a left sidebar: the pages (Flow
+  line, Board, Roadmap, Overview), the projects list, Ask, Workspace and the
+  account. Phones get a header and a five-tab bar (Flow line, Board, Roadmap,
+  Overview, Workspace). The ⌘K palette works everywhere, and Ask docks as a
+  column at 1280px and up and a sheet below. `/setup` gets only the mark and
+  Sign out.
+- **The project is a scope, not a filter.** The board, the flow line and the
+  roadmap show one project, the one picked in the sidebar or a page's own
+  picker. `lib/project.jac` keeps it per browser (`currentProject`,
+  `pickProject`) and tells every mounted page through a `flowline:project`
+  window event.
 - `/workspace` holds everything configured: Organization, People, Projects,
-  Roles and Preferences (the theme), one section at a time from a rail.
+  Roles, GitHub and Preferences (the theme), one section at a time from a
+  rail (`?tab=`).
 - Pages are thin stateful shells. They own state and handlers (bodies in
   `pages/(auth)/impl/`) and compose presentational components from
   `components/<area>/`.
 - `components/ui/` is the jac-shadcn registry: import it, never edit it.
 - `lib/session.jac` wraps `/user/me`; `lib/dates.jac` owns every calendar rule
-  (what counts as overdue), so the card, the lane header and the overview
-  agree.
+  (what counts as overdue), so the board's rows, the step headers and the
+  overview agree.
 
 ### Placement
 

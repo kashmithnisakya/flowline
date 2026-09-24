@@ -4,24 +4,27 @@ mount and the account menu, the palette and Preferences change it.
 """
 
 glob THEME_KEY: str = "flowline-theme",
-     # Pre-rename key, read once so an old browser keeps its choice.
-     THEME_KEY_OLD: str = "standup-theme",
      THEME_PREFS: list[str] = ["light", "dark", "system"],
      # The page ground per theme, for the browser's own chrome on phones.
-     GROUND_LIGHT: str = "#F2F3F1",
+     GROUND_LIGHT: str = "#FAFAF8",
      GROUND_DARK: str = "#111413";
 
 # Paint the theme at module-import time, before React mounts anything;
 # the layout re-applies it on mount for good measure.
+# The theme picker's choices: [value, label].
+glob:pub THEME_CHOICES: list[list[str]] = [
+         ["light", "Light"],
+         ["dark", "Dark"],
+         ["system", "System"]
+     ];
+
 with entry {
     applyTheme(getThemePref());
 }
 
 
 def:pub getThemePref -> str {
-    saved = localStorage.getItem(THEME_KEY)
-        or localStorage.getItem(THEME_KEY_OLD)
-        or "";
+    saved = localStorage.getItem(THEME_KEY) or "";
     return saved if saved in THEME_PREFS else "system";
 }
 

@@ -127,7 +127,7 @@ workspace in that workspace's own root (`sync_connected_workspaces` in
 has the constants and the lease). Opening a page never triggers it. The pass
 polls on a cooldown: **every 15 minutes while deliveries are flowing** (one
 arrived in the last hour), **every tick otherwise**; a workspace nobody opens
-catches up all the same. **Sync now** on `/github` and the board's Sync button
+catches up all the same. **Sync now** in Workspace's GitHub section and the board's Sync button
 run the same walker by hand and ignore the cooldown. It catches history from
 before the webhook existed and anything delivered while the app was down.
 
@@ -144,7 +144,7 @@ before the webhook existed and anything delivered while the app was down.
    `has_more`, so the client (or the next tick) calls again.
 6. A pass that reached the end of every stream rewrites the stored **open
    issue and pull request pages** of each tracked repo (`lists` in the
-   report), which is what `/github` renders.
+   report), which is what the GitHub section renders.
 
 It also adopts hand-pasted PR links: a task whose `pr_link` points at a pull
 request in a tracked repo gets its `pr_number` filled in.
@@ -160,7 +160,7 @@ GitHub, each on an explicit action.
 
 ## Per-repo policy
 
-Each flag is a switch in the repository's automation panel on `/github`.
+Each flag is a switch in the repository's automation panel in Workspace's GitHub section (`/workspace?tab=github`).
 
 | Flag | Switch | Default | Effect |
 | --- | --- | --- | --- |

@@ -4,8 +4,7 @@ path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
 root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
-root ++> Logs ++> LogDay ++> LogEntry, root ++> Iterations ++> Iteration and
-root ++> FilterSets ++> FilterSet; repos and the GitHub connection hang off
+root ++> Logs ++> LogDay ++> LogEntry and root ++> FilterSets ++> FilterSet; repos and the GitHub connection hang off
 the root directly. `owned()` climbs those container edges.
 """
 
@@ -59,7 +58,6 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, WorkflowSteps)
         or isinstance(owner, Logs)
         or isinstance(owner, LogDay)
-        or isinstance(owner, Iterations)
         or isinstance(owner, FilterSets)
     );
 }
@@ -216,10 +214,7 @@ node Task {
         # The card's own breakdown: {"id", "text", "done"} in display order.
         # Written only by the checklist walkers, never by UpdateTask.
         checklist: list[dict[str, any]] = [],
-        # The Iteration this task is planned into, by jid ("" for none), and
-        # when work on it starts. Fields, not edges, so list rows stay
-        # hop-free; the roadmap falls back to the iteration's dates.
-        iteration_id: str = "",
+        # When work on the task starts; the roadmap draws it to the due date.
         start_date: str = "",
         # The container project's jid and the assignees' jids, kept in step
         # with the edges at every write point so a list row needs no hop.
@@ -333,7 +328,6 @@ node Task {
             gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
             pr_state=self.pr_state,
-            iteration_id=self.iteration_id,
             start_date=self.start_date,
             note_lead=note_lead(self.notes),
             checklist_done=counts[0],
@@ -493,17 +487,6 @@ node WorkflowSteps {
 
 node Logs {}
 
-# A time box the team plans in: a name and an inclusive ISO date span. Tasks
-# point at one through Task.iteration_id.
-node Iteration {
-    has name: str,
-        start_date: str,
-        end_date: str,
-        created_at: str = "";
-}
-
-node Iterations {}
-
 # The board's filters as the account left them (`board`, only the keys set
 # away from their default in constants.BOARD_FILTERS), the saved set they
 # came from, and when they were last written ("" means never).
@@ -563,7 +546,6 @@ obj TaskRow {
         gh_sub_done: int = 0,
         pr_number: int = 0,
         pr_state: str = "",
-        iteration_id: str = "",
         start_date: str = "",
         done_at: str = "",
         # The first line of the notes (at most NOTE_LEAD_MAX characters):
@@ -647,6 +629,8 @@ obj TaskTotals {
         # Tasks moved to Done per week for the four weeks ending in the given
         # Monday's week, oldest first (a task created already Done is not).
         done_by_week: list[int] = [],
+        # Tasks moved to Done on each day of that Monday's week, Monday first.
+        done_by_day: list[int] = [],
         projects: list[ProjectTally] = [],
         members: list[MemberTally] = [],
         # Every category in use, so a filter built from the working set
@@ -700,19 +684,6 @@ obj RoleView {
         blurb: str,
         color: str,
         sort_order: float;
-}
-
-obj IterationView {
-    has id: str,
-        name: str,
-        start_date: str,
-        end_date: str;
-}
-
-def iteration_view(it: Iteration) -> IterationView {
-    return IterationView(
-        id=jid(it), name=it.name, start_date=it.start_date, end_date=it.end_date
-    );
 }
 
 obj FilterSetView {
@@ -865,15 +836,6 @@ def roles_of(holder: Root) -> list[Role] {
     out: list[Role] = [];
     for box in [holder-->[?:Roles]] {
         out.extend([box-->[?:Role]]);
-    }
-    return out;
-}
-
-
-def iterations_of(holder: Root) -> list[Iteration] {
-    out: list[Iteration] = [];
-    for box in [holder-->[?:Iterations]] {
-        out.extend([box-->[?:Iteration]]);
     }
     return out;
 }
@@ -1235,28 +1197,9 @@ def mismatched_on_step(holder: Root, step: str, landing: str) -> list[Task] {
 }
 
 
-def tasks_in_iteration(holder: Root, it_id: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, iteration_id==it_id]]);
-    }
-    return out;
-}
-
-
-# The Done tasks whose span (task_span in the iterations service) can
-# overlap [lo, hi]: due or start inside the window, one on each side of it,
-# or an iteration touching it. A superset on purpose: the caller applies
-# the exact span test, so these only have to be cheap and complete. The
-# iteration ids are few, so each is its own query.
-def done_in_window(
-    holder: Root,
-    lo: str,
-    hi: str,
-    window_ids: list[str],
-    after_ids: list[str],
-    before_ids: list[str]
-) -> list[Task] {
+# The Done tasks whose dates can overlap [lo, hi]: due or start inside the
+# window, or one on each side of it. The roadmap applies the exact span test.
+def done_in_window(holder: Root, lo: str, hi: str) -> list[Task] {
     seen: dict[str, bool] = {};
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
@@ -1270,24 +1213,6 @@ def done_in_window(
         found.extend(
             [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, due_date>hi]]
         );
-        found.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date<lo, start_date>hi]]
-        );
-        for it_id in window_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", iteration_id==it_id]]
-            );
-        }
-        for it_id in after_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, iteration_id==it_id]]
-            );
-        }
-        for it_id in before_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date>hi, iteration_id==it_id]]
-            );
-        }
         for t in found {
             if jid(t) not in seen {
                 seen[jid(t)] = True;
@@ -1786,17 +1711,6 @@ def roles_box(holder: Root) -> Roles {
         return found[0];
     }
     box = holder ++> Roles();
-    on_attached(holder, box);
-    return box;
-}
-
-
-def iterations_box(holder: Root) -> Iterations {
-    found = [holder-->[?:Iterations]];
-    if found {
-        return found[0];
-    }
-    box = holder ++> Iterations();
     on_attached(holder, box);
     return box;
 }

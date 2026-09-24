@@ -11,7 +11,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
         <footer className="landing-wrap pt-16 pb-10 sm:pt-24">
             <div className="grid gap-5">
                 <h2
-                    className="max-w-[24ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
+                    className="max-w-[24ch] text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em]"
                 >
                     Draw your flow line this afternoon.
                 </h2>

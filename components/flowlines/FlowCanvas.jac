@@ -18,15 +18,15 @@ import from .geometry {
     placeChips
 }
 import from .lanes { LANE_LABEL_W, laneRects, laneWires }
-import from .kinds { KIND_LABEL, KIND_TONE, DOT_FILL, CARRY_LABEL, colorKey }
-import from ..common.KindGlyph { KindGlyph }
+import from .kinds { DOT_FILL, CARRY_LABEL, colorKey }
+import from .StepNode { StepNode }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 
-glob CHIP_FONT: str = "12px 'Archivo Variable', Arial, sans-serif",
-     NAME_FONT: str = "600 14px 'Archivo Variable', Arial, sans-serif",
-     META_FONT: str = "12px 'Archivo Variable', Arial, sans-serif",
-     COUNT_FONT: str = "12px 'IBM Plex Mono', Menlo, monospace",
+glob CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
+     NAME_FONT: str = "600 12.5px 'Geist Variable', Arial, sans-serif",
+     META_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
+     COUNT_FONT: str = "12px 'Geist Mono Variable', Menlo, monospace",
      # Below this zoom the transitions keep their lines but drop their words:
      # at a whole-line overview the chips would bury the steps.
      CHIP_MIN_ZOOM: float = 0.45;
@@ -168,25 +168,22 @@ def:pub FlowCanvas(
     }
     laneMode = len(lanes) > 0;
     detail = detailOf(zoom);
-    # What each node's text needs: border and padding (22), swatch and gap
-    # (16) beside the name; below LOW detail the name alone, above it also
-    # the count, kind word and glyph. A lane column sizes to the name, count
-    # and glyph, and shows the kind word where it fits. All go to the page.
+    # What each node's text needs (StepNode's anatomy): padding (22) around
+    # the pill (padding 20, glyph and gap 17, name); above LOW detail the
+    # count chip beside it, and in flow mode room for the owner below.
     needLow: dict[str, float] = {};
     needMid: dict[str, float] = {};
     needLane: dict[str, float] = {};
     need: dict[str, float] = {};
-    metaNeed: dict[str, float] = {};
     for s in steps {
-        wantName = 16.0 + textWidth(s.name, NAME_FONT, 8.0);
-        kindWord = KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind;
-        countText = str(s.task_count) + (" task" if s.task_count == 1 else " tasks");
-        wantCount = textWidth(countText, COUNT_FONT, 7.3) + 8.0 + 18.0;
-        wantMeta = wantCount + textWidth(kindWord, META_FONT, 6.6);
-        metaNeed[s.id] = wantMeta + 22.0;
-        needLow[s.id] = wantName + 22.0;
-        needMid[s.id] = (wantMeta if wantMeta > wantName else wantName) + 22.0;
-        needLane[s.id] = (wantCount if wantCount > wantName else wantName) + 22.0;
+        wantPill = 37.0 + textWidth(s.name, NAME_FONT, 7.6);
+        countText = str(s.task_count) + (" done" if s.kind == "done" else " open");
+        wantRow = wantPill + 8.0 + textWidth(countText, COUNT_FONT, 7.3) + 12.0;
+        owner = s.owner.strip() if s.owner else "";
+        wantOwner = textWidth("Anyone" if owner == "anyone" else owner, META_FONT, 6.6);
+        needLow[s.id] = wantPill + 22.0;
+        needLane[s.id] = wantRow + 22.0;
+        needMid[s.id] = (wantOwner if wantOwner > wantRow else wantRow) + 22.0;
         if detail == "low" {
             need[s.id] = needLow[s.id];
         } else {
@@ -580,144 +577,22 @@ def:pub FlowCanvas(
                     </div>
                 }}
                 {for s in steps {
-                    <button
+                    <StepNode
                         key={s.id}
-                        type="button"
-                        data-step={s.id}
-                        title={s.name + (" · " + s.blurb if s.blurb else "")}
-                        className={"group absolute flex flex-col overflow-hidden rounded-md border bg-card px-[9px] py-[7px] text-left transition-[border-color,box-shadow,opacity] duration-150 "
-                            + (
-                                "z-20 border-primary ring-1 ring-primary"
-                                    if selectedId == s.id or connectFrom == s.id
-                                    else "z-10 border-border"
-                            )
-                            + (" shadow-md" if dragId == s.id else "")
-                            + (
-                                " cursor-pointer hover:border-primary"
-                                    if connecting and s.id != connectFrom
-                                    else (
-                                        ""
-                                            if editing or selectedId == s.id
-                                            else " cursor-pointer hover:border-input"
-                                    )
-                            )
-                            + (" opacity-40" if dimStep(s.id) else "")}
-                        style={{
-                            "left": str(rects[s.id][0]) + "px",
-                            "top": str(rects[s.id][1]) + "px",
-                            "width": str(rects[s.id][2]) + "px",
-                            "height": str(rects[s.id][3]) + "px"
-                        }}
-                        onClick={lambda (e: MouseEvent) {
-                            e.stopPropagation();
-                            if onSelect {
-                                onSelect(s.id);
-                            }
-                        }}
-                    >
-                        <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                                className={"step-swatch " + DOT_FILL[colorKey(s.color)]}
-                                aria-hidden="true"
-                            />
-                            <span
-                                className="min-w-0 truncate text-sm leading-5 font-semibold text-foreground"
-                            >
-                                {s.name}
-                            </span>
-                        </span>
-                        {if detail != "low" {
-                            <span
-                                key="meta"
-                                className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-xs leading-[18px]"
-                            >
-                                <span className="num shrink-0 text-muted-foreground">
-                                    {str(s.task_count)
-                                        + (" task" if s.task_count == 1 else " tasks")}
-                                </span>
-                                <span
-                                    className={"flex min-w-0 items-center gap-1 "
-                                        + (
-                                            KIND_TONE[s.kind]
-                                                if s.kind in KIND_TONE
-                                                else "text-subtle"
-                                        )}
-                                >
-                                    {if rects[s.id][2] >= metaNeed[s.id] {
-                                        <span key="word" className="truncate">
-                                            {KIND_LABEL[s.kind]
-                                                if s.kind in KIND_LABEL
-                                                else s.kind}
-                                        </span>
-                                    }}
-                                    <KindGlyph kind={s.kind} size={14}/>
-                                </span>
-                            </span>
-                        }}
-                        {if detail == "high" and s.id in stepTitles {
-                            <span
-                                key="titles"
-                                className="mt-1 flex min-w-0 flex-col border-t pt-1"
-                            >
-                                {for tt in nodeTitles(s, stepTitles) {
-                                    <span
-                                        key={tt}
-                                        className="truncate text-xs leading-[17px] text-foreground"
-                                    >
-                                        {tt}
-                                    </span>
-                                }}
-                                {if s.task_count > len(nodeTitles(s, stepTitles)) {
-                                    <span
-                                        key="more"
-                                        className="text-xs leading-[17px] text-subtle"
-                                    >
-                                        {str(
-                                            s.task_count
-                                                - len(nodeTitles(s, stepTitles))
-                                        )
-                                            + " more"}
-                                    </span>
-                                }}
-                            </span>
-                        }}
-                        {if editing {
-                            <span key="ports" aria-hidden="true">
-                                <span
-                                    className={"pointer-events-none absolute left-1/2 top-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute bottom-0 left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute left-0 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute right-0 top-1/2 size-2 translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                            </span>
-                        }}
-                    </button>
+                        step={s}
+                        rect={rects[s.id]}
+                        detail={detail}
+                        titles={nodeTitles(s, stepTitles)}
+                        showTitles={detail == "high" and s.id in stepTitles}
+                        showOwner={not laneMode}
+                        selected={selectedId == s.id or connectFrom == s.id}
+                        portsOn={selectedId == s.id}
+                        target={connecting and s.id != connectFrom}
+                        editing={editing}
+                        dragging={dragId == s.id}
+                        dim={dimStep(s.id)}
+                        onSelect={onSelect}
+                    />
                 }}
             </div>
             {if laneMode {
@@ -797,7 +672,7 @@ def:pub FlowCanvas(
                     className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-4"
                 >
                     <div
-                        className="flex max-w-sm flex-col items-center gap-1 rounded-md border border-dashed bg-card px-8 py-10 text-center"
+                        className="flex max-w-sm flex-col items-center gap-1 rounded-2xl border border-dashed bg-card px-8 py-10 text-center"
                     >
                         <p className="text-sm font-semibold">A blank canvas</p>
                         <p className="text-sm text-muted-foreground">

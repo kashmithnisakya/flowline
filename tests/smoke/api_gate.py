@@ -24,7 +24,7 @@ FAILS: list[str] = []
 # same-module @effects helper; recognition can vary between builds, so the
 # table of THIS build is asserted here.
 CACHED_READERS = [
-    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles", "ListIterations",
+    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
     "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus",
 ]
 # Task lists stay uncached on purpose: a colleague's move, a webhook drain or
@@ -35,7 +35,7 @@ LIVE_READERS = [
 ]
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
-    "SaveRole", "SaveStep", "SaveIteration", "AddRepo", "SyncGithub", "ApplyTemplate",
+    "SaveRole", "SaveStep", "AddRepo", "SyncGithub", "ApplyTemplate",
     "SetBoardFilters", "SaveFilterSet", "DeleteFilterSet",
 ]
 
@@ -354,7 +354,7 @@ def parity_suite(project_id, member_id, tag):
     row = made["to rehome"]
     moved = report("UpdateTask", {"task_id": row["id"], "title": row["title"], "category": "Moved", "tags": [], "estimate": 0,
                                   "priority": row["priority"], "status": row["status"], "step_id": row["step_id"], "due_date": "",
-                                  "start_date": "", "iteration_id": "", "notes": "", "issue_link": "", "pr_link": "",
+                                  "start_date": "", "notes": "", "issue_link": "", "pr_link": "",
                                   "reviewer_id": "", "review_due": "", "assignee_ids": [m2_id], "project_id": p2_id})
     check("parity: re-parented task reports its new project and assignee",
           moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
@@ -377,15 +377,15 @@ def entry_id(row):
     return find_key(row, "id", "_jac_id")
 
 
-def log_paging_suite(member_id):
+def log_paging_suite(project_id, tag):
     # The log pages in the store: whole days are skipped on their counts and
-    # a day answers its slice by a unique key. Pages must partition the range
-    # in one order at any page size, and the counts must follow every write.
+    # a day answers its slice by a unique key. Task events are its only
+    # writer, so the gate makes a few; pages must partition the range in one
+    # order at any page size.
     span = {"from_date": "2020-01-01", "to_date": "2030-12-31"}
-    for date, n in (("2025-06-02", 3), ("2025-06-03", 2), ("2025-06-04", 1)):
-        for i in range(n):
-            got = report("LogActivity", {"date": date, "member_id": member_id, "activity": f"log gate {date} #{i}"})
-            check(f"log: LogActivity writes an entry on {date}", got.get("date") == date, str(got)[:160])
+    for i in range(3):
+        made = report("CreateTask", {"title": f"Log probe {tag} #{i}", "project_id": project_id})
+        report("MoveTask", {"task_id": made.get("id", ""), "status": "In Progress"})
     whole = report("ListLogEntries", {**span, "page_size": 500})
     rows = whole.get("rows", [])
     ids = [entry_id(r) for r in rows]
@@ -407,50 +407,36 @@ def log_paging_suite(member_id):
           and past.get("total") == total, str(past)[:160])
     clamp = report("ListLogEntries", {**span, "page_size": 100000})
     check("log: page_size clamps to 500", clamp.get("page_size") == 500, str(clamp.get("page_size")))
-    gone = report("DeleteLogEntries", {"entry_ids": [ids[1]]})
-    check("log: DeleteLogEntries removes the entry", gone.get("deleted") == [ids[1]], str(gone))
-    left = [i for i in ids if i != ids[1]]
-    after = log_pages({**span, "page_size": 2})
-    check("log: the day count follows a delete", [entry_id(r) for p in after for r in p.get("rows", [])] == left
-          and all(p.get("total") == total - 1 for p in after), f"{[p.get('total') for p in after]}")
-    moved = Counter(r.get("task_id") for r in rows if r.get("task_id") and entry_id(r) != ids[1])
+    moved = Counter(r.get("task_id") for r in rows if r.get("task_id"))
     task_id = moved.most_common(1)[0][0] if moved else ""
-    mine = [entry_id(r) for r in rows if r.get("task_id") == task_id and entry_id(r) != ids[1]]
+    mine = [entry_id(r) for r in rows if r.get("task_id") == task_id]
     only = report("ListLogEntries", {**span, "task_id": task_id, "page_size": 500})
     check("log: task_id keeps that task's rows, in the range's order",
           bool(task_id) and [entry_id(r) for r in only.get("rows", [])] == mine and only.get("total") == len(mine),
           f"{task_id} {len(mine)}")
 
 
-def log_counts_suite(member_id, project_id, tag):
-    # The log's counts come from the days' tallies, kept on write. They must
-    # equal a count of the entries themselves, before and after a delete, and
-    # the Overview's blocked reason comes from the task's own Blocked line.
+def log_counts_suite(project_id, tag):
+    # The Overview's log numbers come from the days' tallies, kept on write.
+    # They must equal a count of the entries themselves after new task
+    # events, and the blocked reason comes from the task's own Blocked line.
     today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
     monday = today - timedelta(days=today.weekday())
     starts = [(monday - timedelta(days=7 * (3 - i))).isoformat() for i in range(4)]
     days = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
+    window = {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
+              "attention_size": 50}
 
     def parity(label):
         rows = [r for p in log_pages({"from_date": starts[0], "to_date": days[6], "page_size": 500}) for r in p.get("rows", [])]
         by_week = [sum(1 for r in rows if starts[i] <= r["date"] < (starts[i + 1] if i < 3 else days[6] + "~")) for i in range(4)]
         by_day = [sum(1 for r in rows if r["date"] == d) for d in days]
-        people = {}
-        for r in rows:
-            if r["date"] in days:
-                for name in [n.strip() for n in r.get("member_name", "").split(",") if n.strip()]:
-                    people.setdefault(name, [0] * 7)[days.index(r["date"])] += 1
-        got = report("LogCounts", {"monday": monday.isoformat()})
-        got_people = {m["name"]: m["by_day"] for m in got.get("members", [])}
+        got = report("OverviewSnapshot", window).get("logs", {})
         check(f"log counts: {label} equal a count of the entries",
-              got.get("by_week") == by_week and got.get("by_day") == by_day and got_people == people,
-              f"{got.get('by_week')} vs {by_week}; {got.get('by_day')} vs {by_day}; {got_people} vs {people}")
+              got.get("by_week") == by_week and got.get("by_day") == by_day,
+              f"{got.get('by_week')} vs {by_week}; {got.get('by_day')} vs {by_day}")
 
-    made = [entry_id(report("LogActivity", {"date": today.isoformat(), "member_id": member_id, "activity": f"counts {tag} #{i}"}))
-            for i in range(2)]
-    parity("after two notes today")
-    report("DeleteLogEntries", {"entry_ids": made[:1]})
-    parity("after a delete")
+    parity("before this suite's writes")
     task = report("CreateTask", {"title": f"Blocked probe {tag}", "priority": "High", "project_id": project_id})
     report("MoveTask", {"task_id": task.get("id", ""), "status": "Blocked"})
     report("SetMoveInfo", {"task_id": task.get("id", ""), "note": f"waiting on keys {tag}"})
@@ -470,11 +456,15 @@ def log_counts_suite(member_id, project_id, tag):
     check("digest: activity is the newest lines, oldest first",
           [a["what"] for a in digest.get("activity", [])] == [r["activity"] for r in rows[:200]][::-1],
           f"{len(digest.get('activity', []))} lines")
-    snap = report("OverviewSnapshot", {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
-                                       "attention_size": 50})
+    snap = report("OverviewSnapshot", window)
     item = next((b for b in snap.get("blocked", []) if b.get("task_id") == task.get("id")), {})
     check("overview: a blocked task's reason is the note on its Blocked line",
           item.get("reason") == f"waiting on keys {tag}" and item.get("since") == today.isoformat(), str(item)[:200])
+    moved = [t for t in report("ListTasks", {"scope": "done", "page_size": 500}).get("rows", [])
+             if t.get("done_at", "")[:10] in days and t.get("done_at") != t.get("created_at")]
+    by_day = [sum(1 for t in moved if t["done_at"][:10] == d) for d in days]
+    check("overview: done per day counts this week's moves to Done",
+          snap.get("counts", {}).get("done_by_day") == by_day, f"{snap.get('counts', {}).get('done_by_day')} vs {by_day}")
 
 
 def history_pages_suite(project_id):
@@ -521,8 +511,6 @@ def history_store_suite(project_id, member_id):
     # history (ties by id), with totals, across titles that differ only in
     # case, accents and punctuation; a search takes the loaded path.
     far, rank = "9999-12-31", {"High": 0, "Medium": 1, "Low": 2}
-    it = report("SaveIteration", {"name": "Store sprint", "start_date": "2026-09-01",
-                                  "end_date": "2026-09-30"}).get("id", "")
     titles = ["alpha", "Alpha-2", "ábaco", "Zeta", "zeta!", "émile", "Émile", "beta", "Beta",
               "_under", "123 go", "ümlaut", "alpha"]
     cats = ["bug", "Bug", "Feature", "", "feature"]
@@ -530,8 +518,7 @@ def history_store_suite(project_id, member_id):
         t = report("CreateTask", {
             "title": title, "category": cats[i % 5], "priority": ["High", "Medium", "Low"][i % 3],
             "due_date": "" if i % 3 == 0 else f"2026-10-{10 + i:02d}", "estimate": [0.0, 1.5, 3.0][i % 3],
-            "assignee_ids": [member_id] if i % 2 else [], "project_id": project_id,
-            "iteration_id": it if i % 4 == 0 else ""})
+            "assignee_ids": [member_id] if i % 2 else [], "project_id": project_id})
         if i % 3 == 1:
             report("MoveTask", {"task_id": t.get("id", ""), "status": "Done"})
         elif i % 5 == 2:
@@ -589,8 +576,6 @@ def history_store_suite(project_id, member_id):
         ("priority", {"priority": "High"}, lambda r: r["priority"] == "High"),
         ("estimated", {"estimated": "yes"}, lambda r: r["estimate"] > 0),
         ("unestimated", {"estimated": "no"}, lambda r: r["estimate"] <= 0),
-        ("no iteration", {"iteration_id": "none"}, lambda r: not r["iteration_id"]),
-        ("iteration", {"iteration_id": it}, lambda r: r["iteration_id"] == it),
         ("assignee", {"assignee_id": member_id}, lambda r: member_id in r["assignee_ids"]),
         ("column", {"column": blocked_col}, lambda r: keys[column(r)] == blocked_col),
         ("project and assignee", {"project_id": project_id, "assignee_id": member_id},
@@ -651,7 +636,8 @@ def filter_sets_suite(project_id, member_id, tag):
           sets() == [] and board() == ({}, "", False), f"{sets()} {board()}")
     for body, error in (({"name": "  ", "filters": {"priority": "High"}}, "invalid"),
                         ({"name": "Nothing", "filters": {"project": "all", "bogus": "x"}}, "empty"),
-                        ({"name": "Elsewhere", "page": "log", "filters": {"priority": "High"}}, "invalid")):
+                        ({"name": "Elsewhere", "page": "log", "filters": {"priority": "High"}}, "invalid"),
+                        ({"name": "Table", "page": "tasks", "filters": {"priority": "High"}}, "invalid")):
         got = report("SaveFilterSet", body)
         check(f"filters: SaveFilterSet refuses {body['name']!r} as {error}",
               got.get("ok") is False and got.get("error") == error, str(got))
@@ -660,7 +646,7 @@ def filter_sets_suite(project_id, member_id, tag):
     mine_id = (mine.get("set") or {}).get("id", "")
     check("filters: a set keeps the board's keys set away from their default, trimmed name",
           mine.get("ok") and mine["set"].get("name") == "Mine" and mine["set"].get("page") == "board"
-          and mine["set"].get("filters") == {"project": project_id, "priority": "High", "done": "hide"}, str(mine))
+          and mine["set"].get("filters") == {"priority": "High", "done": "hide"}, str(mine))
     dup = report("SaveFilterSet", {"name": "MINE", "filters": {"priority": "Low"}})
     check("filters: a name is unique on its page ignoring case", dup.get("error") == "duplicate", str(dup))
     other = report("SaveFilterSet", {"name": "Z" * 80, "filters": {"assignee": member_id}})
@@ -674,17 +660,17 @@ def filter_sets_suite(project_id, member_id, tag):
     check("filters: GetWorkspace lists the sets by name",
           [(s.get("name"), s.get("id")) for s in sets()] == [("Mine", mine_id), ("Priya's work", other_id)], str(sets()))
     kept = report("SetBoardFilters", {"filters": {"project": project_id, "priority": "Low", "junk": "1"}, "set_id": mine_id})
-    check("filters: SetBoardFilters keeps the board's keys and a set of this account",
-          kept.get("filters") == {"project": project_id, "priority": "Low"} and kept.get("set_id") == mine_id, str(kept))
+    check("filters: SetBoardFilters keeps the board's keys (not the project) and a set of this account",
+          kept.get("filters") == {"priority": "Low"} and kept.get("set_id") == mine_id, str(kept))
     check("filters: BoardSnapshot carries the board's filters with the workspace",
-          board() == ({"project": project_id, "priority": "Low"}, mine_id, True), str(board()))
+          board() == ({"priority": "Low"}, mine_id, True), str(board()))
     poll = report("BoardSnapshot", {"page_size": 1})
     check("filters: the poll carries no filters", poll.get("board_saved") is False and poll.get("filter_sets") == [],
           str({k: poll.get(k) for k in ("board_saved", "filter_sets")}))
     gone = report("DeleteFilterSet", {"set_id": mine_id})
     check("filters: DeleteFilterSet deletes the set", gone.get("deleted") == mine_id, str(gone))
     check("filters: deleting the board's set forgets it and keeps the filters",
-          board() == ({"project": project_id, "priority": "Low"}, "", True)
+          board() == ({"priority": "Low"}, "", True)
           and [s.get("id") for s in sets()] == [other_id], f"{board()} {sets()}")
     again = report("DeleteFilterSet", {"set_id": mine_id})
     check("filters: a deleted set is not found", again.get("error") == "not_found", str(again))
@@ -694,29 +680,6 @@ def filter_sets_suite(project_id, member_id, tag):
           f"{sum(1 for m in made if m.get('ok'))} {full}")
     for m in made:
         report("DeleteFilterSet", {"set_id": (m.get("set") or {}).get("id", "")})
-
-    # The tasks table keeps its own keys (scope, search, sort) and its own
-    # names: a board set's name can repeat there, and a board key cannot.
-    table = report("SaveFilterSet", {"name": "Priya's work", "page": "tasks", "filters": {
-        "scope": "done", "priority": "High", "q": "  login  ", "sort": "due", "dir": "asc",
-        "iteration": "current", "done": "hide"}})
-    table_id = (table.get("set") or {}).get("id", "")
-    check("filters: a tasks set keeps the table's keys, a board set's name can repeat there",
-          table.get("ok") and table["set"].get("page") == "tasks" and table["set"].get("filters") == {
-              "scope": "done", "priority": "High", "q": "login", "sort": "due", "dir": "asc"}, str(table))
-    odd = report("SaveFilterSet", {"name": "Odd", "page": "tasks", "filters": {
-        "scope": "everything", "sort": "size", "dir": "sideways", "estimate": "no"}})
-    check("filters: a tasks value outside its words is dropped",
-          odd.get("ok") and odd["set"].get("filters") == {"estimate": "no"}, str(odd))
-    again = report("SaveFilterSet", {"name": "PRIYA'S WORK", "page": "tasks", "filters": {"priority": "Low"}})
-    check("filters: a name is still unique within the tasks page", again.get("error") == "duplicate", str(again))
-    kept = report("SetBoardFilters", {"filters": {"scope": "done", "q": "login", "priority": "High"}})
-    check("filters: the board keeps none of the table's keys", kept.get("filters") == {"priority": "High"}, str(kept))
-    check("filters: GetWorkspace lists both pages' sets",
-          sorted((s.get("page"), s.get("name")) for s in sets())
-          == [("board", "Priya's work"), ("tasks", "Odd"), ("tasks", "Priya's work")], str(sets()))
-    report("DeleteFilterSet", {"set_id": (odd.get("set") or {}).get("id", "")})
-    report("DeleteFilterSet", {"set_id": table_id})
 
     home = TOKEN
     TOKEN = sign_up(f"{tag}b")
@@ -858,7 +821,7 @@ def main() -> int:
     # ride instead of the notes and the items, which GetTask carries.
     status, payload, reports = walker("UpdateTask", {
         "task_id": task_id, "title": f"CI task {tag}", "category": "", "tags": [], "estimate": 0, "priority": "High",
-        "status": "Backlog", "step_id": "", "due_date": "", "start_date": "", "iteration_id": "",
+        "status": "Backlog", "step_id": "", "due_date": "", "start_date": "",
         "notes": "First line of the notes.\nSecond line.", "issue_link": "", "pr_link": "", "reviewer_id": "",
         "review_due": "", "assignee_ids": [], "project_id": project_id})
     check("UpdateTask reports the notes", status == 200 and bool(reports)
@@ -904,7 +867,7 @@ def main() -> int:
     # flow line's record and the GitHub connection view, in one call.
     status, payload, reports = walker("GetWorkspace")
     ws = reports[0] if reports and isinstance(reports[0], dict) else {}
-    lists = ("members", "projects", "steps", "repos", "roles", "iterations", "filter_sets")
+    lists = ("members", "projects", "steps", "repos", "roles", "filter_sets")
     check("GetWorkspace reports the workspace lists",
           status == 200 and all(isinstance(ws.get(k), list) for k in lists)
           and isinstance(ws.get("github"), dict) and "flow_name" in ws, f"{status} {payload}")
@@ -919,8 +882,8 @@ def main() -> int:
           f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
 
     parity_suite(project_id, member_id, tag)
-    log_paging_suite(member_id)
-    log_counts_suite(member_id, project_id, tag)
+    log_paging_suite(project_id, tag)
+    log_counts_suite(project_id, tag)
     history_pages_suite(project_id)
     history_store_suite(project_id, member_id)
     filter_sets_suite(project_id, member_id, tag)

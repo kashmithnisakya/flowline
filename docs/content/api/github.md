@@ -45,7 +45,7 @@ or a sync.
   variables, and which are missing.
 - `status` is `ok` or `invalid` (a reconnect is needed).
 - `webhook_seen_at` is when a delivery for this installation last arrived;
-  the `/github` connection strip shows "Live · last event N ago" from it.
+  the GitHub section's connection strip shows "Live · last event N ago" from it.
 
 It also re-binds a valid connection whose `gh_installations` row is missing.
 
@@ -164,7 +164,7 @@ task gets the issue number, state and link, and the log records
 
 **Reports** `{"ok": true, "repo": RepoView}` or
 `{"ok": false, "error": "not_found", "message": "Unknown repo."}`.
-Turning `auto_sync` on ("Import issues into *project*" on `/github`) clears the
+Turning `auto_sync` on ("Import issues into *project*" in the GitHub section) clears the
 repo's cursor, so the next sync back-fills its issue history.
 
 ::: walker SetRepoAutoDone h3
@@ -177,7 +177,7 @@ to the done step.
 ::: walker SetRepoAutoClose h3
 
 **Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With `auto_close`
-on ("Close the issue when its card moves to Done" on `/github`), `MoveTask` and
+on ("Close the issue when its card moves to Done" in the GitHub section), `MoveTask` and
 `UpdateTask` close the linked issue when a card lands on Done and reopen it when
 the card leaves Done.
 

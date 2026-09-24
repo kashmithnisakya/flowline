@@ -1,4 +1,4 @@
-"""Landing hero: the one idea (draw the steps, the board and the log follow),
+"""Landing hero: the one idea (draw the steps, the board follows),
 the proof bar, then the playable demo at full container width. From 2xl the
 demo sits beside the text and the proof bar spans both. Left-aligned at every
 width; on phones the primary action fills the row.
@@ -24,14 +24,14 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                     For teams that would rather write than meet
                 </p>
                 <h1
-                    className="max-w-[21ch] text-[clamp(2.125rem,max(min(4.4vw,2.875rem),3.2vw),3.5rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance [font-stretch:125%]"
+                    className="max-w-[21ch] text-[clamp(2.125rem,max(min(4.4vw,2.875rem),3.2vw),3.5rem)] leading-[1.04] font-extrabold tracking-[-0.02em] text-balance"
                 >
-                    Draw how your team works. The board and the daily log follow.
+                    Draw how your team works. The board follows, step by step.
                 </h1>
                 <p
                     className="max-w-[58ch] text-base leading-relaxed text-muted-foreground"
                 >
-                    Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on.
+                    Name your steps once. The board stacks your work under them, every move lands in the task's own history, and linked GitHub issues can move tasks when you turn that on.
                 </p>
                 <div
                     className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6"

@@ -3,15 +3,7 @@ diagram with a single toolbar, View or Edit, Flow or Lanes. Drag pans, ctrl or
 cmd + wheel and pinch zoom, F fits. Phones open on an ordered step list.
 Validation is advisory and never blocks saving. Keep notes out of JSX."""
 
-import from ...models {
-    Project,
-    StepView,
-    TaskRow,
-    TaskView,
-    MemberView,
-    RoleView,
-    IterationView
-}
+import from ...models { Project, StepView, TaskRow, TaskView, MemberView, RoleView }
 import from ...constants { KIND_STATUS }
 import from ...services.projects.projects { AssignToProject }
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
@@ -30,6 +22,7 @@ import from ...services.flowlines.flowlines {
 }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...lib.filters { defaultProject }
+import from ...lib.project { currentProject, pickProject }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,
@@ -44,7 +37,8 @@ import from ...components.flowlines.TemplatePicker { TemplatePicker }
 import from ...components.flowlines.StepInspector { StepInspector }
 import from ...components.flowlines.StepTasksPanel { StepTasksPanel }
 import from ...components.flowlines.StepList { StepList }
-import from ...components.flowlines.controls { Segmented, ZoomControls }
+import from ...components.flowlines.FlowTitle { FlowTitle }
+import from ...components.flowlines.FlowToolbar { FlowToolbar }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.flowlines.geometry {
     hitRect,
@@ -80,13 +74,6 @@ import from ...components.ui.dropdown_menu {
     DropdownMenuItem,
     DropdownMenuSeparator
 }
-import from ...components.ui.select {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem
-}
 import from "sonner" { toast }
 import from "react" { useEffect, useLayoutEffect }
 import from ...components.common.glyphs { Spinner, WarnIcon }
@@ -110,7 +97,6 @@ glob BLANK_STEP: dict[str, str] = {
          "status": "Backlog",
          "due_date": "",
          "start_date": "",
-         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -135,9 +121,8 @@ def:pub FlowLinePage -> JsxPage {
         # "lanes" a computed swimlane layout (lane = owner role, column =
         # flow depth). Persisted per browser; editing always uses flow.
         lineView: str = "flow",
-        # The project on screen, one always: shared with the board through
-        # one localStorage key, so the project you are looking at follows
-        # you between the two tabs. "" until the default is known.
+        # The project on screen, one always: lib/project's pick, shared with
+        # the sidebar and the other pages. "" until the default is known.
         projectId: str = "",
         loading: bool = True,
         # The first read produced nothing: the page says so itself, with a
@@ -187,7 +172,6 @@ def:pub FlowLinePage -> JsxPage {
         taskForm: dict[str, str] = BLANK_TASK,
         taskAssignees: list[str] = [],
         taskSaving: bool = False,
-        iterations: list[IterationView] = [],
         zoom: float = 1.0,
         # Screen-px offset of the drawing's origin inside the viewport.
         panX: float = 0.0,
@@ -283,6 +267,16 @@ def:pub FlowLinePage -> JsxPage {
         []
     );
 
+    # A project picked anywhere else (the sidebar) redraws this page.
+    useEffect(
+        lambda {
+            onPick: any = lambda (e: any) { adoptProject(str(e.detail or "")); };
+            window.addEventListener("flowline:project", onPick);
+            return lambda { window.removeEventListener("flowline:project", onPick); };
+        },
+        []
+    );
+
     # Wheel over the canvas: ctrl or cmd (and trackpad pinch) zooms around
     # the pointer, a plain wheel pans. Native and non-passive, so the page
     # does not scroll or zoom underneath.
@@ -321,7 +315,7 @@ def:pub FlowLinePage -> JsxPage {
     async def loadShared -> None;
     async def reload(pid: str) -> None;
     async def retryLoad -> None;
-    async def selectProject(v: str) -> None;
+    async def adoptProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
     async def refreshPeek(stepId: str, pid: str) -> None;
     async def morePeek -> None;
@@ -419,9 +413,13 @@ def:pub FlowLinePage -> JsxPage {
         if showList
         else {"colOf": {}};
     listCols: dict[str, int] = listPlan["colOf"];
-    taskTotal = 0;
+    # Roles the line names as owners, for the heading's summary.
+    ownerNames: list[str] = [];
     for s in steps {
-        taskTotal = taskTotal + s.task_count;
+        owner = s.owner.strip() if s.owner else "";
+        if owner and owner != "anyone" and owner not in ownerNames {
+            ownerNames.append(owner);
+        }
     }
     # The org's roles and who holds them, for the key row's Roles popover.
     roleList: list[dict[str, any]] = [];
@@ -443,12 +441,13 @@ def:pub FlowLinePage -> JsxPage {
         );
     }
 
-    peekScope = "in this project";
+    projectName = "";
     for p in activeProjects {
         if jid(p) == projectId {
-            peekScope = "in " + p.name;
+            projectName = p.name;
         }
     }
+    peekScope = "in " + projectName if projectName else "in this project";
     # The task dialog offers exactly the steps the canvas shows, left to
     # right, which is the order the board builds its columns in too.
     stepOrder = [st for st in steps];
@@ -619,131 +618,122 @@ def:pub FlowLinePage -> JsxPage {
     showPicker = not loading and not failed and len(steps) == 0 and not scratch;
     # The diagram fills the window below the toolbar and key; edit mode's
     # bar takes one more row.
-    canvasH = "max(20rem, calc(100dvh - 12rem))"
+    canvasH = "max(20rem, calc(100dvh - 17rem))"
         if narrow
         else (
-            "max(24rem, calc(100dvh - 16.5rem))"
+            "max(24rem, calc(100dvh - 18.5rem))"
                 if editing
-                else "max(24rem, calc(100dvh - 13.5rem))"
+                else "max(24rem, calc(100dvh - 15.5rem))"
         );
-    modeOptions: list[dict[str, str]] = [
-        {"value": "view", "label": "View"},
-        {"value": "edit", "label": "Edit"}
-    ];
-    layoutOptions: list[dict[str, str]] = [
-        {"value": "flow", "label": "Flow"},
-        {"value": "lanes", "label": "Lanes"}
-    ];
-    phoneOptions: list[dict[str, str]] = [
-        {"value": "list", "label": "List"},
-        {"value": "diagram", "label": "Diagram"}
-    ];
+
+    # The heading and the control pills over the diagram; `pending` is the
+    # first-load frame's inert copy.
+    def headRow(pending: bool) -> JsxElement {
+        return
+            <div
+                className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-3"
+            >
+                <FlowTitle
+                    projects={activeProjects}
+                    projectId={projectId}
+                    lineName={lineName}
+                    steps={len(steps)}
+                    transitions={linkCount}
+                    roles={len(ownerNames)}
+                    renaming={renaming and not pending}
+                    nameDraft={nameDraft}
+                    pending={pending}
+                    onDraft={lambda (v: str) { nameDraft = v; }}
+                    onRename={saveRename}
+                />
+                <FlowToolbar
+                    editing={editing and not pending}
+                    narrow={narrow}
+                    showList={showList}
+                    phoneView={phoneView}
+                    lineView={lineView}
+                    zoom={zoom}
+                    pending={pending}
+                    onMode={switchMode}
+                    onPhoneView={lambda (v: str) { phoneView = v; }}
+                    onView={switchView}
+                    onZoom={zoomStep}
+                    onActual={zoomActual}
+                    onFit={lambda {
+                        fittedRef.current = False;
+                        fitZoom();
+                    }}
+                />
+            </div>;
+    }
 
     def loadFrame -> JsxElement {
         return
-            <div
-                className="surface flex min-w-0 flex-col overflow-hidden"
-                aria-busy="true"
-            >
+            <div className="flex min-w-0 flex-col gap-4" aria-busy="true">
+                {headRow(True)}
                 <div
-                    data-flow-toolbar="true"
-                    className="pointer-events-none flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5"
+                    className="surface flex min-w-0 flex-col overflow-hidden rounded-2xl"
                 >
-                    <h1 className="page-title mr-1 min-w-0 truncate">{lineName}</h1>
-                    <Segmented label="Mode" options={modeOptions} value="view"/>
-                    {if not showList {
-                        <Segmented
-                            key="layout"
-                            label="Layout"
-                            options={layoutOptions}
-                            value={lineView}
-                        />
-                    }}
-                    <Select value="" disabled={True}>
-                        <SelectTrigger
-                            className="toolbar-filter max-w-48"
-                            data-active="true"
-                            aria-label="Project"
+                    <div className="relative min-w-0" style={{"height": canvasH}}>
+                        <div
+                            className="absolute inset-0 flex items-center justify-center px-6"
                         >
-                            <SelectValue placeholder="Project"/>
-                        </SelectTrigger>
-                        <SelectContent position="popper"></SelectContent>
-                    </Select>
-                    <div className="ml-auto flex shrink-0 items-center gap-3">
-                        {if not showList {
-                            <ZoomControls key="zoom" zoom={1.0} pending={True}/>
-                        }}
-                        {if not narrow {
-                            <Button
-                                key="edit"
-                                size="sm"
-                                className="h-[30px]"
-                                disabled={True}
-                            >
-                                Edit flow line
-                            </Button>
-                        }}
-                    </div>
-                </div>
-                <div className="relative min-w-0" style={{"height": canvasH}}>
-                    <div
-                        className="absolute inset-0 flex items-center justify-center px-6"
-                    >
-                        {for i in range(3) {
-                            <div key={"n" + str(i)} className="flex items-center">
-                                {if i > 0 {
-                                    <span
-                                        key="w"
-                                        aria-hidden="true"
-                                        className="h-0.5 w-8 shrink-0 bg-wire sm:w-16"
-                                    />
-                                }}
-                                <div
-                                    className="flex h-[52px] w-[132px] shrink-0 flex-col justify-center gap-2 rounded-md border bg-card px-3"
-                                >
-                                    <Skeleton className="h-3 w-16"/>
-                                    <Skeleton className="h-2.5 w-20"/>
+                            {for i in range(3) {
+                                <div key={"n" + str(i)} className="flex items-center">
+                                    {if i > 0 {
+                                        <span
+                                            key="w"
+                                            aria-hidden="true"
+                                            className="h-0.5 w-8 shrink-0 bg-wire sm:w-16"
+                                        />
+                                    }}
+                                    <div
+                                        className="flex h-[56px] w-[140px] shrink-0 flex-col justify-center gap-2 rounded-2xl bg-card px-2.5 shadow-xs ring-1 ring-border"
+                                    >
+                                        <Skeleton className="h-6 w-20 rounded-full"/>
+                                        <Skeleton className="h-2.5 w-24"/>
+                                    </div>
                                 </div>
-                            </div>
-                        }}
+                            }}
+                        </div>
                     </div>
-                </div>
-                {if not showList {
-                    <div
-                        key="legend"
-                        aria-label="Key"
-                        className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
-                    >
-                        {for i in range(4) {
-                            <span
-                                key={"k" + str(i)}
-                                className="inline-flex h-[18px] items-center gap-1.5"
-                            >
-                                <Skeleton className="size-3.5 rounded-full"/>
-                                <Skeleton className="h-3 w-12"/>
+                    {if not showList {
+                        <div
+                            key="legend"
+                            aria-label="Key"
+                            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
+                        >
+                            {for i in range(4) {
+                                <span
+                                    key={"k" + str(i)}
+                                    className="inline-flex h-[18px] items-center gap-1.5"
+                                >
+                                    <Skeleton className="size-3.5 rounded-full"/>
+                                    <Skeleton className="h-3 w-12"/>
+                                </span>
+                            }}
+                            <span className="inline-flex h-[18px] items-center gap-1.5">
+                                <svg
+                                    width={22}
+                                    height={8}
+                                    aria-hidden="true"
+                                    className="text-wire"
+                                >
+                                    <path
+                                        d="M1 4 H21"
+                                        stroke="currentColor"
+                                        strokeWidth={1.6}
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                Moves forward
                             </span>
-                        }}
-                        <span className="inline-flex h-[18px] items-center gap-1.5">
-                            <svg
-                                width={22}
-                                height={8}
-                                aria-hidden="true"
-                                className="text-wire"
-                            >
-                                <path
-                                    d="M1 4 H21"
-                                    stroke="currentColor"
-                                    strokeWidth={1.6}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            Moves forward
-                        </span>
-                        <span className="ml-auto inline-flex h-6 items-center">
-                            <Skeleton className="h-3 w-44"/>
-                        </span>
-                    </div>
-                }}
+                            <span className="ml-auto inline-flex h-6 items-center">
+                                <Skeleton className="h-3 w-44"/>
+                            </span>
+                        </div>
+                    }}
+                </div>
             </div>;
     }
 
@@ -769,528 +759,432 @@ def:pub FlowLinePage -> JsxPage {
                         />
                     </div>
                 } else {
-                    <div
-                        key="line"
-                        className="surface flex min-w-0 flex-col overflow-hidden"
-                    >
+                    <div key="line" className="flex min-w-0 flex-col gap-4">
+                        {headRow(False)}
                         <div
-                            data-flow-toolbar="true"
-                            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5"
+                            className="surface flex min-w-0 flex-col overflow-hidden rounded-2xl"
                         >
-                            {if renaming {
-                                <Input
-                                    key="rename"
-                                    aria-label="Flow line name"
-                                    className="h-8 w-64 max-w-full text-base font-semibold"
-                                    value={nameDraft}
-                                    autoFocus={True}
-                                    onChange={lambda (e: any) { nameDraft = e.target.value; }}
-                                    onBlur={saveRename}
-                                    onKeyDown={lambda (e: any) { if e.key == "Enter" {
-                                        saveRename();
-                                    }}}
-                                />
-                            } else {
-                                <h1
-                                    key="name"
-                                    className="page-title mr-1 min-w-0 truncate"
-                                >
-                                    {lineName}
-                                </h1>
-                            } }
-                            <Segmented
-                                label="Mode"
-                                options={modeOptions}
-                                value={"edit" if editing else "view"}
-                                onChange={switchMode}
-                            />
-                            {if narrow and not editing {
-                                <Segmented
-                                    key="phoneview"
-                                    label="Show"
-                                    options={phoneOptions}
-                                    value={phoneView}
-                                    onChange={lambda (v: str) { phoneView = v; }}
-                                />
-                            }}
-                            {if not editing and not showList {
-                                <Segmented
-                                    key="layout"
-                                    label="Layout"
-                                    options={layoutOptions}
-                                    value={lineView}
-                                    onChange={switchView}
-                                />
-                            }}
-                            {if not editing {
-                                <Select
-                                    key="project"
-                                    value={projectId}
-                                    onValueChange={selectProject}
-                                >
-                                    <SelectTrigger
-                                        className="toolbar-filter max-w-48"
-                                        data-active="true"
-                                        aria-label="Project"
-                                    >
-                                        <SelectValue placeholder="Project"/>
-                                    </SelectTrigger>
-                                    <SelectContent position="popper">
-                                        {for p in activeProjects {
-                                            <SelectItem key={jid(p)} value={jid(p)}>
-                                                {p.name}
-                                            </SelectItem>
-                                        }}
-                                    </SelectContent>
-                                </Select>
-                            }}
-                            <div className="ml-auto flex shrink-0 items-center gap-3">
-                                {if not showList {
-                                    <ZoomControls
-                                        key="zoom"
-                                        zoom={zoom}
-                                        onOut={lambda { zoomStep(-1); }}
-                                        onIn={lambda { zoomStep(1); }}
-                                        onActual={zoomActual}
-                                        onFit={lambda {
-                                            fittedRef.current = False;
-                                            fitZoom();
-                                        }}
-                                    />
-                                }}
-                                {if not editing and not narrow {
-                                    <Button
-                                        key="edit"
-                                        size="sm"
-                                        className="h-[30px]"
-                                        onClick={lambda { switchMode("edit"); }}
-                                    >
-                                        Edit flow line
-                                    </Button>
-                                }}
-                            </div>
-                        </div>
-                        {if editing {
-                            <div
-                                key="editbar"
-                                role="region"
-                                aria-label="Editing"
-                                className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2"
-                            >
-                                <span
-                                    className="inline-flex items-center gap-2 text-[13px]"
+                            {if editing {
+                                <div
+                                    key="editbar"
+                                    role="region"
+                                    aria-label="Editing"
+                                    className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2"
                                 >
                                     <span
-                                        className="size-2 shrink-0 rounded-full bg-primary"
-                                        aria-hidden="true"
-                                    />
-                                    <span className="font-semibold">Editing</span>
-                                    <span className="text-muted-foreground">
-                                        Changes save as you go.
-                                    </span>
-                                </span>
-                                <span
-                                    className="hidden min-w-0 items-center gap-x-1.5 text-xs text-subtle xl:flex"
-                                >
-                                    Drag a step to move it · Drag from its edge to connect · Click a transition to label it
-                                </span>
-                                <div className="ml-auto flex items-center gap-2">
-                                    <Button
-                                        key="add"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={addStep}
-                                        disabled={saving or creatingStep}
+                                        className="inline-flex items-center gap-2 text-[13px]"
                                     >
-                                        <svg
-                                            width={14}
-                                            height={14}
-                                            viewBox="0 0 16 16"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={1.7}
-                                            strokeLinecap="round"
+                                        <span
+                                            className="size-2 shrink-0 rounded-full bg-primary"
                                             aria-hidden="true"
-                                        >
-                                            <path d="M8 3v10M3 8h10"/>
-                                        </svg>
-                                        Add step
-                                    </Button>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger
-                                            asChild={False}
-                                            aria-label="More flow line actions"
-                                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                        />
+                                        <span className="font-semibold">Editing</span>
+                                        <span className="text-muted-foreground">
+                                            Changes save as you go.
+                                        </span>
+                                    </span>
+                                    <span
+                                        className="hidden min-w-0 items-center gap-x-1.5 text-xs text-subtle xl:flex"
+                                    >
+                                        Drag a step to move it · Drag from its edge to connect · Click a transition to label it
+                                    </span>
+                                    <div className="ml-auto flex items-center gap-2">
+                                        <Button
+                                            key="add"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={addStep}
+                                            disabled={saving or creatingStep}
                                         >
                                             <svg
-                                                width={16}
-                                                height={16}
+                                                width={14}
+                                                height={14}
                                                 viewBox="0 0 16 16"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={1.7}
+                                                strokeLinecap="round"
                                                 aria-hidden="true"
                                             >
-                                                <circle
-                                                    cx={3.5}
-                                                    cy={8}
-                                                    r={1.3}
-                                                    fill="currentColor"
-                                                />
-                                                <circle
-                                                    cx={8}
-                                                    cy={8}
-                                                    r={1.3}
-                                                    fill="currentColor"
-                                                />
-                                                <circle
-                                                    cx={12.5}
-                                                    cy={8}
-                                                    r={1.3}
-                                                    fill="currentColor"
-                                                />
+                                                <path d="M8 3v10M3 8h10"/>
                                             </svg>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                            align="end"
-                                            className="w-48"
-                                        >
-                                            <DropdownMenuItem onSelect={startRename}>
-                                                Rename flow line
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator/>
-                                            <DropdownMenuItem
-                                                variant="destructive"
-                                                onSelect={lambda { confirmWipe = True; }}
+                                            Add step
+                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger
+                                                asChild={False}
+                                                aria-label="More flow line actions"
+                                                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                                             >
-                                                Delete flow line
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                    <Button
-                                        key="doneediting"
-                                        size="sm"
-                                        onClick={finishEditing}
-                                    >
-                                        Done editing
-                                    </Button>
+                                                <svg
+                                                    width={16}
+                                                    height={16}
+                                                    viewBox="0 0 16 16"
+                                                    aria-hidden="true"
+                                                >
+                                                    <circle
+                                                        cx={3.5}
+                                                        cy={8}
+                                                        r={1.3}
+                                                        fill="currentColor"
+                                                    />
+                                                    <circle
+                                                        cx={8}
+                                                        cy={8}
+                                                        r={1.3}
+                                                        fill="currentColor"
+                                                    />
+                                                    <circle
+                                                        cx={12.5}
+                                                        cy={8}
+                                                        r={1.3}
+                                                        fill="currentColor"
+                                                    />
+                                                </svg>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align="end"
+                                                className="w-48"
+                                            >
+                                                <DropdownMenuItem
+                                                    onSelect={startRename}
+                                                >
+                                                    Rename flow line
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator/>
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onSelect={lambda { confirmWipe = True; }}
+                                                >
+                                                    Delete flow line
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                        <Button
+                                            key="doneediting"
+                                            size="sm"
+                                            onClick={finishEditing}
+                                        >
+                                            Done editing
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
-                        }}
-                        {if showList {
-                            <div key="list" className="bg-card">
-                                <StepList
-                                    steps={steps}
-                                    colOf={listCols}
-                                    selectedId={peekId}
-                                    onOpen={peekStep}
-                                />
-                            </div>
-                        } else {
-                            <div
-                                key="canvasrow"
-                                className="flex min-w-0 flex-col sm:flex-row"
-                            >
+                            }}
+                            {if showList {
+                                <div key="list" className="bg-card">
+                                    <StepList
+                                        steps={steps}
+                                        colOf={listCols}
+                                        selectedId={peekId}
+                                        onOpen={peekStep}
+                                    />
+                                </div>
+                            } else {
                                 <div
-                                    className="relative min-w-0 sm:flex-1"
-                                    style={{"height": canvasH}}
+                                    key="canvasrow"
+                                    className="flex min-w-0 flex-col sm:flex-row"
                                 >
                                     <div
-                                        className="absolute inset-0"
-                                        onPointerDown={beginDrag}
-                                        onPointerMove={moveDrag}
-                                        onPointerUp={endDrag}
-                                        onPointerCancel={endDrag}
+                                        className="relative min-w-0 sm:flex-1"
+                                        style={{"height": canvasH}}
                                     >
-                                        <FlowCanvas
-                                            steps={steps}
-                                            live={lanePose if laneMode else live}
-                                            lanes={laneBands if laneMode else []}
-                                            laneOf={laneOfStep}
-                                            laneCols={laneColOf}
-                                            laneLabelW={laneLabelW()}
-                                            selectedId={selectedId
-                                                if editing
-                                                else peekId}
-                                            connectFrom={connectFrom if editing else ""}
-                                            selectedEdge={selectedEdge
-                                                if editing
-                                                else ""}
-                                            zoom={zoom}
-                                            panX={panX}
-                                            panY={panY}
-                                            editing={editing}
-                                            dragId={dragId}
-                                            stepTitles={stepTitles}
-                                            canvasRef={canvasRef}
-                                            layoutRef={layoutRef}
-                                            viewportRef={viewportRef}
-                                            onSelect={selectStep
-                                                if editing
-                                                else peekStep}
-                                            edgeDraft={edgeDraft}
-                                            edgeCarry={edgeCarry}
-                                            onSelectEdge={selectEdge}
-                                            onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
-                                            onEdgeCarry={lambda (v: str) { edgeCarry = v; }}
-                                            onSaveEdgeLabel={commitEdgeLabel}
-                                            onDeleteEdge={deleteEdge}
-                                            onCanvasClick={clearCanvas
-                                                if editing
-                                                else closePeek}
-                                            onAddStep={lambda {
-                                                editing = True;
-                                                addStep();
-                                            }}
-                                        />
-                                    </div>
-                                    {if editing and connectFrom {
                                         <div
-                                            key="connecting"
-                                            className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center px-3 pt-3"
+                                            className="absolute inset-0"
+                                            onPointerDown={beginDrag}
+                                            onPointerMove={moveDrag}
+                                            onPointerUp={endDrag}
+                                            onPointerCancel={endDrag}
                                         >
-                                            <div
-                                                className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border bg-popover px-4 py-2 shadow-md"
-                                            >
-                                                <p className="text-[13px] text-pretty">
-                                                    <span className="font-semibold">
-                                                        {"Connecting from "
-                                                            + connectTitle
-                                                            + "."}
-                                                    </span>
-                                                    <span
-                                                        className="text-muted-foreground"
-                                                    >
-                                                        {" Click the step work moves to. Going back is fine."}
-                                                    </span>
-                                                </p>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={lambda { connectFrom = ""; }}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    }}
-                                    {if not editing
-                                        and not narrow
-                                        and len(peeked) > 0 {
-                                        <div
-                                            key="peekdock"
-                                            className="absolute top-3 right-3 z-40 flex max-h-[calc(100%-1.5rem)] w-[22rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border shadow-xl"
-                                        >
-                                            <StepTasksPanel
-                                                className="max-h-full"
-                                                step={peeked[0]}
-                                                tasks={peekTasks}
-                                                loading={peekLoading}
-                                                total={peekTotal}
-                                                hasMore={peekMore}
-                                                loadingMore={peekLoadingMore}
-                                                onMore={morePeek}
-                                                scope={peekScope}
-                                                onOpenTask={openTask}
-                                                onClose={closePeek}
+                                            <FlowCanvas
+                                                steps={steps}
+                                                live={lanePose if laneMode else live}
+                                                lanes={laneBands if laneMode else []}
+                                                laneOf={laneOfStep}
+                                                laneCols={laneColOf}
+                                                laneLabelW={laneLabelW()}
+                                                selectedId={selectedId
+                                                    if editing
+                                                    else peekId}
+                                                connectFrom={connectFrom
+                                                    if editing
+                                                    else ""}
+                                                selectedEdge={selectedEdge
+                                                    if editing
+                                                    else ""}
+                                                zoom={zoom}
+                                                panX={panX}
+                                                panY={panY}
+                                                editing={editing}
+                                                dragId={dragId}
+                                                stepTitles={stepTitles}
+                                                canvasRef={canvasRef}
+                                                layoutRef={layoutRef}
+                                                viewportRef={viewportRef}
+                                                onSelect={selectStep
+                                                    if editing
+                                                    else peekStep}
+                                                edgeDraft={edgeDraft}
+                                                edgeCarry={edgeCarry}
+                                                onSelectEdge={selectEdge}
+                                                onEdgeDraft={lambda (v: str) { edgeDraft = v; }}
+                                                onEdgeCarry={lambda (v: str) { edgeCarry = v; }}
+                                                onSaveEdgeLabel={commitEdgeLabel}
+                                                onDeleteEdge={deleteEdge}
+                                                onCanvasClick={clearCanvas
+                                                    if editing
+                                                    else closePeek}
+                                                onAddStep={lambda {
+                                                    editing = True;
+                                                    addStep();
+                                                }}
                                             />
                                         </div>
-                                    }}
-                                </div>
-                                {if editing {
-                                    <div
-                                        key="inspector"
-                                        className="flex min-w-0 flex-col gap-4 overflow-y-auto border-t bg-card p-4 sm:w-[21rem] sm:shrink-0 sm:border-t-0 sm:border-l"
-                                        style={{
-                                            "maxHeight": "none" if narrow else canvasH
-                                        }}
-                                    >
-                                        {if creatingStep {
+                                        {if editing and connectFrom {
                                             <div
-                                                key="create"
-                                                className="flex flex-col gap-3"
+                                                key="connecting"
+                                                className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center px-3 pt-3"
                                             >
-                                                <h2 className="section-title">
-                                                    New step
-                                                </h2>
-                                                <Input
-                                                    aria-label="Step name"
-                                                    value={form["name"] or ""}
-                                                    placeholder="What should this step be called?"
-                                                    autoFocus={True}
-                                                    onChange={lambda (e: any) { setField(
-                                                        "name", e.target.value
-                                                    ); }}
-                                                    onKeyDown={lambda (e: any) { if e.key
-                                                        == "Enter" {
-                                                        commitName();
-                                                    }}}
-                                                />
-                                                <div className="flex gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        disabled={saving
-                                                            or not (
-                                                                form["name"] or ""
-                                                            ).strip()}
-                                                        onClick={commitName}
+                                                <div
+                                                    className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border bg-popover px-4 py-2 shadow-md"
+                                                >
+                                                    <p
+                                                        className="text-[13px] text-pretty"
                                                     >
-                                                        Add to canvas
-                                                    </Button>
+                                                        <span className="font-semibold">
+                                                            {"Connecting from "
+                                                                + connectTitle
+                                                                + "."}
+                                                        </span>
+                                                        <span
+                                                            className="text-muted-foreground"
+                                                        >
+                                                            {" Click the step work moves to. Going back is fine."}
+                                                        </span>
+                                                    </p>
                                                     <Button
                                                         size="sm"
                                                         variant="ghost"
-                                                        onClick={lambda { creatingStep = False; }}
+                                                        onClick={lambda { connectFrom = ""; }}
                                                     >
                                                         Cancel
                                                     </Button>
                                                 </div>
-                                                <p className="text-xs text-subtle">
-                                                    Kind, colour and owner can be set once it is on the canvas.
-                                                </p>
                                             </div>
-                                        } elif len(picked) > 0 {
-                                            <StepInspector
-                                                key={picked[0].id}
-                                                step={picked[0]}
-                                                steps={steps}
-                                                form={form}
-                                                roleOptions={ownerOptions}
-                                                connecting={bool(connectFrom)}
-                                                saving={saving}
-                                                confirmingDelete={confirmDelete}
-                                                onField={setField}
-                                                onNameCommit={commitName}
-                                                onConnect={armConnect}
-                                                onCancelConnect={lambda { connectFrom = ""; }}
-                                                onDelete={deleteStep}
-                                                onUnlink={deleteEdge}
-                                            />
-                                        } else {
+                                        }}
+                                        {if not editing
+                                            and not narrow
+                                            and len(peeked) > 0 {
                                             <div
-                                                key="howto"
-                                                className="flex flex-col gap-4"
+                                                key="peekdock"
+                                                className="absolute top-3 right-3 z-40 flex max-h-[calc(100%-1.5rem)] w-[22rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl shadow-xl ring-1 ring-border"
                                             >
-                                                <div className="flex flex-col gap-2.5">
-                                                    <h2 className="section-title">
-                                                        How to edit
-                                                    </h2>
-                                                    <ol
-                                                        className="flex flex-col gap-2 text-[13px]"
-                                                    >
-                                                        <li className="flex gap-2.5">
-                                                            <span
-                                                                className="num w-4 shrink-0 text-subtle"
-                                                            >
-                                                                1
-                                                            </span>
-                                                            <span>
-                                                                Drag a step to move it. Drag empty canvas to pan.
-                                                            </span>
-                                                        </li>
-                                                        <li className="flex gap-2.5">
-                                                            <span
-                                                                className="num w-4 shrink-0 text-subtle"
-                                                            >
-                                                                2
-                                                            </span>
-                                                            <span>
-                                                                Drag from a step's edge (the dots) to another step to connect them.
-                                                            </span>
-                                                        </li>
-                                                        <li className="flex gap-2.5">
-                                                            <span
-                                                                className="num w-4 shrink-0 text-subtle"
-                                                            >
-                                                                3
-                                                            </span>
-                                                            <span>
-                                                                Click a transition to label it, or a step to rename it, change its kind or remove it.
-                                                            </span>
-                                                        </li>
-                                                    </ol>
-                                                </div>
+                                                <StepTasksPanel
+                                                    className="max-h-full"
+                                                    step={peeked[0]}
+                                                    tasks={peekTasks}
+                                                    loading={peekLoading}
+                                                    total={peekTotal}
+                                                    hasMore={peekMore}
+                                                    loadingMore={peekLoadingMore}
+                                                    onMore={morePeek}
+                                                    scope={peekScope}
+                                                    onOpenTask={openTask}
+                                                    onClose={closePeek}
+                                                />
+                                            </div>
+                                        }}
+                                    </div>
+                                    {if editing {
+                                        <div
+                                            key="inspector"
+                                            className="flex min-w-0 flex-col gap-4 overflow-y-auto border-t bg-card p-4 sm:w-[21rem] sm:shrink-0 sm:border-t-0 sm:border-l"
+                                            style={{
+                                                "maxHeight": "none"
+                                                    if narrow
+                                                    else canvasH
+                                            }}
+                                        >
+                                            {if creatingStep {
                                                 <div
-                                                    className="flex flex-col gap-2 border-t pt-3"
+                                                    key="create"
+                                                    className="flex flex-col gap-3"
                                                 >
                                                     <h2 className="section-title">
-                                                        Checks
+                                                        New step
                                                     </h2>
-                                                    {if len(issues) == 0 {
-                                                        <p
-                                                            key="ok"
-                                                            className="text-[13px] text-muted-foreground"
+                                                    <Input
+                                                        aria-label="Step name"
+                                                        value={form["name"] or ""}
+                                                        placeholder="What should this step be called?"
+                                                        autoFocus={True}
+                                                        onChange={lambda (e: any) { setField(
+                                                            "name", e.target.value
+                                                        ); }}
+                                                        onKeyDown={lambda (e: any) { if e.key
+                                                            == "Enter" {
+                                                            commitName();
+                                                        }}}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            disabled={saving
+                                                                or not (
+                                                                    form["name"] or ""
+                                                                ).strip()}
+                                                            onClick={commitName}
                                                         >
-                                                            Every step can be reached from a start step and can reach a done step.
-                                                        </p>
-                                                    } else {
-                                                        <ul
-                                                            key="issues"
-                                                            className="flex flex-col gap-1.5"
+                                                            Add to canvas
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={lambda { creatingStep = False; }}
                                                         >
-                                                            {for msg in issues {
-                                                                <li
-                                                                    key={msg}
-                                                                    className="flex items-start gap-2 text-[13px] text-warning"
-                                                                >
-                                                                    <WarnIcon
-                                                                        size={14}
-                                                                        className="mt-0.5 shrink-0"
-                                                                    />
-                                                                    <span>{msg}</span>
-                                                                </li>
-                                                            }}
-                                                        </ul>
-                                                    } }
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
                                                     <p className="text-xs text-subtle">
-                                                        Checks are advice. Saving is never blocked.
+                                                        Kind, colour and owner can be set once it is on the canvas.
                                                     </p>
                                                 </div>
-                                            </div>
-                                        }  }
-                                    </div>
-                                }}
-                            </div>
-                        } }
-                        {if not showList {
-                            <div
-                                key="legend"
-                                aria-label="Key"
-                                className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
-                            >
-                                {for k in usedKinds {
-                                    <span
-                                        key={k}
-                                        className="inline-flex items-center gap-1.5"
-                                    >
-                                        <KindGlyph
-                                            kind={k}
-                                            size={14}
-                                            className={KIND_TONE[k]
-                                                if k in KIND_TONE
-                                                else "text-subtle"}
-                                        />
-                                        {KIND_LABEL[k]}
-                                    </span>
-                                }}
-                                <span className="inline-flex items-center gap-1.5">
-                                    <svg
-                                        width={22}
-                                        height={8}
-                                        aria-hidden="true"
-                                        className="text-wire"
-                                    >
-                                        <path
-                                            d="M1 4 H21"
-                                            stroke="currentColor"
-                                            strokeWidth={1.6}
-                                            strokeLinecap="round"
-                                        />
-                                    </svg>
-                                    Moves forward
-                                </span>
-                                {if hasBack or editing {
-                                    <span
-                                        key="back"
-                                        className="inline-flex items-center gap-1.5"
-                                    >
+                                            } elif len(picked) > 0 {
+                                                <StepInspector
+                                                    key={picked[0].id}
+                                                    step={picked[0]}
+                                                    steps={steps}
+                                                    form={form}
+                                                    roleOptions={ownerOptions}
+                                                    connecting={bool(connectFrom)}
+                                                    saving={saving}
+                                                    confirmingDelete={confirmDelete}
+                                                    onField={setField}
+                                                    onNameCommit={commitName}
+                                                    onConnect={armConnect}
+                                                    onCancelConnect={lambda { connectFrom = ""; }}
+                                                    onDelete={deleteStep}
+                                                    onUnlink={deleteEdge}
+                                                />
+                                            } else {
+                                                <div
+                                                    key="howto"
+                                                    className="flex flex-col gap-4"
+                                                >
+                                                    <div
+                                                        className="flex flex-col gap-2.5"
+                                                    >
+                                                        <h2 className="section-title">
+                                                            How to edit
+                                                        </h2>
+                                                        <ol
+                                                            className="flex flex-col gap-2 text-[13px]"
+                                                        >
+                                                            <li
+                                                                className="flex gap-2.5"
+                                                            >
+                                                                <span
+                                                                    className="num w-4 shrink-0 text-subtle"
+                                                                >
+                                                                    1
+                                                                </span>
+                                                                <span>
+                                                                    Drag a step to move it. Drag empty canvas to pan.
+                                                                </span>
+                                                            </li>
+                                                            <li
+                                                                className="flex gap-2.5"
+                                                            >
+                                                                <span
+                                                                    className="num w-4 shrink-0 text-subtle"
+                                                                >
+                                                                    2
+                                                                </span>
+                                                                <span>
+                                                                    Drag from a step's edge (the dots) to another step to connect them.
+                                                                </span>
+                                                            </li>
+                                                            <li
+                                                                className="flex gap-2.5"
+                                                            >
+                                                                <span
+                                                                    className="num w-4 shrink-0 text-subtle"
+                                                                >
+                                                                    3
+                                                                </span>
+                                                                <span>
+                                                                    Click a transition to label it, or a step to rename it, change its kind or remove it.
+                                                                </span>
+                                                            </li>
+                                                        </ol>
+                                                    </div>
+                                                    <div
+                                                        className="flex flex-col gap-2 border-t pt-3"
+                                                    >
+                                                        <h2 className="section-title">
+                                                            Checks
+                                                        </h2>
+                                                        {if len(issues) == 0 {
+                                                            <p
+                                                                key="ok"
+                                                                className="text-[13px] text-muted-foreground"
+                                                            >
+                                                                Every step can be reached from a start step and can reach a done step.
+                                                            </p>
+                                                        } else {
+                                                            <ul
+                                                                key="issues"
+                                                                className="flex flex-col gap-1.5"
+                                                            >
+                                                                {for msg in issues {
+                                                                    <li
+                                                                        key={msg}
+                                                                        className="flex items-start gap-2 text-[13px] text-warning"
+                                                                    >
+                                                                        <WarnIcon
+                                                                            size={14}
+                                                                            className="mt-0.5 shrink-0"
+                                                                        />
+                                                                        <span>
+                                                                            {msg}
+                                                                        </span>
+                                                                    </li>
+                                                                }}
+                                                            </ul>
+                                                        } }
+                                                        <p
+                                                            className="text-xs text-subtle"
+                                                        >
+                                                            Checks are advice. Saving is never blocked.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            }  }
+                                        </div>
+                                    }}
+                                </div>
+                            } }
+                            {if not showList {
+                                <div
+                                    key="legend"
+                                    aria-label="Key"
+                                    className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
+                                >
+                                    {for k in usedKinds {
+                                        <span
+                                            key={k}
+                                            className="inline-flex items-center gap-1.5"
+                                        >
+                                            <KindGlyph
+                                                kind={k}
+                                                size={14}
+                                                className={KIND_TONE[k]
+                                                    if k in KIND_TONE
+                                                    else "text-subtle"}
+                                            />
+                                            {KIND_LABEL[k]}
+                                        </span>
+                                    }}
+                                    <span className="inline-flex items-center gap-1.5">
                                         <svg
                                             width={22}
                                             height={8}
@@ -1301,120 +1195,137 @@ def:pub FlowLinePage -> JsxPage {
                                                 d="M1 4 H21"
                                                 stroke="currentColor"
                                                 strokeWidth={1.6}
-                                                strokeDasharray="5 4"
+                                                strokeLinecap="round"
                                             />
                                         </svg>
-                                        Sends back, on purpose
+                                        Moves forward
                                     </span>
-                                }}
-                                {if len(issues) > 0 and not editing {
-                                    <span
-                                        key="issues"
-                                        className="inline-flex min-w-0 items-center gap-1.5 text-warning"
-                                        title={" ".join(issues)}
-                                    >
-                                        <WarnIcon size={14} className="shrink-0"/>
-                                        <span className="truncate">
-                                            {issues[0]
-                                                + (
-                                                    " (+"
-                                                        + str(len(issues) - 1)
-                                                        + " more)"
-                                                        if len(issues) > 1
-                                                        else ""
-                                                )}
-                                        </span>
-                                    </span>
-                                }}
-                                <Popover>
-                                    <PopoverTrigger
-                                        className="ml-auto inline-flex h-6 items-center gap-1.5 rounded-sm px-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                                    >
-                                        Roles
-                                        <span className="num text-xs">
-                                            {str(len(roleList))}
-                                        </span>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        align="end"
-                                        collisionPadding={16}
-                                        className="w-72 gap-2.5 p-3"
-                                    >
-                                        <div
-                                            className="flex items-baseline justify-between gap-2"
+                                    {if hasBack or editing {
+                                        <span
+                                            key="back"
+                                            className="inline-flex items-center gap-1.5"
                                         >
-                                            <h2 className="text-sm font-semibold">
-                                                Roles
-                                            </h2>
-                                            <a
-                                                href="/workspace?tab=roles"
-                                                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                                            <svg
+                                                width={22}
+                                                height={8}
+                                                aria-hidden="true"
+                                                className="text-wire"
                                             >
-                                                Manage roles
-                                            </a>
-                                        </div>
-                                        {if len(roleList) == 0 {
-                                            <p
-                                                key="none"
-                                                className="text-[13px] text-muted-foreground"
+                                                <path
+                                                    d="M1 4 H21"
+                                                    stroke="currentColor"
+                                                    strokeWidth={1.6}
+                                                    strokeDasharray="5 4"
+                                                />
+                                            </svg>
+                                            Sends back, on purpose
+                                        </span>
+                                    }}
+                                    {if len(issues) > 0 and not editing {
+                                        <span
+                                            key="issues"
+                                            className="inline-flex min-w-0 items-center gap-1.5 text-warning"
+                                            title={" ".join(issues)}
+                                        >
+                                            <WarnIcon size={14} className="shrink-0"/>
+                                            <span className="truncate">
+                                                {issues[0]
+                                                    + (
+                                                        " (+"
+                                                            + str(len(issues) - 1)
+                                                            + " more)"
+                                                            if len(issues) > 1
+                                                            else ""
+                                                    )}
+                                            </span>
+                                        </span>
+                                    }}
+                                    <Popover>
+                                        <PopoverTrigger
+                                            className="ml-auto inline-flex h-6 items-center gap-1.5 rounded-sm px-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                                        >
+                                            Roles
+                                            <span className="num text-xs">
+                                                {str(len(roleList))}
+                                            </span>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            align="end"
+                                            collisionPadding={16}
+                                            className="w-72 gap-2.5 p-3"
+                                        >
+                                            <div
+                                                className="flex items-baseline justify-between gap-2"
                                             >
-                                                No roles yet. A role says who holds a step.
-                                            </p>
-                                        } else {
-                                            <ul
-                                                key="roles"
-                                                className="flex flex-col gap-2"
-                                            >
-                                                {for rl in roleList {
-                                                    <li
-                                                        key={rl["id"]}
-                                                        className="flex min-w-0 flex-col"
-                                                    >
-                                                        <span
-                                                            className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium"
+                                                <h2 className="text-sm font-semibold">
+                                                    Roles
+                                                </h2>
+                                                <a
+                                                    href="/workspace?tab=roles"
+                                                    className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                                                >
+                                                    Manage roles
+                                                </a>
+                                            </div>
+                                            {if len(roleList) == 0 {
+                                                <p
+                                                    key="none"
+                                                    className="text-[13px] text-muted-foreground"
+                                                >
+                                                    No roles yet. A role says who holds a step.
+                                                </p>
+                                            } else {
+                                                <ul
+                                                    key="roles"
+                                                    className="flex flex-col gap-2"
+                                                >
+                                                    {for rl in roleList {
+                                                        <li
+                                                            key={rl["id"]}
+                                                            className="flex min-w-0 flex-col"
                                                         >
                                                             <span
-                                                                className={"step-swatch "
-                                                                    + rl["dot"]}
-                                                                aria-hidden="true"
-                                                            />
-                                                            <span className="truncate">
-                                                                {rl["name"]}
+                                                                className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium"
+                                                            >
+                                                                <span
+                                                                    className={"step-swatch "
+                                                                        + rl["dot"]}
+                                                                    aria-hidden="true"
+                                                                />
+                                                                <span
+                                                                    className="truncate"
+                                                                >
+                                                                    {rl["name"]}
+                                                                </span>
                                                             </span>
-                                                        </span>
-                                                        <span
-                                                            className={"pl-4 text-xs "
-                                                                + (
-                                                                    "text-warning"
-                                                                        if rl["none"]
-                                                                        else "text-muted-foreground"
-                                                                )}
-                                                        >
-                                                            {rl["holders"]}
-                                                        </span>
-                                                    </li>
-                                                }}
-                                            </ul>
-                                        } }
-                                    </PopoverContent>
-                                </Popover>
-                                <span className="text-xs text-subtle">
-                                    <span className="num">{str(len(steps))}</span>
-                                    {" " + stepNoun + " · "}
-                                    <span className="num">{str(linkCount)}</span>
-                                    {" " + linkNoun + " · "}
-                                    <span className="num">{str(taskTotal)}</span>
-                                    {" task" if taskTotal == 1 else " tasks"}
-                                </span>
-                                <span
-                                    className="hidden items-center gap-1 text-xs text-subtle md:inline-flex"
-                                >
-                                    Drag to pan ·
-                                    <span className="kbd">F</span>
-                                    fits
-                                </span>
-                            </div>
-                        }}
+                                                            <span
+                                                                className={"pl-4 text-xs "
+                                                                    + (
+                                                                        "text-warning"
+                                                                            if rl[
+                                                                                "none"
+                                                                            ]
+                                                                            else "text-muted-foreground"
+                                                                    )}
+                                                            >
+                                                                {rl["holders"]}
+                                                            </span>
+                                                        </li>
+                                                    }}
+                                                </ul>
+                                            } }
+                                        </PopoverContent>
+                                    </Popover>
+                                    <span
+                                        className="hidden items-center gap-1 text-xs text-subtle md:inline-flex"
+                                    >
+                                        Drag to pan ·
+                                        <span className="kbd">F</span>
+                                        fits
+                                    </span>
+                                </div>
+                            }}
+                        </div>
                     </div>
                 }  }
             </Reveal>
@@ -1505,7 +1416,6 @@ def:pub FlowLinePage -> JsxPage {
                 taskId={editTaskId}
                 onLoaded={absorbDetails}
                 onChecklist={replacePeekRow}
-                iterations={iterations}
             />
         </div>;
 }

@@ -171,8 +171,8 @@ clean and only fail at runtime, in the browser, or on the deployed build.
 ??? danger "`UpdateTask` overwrites every field it is sent"
 
     Every page that opens the task sheet (`components/board/TaskDialog.jac`)
-    must carry `start_date` and the iteration (a jid or `"none"`) in its form
-    and pass them on save, or a save clears them. The checklist is deliberately
+    must carry `start_date` in its form and pass it on save, or a save
+    clears it. The checklist is deliberately
     **not** part of the form: only `AddChecklistItem`, `SetChecklistItem` and
     `RemoveChecklistItem` write it, each applied at once, and a page that opens
     the sheet passes `taskId`, `checklist` and an `onChecklist` that swaps the

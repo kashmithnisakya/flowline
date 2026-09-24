@@ -5,8 +5,8 @@
 site_name: flowline
 site_url: https://kashmithnisakya.github.io/flowline/
 site_description: >-
-  Run, understand, call and deploy flowline: a kanban board that follows your
-  team's own flow line and a daily log it writes for you, built in Jac.
+  Run, understand, call and deploy flowline: a board that follows your team's
+  own flow line and logs every move a task makes, built in Jac.
 site_author: Kashmith Nisakya
 copyright: Copyright &copy; 2026 Kashmith Nisakya. MIT licensed.
 
@@ -24,8 +24,8 @@ theme:
   logo: assets/brand/logo-mark-dark.svg
   favicon: assets/brand/favicon.svg
   font:
-    text: Archivo
-    code: IBM Plex Mono
+    text: Geist
+    code: Geist Mono
   icon:
     repo: fontawesome/brands/github
     edit: material/pencil-outline
@@ -171,7 +171,7 @@ nav:
       - concepts/index.md
       - Data graph: concepts/data-graph.md
       - Flow lines: concepts/flow-lines.md
-      - The daily log: concepts/daily-log.md
+      - The activity log: concepts/activity-log.md
       - Tenancy and security: concepts/security.md
       - GitHub sync: concepts/github-sync.md
   - API reference:
@@ -182,8 +182,8 @@ nav:
       - Tasks: api/tasks.md
       - Board: api/board.md
       - Saved filters: api/filters.md
-      - Iterations and roadmap: api/iterations.md
-      - Daily log: api/log.md
+      - Roadmap: api/roadmap.md
+      - Activity log: api/log.md
       - Flow lines: api/flow-lines.md
       - Insights: api/insights.md
       - Assistant: api/assistant.md

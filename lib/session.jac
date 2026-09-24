@@ -10,6 +10,7 @@ answers on the next load.
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogout }
 import from .workspace { forgetWorkspace }
+import from .project { PROJECT_KEY }
 
 glob ORG_KEY: str = "flowline-org",
      ACCOUNT_KEY: str = "flowline-account";
@@ -17,9 +18,8 @@ glob ORG_KEY: str = "flowline-org",
 # The first-load frames' shape caches (what the last visit of each page
 # looked like in this browser). Session-scoped like the name: dropped when
 # a session starts or ends, so another account never inherits them.
-glob:pub LANES_KEY: str = "flowline-lanes",
+glob:pub STEPS_KEY: str = "flowline-steps",
      OVERVIEW_SHAPE_KEY: str = "flowline-overview-shape",
-     LOG_SHAPE_KEY: str = "flowline-log-shape",
      ROADMAP_SHAPE_KEY: str = "flowline-roadmap-shape",
      GITHUB_KEY: str = "flowline-github",
      # The account's board filters as this browser last saw them (lib/filters).
@@ -28,12 +28,12 @@ glob:pub LANES_KEY: str = "flowline-lanes",
 glob SESSION_KEYS: list[str] = [
          ORG_KEY,
          ACCOUNT_KEY,
-         LANES_KEY,
+         STEPS_KEY,
          OVERVIEW_SHAPE_KEY,
-         LOG_SHAPE_KEY,
          ROADMAP_SHAPE_KEY,
          GITHUB_KEY,
-         BOARD_FILTERS_KEY
+         BOARD_FILTERS_KEY,
+         PROJECT_KEY
      ],
      ME: dict[str, any] = {"promise": None, "data": None};
 

@@ -24,10 +24,7 @@ glob FILTER_SET_MAX: int = 50,
      FILTER_CHOICES: dict[str, list[str]] = {
          "priority": PRIORITIES,
          "estimate": ["yes", "no"],
-         "done": ["hide"],
-         "scope": ["done", "all", "attention"],
-         "sort": ["title", "step", "priority", "due", "updated"],
-         "dir": ["asc", "desc"]
+         "done": ["hide"]
      };
 
 
@@ -42,11 +39,6 @@ def clean_filters(page: str, raw: dict[str, str]) -> dict[str, str] {
         key = pair[0];
         value = str(raw[key] or "").strip()[:FILTER_VALUE_MAX] if key in raw else "";
         if not value or value == pair[1] {
-            continue;
-        }
-        # The project is the board's scope; "all" was its every-project
-        # value before the board showed one project, and means unset.
-        if key == "project" and value == "all" {
             continue;
         }
         if key in FILTER_CHOICES and value not in FILTER_CHOICES[key] {

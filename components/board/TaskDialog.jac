@@ -11,8 +11,7 @@ import from ...models {
     StepView,
     RoleView,
     TaskRow,
-    TaskView,
-    IterationView
+    TaskView
 }
 import from ...services.tasks.tasks { GetTask }
 import from ..common.Markdown { Markdown }
@@ -21,7 +20,7 @@ import from ..common.Avatar { AvatarStack }
 import from .Checklist { ChecklistEditor }
 import from .MoveMenu { MoveMenu, routeFrom }
 import from .TravelLog { TravelLog }
-import from ..log.DatePicker { DatePicker }
+import from ..common.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
 import from ..ui.input { Input }
@@ -202,8 +201,6 @@ def:pub TaskDialog(
     taskId: str = "",
     onLoaded: Callable[[TaskView], None] = None,
     onChecklist: Callable[[TaskView], None] = None,
-    # The workspace's iterations; the form's "iteration" is a jid or "none".
-    iterations: list[IterationView] = [],
     # Move now (the board): the sheet's Move menu calls this with a column
     # key. Without it a pick only sets the Step field, applied on Save.
     onMove: Callable[[str], None] = None,
@@ -732,7 +729,7 @@ def:pub TaskDialog(
                                 aria-label="Title"
                                 placeholder="What needs doing?"
                                 className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[19px] leading-snug hover:border-border md:text-[19px]"
-                                style={{"fontWeight": 650, "fontStretch": "108%"}}
+                                style={{"fontWeight": 600}}
                                 value={form["title"]}
                                 onChange={lambda (e: ChangeEvent) { onField(
                                     "title", e.target.value
@@ -976,42 +973,6 @@ def:pub TaskDialog(
                                     </p>
                                 }}
                             </PropRow>
-                            {if len(iterations) > 0 or form["iteration"] != "none" {
-                                <PropRow key="iteration" label="Iteration">
-                                    <Select
-                                        value={form["iteration"]}
-                                        onValueChange={lambda (v: str) { onField(
-                                            "iteration", v
-                                        ); }}
-                                    >
-                                        <SelectTrigger
-                                            className={GHOST_SELECT
-                                                + (
-                                                    " text-subtle"
-                                                        if form["iteration"] == "none"
-                                                        else ""
-                                                )}
-                                            aria-label="Iteration"
-                                        >
-                                            <SelectValue placeholder="No iteration"/>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">
-                                                No iteration
-                                            </SelectItem>
-                                            {for it in iterations {
-                                                <SelectItem key={it.id} value={it.id}>
-                                                    {it.name
-                                                        + " · "
-                                                        + prettyDay(it.start_date)
-                                                        + " to "
-                                                        + prettyDay(it.end_date)}
-                                                </SelectItem>
-                                            }}
-                                        </SelectContent>
-                                    </Select>
-                                </PropRow>
-                            }}
                             <PropRow label="Priority">
                                 <Select
                                     value={form["priority"]}
