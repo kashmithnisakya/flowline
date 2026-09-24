@@ -106,7 +106,7 @@ people it tracks are roster members.
   sync, a function, not a walker) and `util.jac`) plus
   `services/util.jac` for shared server-only helpers. Walkers are **bare
   (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
-  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.18: the endpoint
+  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.21: the endpoint
   effect pass does not follow an ability body into an annex, so an annexed
   walker is classified as a pure read, the client caches it, and a save no
   longer invalidates anything (every write-then-refetch shows stale data;
@@ -152,7 +152,7 @@ people it tracks are roster members.
   become predicates, the sort an order ending in `Task.row_key` (the jid,
   so a page cut is exact), `[start:end]` the page. A total comes from the
   tallies; only under a filter is it `len()` of the reference, which on
-  0.37.18 reads the matching rows for a signed-in caller (the store counts
+  0.37.21 reads the matching rows for a signed-in caller (the store counts
   only without one, jaseci-labs/jac#9416), so the step sort walks columns
   with LIMIT windows instead of counting them. The filter set is chosen per request, so it builds the query from
   `jaclang.lib.jaclib` (`GraphQuery`, `QHop`, `QPred`, `QOrder`, `refs`),
@@ -197,15 +197,17 @@ people it tracks are roster members.
   `ensure_tallies(holder)` in `services/util.jac` fills tallies, link
   fields and a missing `done_at` for a project whose `tallies_at` is empty
   (one full load, once; `SaveProject` stamps a new project) and every
-  counting or listing walker calls it first. Two runtime facts shape this
-  (jac 0.37.18, verified in scratch apps): a field write is not visible to
-  a pushed query later in the same request, only to the next one, so a
-  walker that writes and then looks the same row up keeps it in a local
-  (the sync's lookup caches, `others()` in `MoveTask`, the `except_id` in
-  `forget_category`); and `jac fmt` collapses `field in list` inside a
-  filter into one name (`ninwanted`), so there is no pushed `in`: short
-  lists loop one query per value, a GitHub page over `LOOKUP_ONE_BY_ONE`
-  numbers runs one range query kept to the page in Python. Loading costs
+  counting or listing walker calls it first. Two runtime facts shape this:
+  a field write is not visible to a pushed query later in the same
+  request, only to the next one (verified on 0.37.18 in scratch apps,
+  jaseci-labs/jac#9264, still open at 0.37.21), so a walker that writes
+  and then looks the same row up keeps it in a local (the sync's lookup
+  caches, `others()` in `MoveTask`, the `except_id` in `forget_category`);
+  and nothing pushes an `in` yet: through 0.37.18 `jac fmt` collapsed
+  `field in list` inside a filter into one name (`ninwanted`; fixed in
+  0.37.19), so short lists loop one query per value and a GitHub page over
+  `LOOKUP_ONE_BY_ONE` numbers runs one range query kept to the page in
+  Python; a pushed `in` is a follow-up. Loading costs
   about 0.2 ms per Task row locally plus 1 to 2 ms per query, so a walker's
   time is its working set: 209 rows at 1,500 tasks is about 60 ms.
 - **The browser caches a declared reader for 60 s; the task lists are
@@ -416,8 +418,10 @@ line per workspace with the counts. A row whose root is gone
 that installation is dropped there (`release_binding`, a delete that names
 the root it read); an invalid connection keeps its row for `unsuspend`. Schedule a function, never a walker: a
 decorated walker loses its `/walker/` route and logs a spurious error per
-fire on 0.37.18, and static fires do not serialise themselves, hence the
-lease. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
+fire (seen on 0.37.18). Since 0.37.20 the runtime claims each static tick
+once per service (jaseci-labs/jac#9201); the per-workspace lease stays,
+since it also keeps the schedule out of a workspace someone is syncing by
+hand. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
 15 min while deliveries are live, both shorter than never) gates only the
 poll, the token is minted only when a poll will run, an invalid connection
 reports `invalid` without a call, and a manual sync (`auto=False`) holds the
@@ -650,7 +654,10 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   or edge name that was never imported (`STATUS_KIND`, `ForProject`) still
   type-checks clean, then raises `name '...' is not defined` at request time
   and 500s the walker. Only running the endpoint finds it, which is what the
-  API gate suite is for.
+  API gate suite is for. The same goes for a name a release dropped from a
+  runtime module: `open_docs_store` left `jaclang.server.shared_store` in
+  0.37.21 (jaseci-labs/jac#9241), every file still type-checked, and only
+  `jac run` reported it. Boot the app after every pin bump.
 - **A `#` comment among JSX children renders as visible text.** Comments are
   only comments outside the JSX tree; inside it they become a text node and
   ship to the page. Keep notes in the docstring or above the `return`.

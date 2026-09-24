@@ -98,7 +98,7 @@ walker ListMembers {
 
 !!! note "Ability bodies stay inline"
 
-    Through Jac 0.37.18 the endpoint effect analysis does not follow a walker's
+    Through Jac 0.37.21 the endpoint effect analysis does not follow a walker's
     ability body into an `.impl.jac` annex. An annexed walker is classified as
     a pure read, the client caches it, and saves stop invalidating anything.
     Keep walker bodies inline until jaseci-labs/jac#9189 ships.

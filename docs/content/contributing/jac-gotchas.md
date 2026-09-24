@@ -133,9 +133,12 @@ clean and only fail at runtime, in the browser, or on the deployed build.
 
     A `glob` or edge name that was never imported still type-checks, then
     raises `name '...' is not defined` at request time and 500s the walker.
-    Only calling the endpoint finds it.
+    Only calling the endpoint finds it. A name a release dropped from a
+    runtime module is the same (`open_docs_store` left
+    `jaclang.server.shared_store` in 0.37.21): only `jac run` reports it,
+    so boot the app after every pin bump.
 
-??? danger "Walker ability bodies must stay inline through 0.37.18"
+??? danger "Walker ability bodies must stay inline through 0.37.21"
 
     The endpoint effect pass does not follow an ability body into an
     `.impl.jac` annex, so an annexed walker is classified as a read, the

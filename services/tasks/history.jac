@@ -52,7 +52,7 @@ def task_query(
 
 
 # How many tasks a part holds. A graph reference under len() is a count in
-# the store only without a signed-in caller on jac 0.37.18; for a tenant it
+# the store only without a signed-in caller on jac 0.37.21; for a tenant it
 # loads the matching rows (jaseci-labs/jac#9416), so callers count only
 # under a filter, where the tallies cannot answer.
 def part_count(base: HistoryBase, extra: list[QPred]) -> int {
