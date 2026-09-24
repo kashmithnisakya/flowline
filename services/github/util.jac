@@ -16,7 +16,7 @@ import logging;
 # Re-exported so callers get the guard and the request helpers from one
 # place; the definition itself is Python-free and lives in models.jac.
 import from models { valid_full_name, Task, Repo, GithubConnection }
-import from jaclang.server.shared_store { open_docs_store }
+import from jaclang.server.shared_store { shared_store }
 
 # The two bases are overridable so the smoke suite can point the app at
 # tests/smoke/github_stub.py; a deployment never sets them.
@@ -196,7 +196,7 @@ def bind_installation(installation_id: int, root_jid: str) -> bool {
         "bound_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -219,7 +219,7 @@ def unbind_installation(installation_id: int) -> bool {
         return False;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -244,7 +244,7 @@ def release_binding(installation_id: int, root_jid: str) -> bool {
         return False;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -272,7 +272,7 @@ def root_for_installation(installation_id: int) -> str {
         return "";
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "";
         }
@@ -298,7 +298,7 @@ def root_for_installation(installation_id: int) -> str {
 def bound_installations -> list[dict[str, any]] {
     found: list[dict[str, any]] = [];
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return found;
         }
@@ -361,7 +361,7 @@ def enqueue_delivery(
         "payload": payload
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "unavailable";
         }
@@ -382,7 +382,7 @@ def enqueue_delivery(
 def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]] {
     found: list[dict[str, any]] = [];
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return found;
         }
@@ -407,7 +407,7 @@ def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]]
 
 def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -429,7 +429,7 @@ def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
 # Applied rows stay a week as the delivery log, then go.
 def purge_deliveries(installation_id: int, before: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -447,7 +447,7 @@ def purge_deliveries(installation_id: int, before: str) {
 
 def drop_deliveries(installation_id: int) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -465,7 +465,7 @@ def drop_deliveries(installation_id: int) {
 # means on the GitHub tab even while the deliveries wait in the queue.
 def touch_installation(installation_id: int, seen_at: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -489,7 +489,7 @@ def installation_seen_at(installation_id: int) -> str {
         return "";
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "";
         }
@@ -521,7 +521,7 @@ def acquire_sync_lease(root_jid: str, owner: str, ttl_seconds: int) -> bool {
         return False;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -535,7 +535,7 @@ def acquire_sync_lease(root_jid: str, owner: str, ttl_seconds: int) -> bool {
 
 def release_sync_lease(root_jid: str, owner: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -573,7 +573,7 @@ def store_repo_list(
         "items": items
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -598,7 +598,7 @@ def read_repo_list(repo_id: str, kind: str, state: str) -> dict[str, any] {
         return nothing;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return nothing;
         }
@@ -624,7 +624,7 @@ def drop_repo_lists(repo_id: str) {
         return;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
