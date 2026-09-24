@@ -28,9 +28,7 @@ def:pub ConnectCard(
         >
             <div className="flex flex-col items-start gap-4 md:p-7">
                 <IconGithub size={28} className="text-foreground"/>
-                <h2
-                    className="font-display text-[22px] leading-snug font-bold [font-stretch:115%]"
-                >
+                <h2 className="font-display text-[22px] leading-snug font-bold">
                     Keep the board in step with GitHub
                 </h2>
                 <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">

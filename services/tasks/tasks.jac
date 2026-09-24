@@ -13,7 +13,6 @@ import from models {
     ProjectTally,
     MemberTally,
     WorkflowStep,
-    Iteration,
     AssignedTo,
     OnProject,
     HasRole,
@@ -97,12 +96,6 @@ import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 # The legacy status a step stands for. Every move writes both, so the rest of
 # the app keeps reading `status` and never has to know about steps.
-# An iteration id the caller may plan into: its own iteration, else "".
-def owned_iteration(holder: Root, iteration_id: str) -> str {
-    it = resolve(iteration_id);
-    return iteration_id if isinstance(it, Iteration) and owned(holder, it) else "";
-}
-
 
 def status_for_step(holder: Root, step_id: str) -> str {
     step = resolve(step_id);
@@ -284,8 +277,6 @@ walker ListTasks {
         # estimate) or "no" (unestimated).
         tag: str = "",
         estimated: str = "",
-        # An iteration jid, "none" for tasks in no iteration, or "" for any.
-        iteration_id: str = "",
         # A priority, and a board column (a step jid, or a status when the
         # workspace has no flow line), each "" for any.
         priority: str = "",
@@ -405,11 +396,6 @@ walker ListTasks {
         } elif self.estimated == "no" {
             preds.append(QPred(field="estimate", op="<=", value=0.0));
         }
-        if self.iteration_id == "none" {
-            preds.append(QPred(field="iteration_id", op="==", value=""));
-        } elif self.iteration_id {
-            preds.append(QPred(field="iteration_id", op="==", value=self.iteration_id));
-        }
         if self.assignee_id {
             m = resolve(self.assignee_id);
             if not isinstance(m, Member) or not owned(holder, m) {
@@ -453,7 +439,6 @@ walker ListTasks {
             self.category
                 or self.priority
                 or self.estimated
-                or self.iteration_id
                 or self.assignee_id
                 or self.column
         );
@@ -541,14 +526,6 @@ walker ListTasks {
                 continue;
             }
             if self.estimated == "no" and t.estimate > 0.0 {
-                continue;
-            }
-            if self.iteration_id == "none" and t.iteration_id {
-                continue;
-            }
-            if self.iteration_id
-                and self.iteration_id != "none"
-                and t.iteration_id != self.iteration_id {
                 continue;
             }
             if self.priority and t.priority != self.priority {
@@ -678,6 +655,8 @@ def task_totals(
     active_by_project: dict[str, int] = {};
     open_by_member: dict[str, int] = {};
     done_by_member: dict[str, int] = {};
+    days = [shift_day(week0, i) for i in range(7)];
+    by_day = [0, 0, 0, 0, 0, 0, 0];
     for t in open {
         open_count = open_count + 1;
         if t.status == "Blocked" {
@@ -707,6 +686,10 @@ def task_totals(
     for t in week_done {
         if not moved_to_done(t) or done_day(t) < week0 {
             continue;
+        }
+        if done_day(t) in days {
+            at = days.index(done_day(t));
+            by_day[at] = by_day[at] + 1;
         }
         for who in names.ids_of(t) {
             done_by_member[who] = (done_by_member[who] if who in done_by_member else 0)
@@ -747,6 +730,7 @@ def task_totals(
         overdue=overdue_count,
         blocked=blocked_count,
         done_by_week=by_week,
+        done_by_day=by_day,
         projects=tallies,
         members=people,
         categories=categories_of(holder)
@@ -861,7 +845,6 @@ walker CreateTask {
         step_id: str = "",
         due_date: str = "",
         start_date: str = "",
-        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         assignee_ids: list[str] = [],
@@ -907,7 +890,6 @@ walker CreateTask {
             step_id=step,
             due_date=self.due_date,
             start_date=iso_day(self.start_date),
-            iteration_id=owned_iteration(holder, self.iteration_id),
             notes=self.notes,
             issue_link=self.issue_link,
             created_at=stamp,
@@ -968,7 +950,6 @@ walker UpdateTask(find_task) {
         step_id: str = "",
         due_date: str = "",
         start_date: str = "",
-        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         pr_link: str = "",
@@ -1005,7 +986,6 @@ walker UpdateTask(find_task) {
         here.due_date = self.due_date;
         here.keep_keys();
         here.start_date = iso_day(self.start_date);
-        here.iteration_id = owned_iteration(holder, self.iteration_id);
         here.notes = self.notes;
         here.issue_link = self.issue_link;
         here.pr_link = self.pr_link;

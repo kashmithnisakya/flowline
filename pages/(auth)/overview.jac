@@ -7,35 +7,28 @@ import from "react" { useEffect }
 import from ...models {
     Project,
     MemberView,
+    StepView,
     TaskRow,
     TaskTotals,
     LogTotals,
     WeeklyHistory
 }
-import from ...constants { FLOW_LINE_TEMPLATES, STATUS_KIND }
+import from ...constants { FLOW_LINE_TEMPLATES, STATUS_KIND, KIND_COLORS }
 import from ...services.insights.insights { OverviewSnapshot }
 import from ...services.tasks.tasks { TaskHistory, ListTasks }
-import from ...services.log.log { ListLogEntries }
-import from ...services.flowlines.flowlines { GetFlowLine, GetFlowLineMeta }
-import from ...services.github.github { GithubStatus }
-import from ...components.dashboard.HistoryCharts { BurnUpChart, ThroughputChart }
 import from ...components.dashboard.NeedsYou { NeedsYou }
 import from ...components.dashboard.ThisWeek { ThisWeek }
-import from ...components.dashboard.Breakdown { ProjectBars, PeopleTable }
+import from ...components.dashboard.ProjectBars { ProjectBars }
+import from ...components.dashboard.PeopleTable { PeopleTable }
+import from ...components.dashboard.OverTime { OverTime }
+import from ...components.dashboard.HistoryFilters { HistoryFilters }
 import from ...components.dashboard.FirstRun { FirstRun }
-import from ...components.ui.select {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem
-}
 import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
-import from ...components.common.Busy { Busy }
 import from ...lib.dates { todayIso, daysUntil, prettyDay }
 import from ...lib.session { fetchOrgName, cachedOrgName, OVERVIEW_SHAPE_KEY }
+import from ...lib.workspace { loadWorkspace }
 
 glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
      DAY_NAMES: list[str] = [
@@ -46,11 +39,6 @@ glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
          "Friday",
          "Saturday",
          "Sunday"
-     ],
-     HISTORY_RANGES: list[list[str]] = [
-         ["8", "Last 8 weeks"],
-         ["12", "Last 12 weeks"],
-         ["26", "Last 26 weeks"]
      ];
 
 # Reads in flight, by name. A remount (the page used to mount twice on a
@@ -121,14 +109,10 @@ def mondayOf(iso: str) -> str {
     return shiftDay(iso, -offset);
 }
 
-# The local day of a log row's UTC stamp ("2026-09-15T20:39:12.123456Z"),
-# else the server's date for it.
-def localDayOf(at: str, fallback: str) -> str {
-    base = at.replace("Z", "");
-    if len(base) < 19 or base[10] != "T" or base[13] != ":" {
-        return fallback[:10];
-    }
-    return localIso(new(Date, base[:23] + "Z"));
+# "2026-09-21" -> "September 21", for the week line under the title.
+def longDay(iso: str) -> str {
+    d = new(Date, iso + "T00:00:00");
+    return d.toLocaleDateString("en-US", {"month": "long", "day": "numeric"});
 }
 
 # A due date as the worklist reads it: "today", "tomorrow", a weekday later
@@ -196,9 +180,21 @@ def splitNames(joined: str) -> list[str] {
     ];
 }
 
-# One worklist row; the note, kind and flags are filled in by the caller.
+# The pill a row shows: the task's own step, else the first step of its
+# status's kind by the legacy status (a task need not have a step).
+def stepChip(steps: list[StepView], stepId: str, status: str) -> dict[str, str] {
+    for s in steps {
+        if stepId and s.id == stepId {
+            return {"name": s.name, "color": s.color, "kind": s.kind};
+        }
+    }
+    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
+    return {"name": status or "Open", "color": KIND_COLORS[kind], "kind": kind};
+}
+
+# One worklist row; the note, flags and step are filled in by the caller.
 def workRow(
-    id: str, title: str, meta: str, names: list[str], time: str, late: bool
+    id: str, title: str, meta: str, names: list[str], time: str, late: bool, status: str
 ) -> dict[str, any] {
     return {
         "id": id,
@@ -209,8 +205,8 @@ def workRow(
         "names": names,
         "time": time,
         "late": late,
-        "kind": "",
-        "kindLabel": ""
+        "status": status,
+        "step": {}
     };
 }
 
@@ -221,7 +217,8 @@ def dueRow(t: TaskRow, today: str) -> dict[str, any] {
         t.project_name,
         t.assignee_names,
         relDay(t.due_date, today),
-        t.due_date < today
+        t.due_date < today,
+        t.status
     );
 }
 
@@ -262,6 +259,19 @@ def withReview(row: dict[str, any], r: dict[str, any], held: any) -> dict[str, a
     return row;
 }
 
+def group(
+    key: str, label: str, tone: str, rows: list[dict[str, any]], more: int, what: str
+) -> dict[str, any] {
+    return {
+        "key": key,
+        "label": label,
+        "tone": tone,
+        "rows": rows,
+        "more": more,
+        "moreLabel": what
+    };
+}
+
 def:pub OverviewPage -> JsxPage {
     has attention: list[TaskRow] = [],
         attentionTotal: int = 0,
@@ -286,30 +296,20 @@ def:pub OverviewPage -> JsxPage {
         dueLoaded: bool = False,
         dueHasMore: bool = False,
         dueFailed: bool = False,
-        # This week off the log, by local day: tasks that entered Done per
-        # weekday, hand-written lines, and when each blocked task stopped.
-        doneMoves: list[int] = [0, 0, 0, 0, 0, 0, 0],
-        handEntries: int = 0,
-        blockedSince: dict[str, str] = {},
-        # The week's entries by the same local day rule, per roster name, for
-        # the People strip and the entries figure. -1 until a complete read.
-        weekPeople: dict[str, list[int]] = {},
-        weekEntries: int = -1,
-        movesLoaded: bool = False,
-        movesFailed: bool = False,
+        # Tasks that entered Done this week, per local weekday.
+        weekDone: list[int] = [0, 0, 0, 0, 0, 0, 0],
         weekAdded: int = -1,
         addedFailed: bool = False,
         orgName: str = cachedOrgName(),
-        # First-run state, read only while no card has reached Done.
-        setupLoaded: bool = False,
-        stepCount: int = 0,
-        firstStepName: str = "",
+        # The workspace view: the flow line (row pills, checklist) and GitHub.
+        sharedLoaded: bool = False,
+        steps: list[StepView] = [],
         templateName: str = "",
         ghConfigured: bool = False,
         ghConnected: bool = False,
         ghLogin: str = "",
         # The charts over time, scoped by their own filter row. A refetch
-        # keeps the last render on screen, dimmed, instead of a skeleton.
+        # keeps the last render on screen instead of a skeleton.
         history: WeeklyHistory | None = None,
         historyProject: str = "all",
         historyWeeks: str = "12",
@@ -319,7 +319,7 @@ def:pub OverviewPage -> JsxPage {
     async can with entry {
         loadAll();
         loadDue();
-        loadMoves();
+        loadShared();
         orgName = await fetchOrgName();
     }
 
@@ -329,15 +329,11 @@ def:pub OverviewPage -> JsxPage {
 
     async def fetchSnapshot(monday: str) -> any;
     async def fetchDue -> any;
-    async def fetchWeekLog(monday: str) -> any;
-    async def fetchSetup -> any;
     async def fetchHistory(projectId: str, weeks: int) -> any;
     async def loadAll -> None;
     async def loadDue -> None;
-    async def loadMoves -> None;
-    async def loadSetup -> None;
+    async def loadShared -> None;
     async def loadHistory -> None;
-    def absorbWeekLog(rows: list[any], full: bool) -> None;
 
     today = todayIso();
     # The snapshot flags overdue by the server's UTC day; this is that day,
@@ -357,25 +353,22 @@ def:pub OverviewPage -> JsxPage {
         if p.active
     ];
     # Weekly counts, oldest first, four weeks ending in this one. Guarded
-    # with len(): both lists are empty until the counts land.
+    # with len(): the list is empty until the counts land.
     doneSpark = counts.done_by_week
         if counts and len(counts.done_by_week) == 4
         else [0, 0, 0, 0];
-    entrySpark = logs.by_week if logs and len(logs.by_week) == 4 else [0, 0, 0, 0];
     openCount = counts.open if counts else 0;
-    # Early means nothing to count: no task and no log row in four weeks. The
-    # checklist then stands in for the body; later it joins the rail while no
-    # card has reached Done (loadAll reads the setup on the same rule).
+    # Early means nothing to count: no task yet. The checklist then stands
+    # in for the body; later it joins the side column while no card has
+    # reached Done.
     doneEver = countAll(doneSpark);
     for pt in (counts.projects if counts else []) {
         doneEver = doneEver + pt.done;
     }
-    early = (True if counts else False)
-        and taskTotal == 0
-        and countAll(entrySpark) == 0;
+    early = (True if counts else False) and taskTotal == 0;
 
-    # ---- Needs you: each task sits in the first group it qualifies for, and
-    # `flagged` collects the ids the snapshot's attention_total counts.
+    # ---- Needs someone now: each task sits in the first group it qualifies
+    # for, and `flagged` collects the ids the snapshot's attention_total counts.
     shown: list[str] = [];
     flagged: list[str] = [];
     overdueRows: list[dict[str, any]] = [];
@@ -397,16 +390,21 @@ def:pub OverviewPage -> JsxPage {
         if t.status == "Blocked" {
             shown.append(t.id);
             info: dict[str, any] = blockedInfo[t.id] if t.id in blockedInfo else {};
-            since = blockedSince[t.id]
-                if t.id in blockedSince
-                else (info["since"] if "since" in info else t.updated_at[:10]);
             blockedRows.append(
                 withBlocked(
-                    workRow(t.id, t.title, t.project_name, t.assignee_names, "", False),
+                    workRow(
+                        t.id,
+                        t.title,
+                        t.project_name,
+                        t.assignee_names,
+                        "",
+                        False,
+                        t.status
+                    ),
                     t.due_date,
                     today,
                     info,
-                    since
+                    info["since"] if "since" in info else t.updated_at[:10]
                 )
             );
         } elif t.due_date < today {
@@ -437,12 +435,18 @@ def:pub OverviewPage -> JsxPage {
         blockedRows.append(
             withBlocked(
                 workRow(
-                    bid, b["title"], b["project"], splitNames(b["assignees"]), "", False
+                    bid,
+                    b["title"],
+                    b["project"],
+                    splitNames(b["assignees"]),
+                    "",
+                    False,
+                    "Blocked"
                 ),
                 held.due_date if held else "",
                 today,
                 b,
-                blockedSince[bid] if bid in blockedSince else b["since"]
+                b["since"]
             )
         );
     }
@@ -502,7 +506,8 @@ def:pub OverviewPage -> JsxPage {
                     else (
                         "waiting " + plural(waited, "day", "days") if waited > 0 else ""
                     ),
-                dated and due < today
+                dated and due < today,
+                "Review"
             ),
             r,
             held
@@ -534,19 +539,17 @@ def:pub OverviewPage -> JsxPage {
             continue;
         }
         shown.append(q["task_id"]);
-        row = workRow(
-            q["task_id"],
-            q["title"],
-            q["project"],
-            splitNames(q["assignees"]),
-            plural(q["idle_days"], "day", "days") + " idle",
-            False
+        quietRows.append(
+            workRow(
+                q["task_id"],
+                q["title"],
+                q["project"],
+                splitNames(q["assignees"]),
+                plural(q["idle_days"], "day", "days") + " idle",
+                False,
+                q["status"]
+            )
         );
-        row["kind"] = STATUS_KIND[q["status"]]
-            if q["status"] in STATUS_KIND
-            else "active";
-        row["kindLabel"] = q["status"];
-        quietRows.append(row);
     }
     # Flagged tasks the page holds no row for: overdue past both reads.
     hiddenAttention = attentionTotal - len(flagged);
@@ -556,124 +559,82 @@ def:pub OverviewPage -> JsxPage {
     groups: list[dict[str, any]] = [];
     if len(overdueRows) > 0 or hiddenAttention > 0 {
         groups.append(
-            {
-                "key": "overdue",
-                "label": "Overdue",
-                "glyph": "blocked",
-                "alarm": True,
-                "rows": overdueRows,
-                "more": hiddenAttention,
-                "moreLabel": "overdue "
-            }
+            group(
+                "overdue", "Overdue", "alarm", overdueRows, hiddenAttention, "overdue"
+            )
         );
     }
     if len(blockedRows) > 0 {
-        groups.append(
-            {
-                "key": "blocked",
-                "label": "Blocked",
-                "glyph": "blocked",
-                "alarm": True,
-                "rows": blockedRows,
-                "more": 0,
-                "moreLabel": "blocked "
-            }
-        );
+        groups.append(group("blocked", "Blocked", "alarm", blockedRows, 0, "blocked"));
     }
     if len(reviewRows) > 0 {
         groups.append(
-            {
-                "key": "review",
-                "label": "Waiting on review",
-                "glyph": "handoff",
-                "alarm": False,
-                "rows": reviewRows,
-                "more": 0,
-                "moreLabel": "waiting on review "
-            }
+            group(
+                "review",
+                "Waiting on review",
+                "amber",
+                reviewRows,
+                0,
+                "waiting on review"
+            )
         );
     }
     if len(weekDueRows) > 0 {
         groups.append(
-            {
-                "key": "due",
-                "label": "Due this week",
-                "glyph": "calendar",
-                "alarm": False,
-                "rows": weekDueRows,
-                "more": -1 if dueCut else 0,
-                "moreLabel": "due this week "
-            }
+            group(
+                "due",
+                "Due this week",
+                "sky",
+                weekDueRows,
+                -1 if dueCut else 0,
+                "due this week"
+            )
         );
     }
     if len(quietRows) > 0 {
         groups.append(
-            {
-                "key": "quiet",
-                "label": "Gone quiet",
-                "glyph": "quiet",
-                "alarm": False,
-                "rows": quietRows,
-                "more": 0,
-                "moreLabel": "gone quiet "
-            }
+            group("quiet", "Gone quiet", "muted", quietRows, 0, "gone quiet")
         );
     }
-    needsTotal = len(shown) + hiddenAttention;
+    # Each row's step pill, from the task when the page holds it.
+    for g in groups {
+        for row in g["rows"] {
+            known = byId[row["id"]] if row["id"] in byId else None;
+            row["step"] = stepChip(steps, known.step_id, known.status)
+                if known
+                else stepChip(steps, "", row["status"]);
+        }
+    }
 
-    # ---- This week: four figures and tasks that entered Done per day. Log
-    # counts come from the page's own week read once it lands, so every day
-    # on the page follows one rule; the snapshot's UTC days are the fallback.
-    useWeekLog = movesLoaded and not movesFailed and weekEntries >= 0;
+    # ---- This week: four figures and tasks that entered Done per day.
     figures = [
         {"label": "moved to Done", "value": str(doneSpark[3])},
         {
             "label": "tasks added",
             "value": str(weekAdded) if weekAdded >= 0 else ("-" if addedFailed else "…")
         },
-        {
-            "label": "log entries",
-            "value": str(weekEntries)
-                if useWeekLog
-                else ("…" if not movesLoaded else str(entrySpark[3]))
-        },
-        {"label": "open tasks", "value": str(openCount)}
+        {"label": "open tasks", "value": str(openCount)},
+        {"label": "blocked now", "value": str(counts.blocked if counts else 0)}
     ];
-    anyDone = False;
-    for v in doneMoves {
-        if v > 0 {
-            anyDone = True;
-        }
-    }
-    for v in doneSpark {
-        if v > 0 {
-            anyDone = True;
-        }
-    }
+    anyDone = countAll(weekDone) + countAll(doneSpark) > 0;
     dayRows: list[dict[str, any]] = [];
     for i in range(7) {
-        if i < 5 or doneMoves[i] > 0 or todayIdx >= 5 {
+        if i < 5 or weekDone[i] > 0 or todayIdx >= 5 {
             dayRows.append(
                 {
                     "name": DAY_NAMES[i],
                     "label": DAY_LABELS[i],
-                    "value": doneMoves[i],
+                    "value": weekDone[i],
                     "future": i > todayIdx,
                     "today": i == todayIdx
                 }
             );
         }
     }
-    chartState = "loading"
-        if not movesLoaded
-        else ("chart" if anyDone and not movesFailed else "none");
+    chartState = "loading" if loading else ("chart" if anyDone else "none");
     chartNote = "Tasks moved to Done per day. Days still ahead are outlined."
         if chartState != "none"
-        else (
-            "The day chart could not load."
-                if movesFailed
-                else "Nothing has moved to Done in four weeks, so there is no day chart yet."
-        );
+        else "Nothing has moved to Done in four weeks, so there is no day chart yet.";
 
     # ---- Projects and people.
     projRows: list[dict[str, any]] = [];
@@ -708,11 +669,9 @@ def:pub OverviewPage -> JsxPage {
         personOpen[mt.member_id] = mt.open;
         personDone[mt.member_id] = mt.done_in_week;
     }
-    personDays: dict[str, list[int]] = weekPeople if useWeekLog else {};
-    if not useWeekLog {
-        for md in (logs.members if logs else []) {
-            personDays[md.name] = md.by_day;
-        }
+    personDays: dict[str, list[int]] = {};
+    for md in (logs.members if logs else []) {
+        personDays[md.name] = md.by_day;
     }
     peopleRows = [
         {
@@ -723,15 +682,14 @@ def:pub OverviewPage -> JsxPage {
             "done": personDone[m.id] if m.id in personDone else 0,
             "byDay": personDays[m.name]
                 if m.name in personDays and len(personDays[m.name]) == 7
-                else [0, 0, 0, 0, 0, 0, 0],
-            "total": countAll(personDays[m.name]) if m.name in personDays else 0
+                else [0, 0, 0, 0, 0, 0, 0]
         } for m in activeMembers
     ];
 
     # Remember the panels' shape once every read has landed, for the next
     # first-load frame. Placed after those locals: an effect's deps are read
     # where it is called.
-    shapeReady = not loading and not failed and dueLoaded and movesLoaded;
+    shapeReady = not loading and not failed and dueLoaded;
     groupRows: list[int] = [];
     for g in groups {
         groupRows.append(len(g["rows"]) if len(g["rows"]) < NEEDS_CAP else NEEDS_CAP);
@@ -767,34 +725,44 @@ def:pub OverviewPage -> JsxPage {
         [shapeReady, shapeStamp]
     );
 
-    # ---- First run: every item from state the page already read. A
-    # hand-written line this week ticks the log item (task events are log
-    # rows too), so a working team does not get it back each morning.
+    # ---- First run: every item from state the page already read.
     noPeople = len(activeMembers) == 0;
     noProject = len(activeProjects) == 0;
-    logKnown = movesLoaded and not movesFailed;
-    loggedWeek = logKnown and handEntries > 0;
-    steps: list[dict[str, any]] = [];
-    steps.append(
+    firstStepName = steps[0].name if len(steps) > 0 else "";
+    checklist: list[dict[str, any]] = [];
+    checklist.append(
         {
             "key": "flow",
             "title": "Pick how work moves",
             "detail": (
                 (templateName + " template, " if templateName else "")
-                + plural(stepCount, "step", "steps")
+                + plural(len(steps), "step", "steps")
                 + ("." if templateName else " on your flow line.")
             )
-                if stepCount > 0
+                if len(steps) > 0
                 else "Start from a template or draw your own steps.",
-            "done": stepCount > 0,
-            "action": "Redraw" if stepCount > 0 else "Pick a flow line",
+            "done": len(steps) > 0,
+            "action": "Redraw" if len(steps) > 0 else "Pick a flow line",
             "to": "/flowlines",
+            "primary": False
+        }
+    );
+    checklist.append(
+        {
+            "key": "people",
+            "title": "Add the people you track",
+            "detail": "Add teammates so work can be assigned."
+                if noPeople
+                else plural(len(activeMembers), "person", "people") + " on the roster.",
+            "done": not noPeople,
+            "action": "Add a person" if noPeople else "People",
+            "to": "/workspace?tab=people",
             "primary": False
         }
     );
     # CreateTask needs an active project, and the board sends a workspace
     # without one to /setup, so the item asks for a project first.
-    steps.append(
+    checklist.append(
         {
             "key": "task",
             "title": "Add your first task",
@@ -811,25 +779,8 @@ def:pub OverviewPage -> JsxPage {
             "primary": False
         }
     );
-    steps.append(
-        {
-            "key": "log",
-            "title": "Write today's first log line",
-            "detail": "Add a person first, then log what they worked on."
-                if noPeople and not loggedWeek
-                else (
-                    "Logged this week."
-                        if loggedWeek
-                        else "One sentence about what you worked on."
-                ),
-            "done": loggedWeek,
-            "action": "Add a person" if noPeople else "Open log",
-            "to": "/workspace?tab=people" if noPeople else "/log",
-            "primary": False
-        }
-    );
     if ghConfigured {
-        steps.append(
+        checklist.append(
             {
                 "key": "github",
                 "title": "Connect GitHub",
@@ -838,13 +789,13 @@ def:pub OverviewPage -> JsxPage {
                     else "Optional. Import issues and let a merged pull request move its card.",
                 "done": ghConnected,
                 "action": "" if ghConnected else "Connect",
-                "to": "/github",
+                "to": "/workspace?tab=github",
                 "primary": False
             }
         );
     }
     requiredOpen = 0;
-    for s in steps {
+    for s in checklist {
         if not s["done"] and s["key"] != "github" {
             if requiredOpen == 0 {
                 s["primary"] = True;
@@ -852,207 +803,62 @@ def:pub OverviewPage -> JsxPage {
             requiredOpen = requiredOpen + 1;
         }
     }
-    # Past the early page the checklist is an extra rail panel, shown once
-    # both reads land (so no item flips on arrival) and only while a
-    # required item is open and no card has reached Done.
-    checklistReady = setupLoaded and movesLoaded;
-    railChecklist = not early
-        and doneEver == 0
-        and checklistReady
-        and logKnown
-        and requiredOpen > 0;
-    earlyNote = "Figures and charts appear once there is a task or a log line. Until then there is nothing to count, so nothing is shown.";
+    # Past the early page the checklist is an extra side panel, shown once
+    # the workspace read lands (so no item flips on arrival) and only while
+    # a required item is open and no card has reached Done.
+    sideChecklist = not early and doneEver == 0 and sharedLoaded and requiredOpen > 0;
+    checklistTitle = "Get " + (orgName or "your workspace") + " moving";
+    earlyNote = "Figures and charts appear once there is a task. Until then there is nothing to count, so nothing is shown.";
 
-    histWeeks = history.weeks if history else [];
-    histLabels = [prettyDay(w) for w in histWeeks];
-    histAny = countAll(history.scope if history else []) > 0;
-    histFinished = countAll(history.finished if history else []) > 0;
-    # Layout follows the width the page is given (Ask docks beside it at
-    # 1280px), not the viewport: two zones from 52rem, and from 90rem (what
-    # 2xl gives the page without Ask) three columns: Needs you, the week, People.
-    # People keeps 37rem so its own 36rem column query holds behind the border.
+    historyProjects = [[jid(p), p.name] for p in activeProjects];
     shape = cachedShape();
-    zones = "flex flex-col gap-4 @min-[52rem]:grid @min-[52rem]:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] @min-[52rem]:items-start @min-[90rem]:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(37rem,5fr)]";
+    # Layout follows the width the page is given, not the viewport: from
+    # 60rem the worklist sits beside the week; People and the charts span.
+    zones = "grid gap-5 @min-[60rem]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[60rem]:items-start";
+    side = "flex min-w-0 flex-col gap-5";
+    wide = "min-w-0 @min-[60rem]:col-span-2";
 
-    # The charts section, in both the first-load frame and the loaded page,
-    # so its heading and selects sit in the same place from the first paint;
-    # `history` is None until the first read lands and draws the chart boxes.
     def overTime -> JsxElement {
         return
-            <section
-                className="min-w-0 space-y-3 pt-2 @max-[52rem]:order-5 @min-[52rem]:col-span-2 @min-[90rem]:col-span-3"
-                aria-labelledby="over-time"
-            >
-                <div className="flex flex-wrap items-center gap-2">
-                    <h2 id="over-time" className="section-title mr-auto max-sm:w-full">
-                        Over time
-                    </h2>
-                    <Busy active={historyLoading and bool(history)}/>
-                    <Select
-                        value={historyProject}
-                        onValueChange={lambda (v: str) { historyProject = v; }}
-                    >
-                        <SelectTrigger
-                            className="h-8 w-44 max-sm:w-auto max-sm:flex-1"
-                            size="sm"
-                            aria-label="Chart project"
-                        >
-                            <SelectValue/>
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All projects</SelectItem>
-                            {for p in activeProjects {
-                                <SelectItem key={jid(p)} value={jid(p)}>
-                                    {p.name}
-                                </SelectItem>
-                            }}
-                        </SelectContent>
-                    </Select>
-                    <Select
-                        value={historyWeeks}
-                        onValueChange={lambda (v: str) { historyWeeks = v; }}
-                    >
-                        <SelectTrigger
-                            className="h-8 w-40 max-sm:w-auto max-sm:flex-1"
-                            size="sm"
-                            aria-label="Chart range"
-                        >
-                            <SelectValue/>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {for r in HISTORY_RANGES {
-                                <SelectItem key={r[0]} value={r[0]}>{r[1]}</SelectItem>
-                            }}
-                        </SelectContent>
-                    </Select>
-                </div>
-                {if historyFailed and not history {
-                    <LoadFailed
-                        key="hfail"
-                        title="Could not load the charts"
-                        onRetry={loadHistory}
-                    />
-                } elif not history {
-                    <div key="hsk" className="grid gap-4 @min-[52rem]:grid-cols-2">
-                        <Skeleton className="h-64 w-full"/>
-                        <Skeleton className="h-64 w-full"/>
-                    </div>
-                } elif not histAny {
-                    <p
-                        key="hempty"
-                        className="surface px-3.5 py-6 text-[13.5px] text-muted-foreground"
-                    >
-                        No tasks in this range yet.
-                    </p>
-                } else {
-                    <div key="hcharts" className="space-y-3" aria-busy={historyLoading}>
-                        <div
-                            className="grid gap-4 @min-[52rem]:grid-cols-2 @min-[52rem]:items-start"
-                        >
-                            <BurnUpChart
-                                labels={histLabels}
-                                scope={history.scope}
-                                done={history.done}
-                            />
-                            {if histFinished {
-                                <ThroughputChart
-                                    key="tp"
-                                    labels={histLabels}
-                                    finished={history.finished}
-                                    added={history.added}
-                                />
-                            } else {
-                                <section
-                                    key="tpnone"
-                                    className="surface min-w-0 px-3.5 pt-3 pb-4"
-                                    aria-label="Throughput"
-                                >
-                                    <h3 className="section-title text-[15px]">
-                                        Throughput
-                                    </h3>
-                                    <p
-                                        className="mt-1.5 text-[13.5px] text-muted-foreground"
-                                    >
-                                        Nothing moved to Done in these weeks, so there are no bars to draw.
-                                    </p>
-                                </section>
-                            } }
-                        </div>
-                        <details className="text-[13px]">
-                            <summary
-                                className="cursor-pointer select-none text-muted-foreground hover:text-foreground"
-                            >
-                                View as table
-                            </summary>
-                            <div className="surface mt-2 overflow-x-auto">
-                                <table className="data-table w-full">
-                                    <thead>
-                                        <tr>
-                                            <th className="text-left">Week of</th>
-                                            <th className="text-right!">Added</th>
-                                            <th className="text-right!">Done</th>
-                                            <th className="text-right!">Scope</th>
-                                            <th className="text-right!">Done total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {for (i, w) in enumerate(histWeeks) {
-                                            <tr key={w}>
-                                                <td className="num">{histLabels[i]}</td>
-                                                <td className="num text-right">
-                                                    {str(history.added[i])}
-                                                </td>
-                                                <td className="num text-right">
-                                                    {str(history.finished[i])}
-                                                </td>
-                                                <td className="num text-right">
-                                                    {str(history.scope[i])}
-                                                </td>
-                                                <td className="num text-right">
-                                                    {str(history.done[i])}
-                                                </td>
-                                            </tr>
-                                        }}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </details>
-                    </div>
-                }   }
-            </section>;
+            <div className={wide}>
+                <OverTime
+                    history={history}
+                    filters={<HistoryFilters
+                        projects={historyProjects}
+                        project={historyProject}
+                        weeks={historyWeeks}
+                        onProject={lambda (v: str) { historyProject = v; }}
+                        onWeeks={lambda (v: str) { historyWeeks = v; }}
+                    />}
+                    loading={historyLoading}
+                    failed={historyFailed}
+                    onRetry={loadHistory}
+                />
+            </div>;
     }
 
     def loadFrame -> JsxElement {
         return
             <div key="sk" className={zones} aria-busy="true">
-                <div className="min-w-0 @max-[52rem]:order-1">
-                    <NeedsYou
-                        groups={[]}
-                        total={0}
+                <NeedsYou
+                    groups={[]}
+                    placeholder={True}
+                    placeholderRows={shape["groups"]}
+                />
+                <div className={side}>
+                    <ThisWeek
+                        figures={[]}
+                        days={[]}
                         placeholder={True}
-                        placeholderRows={shape["groups"]}
+                        chartState={"loading" if shape["chart"] else "none"}
+                    />
+                    <ProjectBars
+                        rows={[]}
+                        placeholder={True}
+                        placeholderRows={shape["projects"]}
                     />
                 </div>
-                <div className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents">
-                    <div className="min-w-0 @max-[52rem]:order-3">
-                        <ThisWeek
-                            figures={[]}
-                            days={[]}
-                            placeholder={True}
-                            placeholderChart={shape["chart"]}
-                        />
-                    </div>
-                    <div className="min-w-0 @max-[52rem]:order-4">
-                        <ProjectBars
-                            rows={[]}
-                            placeholder={True}
-                            placeholderRows={shape["projects"]}
-                        />
-                    </div>
-                </div>
-                <div
-                    className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
-                >
+                <div className={wide}>
                     <PeopleTable
                         rows={[]}
                         dayNames={DAY_LABELS}
@@ -1066,13 +872,14 @@ def:pub OverviewPage -> JsxPage {
     }
 
     return
-        <div className="@container space-y-4">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className="@container space-y-6">
+            <header>
+                <p className="text-sm text-muted-foreground">
+                    {orgName or "Your workspace"}
+                </p>
                 <h1 className="page-title">Overview</h1>
-                <span className="num text-[12.5px] text-subtle">
-                    {"Week of " + prettyDay(monday)}
-                </span>
-            </div>
+                <p className="page-subtitle">{"Week of " + longDay(monday)}</p>
+            </header>
             <Reveal ready={not loading} frame={loadFrame()}>
                 {if failed {
                     <LoadFailed
@@ -1083,9 +890,6 @@ def:pub OverviewPage -> JsxPage {
                             if dueFailed {
                                 loadDue();
                             }
-                            if movesFailed {
-                                loadMoves();
-                            }
                             if historyFailed {
                                 loadHistory();
                             }
@@ -1093,72 +897,51 @@ def:pub OverviewPage -> JsxPage {
                     />
                 } elif early {
                     <div key="first" className={zones}>
-                        {if checklistReady {
+                        {if sharedLoaded {
                             <FirstRun
                                 key="list"
-                                title={"Get "
-                                    + (orgName or "your workspace")
-                                    + " moving"}
-                                items={steps}
+                                title={checklistTitle}
+                                items={checklist}
                             />
                         } else {
-                            <div key="listsk" className="surface space-y-3 p-3.5">
-                                <Skeleton className="h-4 w-48"/>
+                            <div key="listsk" className="space-y-3">
                                 {for i in range(4) {
-                                    <Skeleton key={str(i)} className="h-10 w-full"/>
+                                    <Skeleton
+                                        key={str(i)}
+                                        className="h-12 w-full rounded-xl"
+                                    />
                                 }}
                             </div>
                         } }
-                        <div key="note" className="min-w-0 @min-[90rem]:col-span-2">
-                            <ThisWeek figures={[]} days={[]} note={earlyNote}/>
-                        </div>
+                        <ThisWeek key="note" figures={[]} days={[]} note={earlyNote}/>
                     </div>
                 } else {
-                    <div key="body" className={zones + ""}>
-                        <div className="min-w-0 @max-[52rem]:order-1">
-                            <NeedsYou
-                                groups={groups}
-                                total={needsTotal}
-                                totalPlus={dueCut}
-                                pending={not dueLoaded}
-                                failNote={"Could not check what is due this week."
-                                    if dueFailed
-                                    else ""}
-                                onRetry={loadDue}
-                            />
-                        </div>
-                        <div
-                            className="flex min-w-0 flex-col gap-4 @max-[52rem]:contents"
-                        >
-                            {if railChecklist {
-                                <div
+                    <div key="body" className={zones}>
+                        <NeedsYou
+                            groups={groups}
+                            pending={not dueLoaded}
+                            failNote={"Could not check what is due this week."
+                                if dueFailed
+                                else ""}
+                            onRetry={loadDue}
+                        />
+                        <div className={side}>
+                            {if sideChecklist {
+                                <FirstRun
                                     key="list"
-                                    className="min-w-0 @max-[52rem]:order-2"
-                                >
-                                    <FirstRun
-                                        title={"Get "
-                                            + (orgName or "your workspace")
-                                            + " moving"}
-                                        items={steps}
-                                    />
-                                </div>
-                            }}
-                            <div className="min-w-0 @max-[52rem]:order-3">
-                                <ThisWeek
-                                    figures={figures}
-                                    days={dayRows}
-                                    chartState={chartState}
-                                    chartNote={chartNote}
-                                    onRetry={loadMoves if movesFailed else None}
+                                    title={checklistTitle}
+                                    items={checklist}
                                 />
-                            </div>
-                            <div className="min-w-0 @max-[52rem]:order-4">
-                                <ProjectBars rows={projRows}/>
-                            </div>
+                            }}
+                            <ThisWeek
+                                figures={figures}
+                                days={dayRows}
+                                chartState={chartState}
+                                chartNote={chartNote}
+                            />
+                            <ProjectBars rows={projRows}/>
                         </div>
-                        <div
-                            className="min-w-0 @max-[52rem]:order-6 @min-[52rem]:col-span-2 @min-[90rem]:col-span-1"
-                        >
+                        <div className={wide}>
                             <PeopleTable
                                 rows={peopleRows}
                                 dayNames={DAY_LABELS}

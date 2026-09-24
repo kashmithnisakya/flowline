@@ -1,7 +1,7 @@
 """⌘K palette: jump to a page, run an action, reopen a recent task or find one
 by title. Pages match on keywords as well as labels; tasks are searched on the
 server (ListTasks with `q`) once the query has two characters. NAV_PAGES and
-PageIcon are also the top bar's and the tab bar's, so every list agrees.
+PageIcon are also the sidebar's and the tab bar's, so every list agrees.
 """
 
 import from "@jac/runtime" { navigate, useLocation, jacLogout }
@@ -17,32 +17,25 @@ import from .StepName { StepName }
 
 glob:pub NAV_PAGES: list[dict[str, str]] = [
          {
+             "key": "flowline",
+             "label": "Flow line",
+             "to": "/flowlines",
+             "group": "daily",
+             "keywords": "workflow steps process transitions design"
+         },
+         {
              "key": "board",
              "label": "Board",
              "to": "/board",
              "group": "daily",
-             "keywords": "kanban columns cards lanes steps"
-         },
-         {
-             "key": "tasks",
-             "label": "Tasks",
-             "to": "/tasks",
-             "group": "daily",
-             "keywords": "table list every task sort filter"
+             "keywords": "tasks steps cards list"
          },
          {
              "key": "roadmap",
              "label": "Roadmap",
              "to": "/roadmap",
              "group": "daily",
-             "keywords": "timeline iterations sprints schedule plan"
-         },
-         {
-             "key": "log",
-             "label": "Log",
-             "to": "/log",
-             "group": "daily",
-             "keywords": "daily record standup history activity"
+             "keywords": "timeline schedule plan dates"
          },
          {
              "key": "overview",
@@ -52,35 +45,30 @@ glob:pub NAV_PAGES: list[dict[str, str]] = [
              "keywords": "insights charts progress blocked overdue report"
          },
          {
-             "key": "flowline",
-             "label": "Flow line",
-             "to": "/flowlines",
-             "group": "setup",
-             "keywords": "workflow steps process transitions design"
-         },
-         {
              "key": "workspace",
              "label": "Workspace",
              "to": "/workspace",
              "group": "setup",
              "keywords": "organization people members roster roles projects team"
-         },
-         {
-             "key": "github",
-             "label": "GitHub",
-             "to": "/github",
-             "group": "setup",
-             "keywords": "issues pull requests repositories sync"
          }
      ];
 
-glob PREFERENCES_PAGE: dict[str, str] = {
-         "key": "preferences",
-         "label": "Preferences",
-         "to": "/workspace?tab=preferences",
-         "group": "setup",
-         "keywords": "settings theme dark light appearance"
-     },
+glob WORKSPACE_TABS: list[dict[str, str]] = [
+         {
+             "key": "github",
+             "label": "GitHub",
+             "to": "/workspace?tab=github",
+             "group": "setup",
+             "keywords": "issues pull requests repositories sync"
+         },
+         {
+             "key": "preferences",
+             "label": "Preferences",
+             "to": "/workspace?tab=preferences",
+             "group": "setup",
+             "keywords": "settings theme dark light appearance"
+         }
+     ],
      ACTIONS: list[dict[str, str]] = [
          {"key": "new-task", "label": "New task", "keywords": "create add card"},
          {
@@ -166,21 +154,12 @@ def:pub PageIcon(name: str, size: int = 16, className: str = "") -> JsxElement {
         >
             {if name == "board" {
                 <g key="board">
-                    <rect x={2.25} y={2.75} width={11.5} height={10.5} rx={1.5}/>
-                    <path d="M6.1 2.75v10.5M9.9 2.75v10.5"/>
-                </g>
-            } elif name == "tasks" {
-                <g key="tasks">
-                    <path d="M6.25 4.5h7.25M6.25 8h7.25M6.25 11.5h7.25"/>
-                    <path d="M2.75 4.5h.5M2.75 8h.5M2.75 11.5h.5" strokeWidth={2}/>
+                    <rect x={2.25} y={2.5} width={11.5} height={3} rx={1}/>
+                    <rect x={2.25} y={6.5} width={11.5} height={3} rx={1}/>
+                    <rect x={2.25} y={10.5} width={11.5} height={3} rx={1}/>
                 </g>
             } elif name == "roadmap" {
                 <path key="roadmap" d="M2.5 4h6M5.5 8h8M3.5 12h5" strokeWidth={2}/>
-            } elif name == "log" {
-                <g key="log">
-                    <rect x={2.5} y={3.5} width={11} height={10} rx={1.5}/>
-                    <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/>
-                </g>
             } elif name == "overview" {
                 <path key="overview" d="M2.5 13.5h11M3.5 10.5l3-3 2.5 2 4-5"/>
             } elif name == "flowline" {
@@ -238,7 +217,7 @@ def:pub PageIcon(name: str, size: int = 16, className: str = "") -> JsxElement {
                     <rect x={3} y={2.5} width={10} height={11} rx={1.5}/>
                     <path d="M5.75 6h4.5M5.75 9h2.75"/>
                 </g>
-            }                }
+            }              }
         </svg>;
 }
 
@@ -355,7 +334,7 @@ def:pub CommandPalette(
     darkNow = isDarkNow();
     pageItems = [
         p
-        for p in NAV_PAGES + [PREFERENCES_PAGE]
+        for p in NAV_PAGES + WORKSPACE_TABS
         if matches(p["label"], p["keywords"], q)
     ];
     actionItems: list[dict[str, str]] = [];

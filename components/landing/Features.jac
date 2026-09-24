@@ -13,7 +13,7 @@ glob FEATURES: list[Feature] = [
          Feature(
              key="github",
              label="GitHub",
-             body="Install the GitHub App on the repositories you pick. Issues become cards, a card's details show its pull request's state, and GitHub's updates reach an open board in under half a minute. Per repository you can let a merged pull request or closed issue move its card to Done, and let Done close the issue."
+             body="Install the GitHub App on the repositories you pick. Issues become tasks, a task's details show its pull request's state, and GitHub's updates reach an open board in under half a minute. Per repository you can let a merged pull request or closed issue move its task to Done, and let Done close the issue."
          ),
          Feature(
              key="assistant",
@@ -23,17 +23,17 @@ glob FEATURES: list[Feature] = [
          Feature(
              key="overview",
              label="Overview",
-             body="Needs attention, the review queue, burn-up and throughput, counted from the board and the log rather than typed in."
+             body="What needs someone now, this week's figures, burn-up and done per week, counted from the board rather than typed in."
          ),
          Feature(
-             key="plan",
-             label="Iterations and roadmap",
-             body="Give cards start and due dates, plan them into iterations, and follow the work on a twelve-week roadmap."
+             key="roadmap",
+             label="Roadmap",
+             body="Give tasks start and due dates and follow them on a twelve-week roadmap, grouped by step."
          ),
          Feature(
              key="checklists",
              label="Checklists",
-             body="Break a card into a checklist. Each item you tick off writes its own line in the log."
+             body="Break a task into a checklist. Its row shows how far along it is, and each item you tick off lands in the task's travel so far."
          ),
          Feature(
              key="people",
@@ -46,7 +46,7 @@ def:pub Features -> JsxElement {
     return
         <section className="landing-wrap pt-14 sm:pt-20">
             <h2
-                className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] [font-stretch:118%]"
+                className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em]"
             >
                 What else ships
             </h2>

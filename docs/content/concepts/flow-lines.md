@@ -1,7 +1,7 @@
 # Flow lines
 
 An organization draws its own steps on `/flowlines`,
-connects them however work really moves, and the board's columns
+connects them however work really moves, and the board's step groups
 **are** those steps. The two views cannot disagree because they
 read the same nodes.
 { .fl-lede }
@@ -10,8 +10,7 @@ read the same nodes.
 
     The feature was called "workflow" until August 2026. The archetypes kept
     that name (`WorkflowStep`, `WorkflowSteps`) because moving or renaming a
-    declaration orphans stored data, and `/workflow` redirects to
-    `/flowlines` for old links.
+    declaration orphans stored data.
 
 ## Steps and kinds
 
@@ -28,7 +27,7 @@ canvas position and a `sort_order`. Behind the name sits a semantic **kind**:
 | `done` | Terminal | `Done` | <span class="fl-step fl-step--emerald">emerald</span> |
 
 The app keys behaviour on the kind, never the name, so renaming "Review &amp;
-merge" to "Code review" changes nothing about how cards behave.
+merge" to "Code review" changes nothing about how tasks behave.
 
 ::: glob KIND_STATUS
 
@@ -49,7 +48,7 @@ flowchart LR
     status --> insights["Insights"]
     status --> github["GitHub sync"]
     status --> assistant["Assistant"]
-    status --> log["Daily log"]
+    status --> log["Activity log"]
 ```
 
 `Changes Requested` is the one legacy status with no kind of its own; it maps
@@ -176,25 +175,25 @@ carry an empty `step_id`. Both fallbacks below are load-bearing.
 2. **Otherwise:** the task sits on the first step whose kind is
    `STATUS_KIND[status]` (a Blocked task goes to the first `blocked` step).
 3. **No step of that kind exists:** the flow line's counts leave the task out,
-   and the board draws it in its first column.
+   and the board draws it in its first step group.
 4. **No flow line at all:** the board falls back to the legacy `STATUSES` as
-   columns, and a task's `status` is its column.
+   groups, and a task's `status` is its group.
 
 !!! info "First, by which order?"
 
     The server takes the first step of a kind by `sort_order`; the board
-    orders columns by canvas `x`, then `sort_order`. They agree unless a step
+    orders its step groups by canvas `x`, then `sort_order`. They agree unless a step
     of the same kind was created later but sits further left.
 
 ## Handoffs follow roles
 
-A step's `owner` is a role name such as `Model Pilot Engineer`. When `MoveTask` moves a card
+A step's `owner` is a role name such as `Model Pilot Engineer`. When `MoveTask` moves a task
 **onto a different step**, it looks for the one active member who holds that
-role **and** is on the task's project. If there is exactly one, the card's
+role **and** is on the task's project. If there is exactly one, the task's
 assignees are replaced by that person and the log line names them
 (`Moved to Implement · Priya Raman`). With no owner, `anyone`, no project, or
-zero or several holders, the assignees are left alone. Reordering a card
-within its own column is never a handoff.
+zero or several holders, the assignees are left alone. Reordering a task
+within its own step is never a handoff.
 
 ## Editing rules
 

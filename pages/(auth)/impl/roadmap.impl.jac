@@ -1,18 +1,32 @@
 """Implementations for the Roadmap page."""
 
 impl RoadmapPage.loadShared -> None {
-    # One read for the projects, roster, flow line, roles and iterations,
-    # fired beside RoadmapSnapshot. Non-fatal: the timeline still draws; the
-    # dialog offers fewer choices.
+    # One read for the projects, roster, flow line and roles, fired beside
+    # RoadmapSnapshot. A picked project that is gone or archived falls back
+    # to the default one; with no project at all there is nothing to load.
     ws = await loadWorkspace();
     projects = ws["projects"];
     members = ws["members"];
     steps = ws["steps"];
     roleRows = ws["roles"];
-    iterations = ws["iterations"];
+    known = False;
+    for p in projects {
+        if p.active and jid(p) == fProject {
+            known = True;
+        }
+    }
+    if not known {
+        fProject = defaultProject(projects);
+    }
+    if not fProject {
+        loading = False;
+    }
 }
 
 impl RoadmapPage.loadRoadmap -> None {
+    if not fProject {
+        return;
+    }
     seq = (reqRef.current or 0) + 1;
     reqRef.current = seq;
     loading = True;
@@ -26,7 +40,7 @@ impl RoadmapPage.loadRoadmap -> None {
             data = result.reports[0] if result.reports else None;
             failed = False;
         }
-    } except Exception as e {
+    } except Exception {
         if reqRef.current == seq {
             failed = True;
         }
@@ -36,59 +50,17 @@ impl RoadmapPage.loadRoadmap -> None {
     }
 }
 
-impl RoadmapPage.reloadIterations -> None {
-    try {
-        iResult = root spawn ListIterations();
-        iterations = iResult.reports[0] if iResult.reports else [];
-        # A deleted iteration cannot stay the filter.
-        kept = False;
-        for it in iterations {
-            if it.id == fIteration {
-                kept = True;
-            }
-        }
-        if not kept {
-            fIteration = "";
-        }
-    } except Exception as e {
-        toast.error("Could not reload the iterations");
-    }
-    await loadRoadmap();
-}
-
-# ------------------------------------------------------------- window and filters
-# Moving the window by hand drops the iteration filter: the picked box would
-# otherwise scroll out of the weeks on screen and leave the timeline empty.
-
 impl RoadmapPage.stepWindow(weeksDelta: int) -> None {
-    fIteration = "";
     windowStart = shiftIso(windowStart, 7 * weeksDelta);
 }
 
 impl RoadmapPage.goToday -> None {
-    fIteration = "";
     windowStart = shiftIso(mondayOf(todayIso()), -7 * LEAD_WEEKS);
 }
 
-# Picking an iteration narrows the rows to it and moves the window over it,
-# with a week of lead so the bars do not start at the very edge.
-impl RoadmapPage.jumpToIteration(iterationId: str) -> None {
-    fIteration = iterationId;
-    for it in iterations {
-        if it.id == iterationId {
-            windowStart = shiftIso(mondayOf(it.start_date), -7);
-        }
-    }
-}
-
-impl RoadmapPage.clearFilters -> None {
-    fIteration = "";
-    fProject = "";
-}
-
 # ------------------------------------------------------------------ columns
-# The board's column rules, so the dialog's Step select says what the board
-# shows. Without a flow line the six statuses stand in.
+# The board's column rules, so the groups and the sheet's Step select say
+# what the board shows. Without a flow line the six statuses stand in.
 
 impl RoadmapPage.columnKeys -> list[str] {
     keys: list[str] = [];
@@ -132,6 +104,45 @@ impl RoadmapPage.columnKeyOf(t: TaskRow, keys: list[str]) -> str {
     return keys[0] if len(keys) > 0 else "";
 }
 
+# The rows in one group per column, in column order, empty ones left out.
+impl RoadmapPage.stepGroups(keys: list[str]) -> list[dict[str, any]] {
+    shown: list[TaskRow] = data["rows"] if data else [];
+    firsts: list[str] = data["starts"] if data else [];
+    lasts: list[str] = data["ends"] if data else [];
+    byKey: dict[str, list[dict[str, any]]] = {};
+    for (i, row) in enumerate(shown) {
+        k = columnKeyOf(row, keys);
+        if k not in byKey {
+            byKey[k] = [];
+        }
+        byKey[k].append({"t": row, "first": firsts[i], "last": lasts[i]});
+    }
+    out: list[dict[str, any]] = [];
+    for k in keys {
+        if k in byKey {
+            kind = columnKind(k);
+            name = k;
+            color = KIND_COLORS[kind] if kind in KIND_COLORS else "slate";
+            for step in steps {
+                if step.id == k {
+                    name = step.name;
+                    color = colorKey(step.color);
+                }
+            }
+            out.append(
+                {
+                    "key": k,
+                    "name": name,
+                    "color": color,
+                    "kind": kind,
+                    "items": byKey[k]
+                }
+            );
+        }
+    }
+    return out;
+}
+
 impl RoadmapPage.mappedStatus(key: str) -> str {
     if len(steps) == 0 {
         return key if key in STATUSES else "Backlog";
@@ -158,7 +169,6 @@ impl RoadmapPage.openTask(tid: str) -> None {
                 "status": columnKeyOf(t, keys),
                 "due_date": t.due_date,
                 "start_date": t.start_date,
-                "iteration": t.iteration_id or "none",
                 "notes": "",
                 "issue": t.issue_link,
                 "pr": t.pr_link,
@@ -274,9 +284,6 @@ impl RoadmapPage.saveTask -> None {
             step_id=taskForm["status"] if len(steps) > 0 else "",
             due_date=taskForm["due_date"],
             start_date=taskForm["start_date"],
-            iteration_id=taskForm["iteration"]
-                if taskForm["iteration"] != "none"
-                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),
@@ -287,7 +294,7 @@ impl RoadmapPage.saveTask -> None {
         );
         closeTask(False);
         await loadRoadmap();
-    } except Exception as e {
+    } except Exception {
         toast.error("Failed to save task");
     }
     taskSaving = False;
@@ -302,7 +309,7 @@ impl RoadmapPage.deleteTask -> None {
         root spawn DeleteTask(task_id=editTaskId);
         closeTask(False);
         await loadRoadmap();
-    } except Exception as e {
+    } except Exception {
         toast.error("Failed to delete task");
     }
     taskSaving = False;

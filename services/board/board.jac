@@ -10,7 +10,6 @@ import from models {
     RepoView,
     RoleView,
     StepView,
-    IterationView,
     FilterSetView,
     FilterSets,
     GithubConnectionView,
@@ -39,7 +38,6 @@ obj BoardData {
         steps: list[StepView],
         repos: list[RepoView],
         roles: list[RoleView],
-        iterations: list[IterationView],
         github_connected: bool,
         webhook_live: bool,
         # The rest of WorkspaceView, so the board can prime the client's
@@ -109,7 +107,6 @@ walker BoardSnapshot {
         steps: list[StepView] = [];
         repos: list[RepoView] = [];
         roles: list[RoleView] = [];
-        iterations: list[IterationView] = [];
         connected = False;
         live = False;
         flow_name = "";
@@ -128,7 +125,6 @@ walker BoardSnapshot {
             steps = ws.steps;
             repos = ws.repos;
             roles = ws.roles;
-            iterations = ws.iterations;
             connected = ws.github_connected;
             live = ws.webhook_live;
             flow_name = ws.flow_name;
@@ -153,7 +149,6 @@ walker BoardSnapshot {
             steps=steps,
             repos=repos,
             roles=roles,
-            iterations=iterations,
             github_connected=connected,
             webhook_live=live,
             flow_name=flow_name,

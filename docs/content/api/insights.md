@@ -14,7 +14,7 @@ Everything `/overview` renders, in one call.
 | Field | Holds |
 | --- | --- |
 | `counts` | [`TaskTotals`](types.md#tasktotals), the same numbers as [`TaskCounts`](tasks.md#taskcounts) |
-| `logs` | [`LogTotals`](types.md#logtotals), the same numbers as [`LogCounts`](log.md#logcounts) |
+| `logs` | [`LogTotals`](types.md#logtotals): log entries per week for the four weeks ending in `monday`'s week, per weekday of that week and per person (an entry naming two assignees counts for both), read from the days' tallies |
 | `attention` | The first `attention_size` open tasks that are Blocked or past due, Blocked first, then soonest due |
 | `attention_total` | How many tasks need attention in all |
 | `members` | Every member (archived included), by name |

@@ -1,9 +1,9 @@
-"""The board toolbar: a title filter, Project, Assignee and Priority, the rest
-under More, and on the right the Done window and the task count. An active
+"""The board toolbar: a title filter, Assignee and Priority, the rest under
+More, and on the right the Done window and the task count. An active
 filter reads as an outlined "Label: value" with a clear button. Below md it
 folds into the title filter plus a Filters button that opens a sheet."""
 
-import from ...models { Project, MemberView, IterationView }
+import from ...models { MemberView }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.button { Button }
 import from ..ui.dropdown_menu {
@@ -59,17 +59,14 @@ def optionLabel(options: list[list[str]], value: str) -> str {
 }
 
 # A ghost trigger that turns into "Label: value ×" once a value is picked.
-# `fixed` is a scope, not a filter: the trigger names the pick and never
-# offers to clear it (the board's project).
 def FilterMenu(
     label: str,
     value: str,
     allValue: str,
     options: list[list[str]],
-    onChange: Callable[[str], None],
-    fixed: bool = False
+    onChange: Callable[[str], None]
 ) -> JsxElement {
-    active = value != allValue and not fixed;
+    active = value != allValue;
     shown = optionLabel(options, value) if value else label;
     return
         <DropdownMenu>
@@ -109,9 +106,9 @@ def FilterMenu(
                 <DropdownMenuTrigger
                     key="off"
                     className="toolbar-filter"
-                    data-active={"true" if fixed else "false"}
+                    data-active="false"
                 >
-                    {shown if fixed else label}
+                    {label}
                     <Chevron/>
                 </DropdownMenuTrigger>
             } }
@@ -151,13 +148,11 @@ def SheetSelect(
 }
 
 def:pub FilterBar(
-    projects: list[Project],
     members: list[MemberView],
     project: str,
     assignee: str,
     category: str,
     hideDone: bool,
-    onProject: Callable[[str], None],
     onAssignee: Callable[[str], None],
     onCategory: Callable[[str], None],
     onHideDone: Callable[[], None],
@@ -167,10 +162,6 @@ def:pub FilterBar(
     estimate: str = "All",
     onTag: Callable[[str], None] = None,
     onEstimate: Callable[[str], None] = None,
-    # "All", "current", "none" or an iteration jid; hidden with none defined.
-    iterations: list[IterationView] = [],
-    iteration: str = "All",
-    onIteration: Callable[[str], None] = None,
     priority: str = "All",
     onPriority: Callable[[str], None] = None,
     query: str = "",
@@ -188,10 +179,6 @@ def:pub FilterBar(
         for m in members
         if not project or project in m.project_ids
     ];
-    projectOptions: list[list[str]] = [];
-    for p in projects {
-        projectOptions.append([jid(p), p.name]);
-    }
     assigneeOptions: list[list[str]] = [["All", "Everyone"]];
     for m in shownMembers {
         assigneeOptions.append([m.id, m.name]);
@@ -215,14 +202,6 @@ def:pub FilterBar(
         ["yes", "Estimated"],
         ["no", "Unestimated"]
     ];
-    iterationOptions: list[list[str]] = [
-        ["All", "All iterations"],
-        ["current", "Current iteration"]
-    ];
-    for it in iterations {
-        iterationOptions.append([it.id, it.name]);
-    }
-    iterationOptions.append(["none", "No iteration"]);
 
     def setTag(v: str) {
         if onTag {
@@ -232,11 +211,6 @@ def:pub FilterBar(
     def setEstimate(v: str) {
         if onEstimate {
             onEstimate(v);
-        }
-    }
-    def setIteration(v: str) {
-        if onIteration {
-            onIteration(v);
         }
     }
     def setPriority(v: str) {
@@ -261,8 +235,7 @@ def:pub FilterBar(
         priority != "All",
         category != "All",
         tag != "All",
-        estimate != "All",
-        iteration != "All"
+        estimate != "All"
     ] {
         if on {
             picked = picked + 1;
@@ -270,7 +243,6 @@ def:pub FilterBar(
     }
     anything = picked > 0 or bool(query.strip());
     showTags = len(tags) > 0 or tag != "All";
-    showIterations = len(iterations) > 0 or iteration != "All";
     countLabel = str(shownCount) + (" task" if shownCount == 1 else " tasks");
     doneLabel = "Done from last " + str(doneDays) + " days";
 
@@ -350,19 +322,8 @@ def:pub FilterBar(
 
     return
         <div className="min-w-0">
-            <div
-                data-board-toolbar="true"
-                className="toolbar hidden rounded-md border-x md:flex"
-            >
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
                 {SearchBox("w-[210px]")}
-                <FilterMenu
-                    label="Project"
-                    value={project}
-                    allValue=""
-                    options={projectOptions}
-                    onChange={onProject}
-                    fixed={True}
-                />
                 <FilterMenu
                     label="Assignee"
                     value={assignee}
@@ -405,16 +366,6 @@ def:pub FilterBar(
                         allValue="All"
                         options={estimateOptions}
                         onChange={setEstimate}
-                    />
-                }}
-                {if iteration != "All" {
-                    <FilterMenu
-                        key="iteration"
-                        label="Iteration"
-                        value={iteration}
-                        allValue="All"
-                        options={iterationOptions}
-                        onChange={setIteration}
                     />
                 }}
                 <DropdownMenu>
@@ -481,30 +432,6 @@ def:pub FilterBar(
                                 </DropdownMenuRadioGroup>
                             </DropdownMenuSubContent>
                         </DropdownMenuSub>
-                        {if showIterations {
-                            <DropdownMenuSub key="iterations">
-                                <DropdownMenuSubTrigger>
-                                    Iteration
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    className="max-h-80 w-52 overflow-y-auto"
-                                >
-                                    <DropdownMenuRadioGroup
-                                        value={iteration}
-                                        onValueChange={setIteration}
-                                    >
-                                        {for o in iterationOptions {
-                                            <DropdownMenuRadioItem
-                                                key={o[0]}
-                                                value={o[0]}
-                                            >
-                                                {o[1]}
-                                            </DropdownMenuRadioItem>
-                                        }}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                        }}
                     </DropdownMenuContent>
                 </DropdownMenu>
                 {if anything {
@@ -566,12 +493,6 @@ def:pub FilterBar(
                     </SheetHeader>
                     <div className="grid gap-3 px-4 py-4">
                         <SheetSelect
-                            label="Project"
-                            value={project}
-                            options={projectOptions}
-                            onChange={onProject}
-                        />
-                        <SheetSelect
                             label="Assignee"
                             value={assignee}
                             options={assigneeOptions}
@@ -604,15 +525,6 @@ def:pub FilterBar(
                             options={estimateOptions}
                             onChange={setEstimate}
                         />
-                        {if showIterations {
-                            <SheetSelect
-                                key="iteration"
-                                label="Iteration"
-                                value={iteration}
-                                options={iterationOptions}
-                                onChange={setIteration}
-                            />
-                        }}
                         <label className="flex items-center gap-2 pt-1 text-[13px]">
                             <Checkbox
                                 checked={not hideDone}

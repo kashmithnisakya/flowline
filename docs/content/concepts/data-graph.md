@@ -19,13 +19,12 @@ flowchart LR
     root --> roles["Roles"] --> role["Role"]
     root --> steps["WorkflowSteps<br/><small>name, template_key</small>"] --> step["WorkflowStep"]
     root --> logs["Logs"] --> day["LogDay"] --> entry["LogEntry"]
-    root --> iterations["Iterations"] --> iteration["Iteration"]
     root --> filtersets["FilterSets<br/><small>board, board_set</small>"] --> filterset["FilterSet"]
     root --> repo["Repo"]
     root --> conn["GithubConnection"]
 
     classDef box stroke-dasharray:4 3
-    class projects,members,roles,steps,logs,iterations,filtersets box
+    class projects,members,roles,steps,logs,filtersets box
 ```
 
 **Typed edges.** Five edges declared in `models.jac` link rows across boxes.
@@ -45,8 +44,7 @@ flowchart LR
 | `root ++> Members ++> Member` | The roster. Members are archived (`active = false`), never deleted. |
 | `root ++> Roles ++> Role` | Org-level roles; a member holds one through a `HasRole` edge. |
 | `root ++> WorkflowSteps ++> WorkflowStep` | The flow line. The box also carries the flow line's display name and the template that seeded it. |
-| `root ++> Logs ++> LogDay ++> LogEntry` | The daily log, one `LogDay` per date. |
-| `root ++> Iterations ++> Iteration` | Time boxes the team plans in; a task points at one through `iteration_id`. |
+| `root ++> Logs ++> LogDay ++> LogEntry` | The activity log task events write, one `LogDay` per date. |
 | `root ++> FilterSets ++> FilterSet` | Named sets of filters. The box also carries the board's own filters, so the board opens on them in any browser. |
 | `root ++> Repo`, `root ++> GithubConnection` | Repos and the GitHub App installation hang off the root directly. |
 
@@ -56,10 +54,10 @@ flowchart LR
 
 One box per kind sits under the root. Writers get or create it through a helper
 (`projects_box(root)`, `members_box`, `roles_box`, `steps_box`, `logs_box`,
-`iterations_box`, `filter_sets_box`);
+`filter_sets_box`);
 reads look it up and return nothing when it is absent, so a read never writes.
 Two overlapping first writes can leave two boxes of one kind, so the cross-kind
-readers (`projects_of`, `members_of`, `roles_of`, `steps_of`, `iterations_of`,
+readers (`projects_of`, `members_of`, `roles_of`, `steps_of`,
 `filter_sets_of`, the task readers)
 merge every box while writers always take the first.
 
@@ -92,7 +90,6 @@ Some references are stored as jid strings on purpose:
 | Field | Why not an edge |
 | --- | --- |
 | `Task.step_id` | Empty on tasks older than flow lines and on tasks whose step was deleted. The board falls back to `status`. |
-| `Task.iteration_id` | Keeps list rows free of edge hops. `DeleteIteration` clears it on every task that pointed at the iteration. |
 | `Task.project_id`, `assignee_ids` | The container project and the `AssignedTo` targets, kept in step with the edges at every write so a list row needs no hop. The edges stay the truth: `owned` climbs the container edge, `ArchiveMember` finds tasks through `AssignedTo`. |
 | `Task.checklist` | The card's own `{id, text, done}` items, written only by the checklist walkers. |
 | `FilterSets.board_set` | The saved set the board's filters came from, a hint for the menu. `DeleteFilterSet` clears it. |
@@ -141,8 +138,6 @@ See [GitHub sync](github-sync.md).
 
 ::: node LogEntry h3
 
-::: node Iteration h3
-
 ::: node FilterSet h3
 
 ::: node Repo h3
@@ -154,8 +149,6 @@ See [GitHub sync](github-sync.md).
 ::: node Members h3
 
 ::: node Roles h3
-
-::: node Iterations h3
 
 ::: node FilterSets h3
 

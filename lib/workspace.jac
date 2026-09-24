@@ -23,7 +23,6 @@ def emptyWorkspace -> dict[str, any] {
         "steps": [],
         "repos": [],
         "roles": [],
-        "iterations": [],
         "filter_sets": [],
         "github_connected": False,
         "flow_name": "Flow line",
@@ -43,7 +42,6 @@ def shapeOf(view: any) -> dict[str, any] {
         "steps": view.steps,
         "repos": view.repos,
         "roles": view.roles,
-        "iterations": view.iterations,
         "filter_sets": view.filter_sets,
         "github_connected": view.github_connected,
         "flow_name": view.flow_name,
@@ -54,11 +52,21 @@ def shapeOf(view: any) -> dict[str, any] {
 }
 
 # Keep this view as the workspace for the next minute. The board calls it
-# with its snapshot, so the pages after it mount without a request.
+# with its snapshot, so the pages after it mount without a request. The
+# sidebar hears `flowline:workspace` and redraws its projects from the cache.
 def:pub rememberWorkspace(view: any) {
     d = new(Date);
     CACHE["view"] = shapeOf(view);
     CACHE["at"] = d.getTime();
+    w: any = window;
+    w.dispatchEvent(new(w.CustomEvent, "flowline:workspace"));
+}
+
+# The cached view's projects, whatever its age: the sidebar lists them and
+# never reads the workspace itself. Empty before any page has read it.
+def:pub cachedProjects -> list[any] {
+    view: any = CACHE["view"];
+    return view["projects"] if view else [];
 }
 
 # Drop the cached view: every roster writer calls this right after its

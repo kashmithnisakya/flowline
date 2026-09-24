@@ -4,24 +4,18 @@ prev/next truth lives. Zoom and pan go through zoomTo/applyPan, which keep a
 piece of the drawing in view whatever the gesture."""
 
 impl FlowLinePage.boot -> None {
-    # The board persists its project filter under the same key, so the two
-    # tabs stay on the same project.
-    stored = localStorage.getItem("flowline_project")
-        or localStorage.getItem("standup_project")
-        or "";
-    picked = stored;
+    picked = currentProject();
     projectId = picked;
-    storedView = localStorage.getItem("flowline_wf_view")
-        or localStorage.getItem("standup_wf_view")
-        or "";
+    storedView = localStorage.getItem("flowline_wf_view") or "";
     if storedView == "lanes" {
         lineView = "lanes";
     }
     # The workspace lists and the flow line go out together; neither waits.
     w: any = window;
     await w.Promise.all([loadShared(), reload(picked)]);
-    # No stored pick: the server opened on the default project, so name it.
-    # A pick that is no longer active is replaced, which reloads the line.
+    # No stored pick: the server opened on the default project, so name it
+    # (the pick's event then finds it on screen). A pick that is no longer
+    # active is replaced, and its event reloads the line.
     known = False;
     for p in projects {
         if jid(p) == projectId and p.active {
@@ -30,23 +24,21 @@ impl FlowLinePage.boot -> None {
     }
     if not known {
         fallback = defaultProject(projects);
-        if projectId {
-            await selectProject(fallback);
-        } else {
+        if not projectId {
             projectId = fallback;
         }
+        pickProject(fallback);
     }
 }
 
 impl FlowLinePage.loadShared -> None {
-    # Projects, roles, roster and iterations feed the filter, the lane
+    # Projects, roles and roster feed the filter, the lane
     # labels and the task dialog; the diagram loads fine without them, so a
     # failed read stays quiet. The flow line's name rides in the same view.
     ws = await loadWorkspace();
     projects = ws["projects"];
     roleRows = ws["roles"];
     roleMembers = ws["members"];
-    iterations = ws["iterations"];
     if ws["ok"] and ws["flow_name"] {
         lineName = ws["flow_name"];
     }
@@ -259,7 +251,6 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "status": key,
         "due_date": picked.due_date,
         "start_date": picked.start_date,
-        "iteration": picked.iteration_id or "none",
         "notes": "",
         "issue": picked.issue_link,
         "pr": picked.pr_link,
@@ -355,9 +346,6 @@ impl FlowLinePage.saveTask -> None {
             step_id=landing,
             due_date=taskForm["due_date"],
             start_date=taskForm["start_date"],
-            iteration_id=taskForm["iteration"]
-                if taskForm["iteration"] != "none"
-                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),
@@ -398,10 +386,12 @@ impl FlowLinePage.deleteTask -> None {
     taskSaving = False;
 }
 
-impl FlowLinePage.selectProject(v: str) -> None {
+impl FlowLinePage.adoptProject(v: str) -> None {
+    if v == projectId {
+        return;
+    }
     openStep = peekId;
     projectId = v;
-    localStorage.setItem("flowline_project", v);
     await reload(v);
     await refreshPeek(openStep, v);
 }
@@ -1206,6 +1196,17 @@ impl FlowLinePage.fitZoom -> None {
         best = clampZoom(byW if byW < byH else byH);
         if best > 1.0 {
             best = 1.0;
+        }
+        # A card grows past its base width to fit its badge and owner, which
+        # the span above cannot see, so shrink until the drawn box fits.
+        for _ in range(3) {
+            drawn = contentBox(best);
+            overW = (drawn[2] - drawn[0]) / (w - 48.0 - mL - mR);
+            overH = (drawn[3] - drawn[1]) / (h - 48.0 - mT - mB);
+            over = overW if overW > overH else overH;
+            if over > 1.0 {
+                best = clampZoom(best / over);
+            }
         }
         zoomRef.current = best;
         zoom = best;

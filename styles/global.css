@@ -1,12 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* wdth.css is the Archivo file that carries the width axis (62% to 125%);
-   the package index is weight-only, so font-stretch would do nothing. */
-@import "@fontsource-variable/archivo/wdth.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
-@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -15,7 +11,7 @@
        primary for the main action, today and selection. Names stay shadcn's
        so the registry primitives restyle without edits. */
     color-scheme: light;
-    --background: #F2F3F1;          /* ground */
+    --background: #FAFAF8;          /* ground */
     --foreground: #161A18;
     --card: #FFFFFF;                /* surface: cards, panels, tables */
     --card-foreground: #161A18;
@@ -53,6 +49,14 @@
     --step-rose-wash: color-mix(in oklab, var(--step-rose) 12%, var(--card));
     --step-emerald-wash: color-mix(in oklab, var(--step-emerald) 12%, var(--card));
     --step-slate-wash: color-mix(in oklab, var(--step-slate) 12%, var(--card));
+    /* -solid fills a step badge under --step-solid-fg text. */
+    --step-sky-solid: var(--step-sky-ink);
+    --step-indigo-solid: var(--step-indigo-ink);
+    --step-amber-solid: var(--step-amber-ink);
+    --step-rose-solid: var(--step-rose-ink);
+    --step-emerald-solid: var(--step-emerald-ink);
+    --step-slate-solid: var(--step-slate-ink);
+    --step-solid-fg: #FFFFFF;
     /* Chart series by meaning, never by index: done, open, active, blocked,
        today. chart-N stays for old call sites and follows the same rule. They
        reference tokens, so the .dark block below re-derives them. */
@@ -70,13 +74,13 @@
     /* Flow line canvas height. The diagram and the panel beside it are flex
        siblings, so both need the same height from one place. */
     --canvas-h: max(26rem, calc(100dvh - 15rem));
-    --sidebar: #FFFFFF;
+    --sidebar: #F2F3F1;
     --sidebar-foreground: #161A18;
     --sidebar-primary: #BF3F0B;
     --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #E2E6E1;
+    --sidebar-accent: #E7EAE6;
     --sidebar-accent-foreground: #161A18;
-    --sidebar-border: #D3D8D2;
+    --sidebar-border: #E3E6E1;
     --sidebar-ring: #BF3F0B;
     /* Only floating layers cast a shadow: menus (float-1) and dialogs,
        sheets, the palette and toasts (float-2). Resting surfaces use borders. */
@@ -118,6 +122,14 @@
     --step-rose: #D98BC2;     --step-rose-ink: #E6A8D3;
     --step-emerald: #79C08E;  --step-emerald-ink: #98D0A7;
     --step-slate: #A3ABA7;    --step-slate-ink: #BCC3BF;
+    /* Dark badges fill with the light step colour under dark text. */
+    --step-sky-solid: var(--step-sky);
+    --step-indigo-solid: var(--step-indigo);
+    --step-amber-solid: var(--step-amber);
+    --step-rose-solid: var(--step-rose);
+    --step-emerald-solid: var(--step-emerald);
+    --step-slate-solid: var(--step-slate);
+    --step-solid-fg: #111413;
     --sidebar: #191D1B;
     --sidebar-foreground: #E4E8E5;
     --sidebar-primary: #F0702E;
@@ -132,11 +144,10 @@
 }
 
 @theme inline {
-    /* One family: Archivo for UI and display (a wider cut, see .font-display
-       below), IBM Plex Mono for data. */
-    --font-sans: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-display: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    /* Geist for UI and display, Geist Mono for data. */
+    --font-sans: 'Geist Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-display: 'Geist Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --color-success: var(--success);
     --color-warning: var(--warning);
     --color-subtle: var(--subtle);
@@ -147,6 +158,13 @@
     --color-series-active: var(--series-active);
     --color-series-blocked: var(--series-blocked);
     --color-series-today: var(--series-today);
+    --color-step-sky-solid: var(--step-sky-solid);
+    --color-step-indigo-solid: var(--step-indigo-solid);
+    --color-step-amber-solid: var(--step-amber-solid);
+    --color-step-rose-solid: var(--step-rose-solid);
+    --color-step-emerald-solid: var(--step-emerald-solid);
+    --color-step-slate-solid: var(--step-slate-solid);
+    --color-step-solid-fg: var(--step-solid-fg);
     --color-step-sky: var(--step-sky);
     --color-step-sky-ink: var(--step-sky-ink);
     --color-step-sky-wash: var(--step-sky-wash);
@@ -224,7 +242,6 @@
     }
     body {
         @apply font-sans bg-background text-foreground;
-        font-stretch: 100%;
         -webkit-font-smoothing: antialiased;
     }
     html {
@@ -248,20 +265,17 @@
 }
 
 @layer components {
-    /* In-app page title: 24px Archivo at a 112% width. */
+    /* In-app page title: 28px, semibold, tight tracking. */
     .page-title {
-        @apply font-display text-2xl leading-tight font-bold tracking-[-0.01em];
-        font-stretch: 112%;
+        @apply font-display text-[28px] leading-tight font-semibold tracking-[-0.025em];
     }
     /* One muted line under a page title. */
     .page-subtitle {
         @apply text-sm text-muted-foreground;
     }
-    /* Section and panel title: 16px, weight 650, 108% width. */
+    /* Section and panel title: 16px, semibold. */
     .section-title {
-        @apply font-display text-base leading-snug;
-        font-weight: 650;
-        font-stretch: 108%;
+        @apply font-display text-base leading-snug font-semibold tracking-[-0.01em];
     }
     /* Metadata text: 12px muted, the size floor. */
     .meta {
@@ -305,10 +319,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    height: 30px;
-    padding-inline: 0.5rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-md);
+    height: 34px;
+    padding-inline: 0.875rem;
+    border: 1px dashed var(--input);
+    border-radius: 9999px;
     background-color: transparent;
     color: var(--muted-foreground);
     font-size: 13px;
@@ -320,6 +334,7 @@
     color: var(--foreground);
 }
 .toolbar-filter[data-active="true"] {
+    border-style: solid;
     border-color: var(--input);
     background-color: var(--card);
     color: var(--foreground);
@@ -361,11 +376,6 @@
 }
 .data-table thead tr:hover {
     background-color: transparent;
-}
-
-/* The wide cut: display text renders at 118% width. */
-.font-display {
-    font-stretch: 118%;
 }
 
 /* ---- Registry restyle (components/ui/ is import-only, so these data-slot

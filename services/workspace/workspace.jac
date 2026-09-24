@@ -1,5 +1,5 @@
 """The workspace read: the roster, projects, flow line, repos, roles,
-iterations, saved filter sets and GitHub connection every page renders
+saved filter sets and GitHub connection every page renders
 beside its own rows, in one call. BoardSnapshot fills its workspace fields
 from the same helper, so the board and the other pages never disagree on a
 sort."""
@@ -13,11 +13,8 @@ import from models {
     RepoView,
     RoleView,
     StepView,
-    IterationView,
     FilterSetView,
     GithubConnectionView,
-    iteration_view,
-    iterations_of,
     filter_set_view,
     filter_sets_of,
     member_view,
@@ -46,7 +43,6 @@ obj WorkspaceView {
         steps: list[StepView],
         repos: list[RepoView],
         roles: list[RoleView],
-        iterations: list[IterationView],
         # Every page's saved filter sets, by name.
         filter_sets: list[FilterSetView],
         github_connected: bool,
@@ -86,11 +82,6 @@ def workspace_view(holder: Root) -> WorkspaceView {
         roles.append(role_view(ro));
     }
     roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });
-    iterations: list[IterationView] = [];
-    for it in iterations_of(holder) {
-        iterations.append(iteration_view(it));
-    }
-    iterations.sort(key=lambda (iv: IterationView) { iv.start_date; });
     filter_sets: list[FilterSetView] = [
         filter_set_view(fs) for fs in filter_sets_of(holder)
     ];
@@ -112,7 +103,6 @@ def workspace_view(holder: Root) -> WorkspaceView {
         steps=steps,
         repos=repos,
         roles=roles,
-        iterations=iterations,
         filter_sets=filter_sets,
         github_connected=github.connected,
         flow_name=flow_name,
@@ -136,7 +126,6 @@ def workspace_view(holder: Root) -> WorkspaceView {
         "WorkflowSteps",
         "WorkflowStep",
         "Repo",
-        "Iteration",
         "FilterSets",
         "FilterSet",
         "GithubConnection"

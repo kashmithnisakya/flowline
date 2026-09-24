@@ -98,7 +98,6 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
         # on page 1, name another project, the load starts over on it, once.
         pid = fProject;
         wantWorkspace = withWorkspace;
-        restarted = False;
         while more and pageNo <= 20 and loadReqRef.current == seq {
             bResult = root spawn BoardSnapshot(
                 page=pageNo,
@@ -115,11 +114,13 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                 more = data.has_more;
                 olderUnfiltered = data.older;
                 cats = data.categories;
-                restart = False;
                 if pageNo == 1 {
                     pid = data.project_id;
                     if loadReqRef.current == seq and fProject != pid {
+                        # The server opened on its default: scope every
+                        # page to it.
                         fProject = pid;
+                        pickProject(pid);
                     }
                 }
                 if wantWorkspace and pageNo == 1 {
@@ -134,19 +135,9 @@ impl BoardPage.loadBoard(withWorkspace: bool) -> dict[str, any] {
                             takeAccountFilters(data);
                         }
                         dropStaleFilters();
-                        restart = bool(fProject) and fProject != pid and not restarted;
                     }
                 }
-                if restart {
-                    restarted = True;
-                    pid = fProject;
-                    wantWorkspace = False;
-                    fetchedTasks = [];
-                    more = True;
-                    pageNo = 0;
-                } elif paintPages
-                    and loadReqRef.current == seq
-                    and not movesRef.current {
+                if paintPages and loadReqRef.current == seq and not movesRef.current {
                     # The working set is one sort_order run, so a later page
                     # lands under the cards already in its lanes: nothing moves.
                     tasks = fetchedTasks;
@@ -209,19 +200,13 @@ impl BoardPage.absorbWorkspace(data: any) -> None {
     members = data.members;
     projects = data.projects;
     steps = data.steps;
+    flowName = data.flow_name;
     repos = data.repos;
     roleRows = data.roles;
-    iterations = data.iterations;
     filterSets = data.filter_sets;
     ghConnected = data.github_connected;
     webhookLive = data.webhook_live;
-    try {
-        localStorage.setItem(
-            LANES_KEY, str(len(data.steps) if len(data.steps) > 0 else len(STATUSES))
-        );
-    } except Exception as e {
-        members = members;
-    }
+    rememberGroups(len(data.steps) if len(data.steps) > 0 else len(STATUSES));
 }
 
 impl BoardPage.retryLoad -> None {
@@ -251,6 +236,7 @@ impl BoardPage.setProjectFilter(v: str) -> None {
         return;
     }
     fProject = v;
+    pickProject(v);
     # A person who is not on the newly picked project cannot stay the
     # filter: the assignee menu no longer lists them.
     if fAssignee != "All" {
@@ -283,13 +269,11 @@ impl BoardPage.setCategoryFilter(v: str) -> None {
 impl BoardPage.boardFilters -> dict[str, str] {
     return trimFilters(
         {
-            "project": fProject,
             "assignee": fAssignee,
             "priority": fPriority,
             "category": fCategory,
             "tag": fTag,
             "estimate": fEstimate,
-            "iteration": fIteration,
             "done": "hide" if hideDone else "show"
         }
     );
@@ -298,27 +282,16 @@ impl BoardPage.boardFilters -> dict[str, str] {
 # Every filter from a stored dict (a key it lacks is off) and the set they
 # came from. The title search is left alone: it is never stored.
 impl BoardPage.adoptFilters(filters: dict[str, str], setId: str) -> None {
-    # A dict without a project keeps the one on screen: the project is the
-    # board's scope, and a set (or "all tasks") does not move it.
-    before = fProject;
-    pid = filterValue(filters, "project") or before;
     who = filterValue(filters, "assignee");
     cat = filterValue(filters, "category");
-    fProject = pid;
     fAssignee = who;
     fCategory = cat;
     fPriority = filterValue(filters, "priority");
     fTag = filterValue(filters, "tag");
     fEstimate = filterValue(filters, "estimate");
-    fIteration = filterValue(filters, "iteration");
     hideDone = filterValue(filters, "done") == "hide";
     activeSet = setId;
-    refreshOlder(pid, who, cat);
-    # A set that pins another project on a loaded board fetches it; on the
-    # boot path the load in flight takes the new project itself.
-    if pid != before and not loading {
-        loadBoard(False);
-    }
+    refreshOlder(fProject, who, cat);
 }
 
 # The first page with the workspace: the account's filters replace this
@@ -338,21 +311,11 @@ impl BoardPage.takeAccountFilters(data: any) -> None {
     } else {
         savedRef.current = "|";
     }
-    # The flow line page's later pick outranks the account's copy; the
-    # save effect writes it to the account once the picking pauses.
-    wanted = str(pickedRef.current or "");
-    if wanted {
-        pickedRef.current = "";
-        if wanted != fProject {
-            fProject = wanted;
-            refreshOlder(wanted, fAssignee, fCategory);
-        }
-    }
     filtersReady = True;
 }
 
 # A filter naming a project that is archived, a person no longer on the
-# roster (or not on the filtered project) or a deleted iteration would show
+# roster (or not on the filtered project) would show
 # an empty board, or an id in its menu: it is dropped instead.
 impl BoardPage.dropStaleFilters -> None {
     pid = fProject;
@@ -377,17 +340,6 @@ impl BoardPage.dropStaleFilters -> None {
         }
         if not known {
             who = "All";
-        }
-    }
-    if fIteration not in ["All", "current", "none"] {
-        known = False;
-        for it in iterations {
-            if it.id == fIteration {
-                known = True;
-            }
-        }
-        if not known {
-            fIteration = "All";
         }
     }
     if pid != fProject or who != fAssignee {
@@ -586,8 +538,6 @@ impl BoardPage.openCreate(inKey: str = "") -> None {
 
 impl BoardPage.showCreate(inKey: str = "") -> None {
     editingId = "";
-    d = new(Date);
-    shifted = new(Date, d.getTime() - d.getTimezoneOffset() * 60000);
     # A lane's add row names its own column; otherwise a new task lands in
     # the first column of the flow line (or the first legacy status), never a
     # hardcoded "Backlog" that may not exist.
@@ -595,26 +545,8 @@ impl BoardPage.showCreate(inKey: str = "") -> None {
     landing = inKey if inKey and inKey in keys else (keys[0] if keys else "Backlog");
     # A task always has a project: the filtered one, else the first active.
     firstProject = defaultProject(projects);
-    # A board filtered to an iteration plans the new task into it.
-    planned = "none";
-    for it in iterations {
-        if fIteration == it.id
-            or (
-                fIteration == "current"
-                and planned == "none"
-                and it.start_date <= shifted.toISOString()[:10]
-                and it.end_date >= shifted.toISOString()[:10]
-            ) {
-            planned = it.id;
-        }
-    }
     # No due date: a quick capture must not be born due today.
-    fresh = {
-        ** BLANK_TASK,
-        "project": fProject or firstProject,
-        "status": landing,
-        "iteration": planned
-    };
+    fresh = {** BLANK_TASK, "project": fProject or firstProject, "status": landing};
     form = fresh;
     baseForm = fresh;
     fAssignees = [];
@@ -649,7 +581,6 @@ impl BoardPage.showTask(t: TaskRow) -> None {
         "status": columnKeyOf(t),
         "due_date": t.due_date,
         "start_date": t.start_date,
-        "iteration": t.iteration_id or "none",
         "notes": "",
         "issue": t.issue_link,
         "pr": t.pr_link,
@@ -797,7 +728,6 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
                 start_date=form["start_date"],
-                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 pr_link=form["pr"].strip(),
@@ -817,7 +747,6 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 step_id=form["status"] if len(steps) > 0 else "",
                 due_date=form["due_date"],
                 start_date=form["start_date"],
-                iteration_id=form["iteration"] if form["iteration"] != "none" else "",
                 notes=form["notes"],
                 issue_link=form["issue"].strip(),
                 assignee_ids=fAssignees,
@@ -1301,205 +1230,33 @@ impl BoardPage.createIssue(repoId: str) -> None {
 
 # ------------------------------------------------------------------- lanes
 
-impl BoardPage.scheduleMeasure -> None {
-    if frameRef.current {
-        return;
-    }
-    frameRef.current = window.requestAnimationFrame(
-        lambda {
-            frameRef.current = 0;
-            measureLanes();
-        }
-    );
-}
-
-impl BoardPage.measureLanes -> None {
-    el: any = lanesRef.current;
-    if not el {
-        return;
-    }
-    w: any = window;
-    wide = bool(w.innerWidth >= 768);
-    box = el.getBoundingClientRect();
-    boxRight = float(box.right);
-    sheetX = sheetEdge();
-    if wide and sheetX > 0 and sheetX < boxRight {
-        boxRight = sheetX;
-    }
-    lanes: any = el.querySelectorAll("[data-lane]");
-    shown: list[str] = [];
-    best = "";
-    bestWidth = 0.0;
-    after = 0;
-    for i in range(int(lanes.length)) {
-        lane: any = lanes[i];
-        r = lane.getBoundingClientRect();
-        key = str(lane.getAttribute("data-lane"));
-        left = r.left if r.left > box.left else box.left;
-        right = r.right if r.right < boxRight else boxRight;
-        seen = right - left;
-        if r.width > 0 and seen >= r.width * 0.6 {
-            shown.append(key);
-        } elif r.left >= box.left {
-            after = after + 1;
-        }
-        if seen > bestWidth {
-            bestWidth = seen;
-            best = key;
-        }
-    }
-    joined = ",".join(shown);
-    if joined != viewKeys {
-        viewKeys = joined;
-    }
-    if after != hiddenAfter {
-        hiddenAfter = after;
-    }
-    if wide != wideView {
-        wideView = wide;
-    }
-    if best and best != activeLane {
-        activeLane = best;
-        if not wide {
-            # Keep the phone's current tab in sight inside its own row.
-            tab: any = document.querySelector('[data-step-tab="' + best + '"]');
-            row: any = tab.parentElement if tab else None;
-            if row {
-                at = tab.getBoundingClientRect().left - row.getBoundingClientRect().left
-                    + row.scrollLeft;
-                row.scrollTo({"left": at - 24, "behavior": "smooth"});
-            }
-        }
-    }
-    # On md+ the lanes fill the window below them, less the page's own
-    # bottom padding, so the page itself does not scroll.
-    height = 0;
-    if wide {
-        main: any = el.closest("main");
-        pad = 0.0;
-        if main {
-            pad = float(w.parseFloat(w.getComputedStyle(main).paddingBottom) or 0);
-        }
-        height = int(w.innerHeight - (box.top + w.scrollY) - pad);
-        if height < 320 {
-            height = 320;
-        }
-    }
-    if height != laneH {
-        laneH = height;
-    }
-}
-
-impl BoardPage.scrollToLane(key: str) -> None {
-    el: any = lanesRef.current;
-    if not el {
-        return;
-    }
-    lane: any = el.querySelector('[data-lane="' + key + '"]');
-    if not lane {
-        return;
-    }
-    w: any = window;
-    still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    el.scrollTo({"left": lane.offsetLeft, "behavior": "auto" if still else "smooth"});
-}
-
-impl BoardPage.scrollToHidden -> None {
-    el: any = lanesRef.current;
-    if not el {
-        return;
-    }
-    box = el.getBoundingClientRect();
-    boxRight = float(box.right);
-    sheetX = sheetEdge();
-    if sheetX > 0 and sheetX < boxRight {
-        boxRight = sheetX;
-    }
-    lanes: any = el.querySelectorAll("[data-lane]");
-    for i in range(int(lanes.length)) {
-        lane: any = lanes[i];
-        r = lane.getBoundingClientRect();
-        if r.right > boxRight + 1 {
-            scrollToLane(str(lane.getAttribute("data-lane")));
-            return;
-        }
-    }
-}
-
-impl BoardPage.revealCard(tid: str) -> None {
-    el: any = lanesRef.current;
-    card: any = document.querySelector('[data-task-card="' + tid + '"]');
-    sheetX = sheetEdge();
-    if not el or not card or sheetX < 0 {
-        return;
-    }
-    w: any = window;
-    limit = sheetX - 16.0;
-    r = card.getBoundingClientRect();
-    if r.right > limit {
-        still = bool(w.matchMedia("(prefers-reduced-motion: reduce)").matches);
-        el.scrollBy(
-            {"left": r.right - limit, "behavior": "auto" if still else "smooth"}
-        );
-    }
-}
-
-impl BoardPage.sheetEdge -> float {
-    sheet: any = document.querySelector("[data-task-sheet][data-state=open]");
-    w: any = window;
-    if not sheet or w.innerWidth < 768 {
-        return -1.0;
-    }
-    # offsetWidth and the inline right, not the rect: the sheet may still be
-    # sliding in.
-    right = float(w.parseFloat(sheet.style.right) or 0);
-    return float(document.documentElement.clientWidth)
-        - right
-        - float(sheet.offsetWidth);
-}
-
 impl BoardPage.stepCard(delta: int) -> None {
-    el: any = lanesRef.current;
-    if not el or not editingId {
+    if not editingId {
         return;
     }
-    cards: any = el.querySelectorAll("[data-task-card]");
+    rows: any = document.querySelectorAll("[data-task-row]");
     at = -1;
-    for i in range(int(cards.length)) {
-        if str(cards[i].getAttribute("data-task-card")) == editingId {
+    for i in range(int(rows.length)) {
+        if str(rows[i].getAttribute("data-task-row")) == editingId {
             at = i;
         }
     }
     to = at + delta;
-    if at < 0 or to < 0 or to >= int(cards.length) {
+    if at < 0 or to < 0 or to >= int(rows.length) {
         return;
     }
-    card: any = cards[to];
-    nextId = str(card.getAttribute("data-task-card"));
+    row: any = rows[to];
+    nextId = str(row.getAttribute("data-task-row"));
     # Over unsaved edits the sheet asks first and nothing moves yet.
     if formDirty() {
         openTaskById(nextId);
         return;
     }
     active: any = document.activeElement;
-    # Focus follows only when it was on a card; typing focus stays in the sheet.
-    if active and active.hasAttribute("data-task-card") {
-        card.focus({"preventScroll": True});
+    # Focus follows only when it was on a row; typing focus stays in the sheet.
+    if active and active.hasAttribute("data-task-row") {
+        row.focus({"preventScroll": True});
     }
-    card.scrollIntoView({"block": "nearest", "inline": "nearest"});
+    row.scrollIntoView({"block": "nearest"});
     openTaskById(nextId);
-}
-
-impl BoardPage.dragEdgeScroll(e: DragEvent) -> None {
-    el: any = lanesRef.current;
-    if not el or not wideView {
-        return;
-    }
-    box = el.getBoundingClientRect();
-    x = float(e.clientX);
-    if x > float(box.right) - 64.0 {
-        el.scrollLeft = el.scrollLeft + 14;
-    } elif x < float(box.left) + 64.0 {
-        el.scrollLeft = el.scrollLeft - 14;
-    }
 }

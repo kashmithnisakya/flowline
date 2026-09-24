@@ -64,7 +64,7 @@ installation) keeps its row, so an `unsuspend` delivery still reaches it.
 
 The log carries one `flowline.github` line per workspace visited
 (`github sync: installation 1234: drained 0, added 1, ... lists 2`) and one
-warning per failure. **Sync now** and **Re-sync history** on `/github` still
+warning per failure. **Sync now** and **Re-sync history** in Workspace's GitHub section still
 run the walker by hand, ignore the cooldown, and hold the workspace's lease for
 `SYNC_LEASE_SECONDS`, so the schedule stays out of a workspace someone is
 syncing. `FLOWLINE_SYNC_INTERVAL_SECONDS` in the pod environment overrides the
