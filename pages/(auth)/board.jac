@@ -36,7 +36,7 @@ import from ...services.github.github { SyncGithub, CreateIssueFromTask }
 import from ...services.github.events { DrainGithubEvents }
 import from ...services.filters.filters { SetBoardFilters }
 import from ...components.board.FilterBar { FilterBar }
-import from ...components.board.FilterSets { FilterSetMenu }
+import from ...components.common.FilterSets { FilterSetMenu }
 import from ...components.board.KanbanColumn { KanbanColumn }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }

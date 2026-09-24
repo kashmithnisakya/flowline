@@ -1,6 +1,7 @@
-"""The board's saved filters: a menu beside the page title that names what is
-on screen (a saved set, that set marked edited, "Filtered" or "All tasks"),
-switches between the sets, and saves, renames or deletes one. Its writes go
+"""Saved filters for one page (the board, the tasks table): a menu beside the
+page title that names what is on screen (a saved set, that set marked
+edited, or the page's labels for a custom and an empty view), switches
+between the sets, and saves, renames, deletes or links to one. Its writes go
 straight to their walkers; the page owns the filters themselves."""
 
 import from "sonner" { toast }
@@ -29,8 +30,8 @@ import from ..ui.dialog {
     DialogFooter
 }
 import from ..workspace.ConfirmDialog { ConfirmDialog }
-import from ..common.ErrorNote { ErrorNote }
-import from ..common.glyphs { Spinner }
+import from .ErrorNote { ErrorNote }
+import from .glyphs { Spinner }
 
 glob NAME_MAX: int = 60;
 
@@ -86,7 +87,18 @@ def:pub FilterSetMenu(
     onDeleted: Callable[[str], None],
     # The first load: no sets yet, so the trigger names what this browser saw.
     loading: bool = False,
-    lastName: str = ""
+    lastName: str = "",
+    # The page the sets belong to, its step keys and names for the summary,
+    # what the trigger says with nothing set and with an unsaved view, what
+    # the save dialog says it saves (and leaves out), and the link prefix a
+    # set is opened by ("" offers no link).
+    page: str = "board",
+    steps: list[list[str]] = [],
+    emptyLabel: str = "All tasks",
+    customLabel: str = "Filtered",
+    saveSubject: str = "the board's filters",
+    saveNote: str = "The title search is not saved.",
+    linkTo: str = ""
 ) -> JsxElement {
     # `naming` is "new" or "rename" while the name dialog is open; the set a
     # rename or delete acts on is held by id from the moment it is asked for.
@@ -101,7 +113,7 @@ def:pub FilterSetMenu(
         targetId: str = "",
         confirming: bool = False;
 
-    nowKey = filterKey(filters);
+    nowKey = filterKey(filters, page);
     # The set the filters came from, and the set they equal right now (that
     # one first, else any set with the same filters).
     active: any = None;
@@ -111,19 +123,19 @@ def:pub FilterSetMenu(
         }
     }
     shown: any = None;
-    if active and filterKey(active.filters) == nowKey {
+    if active and filterKey(active.filters, page) == nowKey {
         shown = active;
     }
     if not shown and nowKey {
         for s in sets {
-            if not shown and filterKey(s.filters) == nowKey {
+            if not shown and filterKey(s.filters, page) == nowKey {
                 shown = s;
             }
         }
     }
     edited = bool(active) and not shown;
     target: any = shown or active;
-    label = "All tasks";
+    label = emptyLabel;
     if shown {
         label = shown.name;
     } elif active {
@@ -131,7 +143,7 @@ def:pub FilterSetMenu(
     } elif loading and lastName {
         label = lastName;
     } elif nowKey {
-        label = "Filtered";
+        label = customLabel;
     }
     picked = shown.id if shown else ("all" if not nowKey else "");
     targetName = target.name if target else "";
@@ -154,19 +166,19 @@ def:pub FilterSetMenu(
         }
     }
 
-    def ask(what: str) {
+    def ask(kind: str) {
         targetId = target.id if target else "";
-        asked = what;
+        asked = kind;
     }
 
     def openAsked(e: any) {
-        what = asked;
+        kind = asked;
         asked = "";
-        if what == "new" or what == "rename" {
-            draft = targetName if what == "rename" else "";
+        if kind == "new" or kind == "rename" {
+            draft = targetName if kind == "rename" else "";
             problem = "";
-            window.setTimeout(lambda { naming = what; }, 0);
-        } elif what == "delete" {
+            window.setTimeout(lambda { naming = kind; }, 0);
+        } elif kind == "delete" {
             window.setTimeout(lambda { confirming = True; }, 0);
         }
     }
@@ -185,7 +197,7 @@ def:pub FilterSetMenu(
         ok = False;
         try {
             result = root spawn SaveFilterSet(
-                set_id=setId, name=name, page="board", filters=values
+                set_id=setId, name=name, page=page, filters=values
             );
             payload: any = result.reports[0] if result.reports else None;
             if payload and payload["ok"] {
@@ -255,14 +267,30 @@ def:pub FilterSetMenu(
         busy = False;
     }
 
-    summary = filterSummary(filters, projects, members, iterations);
-    namingNote = "Saves the board's filters: "
-        + summary
-        + ". The title search is not saved.";
+    def summaryOf(values: dict[str, str]) -> str {
+        return filterSummary(values, projects, members, iterations, page, steps);
+    }
+
+    async def copyLink {
+        if not target {
+            return;
+        }
+        w: any = window;
+        link = str(w.location.origin) + linkTo + target.id;
+        try {
+            await w.navigator.clipboard.writeText(link);
+            toast.success("Link copied");
+        } except Exception as e {
+            toast.error("Could not copy the link");
+        }
+    }
+
+    namingNote = "Saves " + saveSubject + ": " + summaryOf(filters) + ".";
+    if saveNote {
+        namingNote = namingNote + " " + saveNote;
+    }
     if naming == "rename" and held {
-        namingNote = "Keeps its filters: "
-            + filterSummary(held.filters, projects, members, iterations)
-            + ".";
+        namingNote = "Keeps its filters: " + summaryOf(held.filters) + ".";
     }
 
     return
@@ -301,7 +329,7 @@ def:pub FilterSetMenu(
                     </DropdownMenuLabel>
                     <DropdownMenuRadioGroup value={picked} onValueChange={pick}>
                         <DropdownMenuRadioItem value="all">
-                            All tasks
+                            {emptyLabel}
                         </DropdownMenuRadioItem>
                         {for s in sets {
                             <DropdownMenuRadioItem
@@ -324,9 +352,7 @@ def:pub FilterSetMenu(
                                     <span
                                         className="truncate text-xs text-muted-foreground"
                                     >
-                                        {filterSummary(
-                                            s.filters, projects, members, iterations
-                                        )}
+                                        {summaryOf(s.filters)}
                                     </span>
                                 </span>
                             </DropdownMenuRadioItem>
@@ -356,6 +382,13 @@ def:pub FilterSetMenu(
                         >
                             <span className="truncate">
                                 {"Save changes to “" + active.name + "”"}
+                            </span>
+                        </DropdownMenuItem>
+                    }}
+                    {if target and linkTo {
+                        <DropdownMenuItem key="link" onSelect={lambda { copyLink(); }}>
+                            <span className="truncate">
+                                {"Copy link to “" + targetName + "”"}
                             </span>
                         </DropdownMenuItem>
                     }}

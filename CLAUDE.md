@@ -584,8 +584,15 @@ File-based routing with route groups:
   there plus a line in `boardFilters`, `adoptFilters` and `filterSummary`
   (`lib/filters.jac`), or it neither saves nor restores. `lib/filters` also
   keeps this browser's copy for the first frame and writes
-  `flowline_project`, which the flow line page opens on. Named sets are
-  `components/board/FilterSets.jac`; the title search is never saved.
+  `flowline_project`, which the flow line page opens on. The board's title
+  search is never saved.
+- **Named filter sets are per page.** `components/common/FilterSets.jac` is
+  the menu on the board and `/tasks`; a set's `page` picks its keys from
+  `FILTER_TABLES` in `constants.jac` (`TASKS_FILTERS` is the table's URL
+  less the page number, so it carries the scope, search and sort), and the
+  server drops any other key. `/tasks` keeps no view on the account: the
+  URL is its state, and `/tasks?view=<id>` opens a saved set (the table
+  waits for it rather than painting the URL's view first).
 - **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead
@@ -731,6 +738,12 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 - **`len()` on a dict compiles to `.length`**, which is `undefined` on a plain
   JS object, so `len(d) > 0` is silently always false (it type-checks). Track
   emptiness with a separate `bool` field. `len()` on a list is fine.
+- **A local in a nested `def` or an `impl` must not reuse an enclosing name.**
+  The client codegen declares a local with `let` only when no enclosing
+  scope has the name, so `what = asked` in a component helper assigned to
+  the `what` prop (a `const`: "Assignment to constant variable" at runtime),
+  and a `rows` local in a page method would write the page's `has rows`.
+  `jac check` sees neither. Pick names no prop, `has` or render local uses.
 - **A name first assigned inside an `if` is block-scoped in the compiled JS**
   and is `ReferenceError` after the branch. Initialise it before the branch.
 - **A `has` flag cannot arbitrate a shared Escape.** A Radix dialog flips its

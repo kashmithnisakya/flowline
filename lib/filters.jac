@@ -1,18 +1,36 @@
-"""The board's filters on the client: the stored form (only the keys set away
-from their default, as the server keeps them), a comparable key and a
-one-line summary of a set, and this browser's copy of the account's filters,
-which paints the first frame before the board's first page lands."""
+"""Saved filters on the client: the stored form (only the keys set away from
+their default, as the server keeps them), a comparable key and a one-line
+summary of a set, per page (FILTER_TABLES; the board unless a page is
+named), and this browser's copy of the account's board filters, which
+paints the first frame before the board's first page lands."""
 
-import from ..constants { BOARD_FILTERS }
+import from ..constants { FILTER_TABLES }
 import from ..models { Project, MemberView, IterationView }
 import from .session { BOARD_FILTERS_KEY }
 
+glob SCOPE_WORDS: dict[str, str] = {
+         "done": "Done tasks",
+         "all": "All tasks",
+         "attention": "Needs attention"
+     },
+     SORT_WORDS: dict[str, str] = {
+         "title": "title",
+         "step": "step",
+         "priority": "priority",
+         "due": "due date",
+         "updated": "last update"
+     };
+
+def keysOf(page: str) -> list[list[str]] {
+    return FILTER_TABLES[page] if page in FILTER_TABLES else [];
+}
+
 # A key's value in a stored dict, or the key's default when it is not set.
-def:pub filterValue(filters: dict[str, str], key: str) -> str {
+def:pub filterValue(filters: dict[str, str], key: str, page: str = "board") -> str {
     if key in filters and filters[key] {
         return filters[key];
     }
-    for pair in BOARD_FILTERS {
+    for pair in keysOf(page) {
         if pair[0] == key {
             return pair[1];
         }
@@ -21,9 +39,9 @@ def:pub filterValue(filters: dict[str, str], key: str) -> str {
 }
 
 # Every key's value to the stored form: defaults and empty values dropped.
-def:pub trimFilters(picked: dict[str, str]) -> dict[str, str] {
+def:pub trimFilters(picked: dict[str, str], page: str = "board") -> dict[str, str] {
     kept: dict[str, str] = {};
-    for pair in BOARD_FILTERS {
+    for pair in keysOf(page) {
         value = picked[pair[0]] if pair[0] in picked else "";
         if value and value != pair[1] {
             kept[pair[0]] = value;
@@ -32,12 +50,12 @@ def:pub trimFilters(picked: dict[str, str]) -> dict[str, str] {
     return kept;
 }
 
-# One string per filter state, in BOARD_FILTERS order, so two dicts compare
+# One string per filter state, in the page's key order, so two dicts compare
 # as strings ("" is no filter at all).
-def:pub filterKey(filters: dict[str, str]) -> str {
+def:pub filterKey(filters: dict[str, str], page: str = "board") -> str {
     parts: list[str] = [];
-    for pair in BOARD_FILTERS {
-        value = filterValue(filters, pair[0]);
+    for pair in keysOf(page) {
+        value = filterValue(filters, pair[0], page);
         if value != pair[1] {
             parts.append(pair[0] + "=" + value);
         }
@@ -46,20 +64,35 @@ def:pub filterKey(filters: dict[str, str]) -> str {
 }
 
 # What a set filters on, in words: "Platform · High priority · Done hidden".
+# `steps` names the table's step keys ([key, name] pairs).
 def:pub filterSummary(
     filters: dict[str, str],
     projects: list[Project],
     members: list[MemberView],
-    iterations: list[IterationView]
+    iterations: list[IterationView],
+    page: str = "board",
+    steps: list[list[str]] = []
 ) -> str {
     parts: list[str] = [];
-    for pair in BOARD_FILTERS {
+    for pair in keysOf(page) {
         key = pair[0];
-        value = filterValue(filters, key);
-        if value == pair[1] {
+        value = filterValue(filters, key, page);
+        if value == pair[1] or key == "sort" or key == "dir" {
             continue;
         }
-        if key == "project" {
+        if key == "scope" {
+            parts.append(SCOPE_WORDS[value] if value in SCOPE_WORDS else value);
+        } elif key == "step" {
+            label = "Removed step";
+            for st in steps {
+                if st[0] == value {
+                    label = st[1];
+                }
+            }
+            parts.append(label);
+        } elif key == "q" {
+            parts.append("“" + value + "”");
+        } elif key == "project" {
             label = "Removed project";
             for p in projects {
                 if jid(p) == value {
@@ -99,6 +132,15 @@ def:pub filterSummary(
         } elif key == "done" {
             parts.append("Done hidden");
         }
+    }
+    order = filterValue(filters, "sort", page);
+    way = filterValue(filters, "dir", page);
+    if page == "tasks" and (order != "updated" or way != "desc") {
+        parts.append(
+            "Sorted by "
+                + (SORT_WORDS[order] if order in SORT_WORDS else order)
+                + (", ascending" if way == "asc" else ", descending")
+        );
     }
     return " · ".join(parts);
 }

@@ -1,7 +1,7 @@
 """Saved filters: the board's filters kept on the account, so the board opens
-on them in any browser, and named filter sets to switch between. The sets
-ride on GetWorkspace and the board's filters on BoardSnapshot; these walkers
-only write."""
+on them in any browser, and named filter sets for the board and the tasks
+table. The sets ride on GetWorkspace and the board's filters on
+BoardSnapshot; these walkers only write."""
 
 import from models {
     FilterSet,
@@ -13,17 +13,21 @@ import from models {
     on_attached,
     owned
 }
-import from constants { BOARD_FILTERS, FILTER_SET_PAGES, PRIORITIES }
+import from constants { FILTER_TABLES, FILTER_SET_PAGES, PRIORITIES }
 import from services.util { now_iso }
 
 glob FILTER_SET_MAX: int = 50,
      FILTER_NAME_MAX: int = 60,
      FILTER_VALUE_MAX: int = 200,
-     # Keys whose value is one of a few words: any other value drops the key.
+     # Keys whose value is one of a few words, on any page: any other value
+     # drops the key.
      FILTER_CHOICES: dict[str, list[str]] = {
          "priority": PRIORITIES,
          "estimate": ["yes", "no"],
-         "done": ["hide"]
+         "done": ["hide"],
+         "scope": ["done", "all", "attention"],
+         "sort": ["title", "step", "priority", "due", "updated"],
+         "dir": ["asc", "desc"]
      };
 
 
@@ -31,10 +35,10 @@ glob FILTER_SET_MAX: int = 50,
 # not the key's default, and a listed value for the keys FILTER_CHOICES names.
 def clean_filters(page: str, raw: dict[str, str]) -> dict[str, str] {
     out: dict[str, str] = {};
-    if page != "board" {
+    if page not in FILTER_TABLES {
         return out;
     }
-    for pair in BOARD_FILTERS {
+    for pair in FILTER_TABLES[page] {
         key = pair[0];
         value = str(raw[key] or "").strip()[:FILTER_VALUE_MAX] if key in raw else "";
         if not value or value == pair[1] {

@@ -52,7 +52,8 @@ is why renaming a step never changes how anything behaves.
   (optionally) for a reviewer, a review-by date, a PR link or what is blocking it
 - **Multi-assignee tasks**, free-text categories and tags, repos attached to projects
 - **A Tasks table** of every task, searchable as you type and sortable, with
-  Working, Done, All and Needs attention scopes kept in the URL
+  Working, Done, All and Needs attention scopes kept in the URL, and a view
+  saved under a name and picked again (the board saves its filters the same way)
 - **Iterations and a roadmap**: plan tasks into time boxes, filter the board to
   the current one, and see work on a twelve-week timeline by its start and due
   dates or its iteration

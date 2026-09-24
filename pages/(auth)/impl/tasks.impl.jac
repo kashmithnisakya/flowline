@@ -23,30 +23,15 @@ impl TasksPage.loadShared -> None {
         if p.active
     ];
     if ws["ok"] {
-        # A project or assignee id from the URL that is not in the menus
-        # (archived, or another workspace's) would show a blank filter.
-        knownProject = fProject == "all";
-        for p in projects {
-            if jid(p) == fProject {
-                knownProject = True;
-            }
-        }
-        if not knownProject {
-            fProject = "all";
-        }
-        knownMember = fAssignee == "All";
-        for m in members {
-            if m.id == fAssignee and (fProject == "all" or fProject in m.project_ids) {
-                knownMember = True;
-            }
-        }
-        if not knownMember {
-            fAssignee = "All";
-        }
+        dropStaleFilters();
     }
     roleRows = ws["roles"];
     iterations = ws["iterations"];
+    filterSets = ws["filter_sets"];
     workspaceReady = True;
+    if pendingView {
+        openLinkedView();
+    }
     # The app bar may have mounted after the first measure (a full load).
     measureHeader();
 }
@@ -54,7 +39,8 @@ impl TasksPage.loadShared -> None {
 impl TasksPage.loadTasks -> None {
     # A step filter waits for the flow line, which confirms the step still
     # exists (loadShared resets an unknown one); the server places the rows.
-    if fStep != "All" and not readyRef.current {
+    # A linked saved view is read once it is applied.
+    if pendingView or (fStep != "All" and not readyRef.current) {
         return;
     }
     seq = (reqRef.current or 0) + 1;
@@ -246,6 +232,126 @@ impl TasksPage.clearFilters -> None {
     query = "";
     page = 1;
     cursor = -1;
+}
+
+impl TasksPage.viewFilters -> dict[str, str] {
+    return trimFilters(
+        {
+            "scope": scope,
+            "project": fProject,
+            "assignee": fAssignee,
+            "step": fStep,
+            "priority": fPriority,
+            "category": fCategory,
+            "tag": fTag,
+            "estimate": fEstimate,
+            "q": query,
+            "sort": sort,
+            "dir": sortDir
+        },
+        "tasks"
+    );
+}
+
+# Every part of a saved view (a key it lacks is the default), from page 1.
+impl TasksPage.applySet(view: FilterSetView) -> None {
+    f = view.filters;
+    scope = filterValue(f, "scope", "tasks");
+    fProject = filterValue(f, "project", "tasks");
+    fAssignee = filterValue(f, "assignee", "tasks");
+    fStep = filterValue(f, "step", "tasks");
+    fPriority = filterValue(f, "priority", "tasks");
+    fCategory = filterValue(f, "category", "tasks");
+    fTag = filterValue(f, "tag", "tasks");
+    fEstimate = filterValue(f, "estimate", "tasks");
+    words = filterValue(f, "q", "tasks");
+    query = words;
+    queryDraft = words;
+    sort = filterValue(f, "sort", "tasks");
+    sortDir = filterValue(f, "dir", "tasks");
+    page = 1;
+    cursor = -1;
+    activeSet = view.id;
+    dropStaleFilters();
+}
+
+# The set a /tasks?view=<id> link names. The view effect reads the table when
+# the set changed anything; one that matches the URL's view reads it here.
+impl TasksPage.openLinkedView -> None {
+    wanted = pendingView;
+    before = filterKey(viewFilters(), "tasks");
+    found = False;
+    for s in filterSets {
+        if s.id == wanted and s.page == "tasks" {
+            applySet(s);
+            found = True;
+        }
+    }
+    pendingView = "";
+    if not found {
+        toast.error("That saved view no longer exists");
+    }
+    if filterKey(viewFilters(), "tasks") == before {
+        loadTasks();
+    }
+}
+
+impl TasksPage.showDefault -> None {
+    clearFilters();
+    scope = "working";
+    sort = "updated";
+    sortDir = "desc";
+    activeSet = "";
+}
+
+impl TasksPage.absorbSet(view: FilterSetView) -> None {
+    listed: list[FilterSetView] = [
+        s
+        for s in filterSets
+        if s.id != view.id
+    ];
+    listed.append(view);
+    listed.sort(key=lambda (s: FilterSetView) { s.name.lower(); });
+    filterSets = listed;
+    activeSet = view.id;
+}
+
+impl TasksPage.dropSet(setId: str) -> None {
+    filterSets = [
+        s
+        for s in filterSets
+        if s.id != setId
+    ];
+    if activeSet == setId {
+        activeSet = "";
+    }
+}
+
+# A project, person or step id (from the URL or a saved view) that is not in
+# the menus (archived, removed, another workspace's) would show a blank
+# filter; it goes back to all.
+impl TasksPage.dropStaleFilters -> None {
+    if fStep != "All" and fStep not in columnKeys() {
+        fStep = "All";
+    }
+    knownProject = fProject == "all";
+    for p in projects {
+        if jid(p) == fProject {
+            knownProject = True;
+        }
+    }
+    if not knownProject {
+        fProject = "all";
+    }
+    knownMember = fAssignee == "All";
+    for m in members {
+        if m.id == fAssignee and (fProject == "all" or fProject in m.project_ids) {
+            knownMember = True;
+        }
+    }
+    if not knownMember {
+        fAssignee = "All";
+    }
 }
 
 impl TasksPage.goPage(delta: int) -> None {
