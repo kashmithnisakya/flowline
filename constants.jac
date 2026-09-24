@@ -120,30 +120,30 @@ glob STATUSES: list[str] = [
                  }
              ],
              # Unassigned and Validated are both `start`: validated but
-             # unpicked work is still Backlog. Validated needs a due date and
-             # Issues with PRs a linked PR, whether a label or a person moves it.
+             # unpicked work is still Backlog. Ready needs a due date and In
+             # review a linked PR, whether a label or a person moves it.
              "steps": [
                  {
-                     "name": "Unassigned issues",
+                     "name": "Incoming",
                      "kind": "start",
                      "color": "sky",
                      "owner": "anyone",
-                     "blurb": "the issue pool, synced from GitHub",
+                     "blurb": "new issues from GitHub",
                      "x": 60.0,
                      "y": 40.0
                  },
                  {
-                     "name": "Validated",
+                     "name": "Ready",
                      "kind": "start",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "ready to create PRs",
+                     "blurb": "validated, prioritised, dated",
                      "needs_due_date": True,
                      "x": 60.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Picked",
+                     "name": "Building",
                      "kind": "active",
                      "color": "amber",
                      "owner": "Model Pilot Engineer",
@@ -152,7 +152,7 @@ glob STATUSES: list[str] = [
                      "y": 480.0
                  },
                  {
-                     "name": "Design decision",
+                     "name": "Design",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
@@ -161,17 +161,17 @@ glob STATUSES: list[str] = [
                      "y": 700.0
                  },
                  {
-                     "name": "Issues with PRs",
+                     "name": "In review",
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "PR open, in review",
+                     "blurb": "PR open, being reviewed",
                      "needs_pr": True,
                      "x": 740.0,
                      "y": 260.0
                  },
                  {
-                     "name": "PR merged",
+                     "name": "Final check",
                      "kind": "handoff",
                      "color": "rose",
                      "owner": "Model Oversight Engineer",
@@ -193,7 +193,7 @@ glob STATUSES: list[str] = [
              # Index-aligned with `links`, as are the carries and triggers.
              "link_labels": [
                  "validated, with priority",
-                 "picked",
+                 "picked up",
                  "needs a design decision",
                  "decision made",
                  "ready to review",

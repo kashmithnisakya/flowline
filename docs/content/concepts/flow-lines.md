@@ -126,16 +126,16 @@ Oversight Engineer marks it done. Arrows marked *auto* move work on their own
 
 ```mermaid
 flowchart TB
-    U["Unassigned issues<br/><small>start · anyone</small>"]
-    V["Validated<br/><small>start · Product Engineer · needs a due date</small>"]
-    P["Picked<br/><small>active · Model Pilot Engineer</small>"]
-    A["Design decision<br/><small>active · Architect</small>"]
-    R["Issues with PRs<br/><small>handoff · Product Engineer · needs a PR</small>"]
-    M["PR merged<br/><small>handoff · Model Oversight Engineer</small>"]
+    U["Incoming<br/><small>start · anyone</small>"]
+    V["Ready<br/><small>start · Product Engineer · needs a due date</small>"]
+    P["Building<br/><small>active · Model Pilot Engineer</small>"]
+    A["Design<br/><small>active · Architect</small>"]
+    R["In review<br/><small>handoff · Product Engineer · needs a PR</small>"]
+    M["Final check<br/><small>handoff · Model Oversight Engineer</small>"]
     D["Done<br/><small>done · Model Oversight Engineer</small>"]
 
     U -- "auto: label validated" --> V
-    V -- "picked" --> P
+    V -- "picked up" --> P
     P -- "needs a design decision" --> A
     A -- "decision made" --> P
     P -- "auto: label ready-to-review" --> R

@@ -93,7 +93,7 @@ foreign.
 **Reports** the updated [`StepView`](types.md#stepview). Both rules are sent
 every time. They gate every move onto the step: `MoveTask` and `UpdateTask`
 leave the task where it is and report its view with `refused` set (for
-example `"Validated needs a due date"`), `CreateTask` creates nothing, and a
+example `"Ready needs a due date"`), `CreateTask` creates nothing, and a
 GitHub trigger leaves the task and logs `Stayed on <step> · <reason>`. Tasks
 already on the step stay.
 
