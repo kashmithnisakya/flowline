@@ -99,7 +99,7 @@ glob STATUSES: list[str] = [
                      "color": "indigo"
                  },
                  {
-                     "name": "Builder",
+                     "name": "Model Pilot Engineer",
                      "blurb": "Implements. Many PRs, fast.",
                      "color": "amber"
                  },
@@ -109,7 +109,7 @@ glob STATUSES: list[str] = [
                      "color": "slate"
                  },
                  {
-                     "name": "De-slop",
+                     "name": "Model Oversight Engineer",
                      "blurb": "Final pass. Decides done.",
                      "color": "rose"
                  }
@@ -149,7 +149,7 @@ glob STATUSES: list[str] = [
                      "name": "Implement",
                      "kind": "active",
                      "color": "amber",
-                     "owner": "Builder",
+                     "owner": "Model Pilot Engineer",
                      "blurb": "drive the model, add tests",
                      "x": 740.0,
                      "y": 430.0
@@ -167,7 +167,7 @@ glob STATUSES: list[str] = [
                      "name": "Refactor",
                      "kind": "active",
                      "color": "rose",
-                     "owner": "De-slop",
+                     "owner": "Model Oversight Engineer",
                      "blurb": "decides done",
                      "x": 1210.0,
                      "y": 560.0
@@ -176,7 +176,7 @@ glob STATUSES: list[str] = [
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
-                     "owner": "De-slop",
+                     "owner": "Model Oversight Engineer",
                      "blurb": "terminal",
                      "x": 1560.0,
                      "y": 560.0
@@ -184,7 +184,7 @@ glob STATUSES: list[str] = [
              ],
              # Forward first, then the send-back: review that can only
              # approve is a review nobody needs. Merged work has no direct
-             # road to Done - it goes through De-slop, which is what marks it.
+             # road to Done - it goes through Model Oversight Engineer, which is what marks it.
              "links": [
                  [0, 1],
                  [1, 0],

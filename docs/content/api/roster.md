@@ -31,7 +31,7 @@ unknown or foreign.
 ```bash
 curl -X POST $BASE/walker/SaveMember -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"first_name": "Priya", "last_name": "Raman", "roles": ["Builder"],
+  -d '{"first_name": "Priya", "last_name": "Raman", "roles": ["Model Pilot Engineer"],
        "github_username": "priyar", "tags": ["backend"], "color": "amber"}'
 ```
 

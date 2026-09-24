@@ -128,10 +128,10 @@ flowchart TB
     S["Specify<br/><small>start · anyone</small>"]
     T["Triage<br/><small>start · Product Engineer</small>"]
     A["Architecturing<br/><small>active · Architect</small>"]
-    I["Implement<br/><small>active · Builder</small>"]
+    I["Implement<br/><small>active · Model Pilot Engineer</small>"]
     R["Review #amp; merge<br/><small>handoff · Product Engineer</small>"]
-    F["Refactor<br/><small>active · De-slop</small>"]
-    D["Done<br/><small>done · De-slop</small>"]
+    F["Refactor<br/><small>active · Model Oversight Engineer</small>"]
+    D["Done<br/><small>done · Model Oversight Engineer</small>"]
 
     S -- "to PE first" --> T
     T -- "PE too" --> S
@@ -157,9 +157,10 @@ flowchart TB
     class D emerald
 ```
 
-Software team also seeds four roles (Product Engineer, Builder, Architect,
-De-slop) as ordinary `Role` nodes that the team can edit afterwards. Existing
-roles with the same name are left alone, and the box records
+Software team also seeds four roles (Product Engineer, Model Pilot Engineer,
+Architect, Model Oversight Engineer) as ordinary `Role` nodes that the team
+can edit afterwards. Existing roles with the same name are left alone, and
+the box records
 `template_key = "jaseci"` (the template's key from before it was renamed).
 
 ??? example "The templates as declared in `constants.jac`"
@@ -187,7 +188,7 @@ carry an empty `step_id`. Both fallbacks below are load-bearing.
 
 ## Handoffs follow roles
 
-A step's `owner` is a role name such as `Builder`. When `MoveTask` moves a card
+A step's `owner` is a role name such as `Model Pilot Engineer`. When `MoveTask` moves a card
 **onto a different step**, it looks for the one active member who holds that
 role **and** is on the task's project. If there is exactly one, the card's
 assignees are replaced by that person and the log line names them
