@@ -133,7 +133,7 @@ def:pub FilterSetMenu(
     } elif loading and lastName {
         label = lastName;
     } elif nowKey {
-        label = "Filtered";
+        label = "Views";
     }
     picked = shown.id if shown else ("all" if not nowKey else "");
     targetName = target.name if target else "";

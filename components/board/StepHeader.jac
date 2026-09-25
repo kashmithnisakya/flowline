@@ -21,7 +21,7 @@ def:pub StepHeader(
 ) -> JsxElement {
     return
         <div
-            className="sticky top-[5.75rem] z-20 flex h-9 items-center gap-2 rounded-md bg-bg-surface pr-1 pl-2 md:top-8"
+            className="sticky top-[5.75rem] z-20 flex h-9 items-center gap-2 rounded-md bg-bg-surface pr-1 pl-2 lg:top-8"
         >
             <button
                 type="button"
@@ -60,7 +60,6 @@ def:pub StepHeader(
                     key="add"
                     type="button"
                     aria-label={"Add a task to " + label}
-                    title={"Add a task to " + label}
                     onClick={onAdd}
                     className="ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-text-tertiary opacity-0 transition-opacity outline-none group-hover/step:opacity-100 hover:bg-bg-hover hover:text-text-primary focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
                 >

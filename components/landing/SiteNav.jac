@@ -78,6 +78,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                         size="icon"
                         className="md:hidden"
                         aria-label="Menu"
+                        title="Menu"
                         aria-expanded={menuOpen}
                         aria-controls="site-menu"
                         onClick={lambda { menuOpen = not menuOpen; }}

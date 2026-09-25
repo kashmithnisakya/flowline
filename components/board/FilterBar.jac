@@ -11,6 +11,8 @@ import from ..ui.dropdown_menu {
     DropdownMenuTrigger,
     DropdownMenuContent,
     DropdownMenuRadioGroup,
+    DropdownMenuItem,
+    DropdownMenuCheckboxItem,
     DropdownMenuRadioItem,
     DropdownMenuSub,
     DropdownMenuSubTrigger,
@@ -169,6 +171,10 @@ def:pub FilterBar(
     onClear: Callable[[], None] = None,
     shownCount: int = 0,
     doneDays: int = 7,
+    hideEmpty: bool = False,
+    onHideEmpty: Callable[[], None] = None,
+    onExpandAll: Callable[[], None] = None,
+    onCollapseAll: Callable[[], None] = None,
     # The first load: the count is not known yet, so its slot holds a block.
     busy: bool = False
 ) -> JsxElement {
@@ -438,24 +444,58 @@ def:pub FilterBar(
                     <button
                         key="clearall"
                         type="button"
-                        className="toolbar-filter text-primary! hover:bg-transparent! hover:underline"
+                        className="toolbar-filter border-transparent!"
                         onClick={lambda { clearAll(); }}
                     >
-                        Clear filters
+                        Clear
                     </button>
                 }}
                 <div
-                    className="ml-auto flex items-center gap-3 text-[12.5px] text-muted-foreground"
+                    className="ml-auto flex items-center gap-2 text-[12px] text-text-tertiary"
                 >
-                    <label
-                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap"
-                    >
-                        <Checkbox
-                            checked={not hideDone}
-                            onCheckedChange={lambda { onHideDone(); }}
-                        />
-                        {doneLabel}
-                    </label>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger className="toolbar-filter" data-active="false">
+                            Display
+                            <Chevron/>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            collisionPadding={16}
+                            className="w-56"
+                        >
+                            <DropdownMenuCheckboxItem
+                                checked={not hideDone}
+                                onCheckedChange={lambda { onHideDone(); }}
+                            >
+                                {doneLabel}
+                            </DropdownMenuCheckboxItem>
+                            {if onHideEmpty {
+                                <DropdownMenuCheckboxItem
+                                    key="empty"
+                                    checked={hideEmpty}
+                                    onCheckedChange={lambda { onHideEmpty(); }}
+                                >
+                                    Hide empty groups
+                                </DropdownMenuCheckboxItem>
+                            }}
+                            {if onExpandAll {
+                                <DropdownMenuItem
+                                    key="expand"
+                                    onClick={lambda { onExpandAll(); }}
+                                >
+                                    Expand all groups
+                                </DropdownMenuItem>
+                            }}
+                            {if onCollapseAll {
+                                <DropdownMenuItem
+                                    key="collapse"
+                                    onClick={lambda { onCollapseAll(); }}
+                                >
+                                    Collapse all groups
+                                </DropdownMenuItem>
+                            }}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     {if busy {
                         <Skeleton key="count" className="h-3 w-14"/>
                     } else {

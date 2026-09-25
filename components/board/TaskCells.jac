@@ -3,6 +3,8 @@ priority, checklist, due date and the linked GitHub number."""
 
 import from ...models { TaskRow }
 import from ..common.Avatar { AvatarStack }
+import from ..common.PriorityIcon { PriorityIcon }
+import from ..common.ProgressRing { ProgressRing }
 import from .GitHubChip { ghNumber, ghHref }
 import from .taskFacts { dueWords, isLate }
 
@@ -26,44 +28,32 @@ def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
                     <span key="none" className="text-xs text-subtle">Nobody</span>
                 } }
             </span>
-            <span
-                className={"text-[13px] "
-                    + (
-                        "font-medium text-destructive"
-                            if task.priority == "High"
-                            else "text-muted-foreground"
-                    )}
-            >
-                {task.priority}
+            <span className="flex items-center" title={task.priority + " priority"}>
+                <PriorityIcon priority={task.priority}/>
             </span>
             <span className="flex items-center gap-2">
                 {if total > 0 {
                     <span
-                        key="bar"
-                        className="h-1.5 w-12 overflow-hidden rounded-full bg-muted"
+                        key="ring"
+                        className="flex items-center gap-1.5"
                         title={str(done) + " of " + str(total) + " done"}
                     >
-                        <span
-                            className={"block h-full rounded-full " + color}
-                            style={{"width": str(int(100 * done / total)) + "%"}}
-                        />
-                    </span>
-                }}
-                {if total > 0 {
-                    <span key="n" className="num text-xs text-muted-foreground">
-                        {str(done) + "/" + str(total)}
+                        <ProgressRing done={done} total={total}/>
+                        <span className="num text-[12px] text-text-tertiary">
+                            {str(done) + "/" + str(total)}
+                        </span>
                     </span>
                 }}
             </span>
             <span
-                className={"truncate text-[13px] "
+                className={"num truncate text-[12px] "
                     + (
-                        "font-medium text-destructive"
+                        "font-medium text-danger"
                             if late
                             else (
-                                "font-medium"
+                                "font-medium text-text-primary"
                                     if due == "Today"
-                                    else "text-muted-foreground"
+                                    else "text-text-secondary"
                             )
                     )}
             >
@@ -78,7 +68,7 @@ def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
                         rel="noreferrer"
                         tabIndex={-1}
                         draggable={False}
-                        className={"num text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        className={"num text-[12px] text-text-tertiary hover:text-text-primary hover:underline"
                             + (
                                 " line-through"
                                     if task.gh_issue_state == "closed"

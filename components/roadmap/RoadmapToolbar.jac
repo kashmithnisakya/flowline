@@ -32,7 +32,6 @@ def:pub RoadmapToolbar(
                     size="icon-sm"
                     className={ROUND}
                     aria-label="Earlier weeks"
-                    title="Earlier weeks"
                     onClick={lambda { onEarlier(); }}
                 >
                     <Chevron facing="left"/>
@@ -50,7 +49,6 @@ def:pub RoadmapToolbar(
                     size="icon-sm"
                     className={ROUND}
                     aria-label="Later weeks"
-                    title="Later weeks"
                     onClick={lambda { onLater(); }}
                 >
                     <Chevron facing="right"/>

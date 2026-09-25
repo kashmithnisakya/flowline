@@ -36,7 +36,7 @@ def:pub Sidebar(
     return
         <aside
             aria-label="Navigation"
-            className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar px-3 pt-4 pb-3 md:flex"
+            className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar px-3 pt-4 pb-3 lg:flex"
         >
             <Link
                 to="/board"

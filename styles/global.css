@@ -617,7 +617,7 @@
 [data-slot="popover-content"] {
     border-radius: var(--radius-xl);
     --tw-shadow: var(--float-1);
-    animation-duration: 150ms;
+    animation-duration: 120ms;
 }
 [data-slot="dialog-content"],
 [data-slot="sheet-content"] {
@@ -632,7 +632,7 @@
     background: var(--scrim);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    animation-duration: 150ms;
+    animation-duration: 120ms;
 }
 /* Controls keep a surface fill in both themes; the registry's bg-input tints
    would turn the 3:1 control-edge grey into a fill. */
