@@ -12,7 +12,8 @@ def:pub FilteredEmpty(hidden: int, onClear: Callable[[], None]) -> JsxElement {
             <p className="text-[13px] font-medium">No tasks match these filters</p>
             {if hidden > 0 {
                 <p key="n" className="text-[13px] text-text-secondary">
-                    {str(hidden) + (" task is hidden" if hidden == 1 else " tasks are hidden")}
+                    {str(hidden)
+                        + (" task is hidden" if hidden == 1 else " tasks are hidden")}
                 </p>
             }}
             <Button variant="secondary" size="lg" className="mt-1" onClick={onClear}>

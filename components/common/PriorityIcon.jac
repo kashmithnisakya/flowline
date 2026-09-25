@@ -21,7 +21,15 @@ def:pub PriorityIcon(priority: str = "Medium", size: int = 14) -> JsxElement {
             role="img"
             aria-label={priority + " priority"}
         >
-            <rect x={2} y={9} width={3} height={5} rx={1} fill="currentColor" opacity={1}/>
+            <rect
+                x={2}
+                y={9}
+                width={3}
+                height={5}
+                rx={1}
+                fill="currentColor"
+                opacity={1}
+            />
             <rect
                 x={6.5}
                 y={6}

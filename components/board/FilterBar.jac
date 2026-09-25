@@ -454,7 +454,10 @@ def:pub FilterBar(
                     className="ml-auto flex items-center gap-2 text-[12px] text-text-tertiary"
                 >
                     <DropdownMenu>
-                        <DropdownMenuTrigger className="toolbar-filter" data-active="false">
+                        <DropdownMenuTrigger
+                            className="toolbar-filter"
+                            data-active="false"
+                        >
                             Display
                             <Chevron/>
                         </DropdownMenuTrigger>
