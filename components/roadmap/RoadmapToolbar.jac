@@ -5,7 +5,7 @@ import from ..common.Busy { Busy }
 import from ..ui.button { Button }
 import from ..common.Chevron { Chevron }
 
-glob PILL: str = "h-8 rounded-full px-3",
+glob PILL: str = "h-8 rounded-md px-3",
      ROUND: str = "size-8 rounded-full";
 
 def:pub RoadmapToolbar(

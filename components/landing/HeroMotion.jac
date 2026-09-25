@@ -30,7 +30,7 @@ def:pub HeroMotion -> JsxElement {
                 {for s in STEPS {
                     <span
                         key={s["name"]}
-                        className="hm-step flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12px] font-medium"
+                        className="hm-step flex min-w-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium"
                     >
                         <span className={"size-1.5 shrink-0 rounded-full " + s["dot"]}/>
                         <span className="truncate">{s["name"]}</span>
@@ -52,7 +52,7 @@ def:pub HeroMotion -> JsxElement {
                 </div>
             </div>
             <div className="mt-5 border-t pt-3">
-                <p className="meta font-mono">Travel so far</p>
+                <p className="meta num">Travel so far</p>
                 <ul className="mt-2 grid gap-1.5">
                     {for l in LINES {
                         <li

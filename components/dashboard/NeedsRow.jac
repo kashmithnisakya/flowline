@@ -20,7 +20,7 @@ def:pub NeedsRow(row: dict[str, any]) -> JsxElement {
                 } else {
                     <span
                         key="nobody"
-                        className="size-8 rounded-full border border-dashed border-input"
+                        className="size-8 rounded-full border border-input"
                         title="Unassigned"
                     />
                 } }

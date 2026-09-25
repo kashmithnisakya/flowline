@@ -7,7 +7,7 @@ import from ..ui.button { Button }
 import from .Wordmark { Wordmark }
 
 glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
-     NAV_LINK: str = "rounded-full px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground",
+     NAV_LINK: str = "rounded-md px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground",
      MENU_LINK: str = "flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground";
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
@@ -49,7 +49,7 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                             key="app"
                             asChild={True}
                             size="sm"
-                            className="rounded-full"
+                            className="rounded-md"
                         >
                             <a href="/board">Go to your board</a>
                         </Button>
@@ -59,11 +59,11 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                                 asChild={True}
                                 variant="ghost"
                                 size="sm"
-                                className="hidden rounded-full text-muted-foreground md:inline-flex"
+                                className="hidden rounded-md text-muted-foreground md:inline-flex"
                             >
                                 <a href="/login">Sign in</a>
                             </Button>
-                            <Button asChild={True} size="sm" className="rounded-full">
+                            <Button asChild={True} size="sm" className="rounded-md">
                                 <a href="/login?mode=signup">
                                     <span className="sm:hidden">Create workspace</span>
                                     <span className="hidden sm:inline">

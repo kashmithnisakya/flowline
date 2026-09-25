@@ -32,7 +32,7 @@ def:pub YAxis(values: list[int], plotH: str) -> JsxElement {
     top = niceTop(values);
     return
         <div
-            className={"relative w-7 shrink-0 text-right font-mono text-xs tabular-nums text-subtle "
+            className={"relative w-7 shrink-0 text-right num text-xs text-subtle "
                 + plotH}
             aria-hidden="true"
         >
@@ -60,7 +60,7 @@ def:pub XLabels(labels: list[str], gutter: str) -> JsxElement {
     step = 1 if n <= 8 else (2 if n <= 16 else 4);
     return
         <div
-            className={"mt-2 flex font-mono text-xs text-subtle " + gutter}
+            className={"mt-2 flex num text-xs text-subtle " + gutter}
             aria-hidden="true"
         >
             {for (i, lab) in enumerate(labels) {

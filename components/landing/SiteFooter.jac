@@ -25,7 +25,7 @@ def:pub SiteFooter(loggedIn: bool) -> JsxElement {
                 >
                     <Button
                         asChild={True}
-                        className="h-12 w-full rounded-full px-7 text-[15px] font-semibold shadow-[var(--float-1)] sm:w-auto"
+                        className="h-12 w-full rounded-md px-7 text-[15px] font-semibold shadow-[var(--float-1)] sm:w-auto"
                     >
                         <a href={"/board" if loggedIn else "/login?mode=signup"}>
                             {"Go to your board"

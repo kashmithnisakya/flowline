@@ -93,7 +93,7 @@ def BoardPreview(
             {if scratch {
                 <div
                     key="scratch"
-                    className="grid min-h-[190px] place-items-center rounded-md border border-dashed border-input bg-card px-6 text-center text-[13px] text-muted-foreground"
+                    className="grid min-h-[190px] place-items-center rounded-md border border-input bg-card px-6 text-center text-[13px] text-muted-foreground"
                 >
                     You draw the steps on the flow line page, and the board's columns follow them.
                 </div>
@@ -118,7 +118,7 @@ def BoardPreview(
                                 {if i == 0 {
                                     <div
                                         key="new"
-                                        className="flex h-[30px] items-center rounded-md border border-dashed border-input px-2 text-xs text-subtle"
+                                        className="flex h-[30px] items-center rounded-md border border-input px-2 text-xs text-subtle"
                                     >
                                         New task
                                     </div>
@@ -187,7 +187,7 @@ def:pub SetupPage -> JsxPage {
                     } else {
                         <div
                             key="progress"
-                            className="flex items-center gap-2 font-mono text-[12.5px] text-subtle"
+                            className="flex items-center gap-2 text-[12.5px] text-subtle"
                         >
                             <span>{"Step " + str(step) + " of 3"}</span>
                             <span className="flex gap-1.5" aria-hidden="true">
@@ -628,9 +628,7 @@ def:pub SetupPage -> JsxPage {
                     aria-label="Preview of your board"
                     className="grid content-start gap-3 p-5 sm:p-7"
                 >
-                    <p className="font-mono text-xs text-subtle">
-                        Preview of your board
-                    </p>
+                    <p className="num text-xs text-subtle">Preview of your board</p>
                     <BoardPreview
                         steps={stepsFor(choice)}
                         scratch={scratch}

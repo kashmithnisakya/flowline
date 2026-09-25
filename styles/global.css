@@ -95,6 +95,17 @@
     --step-emerald: #387A51;
     --step-slate: #6A726E;
 
+    /* Avatar fills: identity, not status. One fixed set for both themes,
+       each dark enough to carry white initials (>= 5.1:1). */
+    --avatar-1: #2E6C97;
+    --avatar-2: #5550AC;
+    --avatar-3: #8A5A00;
+    --avatar-4: #A34B83;
+    --avatar-5: #387A51;
+    --avatar-6: #4F5753;
+    --avatar-7: #B3261E;
+    --avatar-8: #245A80;
+
     /* Only floating layers cast a shadow. */
     --shadow-float: 0 8px 24px rgb(0 0 0 / 0.14);
     --scrim: rgb(20 20 19 / 0.40);
@@ -220,6 +231,14 @@
     --color-status-doing: var(--status-doing);
     --color-status-review: var(--status-review);
     --color-status-done: var(--status-done);
+    --color-avatar-1: var(--avatar-1);
+    --color-avatar-2: var(--avatar-2);
+    --color-avatar-3: var(--avatar-3);
+    --color-avatar-4: var(--avatar-4);
+    --color-avatar-5: var(--avatar-5);
+    --color-avatar-6: var(--avatar-6);
+    --color-avatar-7: var(--avatar-7);
+    --color-avatar-8: var(--avatar-8);
     --color-project-1: var(--project-1);
     --color-project-2: var(--project-2);
     --color-project-3: var(--project-3);
@@ -315,7 +334,7 @@
     /* Keyboard focus: a 2px primary outline. A focus-visible utility at the
        call site still wins, being in a later layer. */
     :focus-visible {
-        outline: 2px solid var(--ring);
+        outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
     }
     /* Thin themed scrollbars everywhere native chrome shows one. */
@@ -328,7 +347,7 @@
 @layer components {
     /* In-app page title: 28px, semibold, tight tracking. */
     .page-title {
-        @apply font-display text-[28px] leading-tight font-semibold tracking-[-0.025em];
+        @apply font-display text-[20px] leading-tight font-semibold tracking-[-0.02em];
     }
     /* One muted line under a page title. */
     .page-subtitle {
@@ -338,13 +357,36 @@
     .section-title {
         @apply font-display text-base leading-snug font-semibold tracking-[-0.01em];
     }
-    /* Metadata text: 12px muted, the size floor. */
+    /* Metadata, column headers and chips: 12px, the size floor. */
     .meta {
-        @apply text-xs text-muted-foreground;
+        @apply text-[12px] text-text-tertiary;
+    }
+    /* The base: rows, nav and buttons. */
+    .ui-base {
+        @apply text-[13px];
     }
     /* Keyboard hint: mono 12px on a surface with a heavier bottom edge. */
     .kbd {
-        @apply inline-flex items-center rounded-sm border border-b-2 bg-card px-1 font-mono text-xs leading-4 font-medium text-subtle;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 18px;
+        min-width: 18px;
+        padding-inline: 4px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1;
+        color: var(--text-tertiary);
+    }
+    /* Inside a primary button the chip sits on the accent, so it darkens the
+       accent rather than drawing its own border. */
+    [data-variant="default"] .kbd,
+    .kbd-on-accent {
+        border-color: transparent;
+        background: rgb(0 0 0 / 0.14);
+        color: var(--on-accent);
     }
     /* Numbers, dates, times, ids and counts. Tabular figures so columns of
        digits line up, in the UI family: monospace is not a UI typeface, and
@@ -358,7 +400,7 @@
     }
     /* A single filter row between hairlines; wraps on narrow screens. */
     .toolbar {
-        @apply flex flex-wrap items-center gap-2 border-y bg-card px-4 py-2;
+        @apply flex flex-wrap items-center gap-2;
     }
     /* Step colour swatch: a 10px square; pair with bg-step-<key>. */
     .step-swatch {
@@ -496,10 +538,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    height: 32px;
-    padding-inline: 0.875rem;
-    border: 1px dashed var(--input);
-    border-radius: 9999px;
+    height: 28px;
+    padding-inline: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     background-color: transparent;
     color: var(--muted-foreground);
     font-size: 13px;
@@ -511,8 +553,7 @@
     color: var(--foreground);
 }
 .toolbar-filter[data-active="true"] {
-    border-style: solid;
-    border-color: var(--input);
+    border-color: var(--border-strong);
     background-color: var(--card);
     color: var(--foreground);
     font-weight: 600;
@@ -607,9 +648,44 @@
 [data-slot="textarea"]:disabled {
     background-color: var(--muted);
 }
-[data-slot="button"][data-variant="outline"] {
+/* secondary */
+[data-slot="button"][data-variant="outline"],
+[data-slot="button"][data-variant="secondary"] {
     border-color: var(--border);
-    background-color: var(--card);
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+}
+[data-slot="button"][data-variant="outline"]:not(:disabled):hover,
+[data-slot="button"][data-variant="secondary"]:not(:disabled):hover {
+    border-color: var(--border-strong);
+    background-color: var(--bg-hover);
+}
+/* ghost */
+[data-slot="button"][data-variant="ghost"] {
+    color: var(--text-secondary);
+}
+[data-slot="button"][data-variant="ghost"]:not(:disabled):hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+/* primary: flat, no border, weight 600, and the one accent element in view */
+[data-slot="button"][data-variant="default"] {
+    font-weight: 600;
+    border-color: transparent;
+}
+[data-slot="button"][data-variant="default"]:not(:disabled):active {
+    background-color: var(--accent-pressed);
+}
+/* disabled is neutral everywhere: a faded accent reads as a live control */
+[data-slot="button"]:disabled {
+    background-color: var(--bg-surface);
+    border-color: var(--border);
+    color: var(--text-disabled);
+    opacity: 1;
+}
+[data-slot="button"][data-variant="ghost"]:disabled {
+    background-color: transparent;
+    border-color: transparent;
 }
 [data-slot="button"][data-variant="outline"]:not(:disabled):hover,
 [data-slot="button"][data-variant="outline"][aria-expanded="true"] {
@@ -643,7 +719,7 @@
 /* The primary variant ships no <button> hover (only [a]:hover). Mixing in
    the foreground darkens rust in light and lightens it in dark. */
 [data-slot="button"][data-variant="default"]:not(:disabled):hover {
-    background-color: color-mix(in oklab, var(--primary) 88%, var(--foreground) 12%);
+    background-color: var(--accent-hover);
 }
 
 /* Skeletons: a shimmer on a ground mixed from foreground so it stays visible

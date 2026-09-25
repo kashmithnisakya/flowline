@@ -33,7 +33,7 @@ def:pub NeedsGroup(group: dict[str, any]) -> JsxElement {
     return
         <div role="group" aria-label={group["label"]}>
             <h3
-                className={"inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold "
+                className={"inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold "
                     + toneOf(group["tone"])}
             >
                 {group["label"]}

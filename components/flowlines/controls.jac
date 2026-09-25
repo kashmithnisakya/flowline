@@ -25,7 +25,7 @@ def:pub Segmented(
                     type="button"
                     aria-pressed={value == opt["value"]}
                     aria-label={opt["aria"] if "aria" in opt else None}
-                    className={"h-full rounded-full px-3 text-[12.5px] transition-colors duration-150 "
+                    className={"h-full rounded-md px-3 text-[12.5px] transition-colors duration-150 "
                         + (
                             "bg-card font-semibold text-foreground shadow-xs"
                                 if value == opt["value"]
@@ -83,7 +83,7 @@ def:pub ZoomControls(
                 type="button"
                 title="Zoom to 100%"
                 data-zoom={None if pending else pct}
-                className="num h-full min-w-12 rounded-full px-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+                className="num h-full min-w-12 rounded-md px-1 text-[12.5px] text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
                 onClick={lambda { if onActual { onActual(); }}}
             >
                 {if pending {
@@ -115,7 +115,7 @@ def:pub ZoomControls(
             <button
                 type="button"
                 title="Fit the whole flow line (F)"
-                className="ml-0.5 inline-flex h-full items-center gap-1.5 rounded-full bg-card px-3 text-[12.5px] font-semibold text-foreground shadow-xs transition-colors hover:bg-accent"
+                className="ml-0.5 inline-flex h-full items-center gap-1.5 rounded-md bg-card px-3 text-[12.5px] font-semibold text-foreground shadow-xs transition-colors hover:bg-accent"
                 onClick={lambda { if onFit { onFit(); }}}
             >
                 <svg

@@ -50,7 +50,7 @@ def:pub Sidebar(
             <button
                 type="button"
                 onClick={onSearch}
-                className="mt-1.5 mb-3 flex h-9 items-center gap-2.5 rounded-lg bg-card px-3 text-[13px] text-subtle shadow-xs ring-1 ring-sidebar-border hover:text-foreground"
+                className="mt-1.5 mb-3 flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] text-text-tertiary transition-colors hover:bg-bg-hover hover:text-text-primary"
             >
                 <PageIcon name="search"/>
                 <span className="flex-1 text-left">Search</span>

@@ -45,7 +45,7 @@ def:pub TourNeeds -> JsxElement {
             {for n in NEEDS {
                 <div key={n["label"]} role="group" aria-label={n["label"]}>
                     <span
-                        className={"inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold "
+                        className={"inline-flex h-6 items-center rounded-md px-2.5 text-xs font-semibold "
                             + n["tone"]}
                     >
                         {n["label"]}

@@ -25,7 +25,7 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                 >
                     <div className="grid max-w-[38rem] gap-5">
                         <p
-                            className="glass-pill rise rise-1 inline-flex w-fit items-center gap-2 px-3 py-1.5 font-mono text-[12.5px] text-subtle"
+                            className="glass-pill rise rise-1 inline-flex w-fit items-center gap-2 px-3 py-1.5 text-[12.5px] text-subtle"
                         >
                             <span
                                 className="size-1.5 shrink-0 rounded-full bg-primary"
@@ -51,7 +51,7 @@ def:pub Hero(loggedIn: bool) -> JsxElement {
                         >
                             <Button
                                 asChild={True}
-                                className="h-12 w-full rounded-full px-7 text-[15px] font-semibold shadow-[var(--float-1)] sm:w-auto"
+                                className="h-12 w-full rounded-md px-7 text-[15px] font-semibold shadow-[var(--float-1)] sm:w-auto"
                             >
                                 <a
                                     href={"/board"

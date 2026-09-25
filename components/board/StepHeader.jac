@@ -21,7 +21,7 @@ def:pub StepHeader(
 ) -> JsxElement {
     return
         <div
-            className="sticky top-14 z-20 flex h-9 items-center gap-2 rounded-md bg-bg-surface pr-1 pl-2 md:top-0"
+            className="sticky top-[5.75rem] z-20 flex h-9 items-center gap-2 rounded-md bg-bg-surface pr-1 pl-2 md:top-8"
         >
             <button
                 type="button"

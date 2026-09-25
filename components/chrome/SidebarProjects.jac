@@ -87,7 +87,7 @@ def:pub SidebarProjects(path: str) -> JsxElement {
             <button
                 type="button"
                 onClick={lambda { navigate("/workspace?tab=projects"); }}
-                className="mt-1 flex h-9 items-center gap-3 rounded-lg border border-dashed border-sidebar-border px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                className="mt-1 flex h-9 items-center gap-3 rounded-lg border border-sidebar-border px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
             >
                 + New project
             </button>

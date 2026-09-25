@@ -51,7 +51,7 @@ def:pub FlowToolbar(
                 <Button
                     key="edit"
                     size="sm"
-                    className="h-[30px] rounded-full px-3.5"
+                    className="h-[30px] rounded-md px-3.5"
                     disabled={pending}
                     onClick={lambda { if onMode { onMode("edit"); }}}
                 >

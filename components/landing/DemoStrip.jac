@@ -42,7 +42,7 @@ def:pub DemoStrip(
             {if loop {
                 <span
                     key="loop"
-                    className="ml-2 inline-flex items-center gap-1.5 font-mono text-xs whitespace-nowrap text-subtle"
+                    className="ml-2 inline-flex items-center gap-1.5 num text-xs whitespace-nowrap text-subtle"
                 >
                     <i
                         aria-hidden="true"

@@ -22,15 +22,15 @@ def:pub BoardHeader(
             <div className="flex min-w-0 flex-col gap-1.5">
                 <ProjectLine projects={projects} project={project}/>
                 <h1 className="page-title">Board</h1>
-                <p className="flex flex-wrap gap-x-4 text-[13px] text-muted-foreground">
+                <p className="flex flex-wrap gap-x-4 text-[13px] text-text-secondary">
                     {for c in counts {
                         <span key={c[1]}>
                             <b
-                                className={"font-semibold "
+                                className={"font-medium "
                                     + (
-                                        "text-destructive"
+                                        "text-danger"
                                             if c[2] == "alarm"
-                                            else "text-foreground"
+                                            else "text-text-primary"
                                     )}
                             >
                                 {c[0]}
@@ -45,7 +45,8 @@ def:pub BoardHeader(
                     <Button
                         key="sync"
                         variant="secondary"
-                        className="rounded-full"
+                        size="lg"
+                        className="rounded-md"
                         disabled={syncing}
                         onClick={onSync}
                     >
@@ -60,7 +61,12 @@ def:pub BoardHeader(
                         }}
                     </Button>
                 }}
-                <Button className="rounded-full" disabled={busy} onClick={onNew}>
+                <Button
+                    size="lg"
+                    className="rounded-md"
+                    disabled={busy}
+                    onClick={onNew}
+                >
                     <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true">
                         <path
                             d="M8 3v10M3 8h10"
@@ -70,7 +76,10 @@ def:pub BoardHeader(
                         />
                     </svg>
                     New task
-                    <span aria-hidden="true" className="kbd ml-0.5 max-md:hidden">
+                    <span
+                        aria-hidden="true"
+                        className="kbd kbd-on-accent ml-0.5 max-md:hidden"
+                    >
                         N
                     </span>
                 </Button>
