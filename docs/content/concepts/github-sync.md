@@ -103,10 +103,10 @@ event's own time.
 
 | Event | Effect on the board |
 | --- | --- |
-| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an `auto_sync` repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees and the sub-issue counts. A close on an `auto_done` repo moves the card to the done step. |
+| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an `auto_sync` repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees, its labels and the sub-issue counts. A newly added label can move the task along a `label` [trigger](flow-lines.md#automation). A close on an `auto_done` repo moves the card to the done step. |
 | `issues` deleted or transferred | The task is unlinked from the issue (`gh_issue_number = 0`). |
-| `pull_request` | The linked task's PR state (`open`, `draft`, `closed`, `merged`). A merge on an `auto_done` repo moves a card that is In Progress or in Review to done. `review_requested` marks the review as requested. |
-| `pull_request_review` | `approved` or `changes_requested` becomes the task's review state. Comments and dismissals are ignored. |
+| `pull_request` | A PR nobody linked joins the first task whose issue its body closes (`Closes #12`) and that has no PR yet. Then the linked task's PR state (`open`, `draft`, `closed`, `merged`) and labels. A newly added label can fire a `label` trigger and a merge a `pr_merged` trigger; a merge no trigger takes moves a card that is In Progress or in Review to done on an `auto_done` repo. `review_requested` marks the review as requested. |
+| `pull_request_review` | `approved` or `changes_requested` becomes the task's review state, and a new `changes_requested` fires that trigger. Comments and dismissals are ignored. The poll reads no reviews, so this trigger needs webhooks. |
 | `sub_issues` | Links or unlinks a child task's parent and refreshes the parent's done/total counts. |
 | `installation` deleted, suspended, unsuspended | Marks the connection invalid (and unbinds it on delete) or valid again. |
 | `installation_repositories` removed | Turns off `auto_sync`, `auto_done` and `auto_close` for those repos. Tasks and links stay. |

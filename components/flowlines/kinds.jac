@@ -5,6 +5,8 @@ Pinned client in jac.toml, so what other modules import is `:pub`; a server
 `def:pub` here would register a partial effects table and break the cache.
 """
 
+import from ...models { StepView }
+
 glob:pub KIND_LABEL: dict[str, str] = {
          "start": "Start",
          "active": "Active",
@@ -118,4 +120,51 @@ def:pub colorKey(raw: str) -> str {
 
 # What a transition carries: an issue (no code yet) or a PR (code, waiting on
 # a person). Shown as a quiet word before the label, never as a tinted chip.
-glob:pub CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"};
+glob:pub CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"},
+     # The triggers a transition can carry (constants.TRANSITION_TRIGGERS),
+     # as the edge editor offers them.
+     TRIGGER_PICKS: list[dict[str, str]] = [
+         {"key": "", "text": "By hand"},
+         {"key": "label", "text": "Label"},
+         {"key": "pr_merged", "text": "PR merged"},
+         {"key": "changes_requested", "text": "Changes requested"}
+     ];
+
+
+# What moves a task across on its own, in words; "" for a hand-only arrow.
+def:pub triggerNote(trigger: str, wanted: str) -> str {
+    if trigger == "label" {
+        return "moves when labelled " + wanted;
+    }
+    if trigger == "pr_merged" {
+        return "moves when the PR merges";
+    }
+    if trigger == "changes_requested" {
+        return "moves when a review requests changes";
+    }
+    return "";
+}
+
+
+# The client copy of WorkflowStep.refusal for a task moving from `fromStep`
+# to `stepId`: why the server would turn the move away, "" when it would not.
+# Staying on the same step is no move, so no rule applies.
+def:pub moveRefusal(
+    steps: list[StepView], stepId: str, fromStep: str, due: str, pr: str
+) -> str {
+    if not stepId or stepId == fromStep {
+        return "";
+    }
+    for s in steps {
+        if s.id != stepId {
+            continue;
+        }
+        if s.needs_due_date and not due {
+            return s.name + " needs a due date";
+        }
+        if s.needs_pr and not pr.strip() {
+            return s.name + " needs a linked PR";
+        }
+    }
+    return "";
+}

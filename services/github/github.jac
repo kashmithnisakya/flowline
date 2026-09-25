@@ -5,6 +5,7 @@ per call, never reported). Every walker but GithubStatus reports ONE envelope,
 server schedule (services/github/schedule.jac) and by hand; no walker a page
 load calls reaches GitHub."""
 
+import re;
 import from jaclang.lib.effects { effects }
 import from models {
     Project,
@@ -41,7 +42,7 @@ import from models {
 }
 import from services.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from services.log.log { record_task_event, log_imports }
-import from services.tasks.tasks { find_task, status_for_step }
+import from services.tasks.tasks { find_task, status_for_step, follow_trigger }
 import from services.github.util {
     missing_config,
     install_url,
@@ -104,7 +105,10 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      SUB_ISSUE_CAP: int = 20,
      # Queued webhook deliveries applied per drain; a longer backlog drains
      # over successive calls.
-     DRAIN_LIMIT: int = 200;
+     DRAIN_LIMIT: int = 200,
+     # GitHub's closing keywords: "Closes #12" or "fixes org/repo#12" in a
+     # PR body links the PR to the task tracking that issue.
+     CLOSING_REF: str = r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:([\w.-]+/[\w.-]+))?#(\d+)";
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -1084,6 +1088,7 @@ def file_issue_item(
         title=str(item.get("title") or ("Issue #" + str(number))),
         category="",
         tags=clean_tags(label_names(item)),
+        gh_labels=label_names(item),
         priority="Medium",
         status=landing,
         step_id=landing_step,
@@ -1188,6 +1193,7 @@ walker ImportIssues {
         skipped: list[int] = [];
         failed: list[int] = [];
         peaks: dict[str, float] = {};
+        step_peaks: dict[str, float] = {};
         for number in wanted {
             if number <= 0 {
                 continue;
@@ -1225,6 +1231,17 @@ walker ImportIssues {
                 done_step,
                 peaks
             );
+            if fresh.gh_labels {
+                follow_trigger(
+                    here,
+                    fresh,
+                    "label",
+                    fresh.gh_labels,
+                    "labelled " + ", ".join(fresh.gh_labels),
+                    now_iso(),
+                    step_peaks
+                );
+            }
             filed.append(fresh);
             imported.append(fresh.to_view());
         }
@@ -1398,6 +1415,8 @@ obj SyncContext {
         done_name: str = "Done",
         members: list[Member] = [],
         peaks: dict[str, float] = {},
+        # Each step's column top, for tasks the flow line's triggers move.
+        step_peaks: dict[str, float] = {},
         done_peak: float = -1.0,
         family_calls: int = 0,
         # Linked tasks this increment looked at (a lookup that hit).
@@ -1552,23 +1571,112 @@ def stamp_pr_updated(t: Task, item: dict[str, any]) {
 }
 
 
-# One PR off the stream: refresh the linked task's PR state and, for an
-# opted-in repo, land a merge on the done step. Unlinked PRs are skipped.
+# The issue numbers a PR body closes in `full_name`, in the order written.
+def closed_refs(full_name: str, body: str) -> list[int] {
+    found: list[int] = [];
+    for hit in re.finditer(CLOSING_REF, body, re.IGNORECASE) {
+        named = hit.group(1) or full_name;
+        number = int(hit.group(2));
+        if named.lower() == full_name.lower() and number not in found {
+            found.append(number);
+        }
+    }
+    return found;
+}
+
+
+# The task a PR belongs to, as a list (empty when none). A PR nobody linked
+# yet joins the first task whose issue its body closes, unless that task
+# already carries a PR: the one a person pasted wins.
+def pr_task(ctx: SyncContext, full_name: str, item: dict[str, any]) -> list[Task] {
+    number = int(item.get("number") or 0);
+    if number <= 0 {
+        return [];
+    }
+    hits = pull_task(ctx, full_name, number);
+    if hits {
+        return hits;
+    }
+    for ref in closed_refs(full_name, str(item.get("body") or "")) {
+        for t in issue_task(ctx, full_name, ref) {
+            if t.pr_number or t.pr_link {
+                continue;
+            }
+            t.pr_number = number;
+            t.pr_link = str(item.get("html_url") or "");
+            key = full_name + "#" + str(number);
+            ctx.task_by_pr[key] = t;
+            ctx.looked_pr[key] = True;
+            ctx.linked = ctx.linked + 1;
+            record_task_event(
+                ctx.holder,
+                t,
+                "Linked PR " + full_name + " #" + str(number),
+                event_time(item)
+            );
+            return [t];
+        }
+    }
+    return [];
+}
+
+
+# Labels newly on `now` against what the task held; the held list moves on.
+def added_labels(held: list[str], now: list[str]) -> list[str] {
+    return [
+        name
+        for name in now
+        if name not in held
+    ];
+}
+
+
+# One PR off the stream: link it to its issue's task, refresh the PR state,
+# and let the flow line act on a new label or a merge. A merge nothing on
+# the flow line waits for lands on the done step for an opted-in repo.
 def apply_pr_item(
     ctx: SyncContext, full_name: str, key: str, item: dict[str, any]
 ) -> None {
-    hits = pull_task(ctx, full_name, int(item.get("number") or 0));
+    hits = pr_task(ctx, full_name, item);
     if not hits {
         return;
     }
     pt = hits[0];
+    labels = label_names(item);
+    fresh_labels = added_labels(pt.pr_labels, labels);
+    pt.pr_labels = labels;
+    if fresh_labels {
+        follow_trigger(
+            ctx.holder,
+            pt,
+            "label",
+            fresh_labels,
+            "labelled " + ", ".join(fresh_labels),
+            event_time(item),
+            ctx.step_peaks
+        );
+    }
     fresh_pr = pr_state_of(item);
     if fresh_pr and fresh_pr != pt.pr_state {
         pt.pr_state = fresh_pr;
         ctx.refreshed = ctx.refreshed + 1;
-        # Merged means done, but only for opted-in repos and only from
-        # statuses where the chip would suggest it.
+        followed = fresh_pr == "merged"
+            and follow_trigger(
+                ctx.holder,
+                pt,
+                "pr_merged",
+                [],
+                "PR merged",
+                event_time(item),
+                ctx.step_peaks
+            );
+        if followed {
+            ctx.auto_done_moves = ctx.auto_done_moves + 1;
+        }
+        # Otherwise merged means done, but only for opted-in repos and only
+        # from statuses where the chip would suggest it.
         if fresh_pr == "merged"
+            and not followed
             and full_name in ctx.merge_done
             and pt.status in MERGE_SUGGEST_STATUSES {
             ctx.done_peak = auto_done_land(
@@ -1621,6 +1729,17 @@ def apply_issue_item(
             remember_issue(ctx, key, fresh);
             ctx.filed.append(fresh);
             ctx.auto_added = ctx.auto_added + 1;
+            if fresh.gh_labels {
+                follow_trigger(
+                    ctx.holder,
+                    fresh,
+                    "label",
+                    fresh.gh_labels,
+                    "labelled " + ", ".join(fresh.gh_labels),
+                    event_time(item),
+                    ctx.step_peaks
+                );
+            }
         }
         return False;
     }
@@ -1666,6 +1785,21 @@ def apply_issue_item(
     if logins != t.gh_assignees {
         t.gh_assignees = logins;
         ctx.refreshed = ctx.refreshed + 1;
+    }
+    # A label newly on the issue can move the task along the flow line.
+    labels = label_names(item);
+    fresh_labels = added_labels(t.gh_labels, labels);
+    t.gh_labels = labels;
+    if fresh_labels and t.status != "Done" {
+        follow_trigger(
+            ctx.holder,
+            t,
+            "label",
+            fresh_labels,
+            "labelled " + ", ".join(fresh_labels),
+            event_time(item),
+            ctx.step_peaks
+        );
     }
     # Sub-issue family: counts ride the stream. A family that shrank to
     # nothing releases its children here; one that moved asks for the child
@@ -1808,7 +1942,7 @@ def apply_pull(
 ) -> dict[str, any] {
     number = int(item.get("number") or 0);
     key = full_name + "#" + str(number);
-    hits = pull_task(ctx, full_name, number) if number > 0 else [];
+    hits = pr_task(ctx, full_name, item);
     if not hits {
         return delivery_outcome("unlinked", key);
     }
@@ -1848,9 +1982,21 @@ def apply_review(
     if at and t.pr_review_at and at <= t.pr_review_at {
         return delivery_outcome("stale", key);
     }
+    was_verdict = t.pr_review_state;
     t.pr_review_state = verdict;
     if at > t.pr_review_at {
         t.pr_review_at = at;
+    }
+    if verdict == "changes_requested" and was_verdict != verdict {
+        follow_trigger(
+            ctx.holder,
+            t,
+            "changes_requested",
+            [],
+            "changes requested",
+            at or ctx.stamp,
+            ctx.step_peaks
+        );
     }
     t.gh_synced_at = ctx.stamp;
     ctx.refreshed = ctx.refreshed + 1;

@@ -7,6 +7,7 @@ import from ...models { StepView }
 import from ...constants { STEP_KINDS }
 import from .kinds { KIND_LABEL, KIND_HINT, COLOR_KEYS, DOT_FILL, colorKey }
 import from ..common.KindGlyph { KindGlyph }
+import from .StepRules { StepRules }
 import from ..ui.button { Button }
 import from ..ui.input { Input }
 import from ..ui.select {
@@ -75,7 +76,8 @@ def:pub StepInspector(
     onConnect: Callable[[], None] = None,
     onCancelConnect: Callable[[], None] = None,
     onDelete: Callable[[], None] = None,
-    onUnlink: Callable[[str, str], None] = None
+    onUnlink: Callable[[str, str], None] = None,
+    onRule: Callable[[str, bool], None] = None
 ) -> JsxElement {
     byId: dict[str, StepView] = {};
     for s in steps {
@@ -241,6 +243,11 @@ def:pub StepInspector(
                     }}
                 </div>
             </div>
+            <StepRules
+                needsDue={step.needs_due_date}
+                needsPr={step.needs_pr}
+                onRule={onRule}
+            />
             <div className="flex flex-col gap-1.5 border-t pt-3">
                 <span className="text-[12.5px] font-semibold">Goes to</span>
                 {if len(step.next_ids) == 0 {

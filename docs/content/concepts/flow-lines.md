@@ -119,28 +119,29 @@ flowchart LR
 
 ### Software team (`jaseci`)
 
-Seven steps from writing the issue to done, with an architecture step for big
-changes and loops back from review.
+Seven steps from the GitHub issue pool to Done. Work stays an issue until an
+engineer picks it up and opens a PR; from there it is a PR until the Model
+Oversight Engineer marks it done. Arrows marked *auto* move work on their own
+(see [Automation](#automation)).
 
 ```mermaid
 flowchart TB
-    S["Specify<br/><small>start · anyone</small>"]
-    T["Triage<br/><small>start · Product Engineer</small>"]
-    A["Architecturing<br/><small>active · Architect</small>"]
-    I["Implement<br/><small>active · Model Pilot Engineer</small>"]
-    R["Review #amp; merge<br/><small>handoff · Product Engineer</small>"]
-    F["Refactor<br/><small>active · Model Oversight Engineer</small>"]
+    U["Incoming<br/><small>start · anyone</small>"]
+    V["Ready<br/><small>start · Product Engineer · needs a due date</small>"]
+    P["Building<br/><small>active · Model Pilot Engineer</small>"]
+    A["Design<br/><small>active · Architect</small>"]
+    R["In review<br/><small>handoff · Product Engineer · needs a PR</small>"]
+    M["Final check<br/><small>handoff · Model Oversight Engineer</small>"]
     D["Done<br/><small>done · Model Oversight Engineer</small>"]
 
-    S -- "to PE first" --> T
-    T -- "PE too" --> S
-    T -- "needs architecturing" --> A
-    T -- "small, straight to build" --> I
-    A -- "approach agreed" --> I
-    I -- "ready and tested" --> R
-    R -- "big changes, back to builder" --> I
-    R -- "merged" --> F
-    F -- "decides #amp; marks done" --> D
+    U -- "auto: label validated" --> V
+    V -- "picked up" --> P
+    P -- "needs a design decision" --> A
+    A -- "decision made" --> P
+    P -- "auto: label ready-to-review" --> R
+    R -- "auto: changes requested" --> P
+    R -- "auto: PR merged" --> M
+    M -- "correct, no polish" --> D
 
     classDef sky stroke:#2e6c97,stroke-width:2px
     classDef indigo stroke:#5550ac,stroke-width:2px
@@ -148,19 +149,46 @@ flowchart TB
     classDef amber stroke:#a1711a,stroke-width:2px
     classDef rose stroke:#a34b83,stroke-width:2px
     classDef emerald stroke:#387a51,stroke-width:2px
-    class S sky
-    class T,R indigo
+    class U sky
+    class V,R indigo
     class A slate
-    class I amber
-    class F rose
+    class P amber
+    class M rose
     class D emerald
 ```
 
 Software team also seeds four roles (Product Engineer, Model Pilot Engineer,
 Architect, Model Oversight Engineer) as ordinary `Role` nodes that the team
 can edit afterwards. Existing roles with the same name are left alone, and
-the box records
-`template_key = "jaseci"` (the template's key from before it was renamed).
+the box records `template_key = "jaseci"`.
+
+## Automation
+
+Two settings on the flow line itself make it act on its own; both are edited
+on `/flowlines` in Edit mode.
+
+**Entry rules** on a step (`needs_due_date`, `needs_pr`, set with
+`SetStepRules`) turn a task away unless it has a due date or a linked PR.
+They hold for every move onto the step: a board drag, a sheet save, a new
+task and a GitHub trigger. The page stops the move before sending it and the
+server refuses it too (`refused` on the reported task view).
+
+**Triggers** on a transition (`trigger`, `trigger_label`) move a task across
+the arrow when the GitHub sync or a webhook drain sees the fact, only from
+the step the arrow leaves:
+
+| Trigger | Fires when |
+| --- | --- |
+| `label` | The named label is newly added to the task's issue or its linked PR |
+| `pr_merged` | The linked PR merges |
+| `changes_requested` | A review on the linked PR requests changes |
+
+A triggered move lands like a drag: the end of the target column, the step's
+owner takes the task when exactly one person holds that role on the project,
+and the log reads `Moved to <step> · <why>`. When the target's entry rule
+turns it away the task stays and the log reads `Stayed on <step> · <reason>`.
+A PR is linked to its task when its body closes the issue (`Closes #12`,
+`fixes org/repo#12`); see [GitHub sync](github-sync.md).
 
 ??? example "The templates as declared in `constants.jac`"
 

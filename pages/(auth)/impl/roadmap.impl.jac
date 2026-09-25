@@ -246,6 +246,23 @@ impl RoadmapPage.saveTask -> None {
         toast.error("Pick a project for this task");
         return;
     }
+    fromStep = "";
+    for t in (data["rows"] if data else []) {
+        if t.id == editTaskId {
+            fromStep = t.step_id;
+        }
+    }
+    refusal = moveRefusal(
+        steps,
+        taskForm["status"] if len(steps) > 0 else "",
+        fromStep,
+        taskForm["due_date"],
+        taskForm["pr"]
+    );
+    if refusal {
+        toast.error(refusal);
+        return;
+    }
     taskSaving = True;
     reviewer = taskForm["reviewer"] if taskForm["reviewer"] != "none" else "";
     try {
@@ -269,7 +286,7 @@ impl RoadmapPage.saveTask -> None {
             mResult = root spawn ListMembers();
             members = mResult.reports[0] if mResult.reports else members;
         }
-        root spawn UpdateTask(
+        saved = root spawn UpdateTask(
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
@@ -293,6 +310,9 @@ impl RoadmapPage.saveTask -> None {
             project_id=project
         );
         closeTask(False);
+        if len(saved.reports or []) > 0 and saved.reports[0].refused {
+            toast.error(saved.reports[0].refused);
+        }
         await loadRoadmap();
     } except Exception {
         toast.error("Failed to save task");

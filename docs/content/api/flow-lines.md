@@ -59,7 +59,7 @@ Seeds an empty flow line from a template in one call. The templates today are
 | --- | --- | --- |
 | Steps already exist | The existing steps | Nothing |
 | Unknown `template_key` | `[]` | The empty box only |
-| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ...; transitions with labels and carries; `template_key`; the template's roles, if it has any (existing names kept) |
+| Success | The new steps, with transitions | Steps at `sort_order` 1024, 2048, ... with their entry rules; transitions with labels, carries and triggers; `template_key`; the template's roles, if it has any (existing names kept) |
 
 Existing tasks are not touched; tasks with no step start landing on the new
 steps through the status fallback.
@@ -87,6 +87,15 @@ foreign.
 
 **Reports** the moved [`StepView`](types.md#stepview). Coordinates outside
 0..20000 (or not finite) become 0.
+
+::: walker SetStepRules h3
+
+**Reports** the updated [`StepView`](types.md#stepview). Both rules are sent
+every time. They gate every move onto the step: `MoveTask` and `UpdateTask`
+leave the task where it is and report its view with `refused` set (for
+example `"Ready needs a due date"`), `CreateTask` creates nothing, and a
+GitHub trigger leaves the task and logs `Stayed on <step> · <reason>`. Tasks
+already on the step stay.
 
 ::: walker DeleteStep h3
 
@@ -127,15 +136,32 @@ Draws the transition `from_id` to `to_id`, or redraws an existing one.
 - An existing target (`duplicate: true`) is updated in place, and here an
   **empty label or carries keeps** the old value.
 - `carries` other than `issue` or `pr` is stored as empty.
+- `trigger` is one of `TRANSITION_TRIGGERS` (`label`, `pr_merged`,
+  `changes_requested`) or empty; `trigger_label` is kept only for `label`.
 
 ::: walker LabelTransition h3
 
-Sets or clears the label and carries tag on an existing transition. Unlike
-`LinkTransition`, **empty clears**.
+Sets or clears the label, the carries tag and the trigger on an existing
+transition. Unlike `LinkTransition`, **empty clears**.
 
-**Reports** `{"ok": true, "label": "...", "carries": "..."}`, or
-`{"ok": false, "error": "not_found"}` when either end is foreign or there is no
-such transition.
+**Reports** `{"ok": true, "label": "...", "carries": "...", "trigger": "...",
+"trigger_label": "..."}`, or `{"ok": false, "error": "not_found"}` when either
+end is foreign or there is no such transition, or `{"ok": false, "error":
+"match_required", ...}` for a `label` trigger with no `trigger_label`.
+
+A trigger moves a task across the arrow without a person, from the step the
+arrow leaves, when the GitHub sync or a webhook drain sees the fact:
+
+| Trigger | Fires when |
+| --- | --- |
+| `label` | `trigger_label` is newly added to the task's issue or its linked PR (case-insensitive) |
+| `pr_merged` | The linked PR merges |
+| `changes_requested` | A review on the linked PR requests changes (webhook deliveries only) |
+
+The move lands the task at the end of the target step's column, hands it to
+the step's owner as a drag would, and logs `Moved to <step> · <why>`. A merge
+that no `pr_merged` arrow takes still lands on the done step for a repo with
+auto-done on.
 
 ::: walker UnlinkTransition h3
 

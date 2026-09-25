@@ -512,6 +512,8 @@ def:pub laneWires(
             target = byId[nid];
             said = s.next_labels[i] if i < len(s.next_labels) else "";
             carried = s.next_carries[i] if i < len(s.next_carries) else "";
+            fired = s.next_triggers[i] if i < len(s.next_triggers) else "";
+            wanted = s.next_trigger_labels[i] if i < len(s.next_trigger_labels) else "";
             isReturn = target.sort_order < s.sort_order;
             # Travel direction decides the sides, not send-back-ness: a back
             # edge can point at a deeper column when the flow forks.
@@ -603,6 +605,8 @@ def:pub laneWires(
                     "back": isReturn,
                     "label": said,
                     "carries": carried,
+                    "trigger": fired,
+                    "trigger_label": wanted,
                     "outOff": 0.0,
                     "inOff": 0.0,
                     "trunkX": 0.0
@@ -897,7 +901,9 @@ def:pub laneWires(
                 "samples": polySamples(poly),
                 "back": e["back"],
                 "label": e["label"],
-                "carries": e["carries"]
+                "carries": e["carries"],
+                "trigger": e["trigger"],
+                "trigger_label": e["trigger_label"]
             }
         );
     }

@@ -59,6 +59,7 @@ import from services.flowlines.flowlines {
     ApplyTemplate,
     SaveStep,
     MoveStep,
+    SetStepRules,
     DeleteStep,
     DeleteFlowLine,
     LinkTransition,

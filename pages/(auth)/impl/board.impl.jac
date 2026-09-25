@@ -687,6 +687,24 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
         toast.error("Pick a project for this task");
         return;
     }
+    # The step's entry rules, checked before sending: a new task has no PR.
+    fromStep = "";
+    for t in tasks {
+        if t.id == editingId {
+            fromStep = t.step_id;
+        }
+    }
+    refusal = moveRefusal(
+        steps,
+        form["status"] if len(steps) > 0 else "",
+        fromStep if editingId else "",
+        form["due_date"],
+        form["pr"] if editingId else ""
+    );
+    if refusal {
+        toast.error(refusal);
+        return;
+    }
     saving = True;
     reviewer = form["reviewer"] if form["reviewer"] != "none" else "";
     tagList = [
@@ -717,7 +735,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
             }
         }
         if editingId {
-            root spawn UpdateTask(
+            saved = root spawn UpdateTask(
                 task_id=editingId,
                 title=title,
                 category=form["category"],
@@ -736,6 +754,9 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 assignee_ids=fAssignees,
                 project_id=project
             );
+            if len(saved.reports or []) > 0 and saved.reports[0].refused {
+                toast.error(saved.reports[0].refused);
+            }
         } else {
             root spawn CreateTask(
                 title=title,
@@ -933,6 +954,18 @@ impl BoardPage.moveTo(
         return;
     }
     reorder = positioned and oldKey == columnKey;
+    # The target step's entry rules, before the card moves on screen.
+    if onFlowLine {
+        for t in working {
+            if t.id == taskId {
+                refusal = moveRefusal(steps, columnKey, oldKey, t.due_date, t.pr_link);
+                if refusal {
+                    toast.error(refusal);
+                    return;
+                }
+            }
+        }
+    }
     landing = mappedStatus(columnKey);
     # An open sheet on this task follows the move, or its Save (which sends
     # every field) would put the card back. The move is saved, not an edit.
@@ -1012,6 +1045,11 @@ impl BoardPage.moveTo(
     }
     if failed {
         toast.error("Move failed. Restoring the board.");
+        await reloadAll();
+        return;
+    }
+    if len(landed) > 0 and landed[0].refused {
+        toast.error(landed[0].refused);
         await reloadAll();
         return;
     }
