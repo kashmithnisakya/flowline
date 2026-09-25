@@ -1,8 +1,12 @@
-"""The flow line across the top of the board: every step as a pill with its
-count, in order, joined by arrows. A pill scrolls its group into view. It
-wraps rather than scrolls, so the whole line is always on screen."""
+"""The flow line under the board title: each step as its status icon, name and
+count, separated by chevrons. A step scrolls its group into view.
 
-import from ..common.StepBadge { stepWash, stepInk, stepSolid }
+It used to be a card of washed pills with solid count badges, which competed
+with the work below it. It is now one inline line with no card and no
+background, so the board leads and the flow line orients.
+"""
+
+import from ..common.StepBadge { StepIcon }
 
 def jump(key: str) {
     el: any = document.querySelector('[data-step="' + key + '"]');
@@ -16,27 +20,22 @@ def:pub FlowStrip(
 ) -> JsxElement {
     return
         <nav
-            aria-label="Flow line"
-            className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-card px-3.5 py-2.5 shadow-xs ring-1 ring-border/70"
+            aria-label={name or "Flow line"}
+            className="flex flex-wrap items-center gap-x-1 gap-y-1"
         >
-            <span
-                className="mr-2 text-xs leading-tight text-muted-foreground max-sm:hidden"
-            >
-                {name}
-            </span>
             {for (i, key) in enumerate(keys) {
                 <span key={key} className="flex items-center gap-1">
                     {if i > 0 {
                         <svg
-                            key="arrow"
-                            width={16}
-                            height={10}
-                            viewBox="0 0 16 10"
+                            key="sep"
+                            width={12}
+                            height={12}
+                            viewBox="0 0 16 16"
                             aria-hidden="true"
-                            className="text-wire"
+                            className="mx-1 shrink-0 text-text-tertiary"
                         >
                             <path
-                                d="M1 5h12M9.5 1.5 13 5 9.5 8.5"
+                                d="m6 4 4 4-4 4"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth={1.5}
@@ -48,18 +47,11 @@ def:pub FlowStrip(
                     <button
                         type="button"
                         onClick={lambda { jump(key); }}
-                        className={"flex h-8 items-center gap-2 rounded-full pr-3 pl-1 text-[13px] font-semibold whitespace-nowrap "
-                            + stepWash(colors[i])
-                            + " "
-                            + stepInk(colors[i])}
+                        className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[13px] whitespace-nowrap outline-none hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                        <span
-                            className={"flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 font-mono text-xs text-step-solid-fg "
-                                + stepSolid(colors[i])}
-                        >
-                            {str(counts[i])}
-                        </span>
-                        {labels[i]}
+                        <StepIcon color={colors[i]} kind="" size={14}/>
+                        <span className="text-text-secondary">{labels[i]}</span>
+                        <span className="num text-text-tertiary">{str(counts[i])}</span>
                     </button>
                 </span>
             }}

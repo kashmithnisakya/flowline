@@ -3,7 +3,7 @@ over its category, due date and GitHub number, the people and the move
 arrow. Presentational; the hero wraps it to make it movable."""
 
 import from ..common.Avatar { AvatarStack }
-import from ..common.StepBadge { stepSolid }
+import from ..common.StepBadge { stepIcon }
 
 def:pub DemoLine(task: dict[str, any], color: str, done: bool = False) -> JsxElement {
     meta = task["cat"] + ((" · " + task["gh"]) if task["gh"] else "");
@@ -12,7 +12,7 @@ def:pub DemoLine(task: dict[str, any], color: str, done: bool = False) -> JsxEle
         <span className="flex min-w-0 items-center gap-3">
             <span
                 aria-hidden="true"
-                className={"size-2 shrink-0 rounded-full " + stepSolid(color)}
+                className={"size-2 shrink-0 rounded-full bg-current " + stepIcon(color)}
             />
             <span className="grid min-w-0 flex-1 gap-0.5">
                 <span

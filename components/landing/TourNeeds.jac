@@ -28,7 +28,7 @@ glob NEEDS: list[dict[str, str]] = [
          },
          {
              "label": "Waiting on review",
-             "tone": "bg-step-amber-wash text-step-amber-ink",
+             "tone": "bg-bg-surface text-text-secondary",
              "title": "Webhook for cancelled subscriptions",
              "who": "Priya Raman",
              "note": "Reviewer Dev Fernando · PR #412",

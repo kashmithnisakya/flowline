@@ -845,7 +845,7 @@ def:pub BoardPage -> JsxPage {
                             </Button>
                         </div>
                         <ColumnHeads/>
-                        <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-2">
                             {for (ci, key) in enumerate(colKeys) {
                                 <StepGroup
                                     key={key}

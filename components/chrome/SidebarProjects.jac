@@ -8,7 +8,7 @@ import from ...models { Project }
 import from ...lib.workspace { cachedProjects }
 import from ...lib.project { currentProject, pickProject }
 import from ...lib.filters { defaultProject }
-import from ..common.StepBadge { stepSolid }
+import from ..common.ProjectDot { projectDot }
 
 glob SCOPED: list[str] = ["/board", "/flowlines", "/roadmap"],
      TILES: list[str] = ["sky", "indigo", "amber", "rose", "emerald", "slate"];
@@ -46,7 +46,7 @@ def:pub SidebarProjects(path: str) -> JsxElement {
                 "id": jid(p),
                 "name": p.name,
                 "open": str(p.task_total - p.done_total),
-                "tile": stepSolid(TILES[len(rows) % len(TILES)])
+                "tile": projectDot(len(rows))
             }
         );
     }
@@ -78,11 +78,8 @@ def:pub SidebarProjects(path: str) -> JsxElement {
                 >
                     <span
                         aria-hidden="true"
-                        className={"flex size-[18px] shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-step-solid-fg "
-                            + r["tile"]}
-                    >
-                        {r["name"][:1].upper()}
-                    </span>
+                        className={"size-2.5 shrink-0 rounded-[3px] " + r["tile"]}
+                    />
                     <span className="min-w-0 flex-1 truncate">{r["name"]}</span>
                     <span className="num text-xs text-subtle">{r["open"]}</span>
                 </button>

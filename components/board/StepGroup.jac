@@ -52,7 +52,7 @@ def:pub StepGroup(
         <section
             data-step={columnKey}
             aria-label={label}
-            className={"step-group flex scroll-mt-20 flex-col gap-1.5 rounded-3xl transition-colors"
+            className={"group/step flex scroll-mt-20 flex-col gap-1 transition-colors"
                 + (" bg-accent/50" if dragOver else "")}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();

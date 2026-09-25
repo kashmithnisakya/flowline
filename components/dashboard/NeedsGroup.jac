@@ -4,7 +4,6 @@ counted on the board but not held by the page; `more` -1 is unknown)."""
 
 import from "@jac/runtime" { Link }
 import from .NeedsRow { NeedsRow }
-import from ..common.StepBadge { stepWash, stepInk }
 
 glob SHOW_MAX: int = 6;
 
@@ -12,10 +11,7 @@ def toneOf(tone: str) -> str {
     if tone == "alarm" {
         return "bg-destructive/10 text-destructive";
     }
-    if tone == "muted" {
-        return "bg-muted text-muted-foreground";
-    }
-    return stepWash(tone) + " " + stepInk(tone);
+    return "bg-bg-surface text-text-secondary";
 }
 
 def moreText(g: dict[str, any]) -> str {
