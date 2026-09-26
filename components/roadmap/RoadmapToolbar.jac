@@ -5,7 +5,7 @@ import from ..common.Busy { Busy }
 import from ..ui.button { Button }
 import from ..common.Chevron { Chevron }
 
-glob PILL: str = "h-8 rounded-full px-3",
+glob PILL: str = "h-8 rounded-md px-3",
      ROUND: str = "size-8 rounded-full";
 
 def:pub RoadmapToolbar(
@@ -32,7 +32,6 @@ def:pub RoadmapToolbar(
                     size="icon-sm"
                     className={ROUND}
                     aria-label="Earlier weeks"
-                    title="Earlier weeks"
                     onClick={lambda { onEarlier(); }}
                 >
                     <Chevron facing="left"/>
@@ -50,7 +49,6 @@ def:pub RoadmapToolbar(
                     size="icon-sm"
                     className={ROUND}
                     aria-label="Later weeks"
-                    title="Later weeks"
                     onClick={lambda { onLater(); }}
                 >
                     <Chevron facing="right"/>

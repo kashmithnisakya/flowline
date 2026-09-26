@@ -51,7 +51,7 @@ def:pub ThroughputChart(
                                 {if i == n - 1 and v > 0 {
                                     <span
                                         key="cap"
-                                        className="pointer-events-none absolute -translate-y-1 font-mono text-xs font-medium tabular-nums"
+                                        className="pointer-events-none absolute -translate-y-1 num text-xs font-medium"
                                         style={{"bottom": str(v * 100.0 / top) + "%"}}
                                     >
                                         {str(v)}

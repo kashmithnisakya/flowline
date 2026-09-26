@@ -26,7 +26,7 @@ def:pub ProjectLine(projects: list[Project], project: str) -> JsxElement {
     return
         <DropdownMenu>
             <DropdownMenuTrigger
-                className="meta inline-flex max-w-full items-center gap-1 self-start rounded-full outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-solid"
+                className="meta inline-flex max-w-full items-center gap-1 self-start rounded-md outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-solid"
                 aria-label={"Project: " + name + ". Change project"}
             >
                 <span className="truncate">{name or "Pick a project"}</span>

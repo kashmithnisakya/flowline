@@ -18,7 +18,7 @@ def:pub RoadmapAxis(fromDate: str, weeks: int, today: str) -> JsxElement {
                     {for m in months {
                         <div
                             key={m["key"]}
-                            className="absolute inset-y-0 py-1 font-mono text-xs font-medium whitespace-nowrap text-foreground tabular-nums"
+                            className="absolute inset-y-0 py-1 num text-xs font-medium whitespace-nowrap text-foreground tabular-nums"
                             style={{"left": m["left"], "width": m["width"]}}
                         >
                             <span
@@ -38,7 +38,7 @@ def:pub RoadmapAxis(fromDate: str, weeks: int, today: str) -> JsxElement {
                     {for w in weekStarts {
                         <div
                             key={w}
-                            className={"flex-1 border-l border-border/60 px-2 py-1.5 font-mono text-xs tabular-nums "
+                            className={"flex-1 border-l border-border/60 px-2 py-1.5 num text-xs "
                                 + (
                                     "font-medium text-primary"
                                         if todayN >= dayNumber(w)

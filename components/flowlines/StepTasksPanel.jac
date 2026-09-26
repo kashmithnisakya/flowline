@@ -76,7 +76,7 @@ def:pub StepTasksPanel(
                                 <button
                                     type="button"
                                     disabled={loadingMore}
-                                    className="num w-full rounded-full py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+                                    className="num w-full rounded-md py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
                                     onClick={lambda { if onMore { onMore(); }}}
                                 >
                                     {"Loading" if loadingMore else moreText}

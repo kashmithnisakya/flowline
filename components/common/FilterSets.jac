@@ -133,7 +133,7 @@ def:pub FilterSetMenu(
     } elif loading and lastName {
         label = lastName;
     } elif nowKey {
-        label = "Filtered";
+        label = "Views";
     }
     picked = shown.id if shown else ("all" if not nowKey else "");
     targetName = target.name if target else "";
@@ -279,7 +279,7 @@ def:pub FilterSetMenu(
                     aria-label={"Saved filters: "
                         + label
                         + (", edited" if edited else "")}
-                    className="toolbar-filter h-8! max-w-[min(20rem,48vw)] gap-1.5! px-2! text-[13.5px]! disabled:opacity-100"
+                    className="toolbar-filter max-w-[min(20rem,48vw)] gap-1.5! px-2! text-[13.5px]! disabled:opacity-100"
                 >
                     <Bookmark filled={bool(shown) or edited}/>
                     <span className="truncate">{label}</span>

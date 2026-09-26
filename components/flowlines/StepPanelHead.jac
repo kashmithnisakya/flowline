@@ -1,9 +1,10 @@
-"""The step panel's header on the step's wash: its badge, how much work sits
-there, the owner and the blurb, and a close button when the panel floats."""
+"""The step panel's header: the step's icon and name, how much work sits
+there, the owner and the blurb, and a close button when the panel floats.
+Plain ground: the step's colour is carried by its icon."""
 
 import from ...models { StepView }
 import from .kinds { colorKey }
-import from ..common.StepBadge { StepBadge, stepWash, stepInk }
+import from ..common.StepBadge { StepBadge }
 
 def:pub StepPanelHead(
     step: StepView,
@@ -18,12 +19,14 @@ def:pub StepPanelHead(
     who = "Anyone" if owner == "anyone" else owner;
     counted = str(count) + (" task " if count == 1 else " tasks ") + scope;
     return
-        <div className={"flex items-start gap-2 px-4 pt-3.5 pb-3 " + stepWash(c)}>
+        <div
+            className="flex items-start gap-2 border-b border-border-subtle px-4 pt-3.5 pb-3"
+        >
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                 <h2 className="flex max-w-full min-w-0">
                     <StepBadge name={step.name} color={c} kind={step.kind}/>
                 </h2>
-                <p className={"num text-xs font-medium " + stepInk(c)}>
+                <p className="num text-xs text-text-tertiary">
                     {"Loading" if loading else counted}
                     {if who {
                         <span key="who" className="font-sans">{" · " + who}</span>

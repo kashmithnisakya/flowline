@@ -230,7 +230,6 @@ def:pub StepInspector(
                             role="radio"
                             aria-checked={colorKey(form["color"] or "") == c}
                             aria-label={"orchid" if c == "rose" else c}
-                            title={"orchid" if c == "rose" else c}
                             className={"size-6 rounded-sm "
                                 + DOT_FILL[c]
                                 + (

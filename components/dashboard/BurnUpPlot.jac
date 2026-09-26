@@ -85,7 +85,7 @@ def:pub BurnUpPlot(series: list[dict[str, any]], top: int, hover: int) -> JsxEle
                     {if apart {
                         <span
                             key="end"
-                            className="absolute left-full ml-2.5 -translate-y-1/2 font-mono text-xs font-medium tabular-nums"
+                            className="absolute left-full ml-2.5 -translate-y-1/2 num text-xs font-medium"
                             style={{"top": str(valY(s["values"][n - 1], top)) + "%"}}
                         >
                             {str(s["values"][n - 1])}

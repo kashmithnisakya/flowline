@@ -37,19 +37,22 @@ def:pub Faq -> JsxElement {
     return
         <section
             id="faq"
-            className="landing-wrap grid scroll-mt-16 gap-6 pt-14 sm:pt-20 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10"
+            className="landing-wrap grid scroll-mt-16 gap-6 pt-16 sm:pt-24 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10"
         >
-            <h2
-                className="text-[clamp(1.625rem,3vw,2.125rem)] leading-tight font-bold tracking-[-0.012em] lg:sticky lg:top-24 lg:self-start"
-            >
-                Questions
-            </h2>
-            <div className="border-b xl:grid xl:grid-cols-2">
+            <div className="lg:sticky lg:top-24 lg:self-start">
+                <p className="section-eyebrow">Answers</p>
+                <h2
+                    className="mt-3 text-[clamp(1.75rem,3.4vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.025em]"
+                >
+                    Questions
+                </h2>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-2">
                 {for (i, f) in enumerate(FAQS) {
                     <details
                         key={f.q}
                         open={i < 2}
-                        className="group border-t py-4 xl:odd:pr-8 xl:even:pl-8"
+                        className="bento-tile reveal group cursor-pointer gap-0 py-4"
                     >
                         <summary
                             className="flex cursor-pointer list-none items-start justify-between gap-6 text-left [&::-webkit-details-marker]:hidden"

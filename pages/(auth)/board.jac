@@ -41,6 +41,7 @@ import from ...components.board.FlowStrip { FlowStrip }
 import from ...components.board.StepGroup { StepGroup }
 import from ...components.board.OlderDone { OlderDone }
 import from ...components.board.ColumnHeads { ColumnHeads }
+import from ...components.board.FilteredEmpty { FilteredEmpty }
 import from ...components.board.BoardSkeleton { BoardSkeleton, rememberGroups }
 import from ...components.board.NoFlowLine { NoFlowLine }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -201,6 +202,7 @@ def:pub BoardPage -> JsxPage {
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
         boardQuery: str = "",
+        hideEmpty: bool = False,
         hideDone: bool = False,
         dialogOpen: bool = False,
         editingId: str = "",
@@ -706,11 +708,37 @@ def:pub BoardPage -> JsxPage {
             if t.status == "Blocked"
         ]
     );
+    anyFilter = (
+        fAssignee != "All"
+        or fPriority != "All"
+        or fCategory != "All"
+        or fTag != "All"
+        or fEstimate != "All"
+        or bool(boardQuery.strip())
+    );
+    hiddenByFilters = len(tasks) - len(visible);
     headerCounts: list[list[str]] = [
         [str(openCount), "open", ""],
         [str(blockedCount), "blocked", "alarm" if blockedCount > 0 else ""],
         [str(len(recentDone)), "done in the last 7 days", ""]
     ];
+    if anyFilter and hiddenByFilters > 0 {
+        headerCounts.append([str(hiddenByFilters), "hidden by filters", ""]);
+    }
+
+    def expandAll {
+        closed = [];
+        doneOpen = True;
+    }
+
+    def collapseAll {
+        closed = [
+            k
+            for k in colKeys
+            if k != doneKey
+        ];
+        doneOpen = False;
+    }
 
     def isOpen(key: str) -> bool {
         return doneOpen if key == doneKey else key not in closed;
@@ -824,6 +852,10 @@ def:pub BoardPage -> JsxPage {
                                 onQuery={lambda (v: str) { boardQuery = v; }}
                                 onClear={clearFilters}
                                 shownCount={shownCount}
+                                hideEmpty={hideEmpty}
+                                onHideEmpty={lambda { hideEmpty = not hideEmpty; }}
+                                onExpandAll={expandAll}
+                                onCollapseAll={collapseAll}
                             />
                             <FilterSetMenu
                                 sets={boardSets}
@@ -844,49 +876,68 @@ def:pub BoardPage -> JsxPage {
                                 {"Collapse all" if allOpen else "Expand all"}
                             </Button>
                         </div>
-                        <ColumnHeads/>
-                        <div className="flex flex-col gap-6">
+                        {if anyFilter and shownCount == 0 {
+                            <FilteredEmpty
+                                key="none"
+                                hidden={hiddenByFilters}
+                                onClear={clearFilters}
+                            />
+                        }}
+                        {if not (anyFilter and shownCount == 0) {
+                            <ColumnHeads key="heads"/>
+                        }}
+                        <div className="flex flex-col gap-2">
                             {for (ci, key) in enumerate(colKeys) {
-                                <StepGroup
-                                    key={key}
-                                    columnKey={key}
-                                    label={colLabels[ci]}
-                                    kind={columnKind(key)}
-                                    color={colColors[ci]}
-                                    dot={DOT_FILL[colorKey(colColors[ci])]}
-                                    tasks={groupRows[ci]}
-                                    open={isOpen(key)}
-                                    overdue={groupOverdue[ci]}
-                                    today={today}
-                                    selectedId={selectedId}
-                                    doneKey={doneKey}
-                                    route={route}
-                                    onToggle={lambda { toggleGroup(key); }}
-                                    onOpen={openEdit}
-                                    onMove={arrowMove}
-                                    onDropTask={moveTo}
-                                    onDropBeside={moveBeside}
-                                    onAdd={openCreate if key != doneKey else None}
-                                    empty={"Done tasks are hidden"
-                                        if hideDone and key == doneKey
-                                        else "No tasks here"}
-                                    footer={<OlderDone
-                                        total={olderTotal if not hideDone else 0}
-                                        showing={showAllDone and not hideDone}
-                                        shown={len(olderShown)}
-                                        more={olderMore}
-                                        loading={loadingOlder}
-                                        onToggle={toggleOlder}
-                                        onMore={lambda { loadOlder(
-                                            olderPage + 1,
-                                            fProject,
-                                            fAssignee,
-                                            fCategory
-                                        ); }}
-                                    />
-                                        if key == doneKey
-                                        else None}
-                                />
+                                <>
+                                    {if (not hideEmpty)
+                                        or groupCounts[ci] > 0
+                                        or key == doneKey {
+                                        <StepGroup
+                                            key={key}
+                                            columnKey={key}
+                                            label={colLabels[ci]}
+                                            kind={columnKind(key)}
+                                            color={colColors[ci]}
+                                            dot={DOT_FILL[colorKey(colColors[ci])]}
+                                            tasks={groupRows[ci]}
+                                            open={isOpen(key)}
+                                            overdue={groupOverdue[ci]}
+                                            today={today}
+                                            selectedId={selectedId}
+                                            doneKey={doneKey}
+                                            route={route}
+                                            onToggle={lambda { toggleGroup(key); }}
+                                            onOpen={openEdit}
+                                            onMove={arrowMove}
+                                            onDropTask={moveTo}
+                                            onDropBeside={moveBeside}
+                                            onAdd={openCreate
+                                                if key != doneKey
+                                                else None}
+                                            empty={"Done tasks are hidden"
+                                                if hideDone and key == doneKey
+                                                else "No tasks here"}
+                                            footer={<OlderDone
+                                                total={olderTotal
+                                                    if not hideDone
+                                                    else 0}
+                                                showing={showAllDone and not hideDone}
+                                                shown={len(olderShown)}
+                                                more={olderMore}
+                                                loading={loadingOlder}
+                                                onToggle={toggleOlder}
+                                                onMore={lambda { loadOlder(
+                                                    olderPage + 1,
+                                                    fProject,
+                                                    fAssignee,
+                                                    fCategory
+                                                ); }}
+                                            />
+                                                if key == doneKey
+                                                else None}
+                                        />
+                                    }}
+                                </>
                             }}
                         </div>
                     </div>

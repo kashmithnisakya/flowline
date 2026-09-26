@@ -47,7 +47,7 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 [client.app_meta_data]
 title = "Flowline"
 description = "Draw how your team works. The steps you name become the board's columns, and every card that moves writes a line in the daily log. Open source, MIT licensed."
-theme_color = "#F2F3F1"
+theme_color = "#ECEEEA"
 icon = "/static/brand/favicon.svg"
 og_title = "Flowline: draw how your team works"
 og_description = "Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on."

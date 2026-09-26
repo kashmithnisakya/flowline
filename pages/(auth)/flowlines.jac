@@ -703,7 +703,7 @@ def:pub FlowLinePage -> JsxPage {
                                     <div
                                         className="flex h-[56px] w-[140px] shrink-0 flex-col justify-center gap-2 rounded-2xl bg-card px-2.5 shadow-xs ring-1 ring-border"
                                     >
-                                        <Skeleton className="h-6 w-20 rounded-full"/>
+                                        <Skeleton className="h-6 w-20 rounded-md"/>
                                         <Skeleton className="h-2.5 w-24"/>
                                     </div>
                                 </div>
