@@ -2,7 +2,7 @@
 its count, joined by arrows, and a note for the loop back. It wraps rather
 than scrolls, so a phone sees the whole line."""
 
-import from ..common.StepBadge { stepWash, stepInk, stepSolid }
+import from ..common.StepBadge { StepIcon }
 
 def:pub DemoStrip(
     steps: list[dict[str, any]], counts: list[int], loop: str = ""
@@ -31,25 +31,18 @@ def:pub DemoStrip(
                         </svg>
                     }}
                     <span
-                        className={"flex h-8 items-center gap-2 rounded-full pr-3 pl-1 text-[13px] font-semibold whitespace-nowrap "
-                            + stepWash(step["color"])
-                            + " "
-                            + stepInk(step["color"])}
+                        className="flex h-7 items-center gap-1.5 px-1 text-[13px] whitespace-nowrap"
                     >
-                        <span
-                            className={"flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 font-mono text-xs text-step-solid-fg "
-                                + stepSolid(step["color"])}
-                        >
-                            {str(counts[i])}
-                        </span>
-                        {step["name"]}
+                        <StepIcon color={step["color"]} kind="" size={14}/>
+                        <span className="text-text-secondary">{step["name"]}</span>
+                        <span className="num text-text-tertiary">{str(counts[i])}</span>
                     </span>
                 </span>
             }}
             {if loop {
                 <span
                     key="loop"
-                    className="ml-2 inline-flex items-center gap-1.5 font-mono text-xs whitespace-nowrap text-subtle"
+                    className="ml-2 inline-flex items-center gap-1.5 num text-xs whitespace-nowrap text-subtle"
                 >
                     <i
                         aria-hidden="true"

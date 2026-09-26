@@ -28,7 +28,7 @@ glob NEEDS: list[dict[str, str]] = [
          },
          {
              "label": "Waiting on review",
-             "tone": "bg-step-amber-wash text-step-amber-ink",
+             "tone": "bg-bg-surface text-text-secondary",
              "title": "Webhook for cancelled subscriptions",
              "who": "Priya Raman",
              "note": "Reviewer Dev Fernando · PR #412",
@@ -45,7 +45,7 @@ def:pub TourNeeds -> JsxElement {
             {for n in NEEDS {
                 <div key={n["label"]} role="group" aria-label={n["label"]}>
                     <span
-                        className={"inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold "
+                        className={"inline-flex h-6 items-center rounded-md px-2.5 text-xs font-semibold "
                             + n["tone"]}
                     >
                         {n["label"]}

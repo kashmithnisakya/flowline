@@ -705,7 +705,7 @@ def:pub FlowCanvas(
                     className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-4"
                 >
                     <div
-                        className="flex max-w-sm flex-col items-center gap-1 rounded-2xl border border-dashed bg-card px-8 py-10 text-center"
+                        className="flex max-w-sm flex-col items-center gap-1 rounded-2xl border bg-card px-8 py-10 text-center"
                     >
                         <p className="text-sm font-semibold">A blank canvas</p>
                         <p className="text-sm text-muted-foreground">

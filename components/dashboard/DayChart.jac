@@ -51,7 +51,7 @@ def:pub DayChart(days: list[dict[str, any]]) -> JsxElement {
                                 {if not d["future"] {
                                     <span
                                         key="val"
-                                        className={"absolute mb-0.5 font-mono text-xs tabular-nums "
+                                        className={"absolute mb-0.5 num text-xs "
                                             + ("" if d["value"] > 0 else "text-subtle")}
                                         style={{
                                             "bottom": str(d["value"] * 100.0 / top)
@@ -74,7 +74,7 @@ def:pub DayChart(days: list[dict[str, any]]) -> JsxElement {
                             + (
                                 "font-semibold text-primary"
                                     if d["today"]
-                                    else "font-mono text-subtle"
+                                    else "num text-subtle"
                             )}
                     >
                         {"Today" if d["today"] else d["label"]}

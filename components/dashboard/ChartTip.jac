@@ -10,7 +10,7 @@ def:pub SeriesKey(color: str, bar: bool = False) -> JsxElement {
     return
         <span
             className={"inline-block shrink-0 "
-                + ("h-2.5 w-2 rounded-t-[2px]" if bar else "h-0.5 w-3.5 rounded-full")}
+                + ("h-2.5 w-2 rounded-t-[2px]" if bar else "h-0.5 w-3.5 rounded-md")}
             style={{"background": color}}
             aria-hidden="true"
         />;

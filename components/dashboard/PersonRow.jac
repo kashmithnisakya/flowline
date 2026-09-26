@@ -28,11 +28,7 @@ def DayStrip(byDay: list[int], dayNames: list[str], todayIndex: int) -> JsxEleme
                                 else ": " + str(byDay[di]) + " updates"
                         )}
                     className={"size-3.5 rounded-[4px] border "
-                        + (
-                            "border-dashed border-input"
-                                if di > todayIndex
-                                else "border-input/60"
-                        )
+                        + ("border-input" if di > todayIndex else "border-input/60")
                         + (
                             " outline outline-[1.5px] outline-offset-1 outline-primary"
                                 if di == todayIndex

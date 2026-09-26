@@ -9,7 +9,7 @@ def:pub TabBar(path: str) -> JsxElement {
     return
         <nav
             aria-label="Pages"
-            className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
             {for p in NAV_PAGES {
                 <Link

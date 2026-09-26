@@ -20,7 +20,7 @@ def:pub PhoneHeader(
 ) -> JsxElement {
     return
         <header
-            className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/95 pr-2 pl-4 backdrop-blur md:hidden"
+            className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/95 pr-2 pl-4 backdrop-blur lg:hidden"
         >
             <Link to="/board" aria-label={(orgName or "flowline") + " home"}>
                 <Mark/>

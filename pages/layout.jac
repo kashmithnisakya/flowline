@@ -121,7 +121,7 @@ def:pub Shell -> JsxLayout {
                     onSignOut={logout}
                 />
                 <main
-                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-10 md:pt-8 md:pb-10"
+                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-6 lg:pb-10"
                 >
                     <Outlet/>
                 </main>

@@ -4,237 +4,338 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
-@custom-variant dark (&:is(.dark *));
+/* NOTE: these tokens would live in their own file, but the jac client build
+   copies only styles/global.css into .jac/client/compiled/styles, so a
+   relative @import of a sibling stylesheet cannot resolve. They stay here as
+   the first block instead: still one source of truth, just not its own file.
+*/
+
+/* ---------------------------------------------------------------------------
+   Flowline design tokens. One source of truth for colour; every component
+   reads these, never a raw hex.
+
+   Two naming systems live here on purpose:
+
+   1. The design tokens below (--bg-*, --text-*, --accent, --status-*). These
+      are what components should use.
+   2. The shadcn names (--background, --card, --foreground ...), aliased to
+      them at the bottom. `components/ui/` is an import-only registry: it is
+      rewritten by `jac install --shadcn`, so it can never be edited. Aliasing
+      is how the registry primitives follow this palette without being
+      touched.
+
+   One collision is worth knowing about: shadcn's `--accent` means "hover
+   surface", while the accent here is the brand orange. Setting --accent to
+   orange would turn every hover state orange, so the Tailwind utility
+   `bg-accent` is remapped to --bg-hover in the @theme block, while the raw
+   var --accent stays the brand colour for our own call sites.
+
+   Contrast is verified, not assumed. Text pairs clear 4.5:1 and icon/border
+   pairs 3:1 against every surface they can sit on. Two values differ from
+   the brief because the brief's own numbers did not clear its own bar:
+     --danger dark  #E5484D -> #F0595E  (was 4.27:1 on --bg-surface)
+     --text-tertiary light  #74746D -> #6A6A63  (was 4.16:1 on --bg-surface)
+--------------------------------------------------------------------------- */
 
 :root {
-    /* Traveler palette, light: a neutral ground, white surfaces, one rust
-       primary for the main action, today and selection. Names stay shadcn's
-       so the registry primitives restyle without edits. */
     color-scheme: light;
-    --background: #FAFAF8;          /* ground */
-    --foreground: #161A18;
-    --card: #FFFFFF;                /* surface: cards, panels, tables */
-    --card-foreground: #161A18;
-    --popover: #FFFFFF;
-    --popover-foreground: #161A18;
-    --primary: #BF3F0B;             /* rust; white label 5.3:1 */
-    --primary-foreground: #FFFFFF;
-    --secondary: #E7EAE6;           /* inset fill */
-    --secondary-foreground: #161A18;
-    --muted: #E7EAE6;
-    --muted-foreground: #4F5753;
-    --subtle: #636B67;              /* captions, placeholders */
-    --accent: #E2E6E1;              /* hover and selected row */
-    --accent-foreground: #161A18;
-    --destructive: #B3261E;         /* andon: blocked, overdue, destructive */
-    --border: #D3D8D2;              /* hairline */
-    --input: #78807B;               /* control edge, 3:1 on surface and ground */
-    --ring: #BF3F0B;
-    --success: #1C6E45;
-    --warning: #8A5A00;
-    --wire: #6F7672;                /* flow line diagram wires */
-    --mark: #D9530F;                /* logo mark only */
-    /* Step colours (keys in components/flowlines/kinds.jac): fill, -ink for
-       text and -wash (12% fill into the card) for a pale opaque fill. The
-       persisted key rose renders orchid so it never reads as andon red. */
-    --step-sky: #2E6C97;      --step-sky-ink: #245A80;
-    --step-indigo: #5550AC;   --step-indigo-ink: #46419A;
-    --step-amber: #A1711A;    --step-amber-ink: #74510F;
-    --step-rose: #A34B83;     --step-rose-ink: #86386A;
-    --step-emerald: #387A51;  --step-emerald-ink: #2B6041;
-    --step-slate: #6A726E;    --step-slate-ink: #4F5753;
-    --step-sky-wash: color-mix(in oklab, var(--step-sky) 12%, var(--card));
-    --step-indigo-wash: color-mix(in oklab, var(--step-indigo) 12%, var(--card));
-    --step-amber-wash: color-mix(in oklab, var(--step-amber) 12%, var(--card));
-    --step-rose-wash: color-mix(in oklab, var(--step-rose) 12%, var(--card));
-    --step-emerald-wash: color-mix(in oklab, var(--step-emerald) 12%, var(--card));
-    --step-slate-wash: color-mix(in oklab, var(--step-slate) 12%, var(--card));
-    /* -solid fills a step badge under --step-solid-fg text. */
-    --step-sky-solid: var(--step-sky-ink);
-    --step-indigo-solid: var(--step-indigo-ink);
-    --step-amber-solid: var(--step-amber-ink);
-    --step-rose-solid: var(--step-rose-ink);
-    --step-emerald-solid: var(--step-emerald-ink);
-    --step-slate-solid: var(--step-slate-ink);
-    --step-solid-fg: #FFFFFF;
-    /* Chart series by meaning, never by index: done, open, active, blocked,
-       today. chart-N stays for old call sites and follows the same rule. They
-       reference tokens, so the .dark block below re-derives them. */
-    --series-done: var(--success);
-    --series-open: var(--input);
-    --series-active: var(--step-indigo);
-    --series-blocked: var(--destructive);
-    --series-today: var(--primary);
-    --chart-1: var(--success);
-    --chart-2: var(--step-indigo);
-    --chart-3: var(--step-amber);
-    --chart-4: var(--step-sky);
-    --chart-5: var(--step-rose);
-    --radius: 4px;
-    /* Flow line canvas height. The diagram and the panel beside it are flex
-       siblings, so both need the same height from one place. */
-    --canvas-h: max(26rem, calc(100dvh - 15rem));
-    --sidebar: #F2F3F1;
-    --sidebar-foreground: #161A18;
-    --sidebar-primary: #BF3F0B;
-    --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #E7EAE6;
-    --sidebar-accent-foreground: #161A18;
-    --sidebar-border: #E3E6E1;
-    --sidebar-ring: #BF3F0B;
-    /* Only floating layers cast a shadow: menus (float-1) and dialogs,
-       sheets, the palette and toasts (float-2). Resting surfaces use borders. */
-    --float-1: 0 1px 2px rgb(22 26 24 / 0.06), 0 4px 12px -2px rgb(22 26 24 / 0.12);
-    --float-2: 0 1px 2px rgb(22 26 24 / 0.06), 0 8px 24px rgb(22 26 24 / 0.10), 0 16px 40px -8px rgb(22 26 24 / 0.18);
-    --scrim: rgb(17 20 19 / 0.45);
+
+    /* Surfaces, lightest to most raised. The sidebar sits below the canvas
+       so navigation reads a notch quieter than the work area. */
+    --bg-sidebar: #F5F5F3;
+    --bg-canvas: #FAFAF8;
+    --bg-surface: #F1F1EE;
+    --bg-elevated: #FFFFFF;
+    --bg-hover: rgb(0 0 0 / 0.04);
+    --bg-selected: rgb(0 0 0 / 0.06);
+
+    --border-subtle: rgb(0 0 0 / 0.06);
+    --border: rgb(0 0 0 / 0.10);
+    --border-strong: rgb(0 0 0 / 0.16);
+
+    --text-primary: #1C1C1A;
+    --text-secondary: #5C5C56;
+    --text-tertiary: #6A6A63;
+    --text-disabled: #A8A8A1;
+
+    /* The brand orange, and the only accent. Light takes the deep cut, so a
+       white label clears 4.5:1; dark takes the bright cut with a dark label. */
+    --accent: #BF3F0B;
+    --accent-hover: #A93708;
+    --accent-pressed: #8E2E05;
+    --on-accent: #FFFFFF;
+    --focus-ring: rgb(191 63 11 / 0.55);
+
+    --danger: #B3261E;
+
+    /* Status, on 14px icons only: never a fill, a pill or a row tint. */
+    --status-todo: #6A6A63;
+    --status-doing: #3568C4;
+    --status-review: #6B4BC0;
+    --status-done: #2F8F62;
+
+    /* Project dots: a muted eight, shown only as a 10px rounded square. */
+    --project-1: #C2632B;
+    --project-2: #3568C4;
+    --project-3: #6B4BC0;
+    --project-4: #2F8F62;
+    --project-5: #A8456F;
+    --project-6: #1F7A87;
+    --project-7: #8A6A1F;
+    --project-8: #5C5C56;
+
+    /* A step's colour is the user's choice and is persisted, so it stays a
+       feature. It now shows ONLY on the 14px status icon: no washes, no
+       solid pills, no tinted group bands. Verified >= 3:1 as an icon on
+       every surface it can sit on. */
+    --step-sky: #2E6C97;
+    --step-indigo: #5550AC;
+    --step-amber: #A1711A;
+    --step-rose: #A34B83;
+    --step-emerald: #387A51;
+    --step-slate: #6A726E;
+
+    /* Avatar fills: identity, not status. One fixed set for both themes,
+       each dark enough to carry white initials (>= 5.1:1). */
+    --avatar-1: #2E6C97;
+    --avatar-2: #5550AC;
+    --avatar-3: #8A5A00;
+    --avatar-4: #A34B83;
+    --avatar-5: #387A51;
+    --avatar-6: #4F5753;
+    --avatar-7: #B3261E;
+    --avatar-8: #245A80;
+
+    /* Only floating layers cast a shadow. */
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.14);
+    --scrim: rgb(20 20 19 / 0.40);
+    /* Legacy names kept as aliases: there is one float level now, not two. */
+    --float-1: var(--shadow-float);
+    --float-2: var(--shadow-float);
 }
 
 .dark {
-    /* Same system on a charcoal ground; the primary brightens and takes a
-       dark label. Native chrome (scrollbars, form controls) follows the theme. */
     color-scheme: dark;
-    --background: #111413;
-    --foreground: #E4E8E5;
-    --card: #191D1B;
-    --card-foreground: #E4E8E5;
-    --popover: #191D1B;
-    --popover-foreground: #E4E8E5;
-    --primary: #F0702E;
-    --primary-foreground: #1B0B02;
-    --secondary: #1F2421;
-    --secondary-foreground: #E4E8E5;
-    --muted: #1F2421;
-    --muted-foreground: #A0A8A4;
-    --subtle: #8F9793;
-    --accent: #232826;
-    --accent-foreground: #E4E8E5;
-    --destructive: #FF7B6E;
-    --border: #2D3330;
-    --input: #6E7772;
-    --ring: #F0702E;
-    --success: #56C28C;
-    --warning: #E3AB48;
-    --wire: #7C8580;
-    --mark: #F47C3F;
-    --step-sky: #6FAED6;      --step-sky-ink: #8FC2E3;
-    --step-indigo: #A29DE3;   --step-indigo-ink: #B9B5EC;
-    --step-amber: #DDAE52;    --step-amber-ink: #E9C375;
-    --step-rose: #D98BC2;     --step-rose-ink: #E6A8D3;
-    --step-emerald: #79C08E;  --step-emerald-ink: #98D0A7;
-    --step-slate: #A3ABA7;    --step-slate-ink: #BCC3BF;
-    /* Dark badges fill with the light step colour under dark text. */
-    --step-sky-solid: var(--step-sky);
-    --step-indigo-solid: var(--step-indigo);
-    --step-amber-solid: var(--step-amber);
-    --step-rose-solid: var(--step-rose);
-    --step-emerald-solid: var(--step-emerald);
-    --step-slate-solid: var(--step-slate);
-    --step-solid-fg: #111413;
-    --sidebar: #191D1B;
-    --sidebar-foreground: #E4E8E5;
-    --sidebar-primary: #F0702E;
-    --sidebar-primary-foreground: #1B0B02;
-    --sidebar-accent: #232826;
-    --sidebar-accent-foreground: #E4E8E5;
-    --sidebar-border: #2D3330;
-    --sidebar-ring: #F0702E;
-    --float-1: 0 1px 2px rgb(0 0 0 / 0.40), 0 4px 12px -2px rgb(0 0 0 / 0.45);
-    --float-2: 0 1px 2px rgb(0 0 0 / 0.40), 0 12px 32px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.55);
-    --scrim: rgb(0 0 0 / 0.6);
+
+    --bg-sidebar: #141413;
+    --bg-canvas: #181817;
+    --bg-surface: #1E1E1C;
+    --bg-elevated: #232321;
+    --bg-hover: rgb(255 255 255 / 0.04);
+    --bg-selected: rgb(255 255 255 / 0.07);
+
+    --border-subtle: rgb(255 255 255 / 0.06);
+    --border: rgb(255 255 255 / 0.09);
+    --border-strong: rgb(255 255 255 / 0.14);
+
+    --text-primary: #EDEDEA;
+    --text-secondary: #A5A5A0;
+    --text-tertiary: #8A8A84;
+    --text-disabled: #56564F;
+
+    --accent: #F07A3A;
+    --accent-hover: #F48B51;
+    --accent-pressed: #E06A2C;
+    --on-accent: #1B1109;
+    --focus-ring: rgb(240 122 58 / 0.55);
+
+    --danger: #F0595E;
+
+    --status-todo: #8A8A84;
+    --status-doing: #5B8DEF;
+    --status-review: #9D7CE8;
+    --status-done: #4CB782;
+
+    --project-1: #E8935C;
+    --project-2: #5B8DEF;
+    --project-3: #9D7CE8;
+    --project-4: #4CB782;
+    --project-5: #DE7FA8;
+    --project-6: #4FB3C0;
+    --project-7: #C9A64E;
+    --project-8: #A5A5A0;
+
+    --step-sky: #6FAED6;
+    --step-indigo: #A29DE3;
+    --step-amber: #DDAE52;
+    --step-rose: #D98BC2;
+    --step-emerald: #79C08E;
+    --step-slate: #A3ABA7;
+
+    --shadow-float: 0 8px 24px rgb(0 0 0 / 0.35);
+    --scrim: rgb(0 0 0 / 0.55);
+    --float-1: var(--shadow-float);
+    --float-2: var(--shadow-float);
 }
 
+/* ---- shadcn aliases. The registry reads these names; they point at the
+   tokens above so `components/ui/` never needs an edit. --------------------- */
+:root,
+.dark {
+    --background: var(--bg-canvas);
+    --foreground: var(--text-primary);
+    --card: var(--bg-surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-elevated);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--accent);
+    --primary-foreground: var(--on-accent);
+    --secondary: var(--bg-surface);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--bg-surface);
+    --muted-foreground: var(--text-secondary);
+    --subtle: var(--text-tertiary);
+    --accent-foreground: var(--text-primary);
+    --destructive: var(--danger);
+    --input: var(--border-strong);
+    --ring: var(--accent);
+    --sidebar: var(--bg-sidebar);
+    --sidebar-foreground: var(--text-primary);
+    --sidebar-primary: var(--accent);
+    --sidebar-primary-foreground: var(--on-accent);
+    --sidebar-accent: var(--bg-selected);
+    --sidebar-accent-foreground: var(--text-primary);
+    --sidebar-border: var(--border-subtle);
+    --sidebar-ring: var(--accent);
+    --success: var(--status-done);
+    --warning: var(--project-7);
+    --wire: var(--text-tertiary);
+    --mark: var(--accent);
+    /* Chart series (the Overview) and member dots, on the status set. */
+    --series-done: var(--status-done);
+    --series-open: var(--border-strong);
+    --series-active: var(--status-doing);
+    --series-blocked: var(--danger);
+    --series-today: var(--accent);
+    --chart-1: var(--status-done);
+    --chart-2: var(--status-doing);
+    --chart-3: var(--status-review);
+    --chart-4: var(--step-amber);
+    --chart-5: var(--step-rose);
+}
+
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
-    /* Geist for UI and display, Geist Mono for data. */
+    /* One UI family. No monospace in UI text; tabular figures come from
+       font-variant-numeric instead. */
     --font-sans: 'Geist Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-display: 'Geist Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --color-success: var(--success);
-    --color-warning: var(--warning);
-    --color-subtle: var(--subtle);
-    --color-wire: var(--wire);
-    --color-mark: var(--mark);
+
+    /* Design tokens as utilities: bg-canvas, text-tertiary, border-subtle... */
+    --color-bg-sidebar: var(--bg-sidebar);
+    --color-bg-canvas: var(--bg-canvas);
+    --color-bg-surface: var(--bg-surface);
+    --color-bg-elevated: var(--bg-elevated);
+    --color-bg-hover: var(--bg-hover);
+    --color-bg-selected: var(--bg-selected);
+    --color-border-subtle: var(--border-subtle);
+    --color-border-strong: var(--border-strong);
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-tertiary: var(--text-tertiary);
+    --color-text-disabled: var(--text-disabled);
+    --color-on-accent: var(--on-accent);
+    --color-danger: var(--danger);
+    --color-status-todo: var(--status-todo);
+    --color-status-doing: var(--status-doing);
+    --color-status-review: var(--status-review);
+    --color-status-done: var(--status-done);
+    --color-avatar-1: var(--avatar-1);
+    --color-avatar-2: var(--avatar-2);
+    --color-avatar-3: var(--avatar-3);
+    --color-avatar-4: var(--avatar-4);
+    --color-avatar-5: var(--avatar-5);
+    --color-avatar-6: var(--avatar-6);
+    --color-avatar-7: var(--avatar-7);
+    --color-avatar-8: var(--avatar-8);
+    --color-project-1: var(--project-1);
+    --color-project-2: var(--project-2);
+    --color-project-3: var(--project-3);
+    --color-project-4: var(--project-4);
+    --color-project-5: var(--project-5);
+    --color-project-6: var(--project-6);
+    --color-project-7: var(--project-7);
+    --color-project-8: var(--project-8);
+    --color-step-sky: var(--step-sky);
+    --color-step-indigo: var(--step-indigo);
+    --color-step-amber: var(--step-amber);
+    --color-step-rose: var(--step-rose);
+    --color-step-emerald: var(--step-emerald);
+    --color-step-slate: var(--step-slate);
     --color-series-done: var(--series-done);
     --color-series-open: var(--series-open);
     --color-series-active: var(--series-active);
     --color-series-blocked: var(--series-blocked);
     --color-series-today: var(--series-today);
-    --color-step-sky-solid: var(--step-sky-solid);
-    --color-step-indigo-solid: var(--step-indigo-solid);
-    --color-step-amber-solid: var(--step-amber-solid);
-    --color-step-rose-solid: var(--step-rose-solid);
-    --color-step-emerald-solid: var(--step-emerald-solid);
-    --color-step-slate-solid: var(--step-slate-solid);
-    --color-step-solid-fg: var(--step-solid-fg);
-    --color-step-sky: var(--step-sky);
-    --color-step-sky-ink: var(--step-sky-ink);
-    --color-step-sky-wash: var(--step-sky-wash);
-    --color-step-indigo: var(--step-indigo);
-    --color-step-indigo-ink: var(--step-indigo-ink);
-    --color-step-indigo-wash: var(--step-indigo-wash);
-    --color-step-amber: var(--step-amber);
-    --color-step-amber-ink: var(--step-amber-ink);
-    --color-step-amber-wash: var(--step-amber-wash);
-    --color-step-rose: var(--step-rose);
-    --color-step-rose-ink: var(--step-rose-ink);
-    --color-step-rose-wash: var(--step-rose-wash);
-    --color-step-emerald: var(--step-emerald);
-    --color-step-emerald-ink: var(--step-emerald-ink);
-    --color-step-emerald-wash: var(--step-emerald-wash);
-    --color-step-slate: var(--step-slate);
-    --color-step-slate-ink: var(--step-slate-ink);
-    --color-step-slate-wash: var(--step-slate-wash);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    /* shadcn utility names. `bg-accent` is the registry's HOVER surface, so
+       it points at --bg-hover; the raw var --accent stays the brand orange
+       for our own call sites. Mixing those two up turns every hover orange. */
+    --color-accent: var(--bg-hover);
+    --color-accent-foreground: var(--text-primary);
     --color-background: var(--background);
-    /* Explicit radius scale: the registry's rounded-lg (buttons, inputs,
-       selects) lands on 4px and rounded-xl (dialogs) on 6px. Cards, badges
-       and menus are pinned in the registry block below. */
-    --radius-xs: 2px;
-    --radius-sm: 3px;
-    --radius-md: 4px;
-    --radius-lg: 4px;
-    --radius-xl: 6px;
-    --radius-2xl: 6px;
-    --radius-3xl: 8px;
-    --radius-4xl: 8px;
-    /* Resting shadows are gone: the small steps resolve to nothing, and the
-       larger ones are the two floating levels. */
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-subtle: var(--subtle);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-wire: var(--wire);
+    --color-mark: var(--mark);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Radius by role: 4 kbd/checkbox, 6 buttons/inputs/chips/rows, 8 menus
+       and popovers, 12 dialogs. Nothing is pill shaped except avatars and
+       status icons, which set rounded-full at the call site. */
+    --radius: 6px;
+    --radius-xs: 4px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 6px;
+    --radius-xl: 8px;
+    --radius-2xl: 12px;
+    --radius-3xl: 12px;
+    --radius-4xl: 12px;
+
+    /* Resting surfaces never cast a shadow; floating layers get exactly one. */
     --shadow-2xs: 0 0 #0000;
     --shadow-xs: 0 0 #0000;
     --shadow-sm: 0 0 #0000;
-    --shadow-md: var(--float-1);
-    --shadow-lg: var(--float-1);
-    --shadow-xl: var(--float-2);
-    --shadow-2xl: var(--float-2);
+    --shadow-md: var(--shadow-float);
+    --shadow-lg: var(--shadow-float);
+    --shadow-xl: var(--shadow-float);
+    --shadow-2xl: var(--shadow-float);
+
+    /* Flow line canvas height: the diagram and its panel are flex siblings. */
+    --canvas-h: max(26rem, calc(100dvh - 15rem));
 }
+
 
 @layer base {
     * {
@@ -254,7 +355,7 @@
     /* Keyboard focus: a 2px primary outline. A focus-visible utility at the
        call site still wins, being in a later layer. */
     :focus-visible {
-        outline: 2px solid var(--ring);
+        outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
     }
     /* Thin themed scrollbars everywhere native chrome shows one. */
@@ -267,7 +368,7 @@
 @layer components {
     /* In-app page title: 28px, semibold, tight tracking. */
     .page-title {
-        @apply font-display text-[28px] leading-tight font-semibold tracking-[-0.025em];
+        @apply font-display text-[20px] leading-tight font-semibold tracking-[-0.02em];
     }
     /* One muted line under a page title. */
     .page-subtitle {
@@ -277,17 +378,42 @@
     .section-title {
         @apply font-display text-base leading-snug font-semibold tracking-[-0.01em];
     }
-    /* Metadata text: 12px muted, the size floor. */
+    /* Metadata, column headers and chips: 12px, the size floor. */
     .meta {
-        @apply text-xs text-muted-foreground;
+        @apply text-[12px] text-text-tertiary;
+    }
+    /* The base: rows, nav and buttons. */
+    .ui-base {
+        @apply text-[13px];
     }
     /* Keyboard hint: mono 12px on a surface with a heavier bottom edge. */
     .kbd {
-        @apply inline-flex items-center rounded-sm border border-b-2 bg-card px-1 font-mono text-xs leading-4 font-medium text-subtle;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 18px;
+        min-width: 18px;
+        padding-inline: 4px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1;
+        color: var(--text-tertiary);
     }
-    /* Numbers, dates, times, ids and counts: mono with tabular figures. */
+    /* Inside a primary button the chip sits on the accent, so it darkens the
+       accent rather than drawing its own border. */
+    [data-variant="default"] .kbd,
+    .kbd-on-accent {
+        border-color: transparent;
+        background: rgb(0 0 0 / 0.14);
+        color: var(--on-accent);
+    }
+    /* Numbers, dates, times, ids and counts. Tabular figures so columns of
+       digits line up, in the UI family: monospace is not a UI typeface, and
+       it was reading as code on counts like "0 tasks". */
     .num {
-        @apply font-mono tabular-nums;
+        font-variant-numeric: tabular-nums;
     }
     /* A resting surface: card fill, hairline border, 4px radius, no shadow. */
     .surface {
@@ -295,7 +421,7 @@
     }
     /* A single filter row between hairlines; wraps on narrow screens. */
     .toolbar {
-        @apply flex flex-wrap items-center gap-2 border-y bg-card px-4 py-2;
+        @apply flex flex-wrap items-center gap-2;
     }
     /* Step colour swatch: a 10px square; pair with bg-step-<key>. */
     .step-swatch {
@@ -306,6 +432,120 @@
        header share it. */
     .landing-wrap {
         @apply mx-auto w-full max-w-[1760px] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20;
+    }
+    /* ---- Landing atmosphere. The hero sits on light rather than the flat
+       ground: a warm rust glow and a cooler step-sky counterweight, fading
+       out before the first section. Both are held at 10%: the ground is
+       nearly white, so a stronger wash pushes `subtle` text and the rust
+       eyebrow under AA. At 10% the tightest pair still clears it. */
+    .hero-atmosphere {
+        position: absolute;
+        inset-inline: 0;
+        top: 0;
+        z-index: -10;
+        height: min(46rem, 88vh);
+        pointer-events: none;
+        background:
+            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 58%),
+            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 10%, transparent), transparent 60%);
+    }
+    /* A faint grid under the glows, fading out before it reaches an edge, so
+       the hero has texture rather than flat colour. Decorative and masked,
+       so it never competes with the text sitting on it. */
+    .hero-atmosphere::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(to right, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px),
+            linear-gradient(to bottom, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px);
+        background-size: 56px 56px;
+        -webkit-mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
+        mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
+    }
+    .dark .hero-atmosphere {
+        background:
+            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 58%),
+            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 18%, transparent), transparent 60%),
+            linear-gradient(to bottom, color-mix(in oklab, var(--card) 38%, transparent), transparent 55%);
+    }
+    /* A glass capsule: the hero eyebrow and the nav's link group. The 62%
+       card fill carries the text contrast by itself, so the blur is
+       decoration and a browser without backdrop-filter loses nothing. */
+    .glass-pill {
+        border-radius: 9999px;
+        border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+        background: color-mix(in oklab, var(--card) 62%, transparent);
+        -webkit-backdrop-filter: blur(14px) saturate(150%);
+        backdrop-filter: blur(14px) saturate(150%);
+    }
+    /* The hero's product preview reads as a floating screenshot, so it is the
+       one resting surface allowed a shadow. */
+    .hero-frame {
+        border-radius: 18px;
+        box-shadow: var(--float-2);
+    }
+    /* A section's small label, above its heading: mono and rust, sentence
+       case like every other label in the app. */
+    .section-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--primary);
+    }
+    .section-eyebrow::before {
+        content: "";
+        width: 0.375rem;
+        height: 0.375rem;
+        border-radius: 9999px;
+        background: currentColor;
+    }
+    /* A bento tile. The capability grid is tiles of uneven width rather than
+       a ruled list, so the flagship capabilities read as bigger. Resting
+       state is a hairline; the shadow only appears under the pointer. */
+    .bento-tile {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--card);
+        padding: 1.25rem;
+        transition:
+            border-color 160ms ease,
+            box-shadow 160ms ease;
+    }
+    .bento-tile:hover {
+        border-color: color-mix(in oklab, var(--primary) 38%, var(--border));
+        box-shadow: var(--float-1);
+    }
+    /* The rust chip a tile's icon sits in. */
+    .tile-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 10px;
+        border: 1px solid color-mix(in oklab, var(--primary) 22%, transparent);
+        background: color-mix(in oklab, var(--primary) 10%, var(--card));
+        color: var(--primary);
+    }
+    /* The closing call to action: one lit panel, so the page opens and closes
+       on the same note. Glows sit on the card, not the ground, and stay at
+       10% for the same contrast reason as the atmosphere. */
+    .cta-band {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background:
+            radial-gradient(42rem 22rem at 18% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 62%),
+            radial-gradient(38rem 20rem at 84% 110%, color-mix(in oklab, var(--step-sky) 10%, transparent), transparent 64%),
+            var(--card);
+        box-shadow: var(--float-1);
     }
 }
 
@@ -319,10 +559,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    height: 34px;
-    padding-inline: 0.875rem;
-    border: 1px dashed var(--input);
-    border-radius: 9999px;
+    height: 28px;
+    padding-inline: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     background-color: transparent;
     color: var(--muted-foreground);
     font-size: 13px;
@@ -334,8 +574,7 @@
     color: var(--foreground);
 }
 .toolbar-filter[data-active="true"] {
-    border-style: solid;
-    border-color: var(--input);
+    border-color: var(--border-strong);
     background-color: var(--card);
     color: var(--foreground);
     font-weight: 600;
@@ -399,7 +638,7 @@
 [data-slot="popover-content"] {
     border-radius: var(--radius-xl);
     --tw-shadow: var(--float-1);
-    animation-duration: 150ms;
+    animation-duration: 120ms;
 }
 [data-slot="dialog-content"],
 [data-slot="sheet-content"] {
@@ -414,7 +653,7 @@
     background: var(--scrim);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    animation-duration: 150ms;
+    animation-duration: 120ms;
 }
 /* Controls keep a surface fill in both themes; the registry's bg-input tints
    would turn the 3:1 control-edge grey into a fill. */
@@ -430,9 +669,44 @@
 [data-slot="textarea"]:disabled {
     background-color: var(--muted);
 }
-[data-slot="button"][data-variant="outline"] {
+/* secondary */
+[data-slot="button"][data-variant="outline"],
+[data-slot="button"][data-variant="secondary"] {
     border-color: var(--border);
-    background-color: var(--card);
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+}
+[data-slot="button"][data-variant="outline"]:not(:disabled):hover,
+[data-slot="button"][data-variant="secondary"]:not(:disabled):hover {
+    border-color: var(--border-strong);
+    background-color: var(--bg-hover);
+}
+/* ghost */
+[data-slot="button"][data-variant="ghost"] {
+    color: var(--text-secondary);
+}
+[data-slot="button"][data-variant="ghost"]:not(:disabled):hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+/* primary: flat, no border, weight 600, and the one accent element in view */
+[data-slot="button"][data-variant="default"] {
+    font-weight: 600;
+    border-color: transparent;
+}
+[data-slot="button"][data-variant="default"]:not(:disabled):active {
+    background-color: var(--accent-pressed);
+}
+/* disabled is neutral everywhere: a faded accent reads as a live control */
+[data-slot="button"]:disabled {
+    background-color: var(--bg-surface);
+    border-color: var(--border);
+    color: var(--text-disabled);
+    opacity: 1;
+}
+[data-slot="button"][data-variant="ghost"]:disabled {
+    background-color: transparent;
+    border-color: transparent;
 }
 [data-slot="button"][data-variant="outline"]:not(:disabled):hover,
 [data-slot="button"][data-variant="outline"][aria-expanded="true"] {
@@ -466,7 +740,7 @@
 /* The primary variant ships no <button> hover (only [a]:hover). Mixing in
    the foreground darkens rust in light and lightens it in dark. */
 [data-slot="button"][data-variant="default"]:not(:disabled):hover {
-    background-color: color-mix(in oklab, var(--primary) 88%, var(--foreground) 12%);
+    background-color: var(--accent-hover);
 }
 
 /* Skeletons: a shimmer on a ground mixed from foreground so it stays visible
@@ -495,6 +769,126 @@
     to { transform: translateX(100%); }
 }
 
+/* Landing entrance: content rises once, on load, in a short stagger. The
+   backwards fill keeps each element in its start state through its delay, so
+   nothing flashes in before its turn. */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.rise {
+    animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.rise-1 { animation-delay: 60ms; }
+.rise-2 { animation-delay: 140ms; }
+.rise-3 { animation-delay: 220ms; }
+.rise-4 { animation-delay: 300ms; }
+.rise-5 { animation-delay: 400ms; }
+
+/* ---- Hero motion: one task's trip along the flow line on a 12s loop, with
+   its travel writing itself underneath. The figure is decorative (the
+   playable board sits below it), so under reduced motion every animation
+   collapses to its final frame, which is a complete picture: the task on
+   Done and its travel fully written.
+
+   The task rides a four column track with no gap, so its wrapper is exactly
+   one column wide and translateX(100%) is exactly one step. The step pills
+   share one keyframe and are phased apart by negative delays, so each lights
+   only while the task is with it. */
+@keyframes hm-travel {
+    0%, 16% { transform: translateX(0); }
+    25%, 41% { transform: translateX(100%); }
+    50%, 66% { transform: translateX(200%); }
+    75%, 100% { transform: translateX(300%); }
+}
+
+@keyframes hm-lit {
+    0%, 22% {
+        border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+        background: color-mix(in oklab, var(--primary) 12%, var(--card));
+        color: var(--foreground);
+    }
+    30%, 100% {
+        border-color: var(--border);
+        background: var(--card);
+        color: var(--muted-foreground);
+    }
+}
+
+/* One keyframe per line, each holding its line hidden until the task reaches
+   the step that writes it: Build at 25% of the loop, Review at 50%, Done at
+   75%. Phasing these with delays instead would not work, since a shared
+   keyframe's hidden window is far shorter than the wait. */
+@keyframes hm-line-1 {
+    0%, 24% { opacity: 0; transform: translateY(5px); }
+    29%, 100% { opacity: 1; transform: none; }
+}
+@keyframes hm-line-2 {
+    0%, 49% { opacity: 0; transform: translateY(5px); }
+    54%, 100% { opacity: 1; transform: none; }
+}
+@keyframes hm-line-3 {
+    0%, 74% { opacity: 0; transform: translateY(5px); }
+    79%, 100% { opacity: 1; transform: none; }
+}
+
+.hm-track {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.hm-card {
+    grid-column: 1;
+    animation: hm-travel 12s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.hm-step {
+    animation: hm-lit 12s linear infinite;
+}
+.hm-step:nth-child(2) { animation-delay: -9s; }
+.hm-step:nth-child(3) { animation-delay: -6s; }
+.hm-step:nth-child(4) { animation-delay: -3s; }
+.hm-line:nth-child(1) { animation: hm-line-1 12s linear infinite; }
+.hm-line:nth-child(2) { animation: hm-line-2 12s linear infinite; }
+.hm-line:nth-child(3) { animation: hm-line-3 12s linear infinite; }
+
+/* ---- Scroll reveal. Only the hero animated, on load, which left every
+   section below it dead on the page. Each marked block now rises as it
+   enters the viewport, driven by the scroll position rather than a timer,
+   so nothing runs off screen and there is no observer to wire up.
+
+   Gated twice on purpose: `@supports` so a browser without scroll-driven
+   animation simply renders the content (never hidden, just unanimated), and
+   `no-preference` so the reduced-motion block never has to undo it. */
+@supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .reveal {
+            animation: rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            animation-timeline: view();
+            animation-range: entry 0% entry 55%;
+        }
+    }
+}
+
+/* The hero glows drift, very slowly, so the atmosphere is alive without
+   anything appearing to move. Translate and opacity only: growing a
+   full-width layer would overflow the page sideways. */
+@keyframes drift {
+    50% {
+        opacity: 0.86;
+        transform: translate3d(0, -1.5%, 0);
+    }
+}
+.hero-atmosphere {
+    animation: drift 24s ease-in-out infinite;
+    will-change: transform;
+}
+
 /* Motion is for state changes only, and none of it survives reduced motion
    (a spinner still turns: it is the only sign that work is in flight). */
 @media (prefers-reduced-motion: reduce) {
@@ -506,7 +900,9 @@
     *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
         transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
     }
     [data-slot="skeleton"]::after {
         animation: none !important;

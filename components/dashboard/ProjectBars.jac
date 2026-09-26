@@ -29,7 +29,7 @@ def:pub ProjectBars(
                                 className="col-span-3 grid grid-cols-subgrid items-center"
                             >
                                 <Skeleton className="h-3.5 w-20"/>
-                                <Skeleton className="h-2 w-full rounded-full"/>
+                                <Skeleton className="h-2 w-full rounded-md"/>
                                 <Skeleton className="h-3 w-12"/>
                             </li>
                         }}

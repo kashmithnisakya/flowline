@@ -502,10 +502,10 @@ File-based routing with route groups:
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
   would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
   collides with the root layout. The chrome lives in `components/chrome/`:
-  a left sidebar at md and up (the workspace name, search, the pages in
+  a left sidebar at lg (1024px) and up (the workspace name, search, the pages in
   `NAV_PAGES` from `CommandPalette.jac` in the order Flow line, Board,
   Roadmap, Overview, the Projects list, then Ask, Workspace and the account
-  card with the theme and Sign out), and below md a header over a five-tab
+  card with the theme and Sign out), and below lg a header over a five-tab
   bar (those pages plus Workspace). `components/assistant/AssistantDock`
   (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
   `/setup` gets only the setup bar (mark and Sign out).
@@ -571,23 +571,25 @@ File-based routing with route groups:
   `stepWash` / `stepInk` / `stepSolid` class helpers), `ProjectLine.jac`
   (the project picker above a scoped page's title), `CommandPalette.jac`
   (⌘K), `ErrorNote`, `LoadFailed`, `glyphs`, `Markdown`.
-- **The visual system lives in `styles/global.css`.** Geist for UI and
-  display, Geist Mono for data (`@fontsource-variable/geist*`; `brand/`
-  still draws the og image in Archivo and Plex), shadcn token names on a
-  near-white ground with one rust primary, the sidebar on `--sidebar`.
-  The look is open, not boxy: rounded pills for controls, tinted step
-  bars, soft panels. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
+- **The visual system lives in `styles/global.css`.** One token layer
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`,
+  `--status-*`, `--project-*`, `--avatar-*`, both themes) with the shadcn
+  names aliased onto it, so `components/ui/` follows unedited. Geist for UI,
+  Geist Mono only for data (`brand/` still draws the og image in Archivo and
+  Plex). The accent is for the primary button, focus rings, checked
+  controls and the logo only. Toolbar controls are 28px with one solid
+  border; radius steps by role (4 kbd, 6 controls and rows, 8 menus, 12
+  dialogs), and only avatars, dots and progress bars are round. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
   `.toolbar-filter`, `.data-table`, `.step-swatch` ...) are defined there;
   the two that dress registry primitives sit outside `@layer` so they beat
   the primitives' utilities. Nothing renders below 12px, labels are
   sentence case, and only floating layers cast a shadow.
-- **Step colours are tokens.** `--step-<key>`, `-ink` (text), `-wash`
-  (opaque canvas fill) and `-solid` (a badge fill under `--step-solid-fg`:
-  the ink in light, the colour itself in dark) in `styles/global.css` for
-  both palettes; the tables
-  in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
-  colour key needs tokens in both palettes, and its key is what persists
-  (`rose` renders orchid, clear of the andon red).
+- **A step's colour is information, not decoration.** It shows only on
+  the 14px status icon (whose shape carries the kind): no washes, solid
+  pills or tinted bands. `--step-<key>` in `styles/global.css` for both
+  palettes; the tables in `components/flowlines/kinds.jac` only name them
+  (`bg-step-sky`). A new colour key needs a token in both palettes, and its
+  key is what persists (`rose` renders orchid, clear of the andon red).
 - **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
   sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
   so far" from `ListLogEntries` with `task_id`); only the board passes `beside`

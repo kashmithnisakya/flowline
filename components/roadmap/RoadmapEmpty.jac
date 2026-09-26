@@ -25,7 +25,7 @@ def:pub RoadmapEmpty(
                     key="today"
                     variant="outline"
                     size="sm"
-                    className="h-8 rounded-full px-4"
+                    className="h-8 rounded-md px-4"
                     onClick={lambda { onToday(); }}
                 >
                     Back to this week
@@ -34,7 +34,7 @@ def:pub RoadmapEmpty(
                 <Button
                     key="link"
                     size="sm"
-                    className="h-8 rounded-full px-4"
+                    className="h-8 rounded-md px-4"
                     asChild={True}
                 >
                     <Link to={LINKS[action][0]}>{LINKS[action][1]}</Link>

@@ -32,9 +32,9 @@ def:pub TaskLine(
             onOpen={lambda { onOpen(task); }}
             onMoveKey={lambda { moveOpen = True; }}
             onDropBeside={onDropBeside}
-            className={"relative flex cursor-pointer flex-col gap-1 rounded-xl py-2.5 pr-11 pl-3 outline-none select-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring lg:grid lg:min-h-12 lg:items-center lg:gap-x-3 lg:py-1.5 lg:pr-3 "
+            className={"relative flex cursor-pointer flex-col gap-1 rounded-md py-2 pr-11 pl-2 outline-none select-none hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:-outline-offset-2 lg:grid lg:h-10 lg:items-center lg:gap-x-3 lg:py-0 lg:pr-2 "
                 + ROW_COLUMNS
-                + (" bg-accent" if selected else "")}
+                + (" bg-bg-selected" if selected else "")}
         >
             <TaskTitle task={task} dot={dot} alert={alertLine(task, today)}/>
             <TaskMetaLine task={task} today={today}/>
