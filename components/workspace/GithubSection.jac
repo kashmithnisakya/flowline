@@ -424,7 +424,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
     return
         <div className="flex w-full flex-col gap-5">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex min-h-8 flex-wrap items-center gap-x-6 gap-y-2">
                 <h1 className="page-title text-xl">GitHub</h1>
                 {if connected and not loading {
                     <div

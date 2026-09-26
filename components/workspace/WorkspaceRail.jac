@@ -41,7 +41,7 @@ def:pub WorkspaceRail(
         <nav
             ref={navRef}
             aria-label="Workspace sections"
-            className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:-mx-6 sm:px-6 md:sticky md:top-8 md:mx-0 md:flex-col md:gap-0.5 md:overflow-visible md:border-b-0 md:px-0 md:pb-0"
+            className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:-mx-6 sm:px-6 md:sticky md:top-6 md:mx-0 md:flex-col md:gap-0.5 md:overflow-visible md:border-b-0 md:px-0 md:pb-0"
         >
             <div
                 className="hidden min-h-8 truncate px-2 pt-0.5 pb-2.5 text-sm font-bold md:block"
