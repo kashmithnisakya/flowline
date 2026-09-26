@@ -114,7 +114,9 @@ glob BLANK_STEP: dict[str, str] = {
      HANDOFF_KINDS: list[str] = ["handoff", "blocked"],
      KIND_ORDER: list[str] = ["start", "active", "handoff", "blocked", "done"],
      # The step panel floats over the canvas at this width (22rem).
-     PANEL_W: float = 352.0;
+     PANEL_W: float = 352.0,
+     # How far past a frame edge a pan may carry the drawing's edge, in px.
+     PAN_MARGIN: float = 24.0;
 
 
 def:pub FlowLinePage -> JsxPage {
@@ -365,6 +367,9 @@ def:pub FlowLinePage -> JsxPage {
     def zoomActual -> None;
     def zoomTo(z: float, sx: float, sy: float) -> None;
     def applyPan(x: float, y: float) -> None;
+    def panAxis(
+        want: float, lo: float, hi: float, v0: float, v1: float, pinned: bool
+    ) -> float;
     def contentBox(z: float) -> list[float];
     def panRects(z: float) -> dict[str, list[float]];
     def drawnRects -> dict[str, list[float]];
