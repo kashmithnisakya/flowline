@@ -52,7 +52,7 @@ def:pub StepGroup(
         <section
             data-step={columnKey}
             aria-label={label}
-            className={"flex scroll-mt-6 flex-col gap-1.5 rounded-3xl transition-colors"
+            className={"group/step flex scroll-mt-20 flex-col gap-1 transition-colors"
                 + (" bg-accent/50" if dragOver else "")}
             onDragOver={lambda (e: DragEvent) {
                 e.preventDefault();
@@ -72,7 +72,7 @@ def:pub StepGroup(
                 onAdd={(lambda { onAdd(columnKey); }) if onAdd else None}
             />
             {if open {
-                <div key="rows" className="flex flex-col">
+                <div key="rows" className="flex flex-col divide-y divide-border/55">
                     {for t in tasks {
                         <TaskLine
                             key={t.id}
@@ -89,7 +89,7 @@ def:pub StepGroup(
                         />
                     }}
                     {if len(tasks) == 0 {
-                        <p key="empty" className="py-2 pl-11 text-[13px] text-subtle">
+                        <p key="empty" className="py-3 pl-8 text-[13px] text-subtle">
                             {empty}
                         </p>
                     }}

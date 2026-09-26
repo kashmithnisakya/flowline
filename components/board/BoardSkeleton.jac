@@ -37,7 +37,7 @@ def:pub BoardSkeleton -> JsxElement {
                     <div
                         className="flex h-14 items-center gap-3 rounded-2xl bg-muted/60 px-3"
                     >
-                        <Skeleton className="h-8 w-28 rounded-full"/>
+                        <Skeleton className="h-8 w-28 rounded-md"/>
                         <Skeleton className="h-3 w-4"/>
                     </div>
                     {for j in range(2 + (i % 2)) {

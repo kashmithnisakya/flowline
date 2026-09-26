@@ -17,14 +17,14 @@ def:pub NoFlowLine -> JsxElement {
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Button
-                        className="rounded-full"
+                        className="rounded-md"
                         onClick={lambda { navigate("/flowlines"); }}
                     >
                         Pick a template
                     </Button>
                     <Button
                         variant="ghost"
-                        className="rounded-full"
+                        className="rounded-md"
                         onClick={lambda { navigate("/flowlines"); }}
                     >
                         Draw the steps yourself

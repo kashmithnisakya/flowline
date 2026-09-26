@@ -18,7 +18,7 @@ def:pub ColumnHeads -> JsxElement {
     return
         <div
             aria-hidden="true"
-            className={"hidden items-center gap-x-3 px-3 text-xs text-subtle lg:grid "
+            className={"sticky top-14 z-30 hidden items-center gap-x-3 bg-bg-canvas px-2 py-1.5 text-[12px] font-medium text-text-tertiary lg:top-0 lg:grid "
                 + GROUP_COLUMNS}
         >
             {for (i, label) in enumerate(LABELS) {

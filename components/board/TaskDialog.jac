@@ -56,10 +56,10 @@ glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
      },
      # Property values read as text until hovered: ghost triggers and fields.
      GHOST_SELECT: str = "h-8 w-full min-w-0 justify-between border-transparent bg-transparent px-2 font-normal shadow-none hover:bg-accent data-[state=open]:bg-accent [&>svg:last-child]:opacity-0 hover:[&>svg:last-child]:opacity-100 data-[state=open]:[&>svg:last-child]:opacity-100",
-     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:border-border md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
+     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:bg-bg-hover md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
      # Targets whose letter keys belong to a select or menu, not the sheet.
      WIDGET_ROLES: str = "[role=combobox], [role=listbox], [role=menu], [role=option], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [data-slot=select-trigger]",
-     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-accent!";
+     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-bg-hover!";
 
 # One label/value row of the property list.
 def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
@@ -69,7 +69,7 @@ def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
                 + ("items-start" if top else "items-center")}
         >
             <dt
-                className={"text-[13px] text-muted-foreground "
+                className={"text-[13px] text-text-tertiary "
                     + ("pt-1.5" if top else "")}
             >
                 {label}
@@ -616,7 +616,7 @@ def:pub TaskDialog(
                 data-beside={"true" if besideNow else "false"}
                 aria-modal={"false" if besideNow else "true"}
                 showCloseButton={False}
-                className="gap-0 bg-card p-0 text-card-foreground outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[420px]"
+                className="gap-0 bg-bg-elevated p-0 text-text-primary outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[480px]"
                 style={{
                     "top": str(topPx) + "px",
                     "right": str(rightPx) + "px",
@@ -728,7 +728,7 @@ def:pub TaskDialog(
                                 data-task-title="true"
                                 aria-label="Title"
                                 placeholder="What needs doing?"
-                                className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[19px] leading-snug hover:border-border md:text-[19px]"
+                                className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[18px] leading-snug font-semibold hover:bg-bg-hover md:text-[18px]"
                                 style={{"fontWeight": 600}}
                                 value={form["title"]}
                                 onChange={lambda (e: ChangeEvent) { onField(
@@ -803,7 +803,7 @@ def:pub TaskDialog(
                             <PropRow label="Assignees" top={outsideSelected}>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger
-                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring data-[state=open]:bg-accent"
+                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[var(--focus-ring)] data-[state=open]:bg-bg-selected"
                                         aria-label="Assignees"
                                     >
                                         {if len(pickedNames) > 0 {
@@ -1053,7 +1053,7 @@ def:pub TaskDialog(
                                         <Input
                                             aria-label="Pull request link"
                                             className={GHOST_INPUT
-                                                + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                                + " min-w-0 flex-1 num text-xs md:text-xs"}
                                             placeholder="Paste a pull request link"
                                             value={form["pr"]}
                                             onChange={lambda (e: ChangeEvent) { onField(
@@ -1083,7 +1083,7 @@ def:pub TaskDialog(
                                     <Input
                                         aria-label="GitHub issue link"
                                         className={GHOST_INPUT
-                                            + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                            + " min-w-0 flex-1 num text-xs md:text-xs"}
                                         placeholder="Paste a GitHub issue link"
                                         value={form["issue"]}
                                         onChange={lambda (e: ChangeEvent) { onField(

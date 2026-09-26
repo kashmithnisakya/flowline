@@ -38,7 +38,7 @@ def:pub RoadmapSkeleton(fallback: int) -> JsxElement {
                     <div
                         className="relative flex h-9 items-center rounded-lg bg-muted px-2"
                     >
-                        <Skeleton className="h-6 w-28 rounded-full"/>
+                        <Skeleton className="h-6 w-28 rounded-md"/>
                     </div>
                     {for i in range(n) {
                         <div
@@ -55,7 +55,7 @@ def:pub RoadmapSkeleton(fallback: int) -> JsxElement {
                             </LabelCell>
                             <span className="relative h-full flex-1">
                                 <Skeleton
-                                    className="absolute top-1/2 h-4 -translate-y-1/2 rounded-full"
+                                    className="absolute top-1/2 h-4 -translate-y-1/2 rounded-md"
                                     style={{
                                         "left": PH_LEFT[(gi * 3 + i) % 8],
                                         "width": PH_BAR[(gi * 3 + i) % 8]

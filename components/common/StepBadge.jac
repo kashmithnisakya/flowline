@@ -1,68 +1,55 @@
-"""A step as a solid pill (its kind glyph and name on the step's solid fill)
-and the tinted bar a step group sits on. `color` is a key from
-flowlines/kinds COLOR_KEYS; an unknown key renders slate.
+"""A step as its kind glyph in the step's colour, plus its name in plain text.
+
+Colour is information here, not decoration. The glyph carries the step's
+colour at icon size and its shape carries the kind, so meaning never rides on
+colour alone. There is no pill, no solid fill and no tinted band: a step used
+to render as a solid rounded-full badge sitting on a washed bar, which made
+colour the loudest thing on the board and left every group looking urgent.
+
+`color` is a key from flowlines/kinds COLOR_KEYS; an unknown key renders slate.
 """
 
 import from .KindGlyph { KindGlyph }
 
-glob SOLID: dict[str, str] = {
-         "sky": "bg-step-sky-solid [--kind-knockout:var(--step-sky-solid)]",
-         "indigo": "bg-step-indigo-solid [--kind-knockout:var(--step-indigo-solid)]",
-         "amber": "bg-step-amber-solid [--kind-knockout:var(--step-amber-solid)]",
-         "rose": "bg-step-rose-solid [--kind-knockout:var(--step-rose-solid)]",
-         "emerald": "bg-step-emerald-solid [--kind-knockout:var(--step-emerald-solid)]",
-         "slate": "bg-step-slate-solid [--kind-knockout:var(--step-slate-solid)]"
-     },
-     WASH: dict[str, str] = {
-         "sky": "bg-step-sky-wash",
-         "indigo": "bg-step-indigo-wash",
-         "amber": "bg-step-amber-wash",
-         "rose": "bg-step-rose-wash",
-         "emerald": "bg-step-emerald-wash",
-         "slate": "bg-step-slate-wash"
-     },
-     INK: dict[str, str] = {
-         "sky": "text-step-sky-ink",
-         "indigo": "text-step-indigo-ink",
-         "amber": "text-step-amber-ink",
-         "rose": "text-step-rose-ink",
-         "emerald": "text-step-emerald-ink",
-         "slate": "text-step-slate-ink"
+glob ICON: dict[str, str] = {
+         "sky": "text-step-sky",
+         "indigo": "text-step-indigo",
+         "amber": "text-step-amber",
+         "rose": "text-step-rose",
+         "emerald": "text-step-emerald",
+         "slate": "text-step-slate"
      };
 
 def key(color: str) -> str {
-    return color if color in SOLID else "slate";
+    return color if color in ICON else "slate";
 }
 
-# The tint behind a step's group header or row band.
-def:pub stepWash(color: str) -> str {
-    return WASH[key(color)];
+
+# The step's colour, for its glyph and nothing larger.
+def:pub stepIcon(color: str) -> str {
+    return ICON[key(color)];
 }
 
-# The step's solid fill, under --step-solid-fg text.
-def:pub stepSolid(color: str) -> str {
-    return SOLID[key(color)];
+
+# A step's glyph on its own, at icon size, in the step's colour.
+def:pub StepIcon(
+    color: str = "slate", kind: str = "start", size: int = 14
+) -> JsxElement {
+    return <KindGlyph kind={kind or "start"} size={size} className={stepIcon(color)}/>;
 }
 
-# Text in the step's ink, for counts and hints on its wash.
-def:pub stepInk(color: str) -> str {
-    return INK[key(color)];
-}
 
 def:pub StepBadge(
     name: str, color: str = "slate", kind: str = "", size: str = "md"
 ) -> JsxElement {
-    tall = "h-8 px-3.5 text-[14px]" if size == "md" else "h-6 px-2.5 text-[12.5px]";
+    px = 14 if size == "md" else 12;
+    text = "text-[13px]" if size == "md" else "text-[12px]";
     return
         <span
-            className={"inline-flex max-w-full min-w-0 shrink-0 items-center gap-1.5 rounded-full font-semibold whitespace-nowrap text-step-solid-fg shadow-xs "
-                + tall
-                + " "
-                + SOLID[key(color)]}
+            className={"inline-flex max-w-full min-w-0 items-center gap-1.5 font-medium whitespace-nowrap "
+                + text}
         >
-            {if kind {
-                <KindGlyph key="glyph" kind={kind} size={13 if size == "md" else 11}/>
-            }}
+            <StepIcon color={color} kind={kind or "start"} size={px}/>
             <span className="truncate">{name}</span>
         </span>;
 }

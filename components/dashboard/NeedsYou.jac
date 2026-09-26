@@ -11,7 +11,7 @@ import from ..ui.skeleton { Skeleton }
 def Placeholder(rows: int) -> JsxElement {
     return
         <div>
-            <Skeleton className="h-6 w-24 rounded-full"/>
+            <Skeleton className="h-6 w-24 rounded-md"/>
             {for i in range(rows) {
                 <div key={str(i)} className="flex items-center gap-3 py-2">
                     <Skeleton className="size-8 shrink-0 rounded-full"/>

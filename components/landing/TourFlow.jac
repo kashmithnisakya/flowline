@@ -78,7 +78,7 @@ def:pub TourFlow -> JsxElement {
                     <path d="M368 171l4-7 4 7z"/>
                 </g>
                 <g
-                    className="font-mono text-xs"
+                    className="num text-xs"
                     style={{"fill": "var(--subtle)"}}
                     textAnchor="middle"
                 >

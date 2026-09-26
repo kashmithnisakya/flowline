@@ -1,12 +1,13 @@
-"""One sidebar page link: its icon and label, raised on a card fill when it
-is the current page."""
+"""One sidebar page link: its icon and label, on a selected fill when it is
+the current page. Nav sits a notch dimmer than the content, so nothing here
+is raised, ringed or accent coloured."""
 
 import from "@jac/runtime" { Link }
 import from ..common.CommandPalette { PageIcon }
 
-glob:pub ITEM: str = "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors ",
-     ITEM_ON: str = "bg-card font-medium text-foreground shadow-xs ring-1 ring-sidebar-border",
-     ITEM_OFF: str = "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground";
+glob:pub ITEM: str = "flex h-[30px] w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px] transition-colors ",
+     ITEM_ON: str = "bg-bg-selected font-medium text-text-primary",
+     ITEM_OFF: str = "text-text-secondary hover:bg-bg-hover hover:text-text-primary";
 
 # A page is current on its own path and below it; /github is Workspace.
 def:pub isCurrent(path: str, to: str) -> bool {
@@ -24,7 +25,7 @@ def:pub SidebarLink(page: dict[str, str], path: str) -> JsxElement {
             aria-current={"page" if on else None}
             className={ITEM + (ITEM_ON if on else ITEM_OFF)}
         >
-            <PageIcon name={page["key"]} size={18}/>
+            <PageIcon name={page["key"]} size={16}/>
             {page["label"]}
         </Link>;
 }

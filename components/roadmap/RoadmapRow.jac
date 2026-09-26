@@ -47,7 +47,7 @@ def:pub RoadmapRow(
                     {t.title}
                 </span>
                 <span
-                    className={"truncate font-mono text-xs leading-tight tabular-nums "
+                    className={"truncate num text-xs leading-tight "
                         + (
                             "font-medium text-destructive"
                                 if late

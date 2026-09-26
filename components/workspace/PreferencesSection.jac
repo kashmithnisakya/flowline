@@ -20,19 +20,19 @@ def ThemeSwatch(kind: str) -> JsxElement {
     if kind == "light" {
         return
             <span
-                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-black/15 bg-[#F2F3F1] p-1"
+                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-black/15 bg-bg-canvas p-1"
                 aria-hidden="true"
             >
-                <span className="h-1 w-3 rounded-full bg-[#BF3F0B]"/>
+                <span className="h-1 w-3 rounded-full bg-primary"/>
             </span>;
     }
     if kind == "dark" {
         return
             <span
-                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-white/20 bg-[#111413] p-1"
+                className="flex h-[18px] w-7 shrink-0 items-end gap-0.5 overflow-hidden rounded-xs border border-white/20 bg-bg-canvas p-1"
                 aria-hidden="true"
             >
-                <span className="h-1 w-3 rounded-full bg-[#F0702E]"/>
+                <span className="h-1 w-3 rounded-full bg-primary"/>
             </span>;
     }
     return
@@ -40,11 +40,11 @@ def ThemeSwatch(kind: str) -> JsxElement {
             className="flex h-[18px] w-7 shrink-0 overflow-hidden rounded-xs border border-black/15"
             aria-hidden="true"
         >
-            <span className="flex flex-1 items-end bg-[#F2F3F1] p-1">
-                <span className="h-1 w-2 rounded-full bg-[#BF3F0B]"/>
+            <span className="flex flex-1 items-end bg-bg-canvas p-1">
+                <span className="h-1 w-2 rounded-full bg-primary"/>
             </span>
-            <span className="flex flex-1 items-end bg-[#111413] p-1">
-                <span className="h-1 w-2 rounded-full bg-[#F0702E]"/>
+            <span className="flex flex-1 items-end bg-bg-canvas p-1">
+                <span className="h-1 w-2 rounded-full bg-primary"/>
             </span>
         </span>;
 }
