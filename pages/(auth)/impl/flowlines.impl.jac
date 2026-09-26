@@ -1002,9 +1002,9 @@ impl FlowLinePage.contentBox(z: float) -> list[float] {
 }
 
 impl FlowLinePage.applyPan(x: float, y: float) -> None {
-    # Keep a strip of the drawing's box inside the viewport on both axes, then
-    # make sure part of a step is in it too: a box can be in view while every
-    # step sits beyond one of its corners.
+    # Pan only as far as there is drawing to see. On an axis where the whole
+    # drawing fits, it stays where the fit puts it (centred, or the lanes at
+    # their origin); where it overflows, its far edges stop at the frame.
     view: any = viewportRef.current;
     nx = x;
     ny = y;
@@ -1012,64 +1012,64 @@ impl FlowLinePage.applyPan(x: float, y: float) -> None {
         z = float(zoomRef.current) if zoomRef.current else zoom;
         lanes = lineView == "lanes" and not editing;
         box = contentBox(z);
-        w = float(view.clientWidth);
-        h = float(view.clientHeight);
+        # Label chips hang past the outer nodes; the last render measured by
+        # how much, as the fit does.
+        laid: any = layoutRef.current;
+        mL = 0.0;
+        mT = 0.0;
+        mR = 0.0;
+        mB = 0.0;
+        if laid {
+            nb: list[float] = laid["nodes"];
+            eb: list[float] = laid["extent"];
+            mL = nb[0] - eb[0];
+            mT = nb[1] - eb[1];
+            mR = eb[2] - nb[2];
+            mB = eb[3] - nb[3];
+        }
         vx0 = laneLabelW() if lanes else 0.0;
-        keep = 72.0;
-        loX = vx0 + keep - box[2];
-        hiX = w - keep - box[0];
-        loY = keep - box[3];
-        hiY = h - keep - box[1];
-        if nx < loX {
-            nx = loX;
+        # The lanes start at the label gutter, where the fit leaves them.
+        left = box[0] - mL;
+        if lanes and left > vx0 {
+            left = vx0;
         }
-        if nx > hiX {
-            nx = hiX;
-        }
-        if ny < loY {
-            ny = loY;
-        }
-        if ny > hiY {
-            ny = hiY;
-        }
-        rects = panRects(z);
-        bestDx = 0.0;
-        bestDy = 0.0;
-        bestCost = -1.0;
-        for s in steps {
-            if s.id not in rects {
-                continue;
-            }
-            r = rects[s.id];
-            kx = 72.0 if r[2] > 72.0 else r[2];
-            ky = 48.0 if r[3] > 48.0 else r[3];
-            dx = 0.0;
-            dy = 0.0;
-            if r[0] + r[2] + nx < vx0 + kx {
-                dx = vx0 + kx - (r[0] + r[2] + nx);
-            } elif r[0] + nx > w - kx {
-                dx = w - kx - (r[0] + nx);
-            }
-            if r[1] + r[3] + ny < ky {
-                dy = ky - (r[1] + r[3] + ny);
-            } elif r[1] + ny > h - ky {
-                dy = h - ky - (r[1] + ny);
-            }
-            cost = abs(dx) + abs(dy);
-            if bestCost < 0.0 or cost < bestCost {
-                bestCost = cost;
-                bestDx = dx;
-                bestDy = dy;
-            }
-        }
-        if bestCost > 0.0 {
-            nx = nx + bestDx;
-            ny = ny + bestDy;
-        }
+        nx = panAxis(nx, left, box[2] + mR, vx0, float(view.clientWidth), lanes);
+        ny = panAxis(
+            ny,
+            box[1] if lanes else box[1] - mT,
+            box[3] if lanes else box[3] + mB,
+            0.0,
+            float(view.clientHeight),
+            lanes
+        );
     }
     panRef.current = [nx, ny];
     panX = nx;
     panY = ny;
+}
+
+impl FlowLinePage.panAxis(
+    want: float, lo: float, hi: float, v0: float, v1: float, pinned: bool
+) -> float {
+    # One axis of applyPan: the drawing spans lo..hi before panning and the
+    # frame v0..v1. A drawing that fits is centred, or held at the origin
+    # when `pinned` (lanes, whose bands are their own edge, so no margin);
+    # a larger one keeps both of its edges at or past the frame's.
+    gap = 0.0 if pinned else PAN_MARGIN;
+    span = hi - lo;
+    room = v1 - v0;
+    if span + 2.0 * gap <= room + 0.5 {
+        return 0.0 if pinned else v0 + (room - span) / 2.0 - lo;
+    }
+    least = v1 - gap - hi;
+    most = v0 + gap - lo;
+    if want < least {
+        return least;
+    }
+    if want > most {
+        return most;
+    }
+    return want;
 }
 
 impl FlowLinePage.zoomTo(z: float, sx: float, sy: float) -> None {
@@ -1152,11 +1152,17 @@ impl FlowLinePage.measureBox -> None {
     # these two, so an unconditional write would never settle.
     w = float(view.clientWidth);
     h = float(view.clientHeight);
+    resized = w != boxW or h != boxH;
     if w != boxW {
         boxW = w;
     }
     if h != boxH {
         boxH = h;
+    }
+    # A new frame size moves the bounds: keep the pan inside them.
+    if resized and fittedRef.current {
+        panNow: list[float] = panRef.current or [panX, panY];
+        applyPan(panNow[0], panNow[1]);
     }
 }
 
