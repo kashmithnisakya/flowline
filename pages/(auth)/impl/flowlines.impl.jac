@@ -1028,12 +1028,17 @@ impl FlowLinePage.applyPan(x: float, y: float) -> None {
             mB = eb[3] - nb[3];
         }
         vx0 = laneLabelW() if lanes else 0.0;
-        # The lanes start at the label gutter, where the fit leaves them.
+        # The lanes start at the label gutter, where the fit leaves them, and
+        # keep PAN_MARGIN past their last card so it never meets the frame.
         left = box[0] - mL;
+        right = box[2] + mR;
         if lanes and left > vx0 {
             left = vx0;
         }
-        nx = panAxis(nx, left, box[2] + mR, vx0, float(view.clientWidth), lanes);
+        if lanes {
+            right = right + PAN_MARGIN;
+        }
+        nx = panAxis(nx, left, right, vx0, float(view.clientWidth), lanes);
         ny = panAxis(
             ny,
             box[1] if lanes else box[1] - mT,
