@@ -137,24 +137,28 @@ Draws the transition `from_id` to `to_id`, or redraws an existing one.
   **empty label or carries keeps** the old value.
 - `carries` other than `issue` or `pr` is stored as empty.
 - `trigger` is one of `TRANSITION_TRIGGERS` (`label`, `pr_merged`,
-  `changes_requested`) or empty; `trigger_label` is kept only for `label`.
+  `changes_requested`) or empty. `github_label` is the arrow's GitHub label
+  (at most 50 characters) whatever the trigger: a `label` trigger waits for
+  it, and a repo with label sync writes it when a task crosses the arrow.
 
 ::: walker LabelTransition h3
 
-Sets or clears the label, the carries tag and the trigger on an existing
-transition. Unlike `LinkTransition`, **empty clears**.
+Sets or clears the label, the carries tag, the trigger and the GitHub label
+on an existing transition. Unlike `LinkTransition`, **empty clears**.
+`keep_label` leaves the GitHub label on once the task moves past the step the
+arrow leads into (the Software team template keeps `validated`).
 
 **Reports** `{"ok": true, "label": "...", "carries": "...", "trigger": "...",
-"trigger_label": "..."}`, or `{"ok": false, "error": "not_found"}` when either
+"github_label": "...", "keep_label": <bool>}`, or `{"ok": false, "error": "not_found"}` when either
 end is foreign or there is no such transition, or `{"ok": false, "error":
-"match_required", ...}` for a `label` trigger with no `trigger_label`.
+"match_required", ...}` for a `label` trigger with no `github_label`.
 
 A trigger moves a task across the arrow without a person, from the step the
 arrow leaves, when the GitHub sync or a webhook drain sees the fact:
 
 | Trigger | Fires when |
 | --- | --- |
-| `label` | `trigger_label` is newly added to the task's issue or its linked PR (case-insensitive) |
+| `label` | `github_label` is newly added to the task's issue or its linked PR (case-insensitive) |
 | `pr_merged` | The linked PR merges |
 | `changes_requested` | A review on the linked PR requests changes (webhook deliveries only) |
 

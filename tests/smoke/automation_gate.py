@@ -60,6 +60,8 @@ def main() -> int:
     status, _ = req(wg.STUB, "POST", "/_stub/reset", {"installations": [INST], "repos": {REPO: [
         issue(10, "2026-09-02T10:00:00Z", title="Plain issue"),
         issue(11, "2026-09-02T11:00:00Z", labels=["validated"], title="Labelled issue"),
+        issue(12, "2026-09-02T12:00:00Z", title="Moved by hand"),
+        issue(13, "2026-09-02T13:00:00Z", title="Moved by a label"),
     ]}}, auth=False)
     if not check("github stub reachable", status == 200, status):
         return 2
@@ -80,11 +82,12 @@ def main() -> int:
     def trig(a, b):
         s = by[a]
         i = s["next_ids"].index(by[b]["id"])
-        return (s["next_triggers"][i], s["next_trigger_labels"][i])
+        return (s["next_triggers"][i], s["next_github_labels"][i])
     check("  label, merge and review triggers on the right arrows",
           trig("Incoming", "Ready") == ("label", "validated")
           and trig("Building", "In review") == ("label", "ready-to-review")
-          and trig("In review", "Building") == ("changes_requested", "")
+          and trig("In review", "Building") == ("changes_requested", "changes-requested")
+          and trig("Building", "Design") == ("", "needs-design")
           and trig("In review", "Final check") == ("pr_merged", "")
           and trig("Final check", "Done") == ("", ""), [trig("Incoming", "Ready")])
 
@@ -93,7 +96,7 @@ def main() -> int:
     walker("SetRepoAutoSync", {"repo_id": rid, "enabled": True})
     walker("SetRepoAutoDone", {"repo_id": rid, "enabled": True})
     s = walker("SyncGithub")
-    check("poll files both issues", s.get("auto_added") == 2, s)
+    check("poll files all four issues", s.get("auto_added") == 4, s)
     t10, t11 = task(10), task(11)
     check("  they land on Incoming", t10.get("step_id") == by["Incoming"]["id"], t10.get("step_id"))
     check("  a validated label with no due date stays, and the log says why",
@@ -144,13 +147,62 @@ def main() -> int:
     moved = walker("MoveTask", {"task_id": t["id"], "step_id": by["Done"]["id"]})
     check("oversight marks it Done by hand", moved.get("status") == "Done", moved)
 
+    # --------------------------------------------------- label write-back
+    def labels(n):
+        state = json.loads(req(wg.STUB, "GET", "/_stub/state", auth=False)[1])
+        return state["labels"].get(f"{REPO}#{n}", [])
+
+    def label_calls():
+        state = json.loads(req(wg.STUB, "GET", "/_stub/state", auth=False)[1])
+        return [c for c in state["calls"] if "/labels" in c[1]]
+
+    t12, t13 = task(12), task(13)
+    update(t12, due_date="2026-10-03")
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Ready"]["id"]})
+    check("with label sync off, a move writes no label", labels(12) == [] and not label_calls(), label_calls())
+    r = walker("SetRepoLabelSync", {"repo_id": rid, "enabled": True})
+    made = [c[1] for c in label_calls() if c[0] == "POST" and c[1] == f"/repos/{REPO}/labels"]
+    check("turning label sync on creates the flow line's four labels", r.get("ok") and r.get("labels") == 4 and len(made) == 4, (r, made))
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Incoming"]["id"]})
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Ready"]["id"]})
+    check("a move into Ready adds validated to the issue", labels(12) == ["validated"], labels(12))
+    check("  and the log line says so",
+          any(r.get("activity") == "Moved to Ready · labelled validated on GitHub" for r in wg.log_rows()),
+          [r.get("activity") for r in wg.log_rows() if "Ready" in r.get("activity", "")])
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Building"]["id"]})
+    check("  moving on keeps validated (the arrow keeps it)", labels(12) == ["validated"], labels(12))
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Design"]["id"]})
+    check("a move into Design adds needs-design", labels(12) == ["validated", "needs-design"], labels(12))
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Building"]["id"]})
+    check("  back to Building takes needs-design off", labels(12) == ["validated"], labels(12))
+    push("pull_request", envelope("opened", pull_request=pull(30, iso(20), body="Closes #12")))
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["In review"]["id"]})
+    check("a move into In review adds ready-to-review to the PR, not the issue",
+          labels(30) == ["ready-to-review"] and labels(12) == ["validated"], (labels(30), labels(12)))
+    push("pull_request_review", envelope("submitted", review={"state": "changes_requested", "submitted_at": iso(21)},
+                                         pull_request=pull(30, iso(21))))
+    check("a review asking for changes swaps ready-to-review for changes-requested",
+          task(12).get("step_id") == by["Building"]["id"] and labels(30) == ["changes-requested"], (task(12).get("step_id"), labels(30)))
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["In review"]["id"]})
+    check("  back in review, the swap reverses", labels(30) == ["ready-to-review"], labels(30))
+    update(t13, due_date="2026-10-04")
+    before = len(label_calls())
+    push("issues", envelope("labeled", issue=issue(13, iso(22), labels=["validated"])))
+    check("a move the validated label made writes nothing back",
+          task(13).get("step_id") == by["Ready"]["id"] and len(label_calls()) == before, label_calls()[before:])
+    walker("SetRepoLabelSync", {"repo_id": rid, "enabled": False})
+    before = len(label_calls())
+    walker("MoveTask", {"task_id": t12["id"], "step_id": by["Building"]["id"]})
+    check("turned off again, moves stop writing", len(label_calls()) == before and labels(30) == ["ready-to-review"], label_calls()[before:])
+
     # ------------------------------------------------------ editing triggers
     r = walker("LabelTransition", {"from_id": by["Building"]["id"], "to_id": by["In review"]["id"],
-                                   "label": "ready", "carries": "pr", "trigger": "label", "trigger_label": ""})
+                                   "label": "ready", "carries": "pr", "trigger": "label", "github_label": ""})
     check("a label trigger without a label is refused", r.get("error") == "match_required", r)
     r = walker("LabelTransition", {"from_id": by["Building"]["id"], "to_id": by["In review"]["id"],
-                                   "label": "ready", "carries": "pr", "trigger": "bogus", "trigger_label": "x"})
-    check("  an unknown trigger is stored as none", r.get("ok") and r.get("trigger") == "" and r.get("trigger_label") == "", r)
+                                   "label": "ready", "carries": "pr", "trigger": "bogus", "github_label": "x"})
+    check("  an unknown trigger is stored as none, the arrow keeps its label",
+          r.get("ok") and r.get("trigger") == "" and r.get("github_label") == "x", r)
     r = walker("SetStepRules", {"step_id": by["Ready"]["id"], "needs_due_date": False, "needs_pr": True})
     check("SetStepRules writes both rules", r.get("needs_due_date") is False and r.get("needs_pr") is True, r)
 

@@ -148,7 +148,7 @@ def:pub FlowLinePage -> JsxPage {
         connectFrom: str = "",
         selectedEdge: str = "",
         # The selected transition's draft (label, carries, trigger,
-        # trigger_label), re-seeded from the edge on every selection.
+        # github_label), re-seeded from the edge on every selection.
         edgeForm: dict[str, str] = {},
         form: dict[str, str] = BLANK_STEP,
         saving: bool = False,

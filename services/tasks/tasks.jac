@@ -90,7 +90,7 @@ import from services.tasks.history {
 }
 import from jaclang.lib.jaclib { QPred }
 import from services.log.log { record_task_event, sync_task_links }
-import from services.github.util { sync_issue_state }
+import from services.github.util { sync_issue_state, sync_step_labels }
 import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 
@@ -137,9 +137,12 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
 }
 
 # What a move onto a step does beyond the step: the step's owner takes the
-# task (`handed`, from handoff_target), and a move across Done writes back
-# to GitHub. Returns the log line's tail, "" when neither applied.
-def landing_tail(holder: Root, t: Task, handed: list[Member], was: str) -> str {
+# task (`handed`, from handoff_target), a move across Done writes the issue
+# state back, and the arrow crossed writes its GitHub labels (not `moved_by`,
+# the label that moved it). Returns the log line's tail, "" when none applied.
+def landing_tail(
+    holder: Root, t: Task, handed: list[Member], was: str, from_step: str, moved_by: str
+) -> str {
     tail = "";
     if handed {
         target = handed[0];
@@ -155,6 +158,10 @@ def landing_tail(holder: Root, t: Task, handed: list[Member], was: str) -> str {
             tail = tail + " · " + wrote;
         }
     }
+    labelled = sync_step_labels(holder, t, from_step, t.step_id, moved_by);
+    if labelled {
+        tail = tail + " · " + labelled;
+    }
     return tail;
 }
 
@@ -167,7 +174,8 @@ def land_on_step(
     step: WorkflowStep,
     why: str,
     stamp: str,
-    peaks: dict[str, float]
+    peaks: dict[str, float],
+    moved_by: str
 ) {
     sid = jid(step);
     if sid not in peaks {
@@ -177,13 +185,14 @@ def land_on_step(
     peaks[sid] = peaks[sid] + 1024.0;
     handed = handoff_target(holder, t, step);
     was = t.status;
+    from_step = t.step_id;
     t.step_id = sid;
     t.set_status(
         KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress", stamp
     );
     t.sort_order = peaks[sid];
     t.updated_at = stamp;
-    tail = landing_tail(holder, t, handed, was);
+    tail = landing_tail(holder, t, handed, was, from_step, moved_by);
     record_task_event(holder, t, "Moved to " + step.name + " · " + why + tail, stamp);
 }
 
@@ -210,7 +219,7 @@ def follow_trigger(
             continue;
         }
         if trigger == "label"
-            and tr.get("trigger_label", "").strip().lower() not in fresh {
+            and tr.get("github_label", "").strip().lower() not in fresh {
             continue;
         }
         target = resolve(tr["to"]);
@@ -224,7 +233,15 @@ def follow_trigger(
             );
             return False;
         }
-        land_on_step(holder, t, target, why, stamp, peaks);
+        land_on_step(
+            holder,
+            t,
+            target,
+            why,
+            stamp,
+            peaks,
+            tr.get("github_label", "") if trigger == "label" else ""
+        );
         return True;
     }
     return False;
@@ -1135,6 +1152,10 @@ walker UpdateTask(find_task) {
                     line = line + " · " + wrote;
                 }
             }
+            labelled = sync_step_labels(holder, here, was_step, here.step_id, "");
+            if labelled {
+                line = line + " · " + labelled;
+            }
             record_task_event(holder, here, line, here.updated_at);
         }
         view = here.to_view();
@@ -1352,7 +1373,6 @@ walker MoveTask(find_task) {
     legacy status-only move."""
     has status: str = "",
         step_id: str = "",
-        step_name: str = "",
         before_id: str = "",
         after_id: str = "",
         reports: list[TaskView] = [];
@@ -1397,7 +1417,9 @@ walker MoveTask(find_task) {
                 }
             }
             here.step_id = self.step_id;
-            label = self.step_name or mapped;
+            # The log names the step itself; status_for_step checked it.
+            landed = resolve(self.step_id);
+            label = landed.name if isinstance(landed, WorkflowStep) else mapped;
         } else {
             reorder = positioned and not here.step_id and landing == here.status;
             # A status-only move (the assistant, a merged PR, an org with no
@@ -1415,7 +1437,7 @@ walker MoveTask(find_task) {
         # A hand-off replaces the assignees: the card changes hands, it does
         # not gain a hand. The tail names who it went to and any write-back
         # a move across Done made, on the move's own log line.
-        tail = landing_tail(holder, here, handed, was);
+        tail = landing_tail(holder, here, handed, was, was_step, "");
         if landing != was or tail or here.step_id != was_step {
             record_task_event(
                 holder, here, "Moved to " + label + tail, here.updated_at

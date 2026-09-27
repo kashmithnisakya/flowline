@@ -79,7 +79,8 @@ people it tracks are roster members.
   `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
   its member).
   There is no edge between steps: a step keeps its outgoing transitions in
-  its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
+  its own `transitions` field (`{to, label, carries, trigger, github_label,
+  keep_label}`), so `DeleteStep`
   strips the removed step's id from every other step's list, and
   `step_view(s, steps)` reads incoming ids off the whole flow line and
   drops a transition to a step that is gone. **A task's project is its
@@ -354,7 +355,7 @@ stamped with the sync time.
 it: `MoveTask` / `UpdateTask` keep the step and report `TaskView.refused`,
 `CreateTask` creates nothing, and the pages check first with
 `moveRefusal` (`components/flowlines/kinds.jac`). A transition's `trigger`
-(`TRANSITION_TRIGGERS`: `label` with its `trigger_label`, `pr_merged`,
+(`TRANSITION_TRIGGERS`: `label` with its `github_label`, `pr_merged`,
 `changes_requested`) moves a task out of the step it leaves when the sync or
 a drain sees the fact: `follow_trigger` / `land_on_step` in
 `services/tasks/tasks.jac` (a drag's landing, hand-off and log line), called
@@ -433,15 +434,20 @@ in the tenant's session (from `DrainGithubEvents` or the start of
 binds that installation to this root (the workspace that last connected it),
 drops items older than the task's last applied `updated_at`, stamps the log
 with the event's own time, and applies through the helpers the poll uses.
-Neither side calls GitHub. The one write-back is the issue's state for a repo
-with `auto_close`: a move that crosses Done closes the issue (landing) or
-reopens it (leaving). It runs inside `MoveTask` / `UpdateTask` through
-`sync_issue_state` in `services/github/util.jac` (not in
-`services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
-it back); it rides on the move's own log line, and the receiver drops the
-App's echo by sender login so neither is applied a second time. An issue
-reopened on GitHub does not move its task; titles, assignees and labels are
-never written back.
+Neither side calls GitHub. Two write-backs ride on moves, both through
+`services/github/util.jac` (not `services/github/github.jac`: that module
+imports `tasks`, so `tasks` cannot import it back) and both per repo, off by
+default. `sync_issue_state` (`auto_close`): a move that crosses Done closes
+the issue (landing) or reopens it (leaving). `sync_step_labels`
+(`label_sync`): crossing an arrow with a `github_label` adds it (to the PR
+when the arrow carries one and a PR is linked), leaving a step takes the
+labels of arrows into it off unless `keep_label`, and the task's
+`gh_labels` / `pr_labels` move with each write so the next poll does not read
+it as new. Both run in `MoveTask`, `UpdateTask` and the trigger moves
+(`landing_tail`), ride on the move's own log line, and never block it; the
+receiver drops the App's echo by sender login. An issue reopened on GitHub
+does not move its task, a label removed there moves nothing, and titles and
+assignees are never written back.
 
 **No walker a page load calls reaches GitHub.** The poll is
 `sync_connected_workspaces` in `services/github/schedule.jac`, a plain `def`

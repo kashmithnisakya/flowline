@@ -173,7 +173,7 @@ They hold for every move onto the step: a board drag, a sheet save, a new
 task and a GitHub trigger. The page stops the move before sending it and the
 server refuses it too (`refused` on the reported task view).
 
-**Triggers** on a transition (`trigger`, `trigger_label`) move a task across
+**Triggers** on a transition (`trigger`, `github_label`) move a task across
 the arrow when the GitHub sync or a webhook drain sees the fact, only from
 the step the arrow leaves:
 
@@ -189,6 +189,23 @@ and the log reads `Moved to <step> · <why>`. When the target's entry rule
 turns it away the task stays and the log reads `Stayed on <step> · <reason>`.
 A PR is linked to its task when its body closes the issue (`Closes #12`,
 `fixes org/repo#12`); see [GitHub sync](github-sync.md).
+
+**GitHub labels** on a transition work the other way too. For a repo with
+label sync on, a move across an arrow that names a label adds it on GitHub,
+by hand or by a trigger (except the label that moved it), to the linked PR
+when the arrow carries a PR and to the issue otherwise. Leaving a step takes
+off the labels of the arrows into it unless the arrow keeps them. In the
+Software team template:
+
+| Arrow | Label | Where | Taken off when |
+| --- | --- | --- | --- |
+| Incoming → Ready | `validated` | issue | never (kept) |
+| Building → Design | `needs-design` | issue | the task goes back to Building |
+| Building → In review | `ready-to-review` | PR | the task goes back to Building, or merges |
+| In review → Building | `changes-requested` | PR | the task goes back to In review |
+
+The log line names each write (`Moved to Ready · labelled validated on
+GitHub`), and a GitHub error never blocks the move.
 
 ??? example "The templates as declared in `constants.jac`"
 

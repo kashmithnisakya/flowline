@@ -23,7 +23,7 @@ import from .EdgeEditor { EdgeEditor }
 import from .StepNode { StepNode }
 import from ..ui.button { Button }
 
-glob EDGE_EDITOR_H: float = 310.0,
+glob EDGE_EDITOR_H: float = 370.0,
      CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
      NAME_FONT: str = "600 12.5px 'Geist Variable', Arial, sans-serif",
      META_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
@@ -109,7 +109,8 @@ def edgeFields(l: dict[str, any]) -> dict[str, str] {
         "label": str(l["label"]),
         "carries": str(l["carries"]),
         "trigger": str(l["trigger"]),
-        "trigger_label": str(l["trigger_label"])
+        "github_label": str(l["github_label"]),
+        "keep_label": "yes" if l["keep_label"] else ""
     };
 }
 
@@ -120,7 +121,7 @@ def:pub FlowCanvas(
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
-    # The selected transition's draft: label, carries, trigger, trigger_label.
+    # The selected transition's draft: label, carries, trigger, github_label.
     edgeForm: dict[str, str] = {},
     zoom: float = 1.0,
     panX: float = 0.0,
@@ -301,9 +302,12 @@ def:pub FlowCanvas(
                         "trigger": s.next_triggers[i]
                             if i < len(s.next_triggers)
                             else "",
-                        "trigger_label": s.next_trigger_labels[i]
-                            if i < len(s.next_trigger_labels)
-                            else ""
+                        "github_label": s.next_github_labels[i]
+                            if i < len(s.next_github_labels)
+                            else "",
+                        "keep_label": s.next_keep_labels[i]
+                            if i < len(s.next_keep_labels)
+                            else False
                     }
                 );
             }
@@ -321,7 +325,7 @@ def:pub FlowCanvas(
         text = tag + (" · " if tag and said else "") + said + auto;
         l["tag"] = tag;
         l["auto"] = auto;
-        l["note"] = triggerNote(str(l["trigger"]), str(l["trigger_label"]));
+        l["note"] = triggerNote(str(l["trigger"]), str(l["github_label"]));
         l["text"] = text if showChips and selectedEdge != l["key"] else "";
         l["cw"] = textWidth(text, CHIP_FONT, 6.2) + CHIP_PAD_X * 2.0 + 1.0
             if text

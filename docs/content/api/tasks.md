@@ -185,9 +185,9 @@ key. The server decides where the task lands.
 **Reports** the moved [`TaskView`](types.md#taskview).
 **No-op when** `step_id` is set but is not an owned step.
 
-- With `step_id`, the task moves onto that step and gets its mapped status;
-  `step_name` is only the label written to the log. Without it, a legacy
-  status-only move clears the task's step.
+- With `step_id`, the task moves onto that step and gets its mapped status,
+  and the log names the step. Without it, a legacy status-only move clears
+  the task's step.
 - `before_id` or `after_id` places the task beside that task in the target
   step; a stale anchor appends to the end.
 - A positioned drop in the task's **own** step is a pure reorder: no status
@@ -201,8 +201,7 @@ key. The server decides where the task lands.
 ```bash
 curl -X POST $BASE/walker/MoveTask -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"task_id": "<task-id>", "step_id": "<review-step-id>", "step_name": "Review & merge",
-       "before_id": "<anchor-task-id>"}'
+  -d '{"task_id": "<task-id>", "step_id": "<review-step-id>", "before_id": "<anchor-task-id>"}'
 ```
 
 ::: walker SetMoveInfo h3

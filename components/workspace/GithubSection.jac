@@ -27,6 +27,7 @@ import from ...services.github.github {
     SetRepoAutoSync,
     SetRepoAutoDone,
     SetRepoAutoClose,
+    SetRepoLabelSync,
     SyncGithub
 }
 import from ...services.roster.roster { ListRepos, AddRepo }
@@ -231,6 +232,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def toggleAutoDone(rid: str, enabled: bool) -> None;
     async def toggleAutoClose(rid: str, enabled: bool) -> None;
+    async def toggleLabelSync(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool, refresh: bool) -> None;
     async def loadPulls(reset: bool, refresh: bool) -> None;
     async def refreshList -> None;
@@ -590,6 +592,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 r.id, v
                                             ); }}
                                             onClose={lambda (v: bool) { toggleAutoClose(
+                                                r.id, v
+                                            ); }}
+                                            onLabels={lambda (v: bool) { toggleLabelSync(
                                                 r.id, v
                                             ); }}
                                         />

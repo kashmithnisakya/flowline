@@ -1021,11 +1021,7 @@ impl BoardPage.moveTo(
         afterId = anchorId if positioned and not ahead else "";
         if onFlowLine {
             result = root spawn MoveTask(
-                task_id=taskId,
-                step_id=columnKey,
-                step_name=label,
-                before_id=beforeId,
-                after_id=afterId
+                task_id=taskId, step_id=columnKey, before_id=beforeId, after_id=afterId
             );
         } else {
             result = root spawn MoveTask(

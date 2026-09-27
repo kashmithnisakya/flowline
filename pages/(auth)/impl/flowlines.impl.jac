@@ -733,7 +733,8 @@ impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> 
             label=fields["label"] or "",
             carries=fields["carries"] or "",
             trigger=fields["trigger"] or "",
-            trigger_label=fields["trigger_label"] or ""
+            github_label=fields["github_label"] or "",
+            keep_label=fields["keep_label"] == "yes"
         );
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
@@ -746,6 +747,7 @@ impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> 
                     if not payload["label"]
                         and not payload["carries"]
                         and not payload["trigger"]
+                        and not payload["github_label"]
                     else "Transition saved"
             );
         } elif payload and payload["message"] {
