@@ -145,7 +145,10 @@ node Repo {
         auto_done: bool = False,
         # The reverse direction: a card landing on Done closes its issue,
         # and one leaving Done reopens it.
-        auto_close: bool = False;
+        auto_close: bool = False,
+        # A move across an arrow with a GitHub label adds that label to the
+        # issue or its PR, and leaving the step takes the ones not kept off.
+        label_sync: bool = False;
 }
 
 node Task {
@@ -464,7 +467,9 @@ node WorkflowStep {
         # Outgoing transitions in draw order, one per target step:
         # {"to": step jid, "label": what has to be true to cross, "carries":
         # "issue" | "pr" | "", "trigger": a TRANSITION_TRIGGERS value,
-        # "trigger_label": the label a "label" trigger waits for}. Self-loops are refused.
+        # "github_label": the arrow's GitHub label (a "label" trigger waits
+        # for it; crossing the arrow writes it for a label_sync repo),
+        # "keep_label": "yes" to leave it on after the task moves on}.
         transitions: list[dict[str, str]] = [],
         # Entry rules: no task lands here, by hand or by a trigger, without
         # a due date or a linked PR.
@@ -699,7 +704,8 @@ obj RepoView {
         project_name: str,
         auto_sync: bool = False,
         auto_done: bool = False,
-        auto_close: bool = False;
+        auto_close: bool = False,
+        label_sync: bool = False;
 }
 
 obj RoleView {
@@ -746,7 +752,8 @@ obj StepView {
         next_labels: list[str] = [],
         next_carries: list[str] = [],
         next_triggers: list[str] = [],
-        next_trigger_labels: list[str] = [],
+        next_github_labels: list[str] = [],
+        next_keep_labels: list[bool] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0,
@@ -814,7 +821,8 @@ def repo_view(r: Repo) -> RepoView {
         project_name=project_name,
         auto_sync=r.auto_sync,
         auto_done=r.auto_done,
-        auto_close=r.auto_close
+        auto_close=r.auto_close,
+        label_sync=r.label_sync
     );
 }
 
@@ -1859,14 +1867,16 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
     next_labels: list[str] = [];
     next_carries: list[str] = [];
     next_triggers: list[str] = [];
-    next_trigger_labels: list[str] = [];
+    next_github_labels: list[str] = [];
+    next_keep_labels: list[bool] = [];
     for t in s.transitions {
         if t["to"] in known {
             next_ids.append(t["to"]);
             next_labels.append(t["label"]);
             next_carries.append(t["carries"]);
             next_triggers.append(t.get("trigger", ""));
-            next_trigger_labels.append(t.get("trigger_label", ""));
+            next_github_labels.append(t.get("github_label", ""));
+            next_keep_labels.append(t.get("keep_label", "") == "yes");
         }
     }
     return StepView(
@@ -1886,7 +1896,8 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
         next_labels=next_labels,
         next_carries=next_carries,
         next_triggers=next_triggers,
-        next_trigger_labels=next_trigger_labels
+        next_github_labels=next_github_labels,
+        next_keep_labels=next_keep_labels
     );
 }
 

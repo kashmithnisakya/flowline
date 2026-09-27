@@ -10,9 +10,9 @@ import sys
 import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-STATE = {"installations": [], "repos": {}, "next_number": 1000, "calls": []}
+STATE = {"installations": [], "repos": {}, "next_number": 1000, "calls": [], "labels": {}}
 LOCK = threading.Lock()
 
 
@@ -118,6 +118,7 @@ class Handler(BaseHTTPRequestHandler):
                     STATE["repos"][repo] = {int(i["number"]): i for i in items}
                 STATE["next_number"] = 1000
                 STATE["calls"] = []
+                STATE["labels"] = {}
                 return self._send(200, {"ok": True})
             if url.path == "/login/oauth/access_token":
                 return self._send(200, {"access_token": "stub-user-token", "token_type": "bearer"})
@@ -125,6 +126,23 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 return self._send(201, {"token": f"stub-install-token-{m.group(1)}",
                                         "expires_at": "2099-01-01T00:00:00Z"})
+            # Labels on an issue or a PR (GitHub numbers both as issues); the
+            # stub keeps them per repo and number, so a gate reads the result.
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)/labels", url.path)
+            if m:
+                key = f"{m.group(1)}#{m.group(2)}"
+                held = STATE["labels"].setdefault(key, [])
+                for name in body.get("labels") or []:
+                    if name not in held:
+                        held.append(name)
+                return self._send(200, [{"name": n} for n in held])
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/labels", url.path)
+            if m:
+                made = STATE["labels"].setdefault(m.group(1) + ":repo", [])
+                if body.get("name") in made:
+                    return self._send(422, {"message": "Validation Failed"})
+                made.append(body.get("name"))
+                return self._send(201, {"name": body.get("name"), "color": body.get("color")})
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues", url.path)
             if m:
                 repo = m.group(1)
@@ -156,6 +174,20 @@ class Handler(BaseHTTPRequestHandler):
                 item["closed_at"] = stamp if state == "closed" else None
                 return self._send(200, item)
         return self._send(404, {"message": f"stub: no route for PATCH {url.path}"})
+
+    def do_DELETE(self):
+        url = urlparse(self.path)
+        with LOCK:
+            STATE["calls"].append(("DELETE", url.path, self._token()))
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/(\d+)/labels/(.+)", url.path)
+            if m:
+                held = STATE["labels"].get(f"{m.group(1)}#{m.group(2)}", [])
+                name = unquote(m.group(3))
+                if name not in held:
+                    return self._send(404, {"message": "Label does not exist"})
+                held.remove(name)
+                return self._send(200, [{"name": n} for n in held])
+        return self._send(404, {"message": f"stub: no route for DELETE {url.path}"})
 
 
 def main():

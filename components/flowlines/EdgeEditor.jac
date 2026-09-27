@@ -1,7 +1,8 @@
 """The selected transition's editor over the canvas: `form` holds its label,
-carries, trigger and trigger_label, and every field saves together."""
+carries, trigger and github_label, and every field saves together."""
 
-import from .kinds { TRIGGER_PICKS, triggerNote }
+import from .kinds { TRIGGER_PICKS }
+import from .EdgeGithub { EdgeGithub }
 import from .EdgePicks { EdgePicks }
 import from .EdgeActions { EdgeActions }
 import from ..ui.input { Input }
@@ -26,7 +27,6 @@ def:pub EdgeEditor(
     onDelete: Callable[[], None] = None
 ) -> JsxElement {
     trigger = form["trigger"] or "";
-    note = triggerNote(trigger, form["trigger_label"] or "…");
     return
         <div
             className="absolute z-40 w-72 -translate-x-1/2 rounded-xl border bg-popover p-2.5 shadow-lg"
@@ -66,28 +66,7 @@ def:pub EdgeEditor(
                 value={trigger}
                 onPick={lambda (v: str) { if onField { onField("trigger", v); }}}
             />
-            {if trigger == "label" {
-                <Input
-                    key="match"
-                    aria-label="GitHub label"
-                    value={form["trigger_label"] or ""}
-                    placeholder="GitHub label, e.g. ready-to-review"
-                    className="mt-2 h-8 text-[13px]"
-                    onChange={lambda (e: any) { if onField {
-                        onField("trigger_label", e.target.value);
-                    }}}
-                    onKeyDown={lambda (e: any) { if e.key == "Enter" and onSave {
-                        onSave();
-                    }}}
-                />
-            }}
-            {if note {
-                <p key="note" className="mt-1.5 text-xs text-subtle">
-                    {"On the issue or its PR, the task " + note + "."
-                        if trigger == "label"
-                        else "The task " + note + "."}
-                </p>
-            }}
+            <EdgeGithub form={form} onField={onField} onSave={onSave}/>
             <EdgeActions
                 clearable={clearable}
                 onSave={onSave}

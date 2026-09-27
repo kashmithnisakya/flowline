@@ -64,6 +64,8 @@ import from services.github.util {
     acquire_sync_lease,
     read_repo_list,
     store_repo_list,
+    sync_step_labels,
+    ensure_repo_labels,
     log
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
@@ -1019,11 +1021,18 @@ def auto_done_land(
         peak = status_peak(holder, "Done");
     }
     peak = peak + 1024.0;
+    from_step = t.step_id;
     t.set_status("Done", stamp);
     t.step_id = step_id;
     t.sort_order = peak;
     t.updated_at = stamp;
-    record_task_event(holder, t, "Moved to " + step_name + " · " + why, stamp);
+    labelled = sync_step_labels(holder, t, from_step, step_id, "");
+    record_task_event(
+        holder,
+        t,
+        "Moved to " + step_name + " · " + why + (" · " + labelled if labelled else ""),
+        stamp
+    );
     return peak;
 }
 
@@ -1364,6 +1373,28 @@ walker SetRepoAutoDone {
         }
         target.auto_done = self.enabled;
         report {"ok": True, "repo": repo_view(target)};
+    }
+}
+
+
+walker SetRepoLabelSync {
+    """Per-repo policy, off by default: a move across an arrow with a GitHub
+    label writes that label to the issue or its PR, and leaving a step takes
+    off the labels not kept. Turning it on creates the flow line's labels in
+    the repo, coloured like their steps; `labels` says how many were new."""
+    has repo_id: str = "",
+        enabled: bool = False,
+        reports: list[dict[str, any]] = [];
+
+    can set with Root entry {
+        target = resolve(self.repo_id);
+        if not isinstance(target, Repo) or not owned(here, target) {
+            report {"ok": False, "error": "not_found", "message": "Unknown repo."};
+            disengage;
+        }
+        target.label_sync = self.enabled;
+        made = ensure_repo_labels(here, target.full_name) if self.enabled else 0;
+        report {"ok": True, "repo": repo_view(target), "labels": made};
     }
 }
 

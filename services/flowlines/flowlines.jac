@@ -101,18 +101,21 @@ def safe_coord(v: float) -> float {
 }
 
 
-# One stored transition. A trigger outside TRANSITION_TRIGGERS is none, and
-# only a "label" trigger keeps a match: the others need nothing named.
+# One stored transition. A trigger outside TRANSITION_TRIGGERS is none; the
+# GitHub label is the arrow's whatever its trigger (a "label" trigger waits
+# for it), capped at GitHub's 50 characters, and only a label can be kept.
 def transition(
-    to: str, label: str, carries: str, trigger: str, wanted: str
+    to: str, label: str, carries: str, trigger: str, github: str, keep: bool
 ) -> dict[str, str] {
     fired = trigger.strip() if trigger.strip() in TRANSITION_TRIGGERS else "";
+    named = github.strip()[:50];
     return {
         "to": to,
         "label": label.strip(),
         "carries": carries.strip() if carries.strip() in CARRY_KINDS else "",
         "trigger": fired,
-        "trigger_label": wanted.strip() if fired == "label" else ""
+        "github_label": named,
+        "keep_label": "yes" if keep and named else ""
     };
 }
 
@@ -377,8 +380,12 @@ walker ApplyTemplate {
             fires = chosen["link_triggers"];
         }
         matches: list[str] = [];
-        if "link_matches" in chosen {
-            matches = chosen["link_matches"];
+        if "link_github_labels" in chosen {
+            matches = chosen["link_github_labels"];
+        }
+        keeps: list[bool] = [];
+        if "link_keep_labels" in chosen {
+            keeps = chosen["link_keep_labels"];
         }
         raw_links: list[list[int]] = chosen["links"];
         for (i, pair) in enumerate(raw_links) {
@@ -391,7 +398,8 @@ walker ApplyTemplate {
                         wording[i] if i < len(wording) else "",
                         cargo[i] if i < len(cargo) else "",
                         fires[i] if i < len(fires) else "",
-                        matches[i] if i < len(matches) else ""
+                        matches[i] if i < len(matches) else "",
+                        keeps[i] if i < len(keeps) else False
                     )
                 ];
         }
@@ -663,9 +671,9 @@ walker LinkTransition {
         # "issue" or "pr" (CARRY_KINDS); anything else is stored as untagged.
         carries: str = "",
         # What moves a task across on its own (TRANSITION_TRIGGERS), and the
-        # label a "label" trigger waits for.
+        # arrow's GitHub label (what a "label" trigger waits for).
         trigger: str = "",
-        trigger_label: str = "",
+        github_label: str = "",
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
@@ -698,7 +706,12 @@ walker LinkTransition {
             disengage;
         }
         fresh = transition(
-            jid(target), self.label, self.carries, self.trigger, self.trigger_label
+            jid(target),
+            self.label,
+            self.carries,
+            self.trigger,
+            self.github_label,
+            False
         );
         to = fresh["to"];
         # Re-drawing an arrow is how its label gets edited: a non-empty
@@ -713,7 +726,8 @@ walker LinkTransition {
                     t["label"],
                     t["carries"],
                     t.get("trigger", ""),
-                    t.get("trigger_label", "")
+                    t.get("github_label", ""),
+                    t.get("keep_label", "") == "yes"
                 );
                 kept.append(
                     transition(
@@ -721,7 +735,8 @@ walker LinkTransition {
                         fresh["label"] or had["label"],
                         fresh["carries"] or had["carries"],
                         fresh["trigger"] or had["trigger"],
-                        fresh["trigger_label"] or had["trigger_label"]
+                        fresh["github_label"] or had["github_label"],
+                        had["keep_label"] == "yes"
                     )
                 );
             } else {
@@ -740,15 +755,17 @@ walker LinkTransition {
 walker LabelTransition {
     """Set or clear what has to be true to cross an existing transition, and
     what it carries and what moves a task across on its own. Unlike
-    LinkTransition, empty here means CLEAR, the only way to take the wording
-    or the trigger off an arrow without deleting it. The editor saves every
-    field together, so all are always sent."""
+    LinkTransition, empty here means CLEAR, the only way to take the wording,
+    the trigger or the GitHub label off an arrow without deleting it. The
+    editor saves every field together, so all are always sent."""
     has from_id: str = "",
         to_id: str = "",
         label: str = "",
         carries: str = "",
         trigger: str = "",
-        trigger_label: str = "",
+        github_label: str = "",
+        # Leave the GitHub label on once the task moves past this arrow's step.
+        keep_label: bool = False,
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
@@ -773,7 +790,12 @@ walker LabelTransition {
             disengage;
         }
         fresh = transition(
-            jid(target), self.label, self.carries, self.trigger, self.trigger_label
+            jid(target),
+            self.label,
+            self.carries,
+            self.trigger,
+            self.github_label,
+            self.keep_label
         );
         found = False;
         kept: list[dict[str, str]] = [];
@@ -790,7 +812,7 @@ walker LabelTransition {
             disengage;
         }
         # A label trigger with no label to wait for would never fire.
-        if fresh["trigger"] == "label" and not fresh["trigger_label"] {
+        if fresh["trigger"] == "label" and not fresh["github_label"] {
             report {
                 "ok": False,
                 "error": "match_required",
@@ -804,7 +826,8 @@ walker LabelTransition {
             "label": fresh["label"],
             "carries": fresh["carries"],
             "trigger": fresh["trigger"],
-            "trigger_label": fresh["trigger_label"]
+            "github_label": fresh["github_label"],
+            "keep_label": fresh["keep_label"] == "yes"
         };
     }
 }

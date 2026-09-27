@@ -167,10 +167,11 @@ Each flag is a switch in the repository's automation panel in Workspace's GitHub
 | `auto_sync` | Import issues into *project* | off | File new issues as tasks. Turning it on clears the cursor, so the next sync back-fills the repo's history. |
 | `auto_done` | Move a card to Done when its issue closes or its pull request merges | off | A closed issue, or a merged PR on a card In Progress or in Review, moves the card to the done step. |
 | `auto_close` | Close the issue when its card moves to Done | off | A card landing on Done closes its GitHub issue; a card leaving Done reopens it. |
+| `label_sync` | Add the flow line's labels as work moves | off | A move writes the crossed arrow's GitHub label and takes the left step's unkept labels off. Turning it on creates the labels in the repo. |
 
 ## Writing back to GitHub
 
-flowline writes to GitHub in exactly two cases:
+flowline writes to GitHub in exactly three cases:
 
 1. **Opening an issue from a task** (`CreateIssueFromTask`), an explicit action.
 2. **Keeping an issue's state with its card**, only on repos with
@@ -178,12 +179,18 @@ flowline writes to GitHub in exactly two cases:
    closes the issue, and a move that leaves Done reopens it. The write is noted
    on the move's own log line (`Moved to Done · closed org/repo #12`,
    `Moved to Implement · reopened org/repo #12`).
+3. **Keeping the flow line's labels with its work**, only on repos with
+   `label_sync`, inside the same moves and the moves the flow line's triggers
+   make: crossing an arrow with a GitHub label adds it to the issue or its PR,
+   and leaving a step takes the unkept ones off (see
+   [Flow lines](flow-lines.md#automation)). The task's own copy of its labels
+   moves with each write, so the next poll does not read Flowline's label as
+   new and fire a trigger on it.
 
-GitHub then sends an `issues.closed` or `issues.reopened` delivery for that
-write, sent by `<slug>[bot]`, and the receiver drops it as an `echo`, so the
-card is not moved or logged twice. The other direction is deliberately
-one-way: an issue reopened on GitHub does not move its card, and titles,
-assignees and labels are never written back.
+GitHub then sends a delivery for each write, sent by `<slug>[bot]`, and the
+receiver drops it as an `echo`, so the card is not moved or logged twice. An
+issue reopened on GitHub does not move its card, a label removed on GitHub
+moves nothing, and titles and assignees are never written back.
 
 ## When a connection goes invalid
 

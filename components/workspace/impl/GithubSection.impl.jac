@@ -388,6 +388,31 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
     }
 }
 
+impl GithubSection.toggleLabelSync(rid: str, enabled: bool) -> None {
+    try {
+        result = root spawn SetRepoLabelSync(repo_id=rid, enabled=enabled);
+        payload = result.reports[0] if result.reports else None;
+        if payload and payload["ok"] {
+            forgetWorkspace();
+            rResult = root spawn ListRepos();
+            repos = rResult.reports[0] if rResult.reports else [];
+            made = int(payload["labels"] or 0);
+            toast.success(
+                (
+                    "Moves will add the flow line's labels on GitHub"
+                    + (" · created " + str(made) + " labels" if made > 0 else "")
+                )
+                    if enabled
+                    else "Writing labels to GitHub turned off"
+            );
+        } else {
+            toast.error("Could not update that repository");
+        }
+    } except Exception as e {
+        toast.error("Could not update that repository");
+    }
+}
+
 impl GithubSection.attachRepo(fullName: str) -> None {
     if attaching {
         return;

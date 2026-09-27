@@ -168,11 +168,14 @@ was being deployed. GitHub does not retry a failed delivery on its own; the
 App's Advanced tab lists every delivery with its response and a Redeliver
 button.
 
-Flowline writes to GitHub in two cases: an issue you explicitly create from a
-task, and, per repo and off by default ("Close the issue when its card moves
-to Done"), the issue's state: closing it when its card reaches your done step,
-and reopening it when the card moves back out. The receiver drops the App's own echo of either, so
-the card is not moved or logged twice. Titles, assignees and labels are never
+Flowline writes to GitHub in three cases: an issue you explicitly create from a
+task; per repo and off by default ("Close the issue when its card moves to
+Done"), the issue's state, closing it when its card reaches your done step and
+reopening it when the card moves back out; and per repo and off by default
+("Add the flow line's labels as work moves"), the labels on your flow line's
+arrows, such as `validated` or `ready-to-review`, added as work crosses them
+and taken off as it moves on. The receiver drops the App's own echo of each,
+so the card is not moved or logged twice. Titles and assignees are never
 written back.
 
 ## License

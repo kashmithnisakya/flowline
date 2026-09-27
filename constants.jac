@@ -212,7 +212,9 @@ glob STATUSES: list[str] = [
                  "pr"
              ],
              # What moves a task along the arrow without a person (see
-             # TRANSITION_TRIGGERS); `link_matches` names the label.
+             # TRANSITION_TRIGGERS). `link_github_labels` is each arrow's GitHub
+             # label: what a label trigger waits for, and what crossing the
+             # arrow writes for a repo with label sync; only `validated` stays.
              "link_triggers": [
                  "label",
                  "",
@@ -223,7 +225,17 @@ glob STATUSES: list[str] = [
                  "pr_merged",
                  ""
              ],
-             "link_matches": ["validated", "", "", "", "ready-to-review", "", "", ""]
+             "link_github_labels": [
+                 "validated",
+                 "",
+                 "needs-design",
+                 "",
+                 "ready-to-review",
+                 "changes-requested",
+                 "",
+                 ""
+             ],
+             "link_keep_labels": [True, False, False, False, False, False, False, False]
          }
      ],
      # Kind -> legacy status. A move writes both, so insights, GitHub sync
