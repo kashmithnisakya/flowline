@@ -1,6 +1,6 @@
 """The recorded product tour (named TourFilm: upstream owns DemoStrip, the
 flow line strip across a sample board), between the interactive hero board and the
-capability grid. The file is 1.8 MB, so it is lazy and carries its intrinsic
+capability grid. The file is 1.2 MB, so it is lazy and carries its intrinsic
 size: nothing is fetched until a reader scrolls near it, and the frame holds
 its space before it arrives so the page never jumps.
 
@@ -9,7 +9,7 @@ Vite's at build time, so the src must be the `/static/` spelling.
 """
 
 glob DEMO_SRC: str = "/static/demo/flowline-demo.gif",
-     DEMO_ALT: str = "A recorded tour of Flowline: signing in to the board, opening a task, ticking a checklist item and moving it on, then the flow line behind the board, the tasks table, the roadmap, its travel so far and the Overview.";
+     DEMO_ALT: str = "A recorded tour of Flowline: signing in to the board, ticking a task's checklist and reading how it got there, a move the next step's rule refuses, the flow line with its automatic arrows and its role lanes, the roadmap and the Overview.";
 
 def:pub TourFilm -> JsxElement {
     return
@@ -23,7 +23,7 @@ def:pub TourFilm -> JsxElement {
             <p
                 className="mt-3 max-w-[62ch] text-base leading-relaxed text-muted-foreground"
             >
-                The board, a task and its checklist, the flow line behind it, the tasks table, the roadmap, its travel so far and the Overview.
+                The board, a task and how it got there, a move a step refuses, the flow line behind it, the roadmap and the Overview.
             </p>
             <figure className="hero-frame reveal mt-8 overflow-hidden border bg-card">
                 <img

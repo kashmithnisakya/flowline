@@ -10,7 +10,7 @@ JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 it, the data graph, every API walker and deploying with jachammer (sources in
 [`docs/`](docs/)).
 
-![A tour of Flowline: sign in to the board, open a task, tick a checklist item and move it on, then the flow line behind the board, the tasks table, the roadmap, the log it wrote and the Overview](assets/demo/flowline-demo.gif)
+![A tour of Flowline: sign in to the board, tick a task's checklist and read how it got there, a move the next step's rule refuses, the flow line with its automatic arrows and its role lanes, the roadmap and the Overview](assets/demo/flowline-demo.gif)
 
 ## Draw your flow line, get your board
 

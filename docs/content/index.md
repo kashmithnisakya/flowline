@@ -56,7 +56,7 @@ included), and **the board becomes those steps**: one project's work, stacked
 step by step down the page. Every move lands in the task's activity log, so
 the standup note is already there. Dated tasks are followed on a roadmap.
 
-<!-- The demo GIF (gifs/flowline-demo.gif) shows the pre-redesign app; re-record it before embedding it again. -->
+![A tour of Flowline: sign in to the board, tick a task's checklist and read how it got there, a move the next step's rule refuses, the flow line with its automatic arrows and its role lanes, the roadmap and the Overview](assets/demo/flowline-demo.gif){ .fl-demo loading=lazy }
 
 <div class="grid cards fl-features" markdown>
 

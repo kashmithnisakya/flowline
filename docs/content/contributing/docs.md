@@ -35,7 +35,7 @@ docs/
 ```
 
 Brand assets are not copied into `docs/`: the hook publishes
-`assets/brand/*.svg` and `gifs/flowline-demo.gif` straight from the repo.
+`assets/brand/*.svg` and `assets/demo/flowline-demo.gif` straight from the repo.
 
 ## The reference directives
 
