@@ -1,6 +1,7 @@
-"""One task's pill across the weeks, in its step's solid colour. Past due
-turns it red, Done fades it, and a blocked task carries a diagonal hatch.
-A side clipped by the window stays square; `win` is Timeline's window."""
+"""One task's pill across the weeks, neutral like the Overview's open
+series: a step's colour stays on its icon. Past due turns it red, Done fades
+it, and a blocked task carries a diagonal hatch. A side clipped by the
+window stays square; `win` is Timeline's window."""
 
 import from .span { spanStyle }
 
@@ -10,7 +11,6 @@ def:pub RoadmapBar(
     first: str,
     last: str,
     win: dict[str, any],
-    color: str,
     late: bool = False,
     done: bool = False,
     blocked: bool = False
@@ -21,7 +21,7 @@ def:pub RoadmapBar(
     } elif late {
         css["backgroundColor"] = "var(--destructive)";
     } else {
-        css["backgroundColor"] = "var(--step-" + color + "-solid)";
+        css["backgroundColor"] = "var(--series-open)";
     }
     if blocked and not done {
         css["backgroundImage"] = HATCH;

@@ -32,7 +32,6 @@ def:pub RoadmapGroup(
                     t={it["t"]}
                     first={it["first"]}
                     last={it["last"]}
-                    color={color}
                     blocked={blocked or it["t"].status == "Blocked"}
                     win={win}
                     onOpen={onOpen}
