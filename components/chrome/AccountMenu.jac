@@ -24,38 +24,36 @@ def:pub AccountMenu(
     card: bool = False
 ) -> JsxElement {
     name = orgName or "Your workspace";
+    # A trigger's asChild needs one literal child: an `{if}` slot compiles to
+    # an array, which Radix's Slot drops, and the menu never opens.
+    cardTrigger = <DropdownMenuTrigger asChild={True}>
+        <button
+            type="button"
+            aria-label="Account menu"
+            className="flex w-full items-center gap-2.5 rounded-xl bg-card p-2.5 text-left shadow-xs ring-1 ring-sidebar-border transition-colors hover:bg-accent"
+        >
+            <Avatar name={name} size="sm"/>
+            <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[13px] font-medium">{name}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                    {account}
+                </span>
+            </span>
+            <PageIcon name="more" className="text-subtle"/>
+        </button>
+    </DropdownMenuTrigger>;
+    avatarTrigger = <DropdownMenuTrigger asChild={True}>
+        <button
+            type="button"
+            aria-label="Account menu"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-accent"
+        >
+            <Avatar name={name} size="sm"/>
+        </button>
+    </DropdownMenuTrigger>;
     return
         <DropdownMenu>
-            <DropdownMenuTrigger asChild={True}>
-                {if card {
-                    <button
-                        key="card"
-                        type="button"
-                        aria-label="Account menu"
-                        className="flex w-full items-center gap-2.5 rounded-xl bg-card p-2.5 text-left shadow-xs ring-1 ring-sidebar-border transition-colors hover:bg-accent"
-                    >
-                        <Avatar name={name} size="sm"/>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-[13px] font-medium">
-                                {name}
-                            </span>
-                            <span className="truncate text-xs text-muted-foreground">
-                                {account}
-                            </span>
-                        </span>
-                        <PageIcon name="more" className="text-subtle"/>
-                    </button>
-                } else {
-                    <button
-                        key="avatar"
-                        type="button"
-                        aria-label="Account menu"
-                        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-accent"
-                    >
-                        <Avatar name={name} size="sm"/>
-                    </button>
-                } }
-            </DropdownMenuTrigger>
+            {cardTrigger if card else avatarTrigger}
             <DropdownMenuContent
                 align="end"
                 side={"top" if card else "bottom"}
