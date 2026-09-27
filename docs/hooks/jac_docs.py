@@ -49,7 +49,7 @@ log = logging.getLogger("mkdocs.hooks.jac_docs")
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_GLOBS = ["models.jac", "constants.jac", "services/**/*.jac"]
 # Files published from the repo rather than copied into docs/content.
-REPO_ASSETS = ["assets/brand/*.svg", "gifs/flowline-demo.gif"]
+REPO_ASSETS = ["assets/brand/*.svg", "assets/demo/flowline-demo.gif"]
 
 
 # --------------------------------------------------------------------- lexer
