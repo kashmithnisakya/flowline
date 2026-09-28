@@ -59,6 +59,7 @@ import from services.flowlines.flowlines {
     ApplyTemplate,
     SaveStep,
     MoveStep,
+    SetStepRules,
     DeleteStep,
     DeleteFlowLine,
     LinkTransition,
@@ -82,7 +83,8 @@ import from services.github.github {
     SyncGithub,
     SetRepoAutoSync,
     SetRepoAutoDone,
-    SetRepoAutoClose
+    SetRepoAutoClose,
+    SetRepoLabelSync
 }
 import from services.github.events { GithubEvent, DrainGithubEvents }
 # The scheduled sync registers through this import like a walker does.

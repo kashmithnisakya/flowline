@@ -2,7 +2,7 @@
 depth, then sort order, so the list reads the way the diagram runs."""
 
 import from ...models { StepView }
-import from .kinds { CARRY_LABEL }
+import from .kinds { CARRY_LABEL, triggerNote }
 import from .StepListRow { StepListRow }
 
 def:pub StepList(
@@ -29,7 +29,26 @@ def:pub StepList(
             said = s.next_labels[i] if i < len(s.next_labels) else "";
             carried = s.next_carries[i] if i < len(s.next_carries) else "";
             tag = CARRY_LABEL[carried] if carried in CARRY_LABEL else "";
-            note = tag + (", " if tag and said else "") + said;
+            fired = s.next_triggers[i] if i < len(s.next_triggers) else "";
+            named = s.next_github_labels[i] if i < len(s.next_github_labels) else "";
+            moves = triggerNote(fired, named);
+            # A label nothing waits for is still written on GitHub by a move.
+            if named and fired != "label" {
+                moves = ", ".join(
+                    [
+                        part
+                        for part in [moves, "labels " + named]
+                        if part
+                    ]
+                );
+            }
+            note = ", ".join(
+                [
+                    part
+                    for part in [tag, said, moves]
+                    if part
+                ]
+            );
             outs.append(
                 {
                     "key": s.id + ">" + nid,

@@ -201,6 +201,17 @@
     --warning: var(--project-7);
     --wire: var(--text-tertiary);
     --mark: var(--accent);
+    /* Chart series (the Overview) and member dots, on the status set. */
+    --series-done: var(--status-done);
+    --series-open: var(--border-strong);
+    --series-active: var(--status-doing);
+    --series-blocked: var(--danger);
+    --series-today: var(--accent);
+    --chart-1: var(--status-done);
+    --chart-2: var(--status-doing);
+    --chart-3: var(--status-review);
+    --chart-4: var(--step-amber);
+    --chart-5: var(--step-rose);
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -253,6 +264,16 @@
     --color-step-rose: var(--step-rose);
     --color-step-emerald: var(--step-emerald);
     --color-step-slate: var(--step-slate);
+    --color-series-done: var(--series-done);
+    --color-series-open: var(--series-open);
+    --color-series-active: var(--series-active);
+    --color-series-blocked: var(--series-blocked);
+    --color-series-today: var(--series-today);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
 
     /* shadcn utility names. `bg-accent` is the registry's HOVER surface, so
        it points at --bg-hover; the raw var --accent stays the brand orange

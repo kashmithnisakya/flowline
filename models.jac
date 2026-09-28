@@ -145,7 +145,10 @@ node Repo {
         auto_done: bool = False,
         # The reverse direction: a card landing on Done closes its issue,
         # and one leaving Done reopens it.
-        auto_close: bool = False;
+        auto_close: bool = False,
+        # A move across an arrow with a GitHub label adds that label to the
+        # issue or its PR, and leaving the step takes the ones not kept off.
+        label_sync: bool = False;
 }
 
 node Task {
@@ -203,6 +206,10 @@ node Task {
         # event. The card's assignees are the roster's and stay the
         # workspace's to set; these say what GitHub thinks.
         gh_assignees: list[str] = [],
+        # GitHub's labels on the issue and on the linked PR, refreshed by the
+        # sync. A label trigger fires on one newly added to either.
+        gh_labels: list[str] = [],
+        pr_labels: list[str] = [],
         # The linked PR's review conversation: "requested" from a review
         # request, then the verdict a review submits. Its own clock, because
         # the PR's updated_at does not move when someone reviews it.
@@ -459,10 +466,29 @@ node WorkflowStep {
         sort_order: float = 0.0,
         # Outgoing transitions in draw order, one per target step:
         # {"to": step jid, "label": what has to be true to cross, "carries":
-        # "issue" | "pr" | ""}. Cycles are allowed; self-loops are refused.
+        # "issue" | "pr" | "", "trigger": a TRANSITION_TRIGGERS value,
+        # "github_label": the arrow's GitHub label (a "label" trigger waits
+        # for it; crossing the arrow writes it for a label_sync repo),
+        # "keep_label": "yes" to leave it on after the task moves on}.
         transitions: list[dict[str, str]] = [],
+        # Entry rules: no task lands here, by hand or by a trigger, without
+        # a due date or a linked PR.
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         created_at: str = "",
         updated_at: str = "";
+
+    # Why a task with this due date and PR link may not land here, or ""
+    # when it may.
+    def refusal(due_date: str, pr_link: str) -> str {
+        if self.needs_due_date and not due_date {
+            return self.name + " needs a due date";
+        }
+        if self.needs_pr and not pr_link {
+            return self.name + " needs a linked PR";
+        }
+        return "";
+    }
 }
 
 # Boxes, one of each per root, made on first write by the *_box helpers.
@@ -563,7 +589,10 @@ obj TaskView(TaskRow) {
         gh_synced_at: str = "",
         gh_assignees: list[str] = [],
         pr_review_state: str = "",
-        checklist: list[dict[str, any]] = [];
+        checklist: list[dict[str, any]] = [],
+        # Set when a write asked for a step whose entry rule the task fails:
+        # the step stayed, and this says why.
+        refused: str = "";
 }
 
 # A task by id and title, for the assistant's citations: nothing else rides.
@@ -675,7 +704,8 @@ obj RepoView {
         project_name: str,
         auto_sync: bool = False,
         auto_done: bool = False,
-        auto_close: bool = False;
+        auto_close: bool = False,
+        label_sync: bool = False;
 }
 
 obj RoleView {
@@ -714,11 +744,16 @@ obj StepView {
         sort_order: float,
         owner: str = "",
         blurb: str = "",
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids, all three read off the step's field.
+        # Index-aligned with next_ids, all read off the step's field.
         next_labels: list[str] = [],
         next_carries: list[str] = [],
+        next_triggers: list[str] = [],
+        next_github_labels: list[str] = [],
+        next_keep_labels: list[bool] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0,
@@ -786,7 +821,8 @@ def repo_view(r: Repo) -> RepoView {
         project_name=project_name,
         auto_sync=r.auto_sync,
         auto_done=r.auto_done,
-        auto_close=r.auto_close
+        auto_close=r.auto_close,
+        label_sync=r.label_sync
     );
 }
 
@@ -1830,11 +1866,17 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
     next_ids: list[str] = [];
     next_labels: list[str] = [];
     next_carries: list[str] = [];
+    next_triggers: list[str] = [];
+    next_github_labels: list[str] = [];
+    next_keep_labels: list[bool] = [];
     for t in s.transitions {
         if t["to"] in known {
             next_ids.append(t["to"]);
             next_labels.append(t["label"]);
             next_carries.append(t["carries"]);
+            next_triggers.append(t.get("trigger", ""));
+            next_github_labels.append(t.get("github_label", ""));
+            next_keep_labels.append(t.get("keep_label", "") == "yes");
         }
     }
     return StepView(
@@ -1844,13 +1886,18 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
         color=s.color,
         owner=s.owner,
         blurb=s.blurb,
+        needs_due_date=s.needs_due_date,
+        needs_pr=s.needs_pr,
         x=s.x,
         y=s.y,
         sort_order=s.sort_order,
         prev_ids=prev_ids,
         next_ids=next_ids,
         next_labels=next_labels,
-        next_carries=next_carries
+        next_carries=next_carries,
+        next_triggers=next_triggers,
+        next_github_labels=next_github_labels,
+        next_keep_labels=next_keep_labels
     );
 }
 

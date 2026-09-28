@@ -13,7 +13,7 @@ import from ...services.roster.roster { ListMembers }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...lib.project { currentProject }
 import from ...lib.filters { defaultProject }
-import from ...components.flowlines.kinds { colorKey }
+import from ...components.flowlines.kinds { colorKey, moveRefusal }
 import from ...components.roadmap.span { shiftIso, mondayOf }
 import from ...components.roadmap.Timeline { RoadmapTimeline }
 import from ...components.roadmap.RoadmapToolbar { RoadmapToolbar }

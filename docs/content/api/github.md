@@ -174,6 +174,17 @@ on ("Move a card to Done when its issue closes or its pull request merges"), a
 closed issue or a merged PR (on a card In Progress or in Review) moves the card
 to the done step.
 
+::: walker SetRepoLabelSync h3
+
+**Reports** `{"ok": true, "repo": RepoView, "labels": <n>}` or `not_found`.
+With `label_sync` on ("Add the flow line's labels as work moves"), a move
+across an arrow with a GitHub label adds it (to the linked PR when the arrow
+carries a PR, else the issue), and leaving a step takes off the labels of the
+arrows into it that are not kept. Turning it on creates every label the flow
+line names in the repo, coloured like the step its arrow leads into; `labels`
+counts the new ones (a label the repo has is left as it is, and -1 means
+GitHub could not be written to). Writes need the App's Issues: read and write.
+
 ::: walker SetRepoAutoClose h3
 
 **Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With `auto_close`

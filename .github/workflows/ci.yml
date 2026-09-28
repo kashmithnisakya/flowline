@@ -175,6 +175,9 @@ jobs:
       - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
         run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
 
+      - name: Automation gate (entry rules, label, merge and review triggers, PR linking)
+        run: python3 tests/smoke/automation_gate.py http://localhost:8000 http://127.0.0.1:8099
+
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log
 

@@ -10,12 +10,12 @@ import from ..common.StepBadge { StepBadge }
 import from .CountChip { CountChip }
 
 glob RING: dict[str, str] = {
-         "sky": "ring-2 ring-step-sky-solid",
-         "indigo": "ring-2 ring-step-indigo-solid",
-         "amber": "ring-2 ring-step-amber-solid",
-         "rose": "ring-2 ring-step-rose-solid",
-         "emerald": "ring-2 ring-step-emerald-solid",
-         "slate": "ring-2 ring-step-slate-solid"
+         "sky": "ring-2 ring-step-sky",
+         "indigo": "ring-2 ring-step-indigo",
+         "amber": "ring-2 ring-step-amber",
+         "rose": "ring-2 ring-step-rose",
+         "emerald": "ring-2 ring-step-emerald",
+         "slate": "ring-2 ring-step-slate"
      };
 
 def:pub StepNode(

@@ -79,7 +79,8 @@ people it tracks are roster members.
   `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
   its member).
   There is no edge between steps: a step keeps its outgoing transitions in
-  its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
+  its own `transitions` field (`{to, label, carries, trigger, github_label,
+  keep_label}`), so `DeleteStep`
   strips the removed step's id from every other step's list, and
   `step_view(s, steps)` reads incoming ids off the whole flow line and
   drops a transition to a step that is gone. **A task's project is its
@@ -349,6 +350,21 @@ it was really closed and ages out of the board like any other task;
 `SyncGithub(full=True)` re-walks a repo and corrects rows an earlier import
 stamped with the sync time.
 
+**The flow line automates itself.** A step's entry rules
+(`needs_due_date`, `needs_pr`, `WorkflowStep.refusal`) gate every move onto
+it: `MoveTask` / `UpdateTask` keep the step and report `TaskView.refused`,
+`CreateTask` creates nothing, and the pages check first with
+`moveRefusal` (`components/flowlines/kinds.jac`). A transition's `trigger`
+(`TRANSITION_TRIGGERS`: `label` with its `github_label`, `pr_merged`,
+`changes_requested`) moves a task out of the step it leaves when the sync or
+a drain sees the fact: `follow_trigger` / `land_on_step` in
+`services/tasks/tasks.jac` (a drag's landing, hand-off and log line), called
+from `services/github/github.jac`. Labels fire on being newly added
+(`Task.gh_labels` / `pr_labels` hold what was seen), a PR links to the task
+whose issue its body closes (`pr_task`), and a merge a `pr_merged` arrow
+takes skips the repo's `auto_done`. `tests/smoke/automation_gate.py` drives
+all of it against the stub.
+
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
 was deleted) fall back to `STATUS_KIND[status]` and render in the first group
 of that kind (the board's `columnKeyOf`, the roadmap's `stepGroups`); an org with no flow line at all falls back to `STATUSES`. Both
@@ -418,15 +434,20 @@ in the tenant's session (from `DrainGithubEvents` or the start of
 binds that installation to this root (the workspace that last connected it),
 drops items older than the task's last applied `updated_at`, stamps the log
 with the event's own time, and applies through the helpers the poll uses.
-Neither side calls GitHub. The one write-back is the issue's state for a repo
-with `auto_close`: a move that crosses Done closes the issue (landing) or
-reopens it (leaving). It runs inside `MoveTask` / `UpdateTask` through
-`sync_issue_state` in `services/github/util.jac` (not in
-`services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
-it back); it rides on the move's own log line, and the receiver drops the
-App's echo by sender login so neither is applied a second time. An issue
-reopened on GitHub does not move its task; titles, assignees and labels are
-never written back.
+Neither side calls GitHub. Two write-backs ride on moves, both through
+`services/github/util.jac` (not `services/github/github.jac`: that module
+imports `tasks`, so `tasks` cannot import it back) and both per repo, off by
+default. `sync_issue_state` (`auto_close`): a move that crosses Done closes
+the issue (landing) or reopens it (leaving). `sync_step_labels`
+(`label_sync`): crossing an arrow with a `github_label` adds it (to the PR
+when the arrow carries one and a PR is linked), leaving a step takes the
+labels of arrows into it off unless `keep_label`, and the task's
+`gh_labels` / `pr_labels` move with each write so the next poll does not read
+it as new. Both run in `MoveTask`, `UpdateTask` and the trigger moves
+(`landing_tail`), ride on the move's own log line, and never block it; the
+receiver drops the App's echo by sender login. An issue reopened on GitHub
+does not move its task, a label removed there moves nothing, and titles and
+assignees are never written back.
 
 **No walker a page load calls reaches GitHub.** The poll is
 `sync_connected_workspaces` in `services/github/schedule.jac`, a plain `def`
@@ -487,10 +508,10 @@ File-based routing with route groups:
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
   would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
   collides with the root layout. The chrome lives in `components/chrome/`:
-  a left sidebar at md and up (the workspace name, search, the pages in
+  a left sidebar at lg (1024px) and up (the workspace name, search, the pages in
   `NAV_PAGES` from `CommandPalette.jac` in the order Flow line, Board,
   Roadmap, Overview, the Projects list, then Ask, Workspace and the account
-  card with the theme and Sign out), and below md a header over a five-tab
+  card with the theme and Sign out), and below lg a header over a five-tab
   bar (those pages plus Workspace). `components/assistant/AssistantDock`
   (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
   `/setup` gets only the setup bar (mark and Sign out).
@@ -556,23 +577,25 @@ File-based routing with route groups:
   `stepWash` / `stepInk` / `stepSolid` class helpers), `ProjectLine.jac`
   (the project picker above a scoped page's title), `CommandPalette.jac`
   (⌘K), `ErrorNote`, `LoadFailed`, `glyphs`, `Markdown`.
-- **The visual system lives in `styles/global.css`.** Geist for UI and
-  display, Geist Mono for data (`@fontsource-variable/geist*`; `brand/`
-  still draws the og image in Archivo and Plex), shadcn token names on a
-  near-white ground with one rust primary, the sidebar on `--sidebar`.
-  The look is open, not boxy: rounded pills for controls, tinted step
-  bars, soft panels. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
+- **The visual system lives in `styles/global.css`.** One token layer
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`,
+  `--status-*`, `--project-*`, `--avatar-*`, both themes) with the shadcn
+  names aliased onto it, so `components/ui/` follows unedited. Geist for UI,
+  Geist Mono only for data (`brand/` still draws the og image in Archivo and
+  Plex). The accent is for the primary button, focus rings, checked
+  controls and the logo only. Toolbar controls are 28px with one solid
+  border; radius steps by role (4 kbd, 6 controls and rows, 8 menus, 12
+  dialogs), and only avatars, dots and progress bars are round. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
   `.toolbar-filter`, `.data-table`, `.step-swatch` ...) are defined there;
   the two that dress registry primitives sit outside `@layer` so they beat
   the primitives' utilities. Nothing renders below 12px, labels are
   sentence case, and only floating layers cast a shadow.
-- **Step colours are tokens.** `--step-<key>`, `-ink` (text), `-wash`
-  (opaque canvas fill) and `-solid` (a badge fill under `--step-solid-fg`:
-  the ink in light, the colour itself in dark) in `styles/global.css` for
-  both palettes; the tables
-  in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
-  colour key needs tokens in both palettes, and its key is what persists
-  (`rose` renders orchid, clear of the andon red).
+- **A step's colour is information, not decoration.** It shows only on
+  the 14px status icon (whose shape carries the kind): no washes, solid
+  pills or tinted bands. `--step-<key>` in `styles/global.css` for both
+  palettes; the tables in `components/flowlines/kinds.jac` only name them
+  (`bg-step-sky`). A new colour key needs a token in both palettes, and its
+  key is what persists (`rose` renders orchid, clear of the andon red).
 - **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
   sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
   so far" from `ListLogEntries` with `task_id`); only the board passes `beside`

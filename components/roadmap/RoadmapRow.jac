@@ -12,7 +12,6 @@ def:pub RoadmapRow(
     t: TaskRow,
     first: str,
     last: str,
-    color: str,
     blocked: bool,
     win: dict[str, any],
     onOpen: Callable[[str], None]
@@ -62,7 +61,6 @@ def:pub RoadmapRow(
                     first={first}
                     last={last}
                     win={win}
-                    color={color}
                     late={late}
                     done={t.status == "Done"}
                     blocked={blocked}
