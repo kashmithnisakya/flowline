@@ -16,6 +16,7 @@ import from urllib.parse { quote }
 
 # Re-exported so callers get the guard and the request helpers from one
 # place; the definition itself is Python-free and lives in models.jac.
+import from services.util { ensure_arrows }
 import from models {
     valid_full_name,
     Task,
@@ -923,6 +924,7 @@ def sync_step_labels(
         or not repo_policy(holder, t.gh_repo, "label_sync") {
         return "";
     }
+    ensure_arrows(holder);
     adding = "";
     on_pr = False;
     leaving: list[str] = [];
@@ -1028,6 +1030,7 @@ def ensure_repo_labels(holder: Root, full_name: str) -> int {
     if not access or not valid_full_name(full_name) {
         return -1;
     }
+    ensure_arrows(holder);
     steps = steps_of(holder);
     names: dict[str, str] = {};
     for st in steps {

@@ -508,7 +508,10 @@ node Roles {}
 # on the template: one with a `roles` list brings fixed roles.
 node WorkflowSteps {
     has name: str = "Flow line",
-        template_key: str = "";
+        template_key: str = "",
+        # When ensure_arrows (services/util.jac) moved this flow line's arrows
+        # to the "github_label" key; "" means not yet.
+        arrows_at: str = "";
 }
 
 node Logs {}

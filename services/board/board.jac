@@ -20,7 +20,13 @@ import from models {
     resolve,
     owned
 }
-import from services.util { page_bounds, done_cutoff, order_working, ensure_tallies }
+import from services.util {
+    page_bounds,
+    done_cutoff,
+    order_working,
+    ensure_tallies,
+    ensure_arrows
+}
 import from services.workspace.workspace { workspace_view }
 
 obj BoardData {
@@ -72,6 +78,7 @@ walker BoardSnapshot {
 
     can gather with Root entry {
         ensure_tallies(here);
+        ensure_arrows(here);
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
         cutoff = done_cutoff(self.done_days);
         scoped: Project | None = None;
