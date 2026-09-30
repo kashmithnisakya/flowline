@@ -27,6 +27,7 @@ import from ..ui.select {
 }
 import from ..ui.sheet { Sheet, SheetContent, SheetHeader, SheetTitle }
 import from ..ui.skeleton { Skeleton }
+import from .columnWidths { resetWidths }
 
 glob CHEVRON_D: str = "m4.5 6.5 3.5 3.5 3.5-3.5";
 
@@ -497,6 +498,9 @@ def:pub FilterBar(
                                     Collapse all groups
                                 </DropdownMenuItem>
                             }}
+                            <DropdownMenuItem onClick={lambda { resetWidths(); }}>
+                                Reset column widths
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                     {if busy {

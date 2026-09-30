@@ -651,7 +651,11 @@ File-based routing with route groups:
   below lg, and `RowMove`, the step menu, mounted only while open).
   Tailwind only sees class names written out whole in source, so a
   responsive variant is its own literal (`ROW_COLUMNS`), never built by
-  string replacement.
+  string replacement. The grid's widths are the `--row-cols` variable
+  (default in `styles/global.css`); `ColumnHeads` lets the user resize the
+  five data columns (a double-click fits one to the cells tagged
+  `data-col`, the Display menu resets) and keeps them in this browser
+  (`columnWidths.jac`).
 - **Board deep links**: `/board?task=<id>` opens a task, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead
