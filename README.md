@@ -115,7 +115,7 @@ Create one at <https://github.com/settings/apps/new>:
 | Request user authorization (OAuth) during installation | **on** |
 | Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, a secret you generate (`openssl rand -hex 32`) |
 | Subscribe to events | Issues · Pull request · Pull request review · Sub-issues (installation events are sent to every App on their own) |
-| Repository permissions | Issues: read and write · Pull requests: read · Metadata: read |
+| Repository permissions | Issues: read and write · Pull requests: read and write · Metadata: read |
 
 The OAuth-during-installation box is not optional. Installation ids are small
 integers, so completing a connection requires proving the person who
