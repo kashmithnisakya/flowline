@@ -87,7 +87,7 @@ def:pub ConnectCard(
                     }}
                 </ul>
                 <p className="num mt-3 text-xs text-subtle">
-                    Issues: read and write · Pull requests: read · Metadata: read
+                    Issues: read and write · Pull requests: read and write · Metadata: read
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground">
                     Flowline stores the installation id, never a token.

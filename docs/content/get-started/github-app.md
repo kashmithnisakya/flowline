@@ -26,12 +26,21 @@ Open <https://github.com/settings/apps/new> (or your organization's
 | Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, secret from `openssl rand -hex 32` |
 | Webhook content type | `application/json` |
 | Subscribe to events | Issues, Pull request, Pull request review, Sub-issues |
-| Repository permissions | Issues: read and write, Pull requests: read, Metadata: read |
+| Repository permissions | Issues: read and write, Pull requests: read and write, Metadata: read |
 
 Installation events (`installation`, `installation_repositories`) are sent to
 every App without subscribing. `/github` renders the Workspace page on its
 GitHub section, which finishes the install round trip; an App registered with
 `<HOST>/workspace?tab=github` URLs works the same way.
+
+!!! note "Pull requests: read and write"
+
+    Write access to pull requests is for AI code review, which posts its
+    review on the pull request. Nothing uses it yet. On an App registered
+    with read only, raising it sends every account that installed the App a
+    request to approve the new permission (an organization owner approves it
+    under **Settings, GitHub Apps**). Until they approve, the installation
+    keeps read access and everything else works as before.
 
 !!! danger "Two settings that are not optional"
 
