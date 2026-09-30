@@ -55,3 +55,35 @@ def:pub applyWidths(widths: list[int]) {
     }
     document.documentElement.style.setProperty("--row-cols", cols + " 40px");
 }
+
+def dropWidths {
+    try {
+        localStorage.removeItem(COLUMN_WIDTHS_KEY);
+    } except Exception as e {
+        return;
+    }
+}
+
+# Forget this browser's widths; the mounted heads follow the event.
+def:pub resetWidths {
+    dropWidths();
+    w: any = window;
+    w.dispatchEvent(new(w.CustomEvent, "flowline:columns"));
+}
+
+# The widest content of column `idx` across the rows on screen and its
+# label, measured with a Range so truncated text reports its full width.
+def:pub fitWidth(idx: int) -> int {
+    widest = 0.0;
+    doc: any = document;
+    cells: any = doc.querySelectorAll("[data-col='" + str(idx) + "']");
+    for el in cells {
+        span_range: any = doc.createRange();
+        span_range.selectNodeContents(el);
+        width = float(span_range.getBoundingClientRect().width);
+        if width > widest {
+            widest = width;
+        }
+    }
+    return clampWidth(widest + 6.0);
+}

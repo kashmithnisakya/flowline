@@ -1,22 +1,28 @@
 """The board's column labels from lg up, once above every step group, on the
 same grid as a task row's cells. Each data column has a handle on its left
 edge: drag it (or focus it and use the arrow keys) to resize, double-click
-to reset. Widths stay in this browser."""
+to fit its content. Widths stay in this browser."""
 
+import from "react" { useEffect }
 import from .TaskCells { GROUP_COLUMNS }
 import from .ColumnHandle { ColumnHandle }
-import from .columnWidths {
-    DEFAULT_WIDTHS,
-    clampWidth,
-    loadWidths,
-    keepWidths,
-    applyWidths
-}
+import from .columnWidths { clampWidth, fitWidth, loadWidths, keepWidths, applyWidths }
 
 glob LABELS: list[str] = ["People", "Priority", "Checklist", "Due", "GitHub"];
 
 def:pub ColumnHeads -> JsxElement {
     has widths: list[int] = loadWidths();
+
+    # The Display menu's reset ends in a `flowline:columns` event.
+    useEffect(
+        lambda {
+            w: any = window;
+            onReset = lambda (e: any) { widths = loadWidths(); };
+            w.addEventListener("flowline:columns", onReset);
+            return lambda { w.removeEventListener("flowline:columns", onReset); };
+        },
+        []
+    );
 
     def resize(idx: int, w: float, save: bool) {
         next_widths: list[int] = [];
@@ -32,6 +38,7 @@ def:pub ColumnHeads -> JsxElement {
     applyWidths(widths);
     return
         <div
+            data-board-heads="true"
             className={"sticky top-14 z-30 hidden items-center gap-x-3 bg-bg-canvas px-2 py-1.5 text-[12px] font-medium text-text-tertiary lg:top-0 lg:grid "
                 + GROUP_COLUMNS}
         >
@@ -43,9 +50,11 @@ def:pub ColumnHeads -> JsxElement {
                         label={label}
                         width={widths[i]}
                         onResize={lambda (w: float, save: bool) { resize(i, w, save); }}
-                        onReset={lambda { resize(i, float(DEFAULT_WIDTHS[i]), True); }}
+                        onFit={lambda { resize(i, float(fitWidth(i)), True); }}
                     />
-                    <span aria-hidden="true" className="block truncate">{label}</span>
+                    <span aria-hidden="true" className="block truncate">
+                        <span data-col={str(i)}>{label}</span>
+                    </span>
                 </span>
             }}
             <span aria-hidden="true"/>
