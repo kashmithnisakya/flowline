@@ -8,10 +8,11 @@ import from ..common.ProgressRing { ProgressRing }
 import from .GitHubChip { ghNumber, ghHref }
 import from .taskFacts { dueWords, isLate }
 
-# The row grid: glyph, title, the five cells, the move button.
-glob:pub GROUP_COLUMNS: str = "grid-cols-[28px_minmax(0,1fr)_104px_76px_112px_104px_84px_40px]",
+# The row grid: glyph, title, the five cells, the move button. The widths
+# are --row-cols (styles/global.css), which ColumnHeads resizes.
+glob:pub GROUP_COLUMNS: str = "grid-cols-(--row-cols)",
      # The same grid from lg up, written out whole so Tailwind generates it.
-     ROW_COLUMNS: str = "lg:grid-cols-[28px_minmax(0,1fr)_104px_76px_112px_104px_84px_40px]";
+     ROW_COLUMNS: str = "lg:grid-cols-(--row-cols)";
 
 def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
     total = task.checklist_total;

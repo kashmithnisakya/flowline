@@ -169,6 +169,7 @@ default = "server"
 "lib.project" = "client"
 "components.chrome.SidebarLink.isCurrent" = "client"
 "components.board.taskFacts" = "client"
+"components.board.columnWidths" = "client"
 "components.board.BoardSkeleton.rememberGroups" = "client"
 # The landing demos' sample data: plain globs, no client evidence of their own.
 "components.landing.demoData" = "client"

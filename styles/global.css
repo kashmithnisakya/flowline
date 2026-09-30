@@ -168,6 +168,12 @@
     --float-2: var(--shadow-float);
 }
 
+/* The board row grid: glyph, title, five data columns, move button.
+   ColumnHeads overrides it with this browser's widths. */
+:root {
+    --row-cols: 28px minmax(0, 1fr) 104px 76px 112px 104px 84px 40px;
+}
+
 /* ---- shadcn aliases. The registry reads these names; they point at the
    tokens above so `components/ui/` never needs an edit. --------------------- */
 :root,
