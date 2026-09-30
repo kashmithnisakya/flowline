@@ -22,17 +22,17 @@ def:pub RoadmapRow(
     dates = prettyDay(first)
         if first == last
         else prettyDay(first) + " – " + prettyDay(last);
+    # The hover title is the bar's legend: the red and the hatch in words.
+    stuck = blocked and t.status != "Done";
+    flags = (" · " + lateWords if late else "") + (" · Blocked" if stuck else "");
+    spoken = (", " + lateWords if late else "") + (", blocked" if stuck else "");
     return
         <button
             type="button"
             data-task-card={t.id}
             className="group relative flex h-11 w-full items-center text-left outline-none"
-            title={t.title + " · " + dates}
-            aria-label={"Open "
-                + t.title
-                + ", "
-                + dates
-                + (", " + lateWords if late else "")}
+            title={t.title + " · " + dates + flags}
+            aria-label={"Open " + t.title + ", " + dates + spoken}
             onClick={lambda { onOpen(t.id); }}
         >
             <span

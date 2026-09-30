@@ -4,6 +4,7 @@ column order. A bar opens the board's task sheet in place."""
 
 import from "sonner" { toast }
 import from "react" { useEffect }
+import from "@jac/runtime" { Link }
 import from ...models { Project, MemberView, TaskRow, TaskView, StepView, RoleView }
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 import from ...services.roadmap.roadmap { RoadmapSnapshot }
@@ -119,9 +120,6 @@ def:pub RoadmapPage -> JsxPage {
     if late > 0 {
         summary = summary + " · " + str(late) + " past due";
     }
-    if unscheduled > 0 {
-        summary = summary + " · " + str(unscheduled) + " without dates";
-    }
     activeProjects = [
         p
         for p in projects
@@ -208,6 +206,19 @@ def:pub RoadmapPage -> JsxPage {
                     <h1 className="page-title">Roadmap</h1>
                     <p className="page-subtitle num min-h-5">
                         {summary if data else ""}
+                        {if data and unscheduled > 0 {
+                            <>
+                                {" · "}
+                                <Link
+                                    key="undated"
+                                    to="/board"
+                                    title="Dates are set in the task sheet on the board"
+                                    className="underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
+                                >
+                                    {str(unscheduled) + " without dates"}
+                                </Link>
+                            </>
+                        }}
                     </p>
                 </div>
                 <RoadmapToolbar
@@ -246,11 +257,9 @@ def:pub RoadmapPage -> JsxPage {
                             groups={groups}
                             onOpen={openTask}
                         />
-                        <RoadmapNotes
-                            unscheduled={unscheduled}
-                            truncated={bool(data["truncated"])}
-                            shown={len(rows)}
-                        />
+                        {if bool(data["truncated"]) {
+                            <RoadmapNotes key="notes" shown={len(rows)}/>
+                        }}
                     </div>
                 }  }
             </Reveal>
