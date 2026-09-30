@@ -77,7 +77,8 @@ import from services.util {
     moved_to_done,
     ensure_tallies,
     ensure_history,
-    ensure_keys
+    ensure_keys,
+    ensure_arrows
 }
 import from services.tasks.history {
     HistoryBase,
@@ -209,6 +210,7 @@ def follow_trigger(
     stamp: str,
     peaks: dict[str, float]
 ) -> bool {
+    ensure_arrows(holder);
     source = resolve(t.step_id) if t.step_id else None;
     if not isinstance(source, WorkflowStep) or not owned(holder, source) {
         return False;

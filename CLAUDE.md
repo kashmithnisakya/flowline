@@ -80,7 +80,10 @@ people it tracks are roster members.
   its member).
   There is no edge between steps: a step keeps its outgoing transitions in
   its own `transitions` field (`{to, label, carries, trigger, github_label,
-  keep_label}`), so `DeleteStep`
+  keep_label}`; arrows saved before Sep 27 2026 said `trigger_label`, and
+  `ensure_arrows` in `services/util.jac` renames it once per workspace,
+  stamped `WorkflowSteps.arrows_at`, so a new reader of an arrow's label
+  calls it first), so `DeleteStep`
   strips the removed step's id from every other step's list, and
   `step_view(s, steps)` reads incoming ids off the whole flow line and
   drops a transition to a step that is gone. **A task's project is its

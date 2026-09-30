@@ -28,7 +28,13 @@ import from models {
     roles_box,
     steps_box
 }
-import from services.util { now_iso, page_bounds, done_cutoff, ensure_tallies }
+import from services.util {
+    now_iso,
+    page_bounds,
+    done_cutoff,
+    ensure_tallies,
+    ensure_arrows
+}
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
@@ -173,6 +179,7 @@ glob STEP_TITLES: int = 2;
 def read_flow_line(
     box: WorkflowSteps, holder: Root, project_id: str, with_counts: bool, done_days: int
 ) -> list[StepView] {
+    ensure_arrows(holder);
     views: list[StepView] = [];
     line_steps = [box-->[?:WorkflowStep]];
     for st in line_steps {
@@ -677,6 +684,7 @@ walker LinkTransition {
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
+        ensure_arrows(here);
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -769,6 +777,7 @@ walker LabelTransition {
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
+        ensure_arrows(here);
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
