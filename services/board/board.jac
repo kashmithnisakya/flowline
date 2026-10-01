@@ -60,7 +60,7 @@ obj BoardData {
 }
 
 
-walker BoardSnapshot {
+walker:protect BoardSnapshot {
     """One project's board in one call. `project_id` picks the project; an
     empty, foreign, archived or unknown id falls back to the caller's own
     default project (the earliest created), and the report says which was

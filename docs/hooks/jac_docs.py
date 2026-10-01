@@ -71,8 +71,8 @@ class JacLexer(RegexLexer):
             (r"[rbfRBF]{0,2}'(\\\\|\\'|[^'\n])*'", String.Single),
             (r"@[A-Za-z_][\w.]*", Name.Decorator),
             (
-                r"(walker|node|edge|obj|enum|class)(\s+)([A-Za-z_]\w*)",
-                bygroups(Keyword.Declaration, Whitespace, Name.Class),
+                r"(walker|node|edge|obj|enum|class)((?::(?:pub|protect|priv))?)(\s+)([A-Za-z_]\w*)",
+                bygroups(Keyword.Declaration, Keyword, Whitespace, Name.Class),
             ),
             (
                 r"(def|can)(\s+)([A-Za-z_]\w*)",
@@ -159,6 +159,7 @@ TOKEN_RE = re.compile(
 
 OPEN = {"{": "}", "(": ")", "[": "]"}
 DECL_KINDS = {"walker", "node", "edge", "obj"}
+ACCESS = {"pub", "protect", "priv"}
 
 
 @dataclass
@@ -367,9 +368,13 @@ def parse_file(path: Path) -> list[Decl]:
         if stmt_start and word == "async" and i + 1 < len(toks) and toks[i + 1].text == "walker":
             i += 1
             continue
-        if stmt_start and word in DECL_KINDS and i + 1 < len(toks) and toks[i + 1].kind == "word":
-            decl = Decl(word, toks[i + 1].text, rel, t.line, doc=" ".join(pending), decorators=decorators)
-            j = i + 2
+        # `walker:protect Name`: the access tag sits between the kind and the name.
+        n = i + 1
+        if stmt_start and word in DECL_KINDS and n + 1 < len(toks) and toks[n].text == ":" and toks[n + 1].text in ACCESS:
+            n += 2
+        if stmt_start and word in DECL_KINDS and n < len(toks) and toks[n].kind == "word":
+            decl = Decl(word, toks[n].text, rel, t.line, doc=" ".join(pending), decorators=decorators)
+            j = n + 1
             if toks[j].text == "(":
                 close = match_close(toks, j)
                 decl.base = squash(src[toks[j].end : toks[close].start])

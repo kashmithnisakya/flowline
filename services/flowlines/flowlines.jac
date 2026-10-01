@@ -132,7 +132,7 @@ def read_flow_line_meta(box: WorkflowSteps) -> dict[str, str] {
 }
 
 
-walker GetFlowLineMeta {
+walker:protect GetFlowLineMeta {
     """Read-only: a GET must not write, so a workspace with no box yet
     reports the defaults without creating one."""
     has reports: list[dict[str, str]] = [];
@@ -149,7 +149,7 @@ walker GetFlowLineMeta {
 }
 
 
-walker RenameFlowLine {
+walker:protect RenameFlowLine {
     has name: str = "",
         reports: list[dict[str, str]] = [];
 
@@ -230,7 +230,7 @@ def read_flow_line(
 }
 
 
-walker GetFlowLine {
+walker:protect GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
     the legacy status fallback) has one implementation for board and view.
@@ -256,7 +256,7 @@ walker GetFlowLine {
 }
 
 
-walker ListStepTasks {
+walker:protect ListStepTasks {
     """One page of the work sitting on one step, for the panel the flow line
     view opens. Placement reuses GetFlowLine's rule over the same working
     set (`done_days`) so list and count never disagree; the walk touches
@@ -314,7 +314,7 @@ walker ListStepTasks {
 }
 
 
-walker ApplyTemplate {
+walker:protect ApplyTemplate {
     """Seed the org's flow line from one template, atomically. Idempotent by
     refusal: with any step already present the existing flow line is reported
     instead, so a double-click cannot overlay two flow lines."""
@@ -459,7 +459,7 @@ walker find_step {
 }
 
 
-walker SaveStep {
+walker:protect SaveStep {
     """Empty step_id creates; otherwise updates the addressed one. Update is
     partial on purpose (empty means keep): the inspector edits one field at a
     time and must not blank the others."""
@@ -543,7 +543,7 @@ walker SaveStep {
 }
 
 
-walker MoveStep(find_step) {
+walker:protect MoveStep(find_step) {
     """Persist the designer position after a drag, fired on mouse-up."""
     has x: float = 0.0,
         y: float = 0.0,
@@ -564,7 +564,7 @@ walker MoveStep(find_step) {
 }
 
 
-walker SetStepRules(find_step) {
+walker:protect SetStepRules(find_step) {
     """The step's entry rules, both sent every time: a task lands here only
     with a due date (`needs_due_date`) and a linked PR (`needs_pr`). Tasks
     already sitting here stay; the rules gate the next move in."""
@@ -582,7 +582,7 @@ walker SetStepRules(find_step) {
 }
 
 
-walker DeleteStep(find_step) {
+walker:protect DeleteStep(find_step) {
     """Removes the step and every transition into it (its own go with it);
     any task on it falls back to its status. Refuses to remove the LAST start
     or done step: an org with no way in or out has a board work cannot leave."""
@@ -637,7 +637,7 @@ walker DeleteStep(find_step) {
 }
 
 
-walker DeleteFlowLine {
+walker:protect DeleteFlowLine {
     """Removes every step and transition so the flow line can be designed again.
     Walks the caller's own root (no jid input, nothing to owned()-check).
     Tasks fall back to their status as after DeleteStep; name and roles stay;
@@ -668,7 +668,7 @@ walker DeleteFlowLine {
 }
 
 
-walker LinkTransition {
+walker:protect LinkTransition {
     """Draw a transition from_id -> to_id, both ends owned-checked. Loops and
     branches are legal; a self-loop is refused and a duplicate reports success."""
     has from_id: str = "",
@@ -760,7 +760,7 @@ walker LinkTransition {
 }
 
 
-walker LabelTransition {
+walker:protect LabelTransition {
     """Set or clear what has to be true to cross an existing transition, and
     what it carries and what moves a task across on its own. Unlike
     LinkTransition, empty here means CLEAR, the only way to take the wording,
@@ -842,7 +842,7 @@ walker LabelTransition {
 }
 
 
-walker UnlinkTransition {
+walker:protect UnlinkTransition {
     has from_id: str = "",
         to_id: str = "",
         reports: list[dict[str, any]] = [];

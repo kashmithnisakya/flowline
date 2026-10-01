@@ -7,7 +7,8 @@ one rule that every mutation follows by hand.
 
 ## Isolation is structural
 
-Every walker endpoint requires a JWT. The runtime resolves the caller's root
+Every walker endpoint is declared `walker:protect`, so it requires a JWT (a
+plain walker is private and not served at all). The runtime resolves the caller's root
 from the token and spawns the walker **on that root**. A traversal such as
 `[root --> ...]` can only reach nodes reachable from there, so a list walker
 cannot return another tenant's rows no matter how it filters. There are no

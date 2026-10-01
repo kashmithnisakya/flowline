@@ -104,7 +104,7 @@ def _llm_failed(what: str, e: Exception) {
 }
 
 
-walker AskAssistant {
+walker:protect AskAssistant {
     has question: str = "",
         from_date: str = "",
         to_date: str = "",
@@ -124,7 +124,7 @@ walker AskAssistant {
     }
 }
 
-walker WriteStandup {
+walker:protect WriteStandup {
     has period: str = "today",
         from_date: str = "",
         to_date: str = "",
@@ -141,7 +141,7 @@ walker WriteStandup {
     }
 }
 
-walker ProposeAction {
+walker:protect ProposeAction {
     """Returns a suggestion only. The client confirms it and then calls the
     ordinary CreateTask / MoveTask walkers, so the model never mutates."""
     # NOTE: not `request`, the serve layer reserves that name for the HTTP
