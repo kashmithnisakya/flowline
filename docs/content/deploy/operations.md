@@ -21,10 +21,10 @@ Kubernetes events; `jachammer top [--prod] --json` reports CPU and memory per
 pod.
 
 **Metrics.** `/metrics` (Prometheus format, with per-walker metrics) requires
-admin authentication. Through Jac 0.37.21, with more than one worker, it answers
-`200` with an empty body, because the collector is created before the worker
-supervisor configures multi-process mode (jaseci-labs/jac#9190); prefer
-`jachammer top` until that ships.
+admin authentication and merges every worker's series (before Jac 0.37.22 it
+answered `200` with an empty body whenever more than one worker ran,
+jaseci-labs/jac#9190). Process stats (CPU, memory, GC, file descriptors) are
+per process and stay sparse there; `jachammer top` reports them per pod.
 
 **Application logs.** The app logs to named loggers:
 
