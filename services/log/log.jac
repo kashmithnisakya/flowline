@@ -196,7 +196,7 @@ def day_slice(
 }
 
 
-walker ListLogEntries {
+walker:protect ListLogEntries {
     """One page of the entries in [from_date, to_date], newest day first and
     newest stamp first within a day, so a later page lands under the rows on
     screen. `total` is the whole range, from the day counts. A `task_id`

@@ -38,7 +38,7 @@ def outcome(kind: str, detail: str = "") -> dict[str, any] {
 
 
 @restspec(protocol=APIProtocol.WEBHOOK, scheme="github")
-walker GithubEvent {
+walker:protect GithubEvent {
     """One delivery from the App's webhook. `event` and `delivery` come from
     the X-GitHub-Event and X-GitHub-Delivery headers, the rest are the
     payload's top-level keys. The report lands in GitHub's delivery log."""
@@ -134,7 +134,7 @@ walker GithubEvent {
 }
 
 
-walker DrainGithubEvents {
+walker:protect DrainGithubEvents {
     """Apply the deliveries queued for this workspace, oldest first, without
     calling GitHub. The board runs it on open through SyncGithub; this is
     the GitHub-free way to run it alone."""

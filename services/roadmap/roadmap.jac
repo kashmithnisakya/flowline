@@ -43,7 +43,7 @@ def task_span(t: Task) -> list[str] {
 }
 
 
-walker RoadmapSnapshot {
+walker:protect RoadmapSnapshot {
     """One project's roadmap for [from_date, to_date], at most
     ROADMAP_MAX_ROWS rows; a foreign or unknown project reads empty. A bad
     window reads as two weeks back to eight ahead. Only open tasks and the

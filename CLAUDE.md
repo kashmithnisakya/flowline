@@ -106,8 +106,12 @@ people it tracks are roster members.
   `workspace_view` helper, so there is one definition of those lists), and
   `github` with `github.jac`, `events.jac`, `schedule.jac` (the scheduled
   sync, a function, not a walker) and `util.jac`) plus
-  `services/util.jac` for shared server-only helpers. Walkers are **bare
-  (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
+  `services/util.jac` for shared server-only helpers. Every endpoint walker
+  is **`walker:protect`** (JWT-required); there are no `:pub` walkers. Since
+  jac 0.37.23 a plain `walker` or `def` is private: not served and not
+  callable from the client, so a new endpoint without `:protect` 404s and
+  its page fails to build (E5082). The `find_*` lookup bases and the
+  scheduled `sync_connected_workspaces` stay plain on purpose. **Keep walker ability
   bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.21: the endpoint
   effect pass does not follow an ability body into an annex, so an annexed
   walker is classified as a pure read, the client caches it, and a save no
@@ -785,7 +789,8 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   without it a page's plain import of a walker pulls the whole module
   (abilities included) into the browser bundle and the build dies with
   "Client pathway failed to lower this edge reference shape". **A new
-  service module needs its own pin line.** The three `lib/utils`
+  service module needs its own pin line.** Since 0.37.23 a pin is placement
+  only: it never exposes a walker, `:protect` does. The three `lib/utils`
   helpers are pinned `"client"` because an evidence-free `def:pub` in a
   web-app is otherwise a server endpoint. `jac check <page> --placements`
   prints every verdict with its evidence.

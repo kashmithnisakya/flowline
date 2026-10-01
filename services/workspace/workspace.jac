@@ -141,7 +141,7 @@ def read_workspace(holder: Root) -> WorkspaceView {
 }
 
 
-walker GetWorkspace {
+walker:protect GetWorkspace {
     """Everything a page needs beside its own data, in one read: the lists
     BoardSnapshot carries with `with_workspace`, the flow line's name and
     template key, and the GitHub connection view. No GitHub call."""

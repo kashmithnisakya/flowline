@@ -206,7 +206,7 @@ def read_connection(holder: Root) -> GithubConnectionView {
 }
 
 
-walker GithubStatus {
+walker:protect GithubStatus {
     """Cheap, no GitHub call: every page showing GitHub UI opens with it."""
     has reports: list[GithubConnectionView] = [];
 
@@ -216,7 +216,7 @@ walker GithubStatus {
 }
 
 
-walker StartGithubInstall {
+walker:protect StartGithubInstall {
     """Hands back the install URL carrying a one-shot nonce, stored server-side
     and burned on use so a forged callback cannot bind another installation."""
     has reports: list[dict[str, any]] = [];
@@ -246,7 +246,7 @@ walker StartGithubInstall {
 }
 
 
-walker CompleteGithubInstall {
+walker:protect CompleteGithubInstall {
     """Finish the round trip GitHub redirected back from. Two checks before
     anything is stored: the nonce matches the one this workspace issued (CSRF),
     and the GitHub user can actually see the claimed installation, since
@@ -336,7 +336,7 @@ walker CompleteGithubInstall {
 }
 
 
-walker DisconnectGithub {
+walker:protect DisconnectGithub {
     """Forgets the installation. Imported tasks and their links stay: they
     are this workspace's own data, not GitHub's."""
     has reports: list[dict[str, any]] = [];
@@ -357,7 +357,7 @@ walker DisconnectGithub {
 
 # ---------------------------------------------------------------- reads
 
-walker ListGithubRepos {
+walker:protect ListGithubRepos {
     """One GitHub page (100) of the repos this installation was granted,
     filtered by `query` after the fetch, so a page under a query can run
     short. `attached` marks the ones already tracked in the workspace;
@@ -811,7 +811,7 @@ def empty_page(page: int) -> dict[str, any] {
 }
 
 
-walker ListRepoIssues {
+walker:protect ListRepoIssues {
     """One page of a repo's issues. Page 1 comes from the page the sync
     stored (`synced_at`, `stale`) and never calls GitHub; `refresh` or a
     later page reads GitHub, and page 1 then replaces the stored one.
@@ -843,7 +843,7 @@ walker ListRepoIssues {
 }
 
 
-walker ListRepoPulls {
+walker:protect ListRepoPulls {
     """One page of a repo's pull requests, served the way ListRepoIssues is:
     page 1 from the store unless `refresh`, later pages from GitHub."""
     has repo_id: str = "",
@@ -871,7 +871,7 @@ walker ListRepoPulls {
 }
 
 
-walker SearchRepoItems {
+walker:protect SearchRepoItems {
     """One page of GitHub search results scoped to one repo. `kind` picks issues
     or PRs; rows use the list walkers' shapes. GitHub allows ~30 searches a
     minute, so the client only calls on an explicit action. Foreign repo: empty."""
@@ -1135,7 +1135,7 @@ def file_issue_item(
 }
 
 
-walker ImportIssues {
+walker:protect ImportIssues {
     """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
     the identity. Closed issues land on the done step, the rest on the chosen
     step; `step_id` wins over `status`, which only applies with no flow line."""
@@ -1260,7 +1260,7 @@ walker ImportIssues {
 }
 
 
-walker CreateIssueFromTask(find_task) {
+walker:protect CreateIssueFromTask(find_task) {
     """Open a GitHub issue for this task. The one and only write to GitHub,
     and one-way: later task edits never touch the issue."""
     has repo_id: str = "",
@@ -1335,7 +1335,7 @@ walker CreateIssueFromTask(find_task) {
 }
 
 
-walker SetRepoAutoSync {
+walker:protect SetRepoAutoSync {
     """Turn auto-filing of new issues on or off for one repo. Enabling
     clears the cursor so the next sync backfills the repo's history; the
     (gh_repo, gh_issue_number) identity keeps re-runs duplicate-free."""
@@ -1358,7 +1358,7 @@ walker SetRepoAutoSync {
 }
 
 
-walker SetRepoAutoDone {
+walker:protect SetRepoAutoDone {
     """Per-repo policy: a merged PR or a closed issue moves the linked card
     to the done step on the next sync. Off, the board only shows nudges."""
     has repo_id: str = "",
@@ -1377,7 +1377,7 @@ walker SetRepoAutoDone {
 }
 
 
-walker SetRepoLabelSync {
+walker:protect SetRepoLabelSync {
     """Per-repo policy, off by default: a move across an arrow with a GitHub
     label writes that label to the issue or its PR, and leaving a step takes
     off the labels not kept. Turning it on creates the flow line's labels in
@@ -1399,7 +1399,7 @@ walker SetRepoLabelSync {
 }
 
 
-walker SetRepoAutoClose {
+walker:protect SetRepoAutoClose {
     """Per-repo policy, the reverse of auto_done and off by default: a card
     landing on Done closes its GitHub issue and one leaving Done reopens it.
     The receiver drops the App's own echo, so neither is applied twice."""
@@ -2274,7 +2274,7 @@ def refresh_repo_lists(ctx: SyncContext, full_name: str) -> bool {
 }
 
 
-walker SyncGithub {
+walker:protect SyncGithub {
     """One bounded increment of the GitHub sync. Every tracked repo's issues
     stream (issues AND pull requests, oldest update first) is read from the
     repo's cursor and each item goes through apply_issue_item or

@@ -67,7 +67,7 @@ def name_taken(sets: list[FilterSet], name: str, except_id: str) -> bool {
 }
 
 
-walker SetBoardFilters {
+walker:protect SetBoardFilters {
     """Keep the board's filters on the account. `filters` is stored as
     clean_filters leaves it; `set_id` names the saved set they came from and
     is kept only when it is one of this account's board sets."""
@@ -97,7 +97,7 @@ walker SetBoardFilters {
 }
 
 
-walker SaveFilterSet {
+walker:protect SaveFilterSet {
     """Name a set of filters. No `set_id` creates one on `page`; otherwise the
     addressed set takes the name and the filters (a rename sends its own
     filters back). A name is 1 to 60 characters and unique on its page
@@ -173,7 +173,7 @@ walker SaveFilterSet {
 }
 
 
-walker DeleteFilterSet {
+walker:protect DeleteFilterSet {
     """Delete one saved set. The board keeps its filters, and forgets the set
     as the one they came from."""
     has set_id: str = "",

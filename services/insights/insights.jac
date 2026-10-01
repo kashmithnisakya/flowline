@@ -446,7 +446,7 @@ obj OverviewData {
 }
 
 
-walker OverviewSnapshot {
+walker:protect OverviewSnapshot {
     """The whole Overview in one call. The open tasks and this week's Done
     are read once and every panel is computed from them; Done per week
     comes from the projects' weekly counts, so the page costs one round trip
@@ -500,7 +500,7 @@ walker OverviewSnapshot {
 }
 
 
-walker Digest {
+walker:protect Digest {
     """The workspace snapshot. Bare (JWT-required) like every walker here: a
     :pub walker would run anonymous callers on the shared guest graph."""
     has from_date: str = "",

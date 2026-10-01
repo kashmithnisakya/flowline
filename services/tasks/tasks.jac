@@ -368,7 +368,7 @@ def sort_tasks(holder: Root, rows: list[Task], field: str, reverse: bool) {
 }
 
 
-walker ListTasks {
+walker:protect ListTasks {
     """One page of tasks. `scope` picks the working set the board renders
     ("working": open plus Done reached in the last `done_days`), the history
     behind its "+N older" ("older": Done before that cutoff, newest first),
@@ -851,7 +851,7 @@ def task_totals(
 }
 
 
-walker TaskCounts {
+walker:protect TaskCounts {
     """The Overview's numbers over the whole history: open tasks, Done per
     week for the four weeks ending in `monday`'s week (from the weekly
     counts), and total/done per project (from the tallies)."""
@@ -872,7 +872,7 @@ walker TaskCounts {
 }
 
 
-walker TaskHistory {
+walker:protect TaskHistory {
     """The Overview's charts over time: for the `weeks` weeks ending in
     `monday`'s week, tasks added and moved to Done per week plus running
     scope and done totals. `project_id` narrows it to that project. It reads
@@ -948,7 +948,7 @@ walker TaskHistory {
 }
 
 
-walker CreateTask {
+walker:protect CreateTask {
     has title: str,
         category: str = "",
         tags: list[str] = [],
@@ -1059,7 +1059,7 @@ walker find_task {
     }
 }
 
-walker UpdateTask(find_task) {
+walker:protect UpdateTask(find_task) {
     has title: str = "",
         category: str = "",
         tags: list[str] = [],
@@ -1167,7 +1167,7 @@ walker UpdateTask(find_task) {
     }
 }
 
-walker GetTask(find_task) {
+walker:protect GetTask(find_task) {
     """One task by jid, owner-checked by find_task: the full TaskView, which
     is what the task sheet loads when it opens (a list row carries no notes
     or checklist items), and a deep link to a card the board's working set
@@ -1181,7 +1181,7 @@ walker GetTask(find_task) {
 }
 
 
-walker ListTaskTitles {
+walker:protect ListTaskTitles {
     """The working set as id and title only, for the assistant's citations:
     the rows and order of ListTasks(scope="working"), at most `limit` (capped
     at 500), with nothing else on the wire."""
@@ -1223,7 +1223,7 @@ def checklist_rows(t: Task) -> list[dict[str, any]] {
 }
 
 
-walker AddChecklistItem(find_task) {
+walker:protect AddChecklistItem(find_task) {
     """Append one item to the task's checklist. Blank text or a full list
     (CHECKLIST_MAX) adds nothing; the task view is reported either way."""
     has text: str = "",
@@ -1243,7 +1243,7 @@ walker AddChecklistItem(find_task) {
 }
 
 
-walker SetChecklistItem(find_task) {
+walker:protect SetChecklistItem(find_task) {
     """Check, uncheck or rename one item: `done` is "yes", "no" or "" to leave
     it, `text` renames when not blank. Checking an item off writes a log
     line with the progress; nothing else does."""
@@ -1304,7 +1304,7 @@ walker SetChecklistItem(find_task) {
 }
 
 
-walker RemoveChecklistItem(find_task) {
+walker:protect RemoveChecklistItem(find_task) {
     """Drop one item from the task's checklist; an unknown id removes nothing."""
     has item_id: str = "",
         reports: list[TaskView] = [];
@@ -1326,7 +1326,7 @@ walker RemoveChecklistItem(find_task) {
 }
 
 
-walker SetMoveInfo(find_task) {
+walker:protect SetMoveInfo(find_task) {
     """The move handoff, all fields optional. Review gets a reviewer, an
     ETA and a PR link; Blocked and Changes Requested get a note. Partial
     by design; anything left empty stays untouched."""
@@ -1365,7 +1365,7 @@ walker SetMoveInfo(find_task) {
     }
 }
 
-walker MoveTask(find_task) {
+walker:protect MoveTask(find_task) {
     """The drag-drop / arrow-move endpoint. Server-authoritative: a move
     appends to the end of the target column, unless `before_id`/`after_id`
     asks for the spot beside that card there (a stale anchor appends). A
@@ -1548,7 +1548,7 @@ walker MoveTask(find_task) {
     }
 }
 
-walker DeleteTask(find_task) {
+walker:protect DeleteTask(find_task) {
     can remove with Task entry {
         gone = jid(here);
         for p in task_project(here) {

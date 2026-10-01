@@ -48,6 +48,11 @@ jobs:
       - name: jac --version
         run: jac --version
 
+      # Since 0.37.23 `jac check` fails (E1138) on an import of a dependency
+      # jac.toml declares but the environment lacks, so install them first.
+      - name: jac install (python + npm dependencies)
+        run: jac install
+
       # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
       # those files verbatim from the registry, so holding them to the
       # formatter would go red on the next install. They still get linted and
