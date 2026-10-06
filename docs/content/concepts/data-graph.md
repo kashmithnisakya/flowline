@@ -16,15 +16,16 @@ flowchart LR
     root(("root"))
     root --> projects["Projects"] --> project["Project"] --> task["Task"]
     root --> members["Members"] --> member["Member"]
-    root --> roles["Roles"] --> role["Role"]
+    root --> roles["Roles"] --> role["Role"] --> resp["Responsibility"]
     root --> steps["WorkflowSteps<br/><small>name, template_key</small>"] --> step["WorkflowStep"]
     root --> logs["Logs"] --> day["LogDay"] --> entry["LogEntry"]
     root --> filtersets["FilterSets<br/><small>board, board_set</small>"] --> filterset["FilterSet"]
+    root --> runs["AgentRuns"] --> run["AgentRun"]
     root --> repo["Repo"]
     root --> conn["GithubConnection"]
 
     classDef box stroke-dasharray:4 3
-    class projects,members,roles,steps,logs,filtersets box
+    class projects,members,roles,steps,logs,filtersets,runs box
 ```
 
 **Typed edges.** Five edges declared in `models.jac` link rows across boxes.
@@ -43,6 +44,8 @@ flowchart LR
 | `root ++> Projects ++> Project ++> Task` | A task's project **is** its container. Every task has exactly one project, and moving a task to another project re-homes it. |
 | `root ++> Members ++> Member` | The roster. Members are archived (`active = false`), never deleted. |
 | `root ++> Roles ++> Role` | Org-level roles; a member holds one through a `HasRole` edge. |
+| `Role ++> Responsibility` | An AI responsibility the role carries (an `AI_RESPONSIBILITIES` key, such as code review), run when a task enters one of the role's steps. |
+| `root ++> AgentRuns ++> AgentRun` | One run of a responsibility on a task: its status and result, what the task sheet shows. |
 | `root ++> WorkflowSteps ++> WorkflowStep` | The flow line. The box also carries the flow line's display name and the template that seeded it. |
 | `root ++> Logs ++> LogDay ++> LogEntry` | The activity log task events write, one `LogDay` per date. |
 | `root ++> FilterSets ++> FilterSet` | Named sets of filters. The box also carries the board's own filters, so the board opens on them in any browser. |
@@ -54,7 +57,7 @@ flowchart LR
 
 One box per kind sits under the root. Writers get or create it through a helper
 (`projects_box(root)`, `members_box`, `roles_box`, `steps_box`, `logs_box`,
-`filter_sets_box`);
+`filter_sets_box`, `agent_runs_box`);
 reads look it up and return nothing when it is absent, so a read never writes.
 Two overlapping first writes can leave two boxes of one kind, so the cross-kind
 readers (`projects_of`, `members_of`, `roles_of`, `steps_of`,
@@ -79,8 +82,9 @@ same row up keeps it in a local instead.
 ### Containment is ownership
 
 [`owned(holder, target)`](security.md#resolution-is-not-authorization) climbs
-container edges, at most three hops (task, project, box; or log entry, day,
-box), and compares each parent with the caller's root. Typed edges never lead
+container edges, at most three hops (task, project, box; log entry, day,
+box; or responsibility, role, box), and compares each parent with the
+caller's root. Typed edges never lead
 to a container, so they cannot make a foreign row look owned.
 
 ### Links that are fields, not edges
@@ -97,6 +101,8 @@ Some references are stored as jid strings on purpose:
 | `Task.reviewer_id`, `reviewer_name` | A snapshot of who was asked to review. |
 | `Task.gh_parent_repo`, `gh_parent_number` | GitHub sub-issue family. An edge would cost a traversal per row in every list. |
 | `LogEntry.task_id`, `member_name`, `project_name` | The log is history: names are snapshotted when the entry is written. |
+| `AgentRun.task_id`, `responsibility_id` | Like a log entry, a run outlives a deleted task or responsibility, and a task's runs are one pushed query on `task_id`. |
+| `Responsibility.on_steps` | The steps of the role it runs on, by jid; empty means all of them. A deleted step's id simply never matches. |
 
 ### Ids
 
@@ -128,6 +134,8 @@ See [GitHub sync](github-sync.md).
 
 ::: node Role h3
 
+::: node Responsibility h3
+
 ::: node WorkflowSteps h3
 
 ::: node WorkflowStep h3
@@ -140,6 +148,8 @@ See [GitHub sync](github-sync.md).
 
 ::: node FilterSet h3
 
+::: node AgentRun h3
+
 ::: node Repo h3
 
 ::: node GithubConnection h3
@@ -151,6 +161,8 @@ See [GitHub sync](github-sync.md).
 ::: node Roles h3
 
 ::: node FilterSets h3
+
+::: node AgentRuns h3
 
 ## Typed edges
 

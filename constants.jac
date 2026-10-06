@@ -238,6 +238,31 @@ glob STATUSES: list[str] = [
              "link_keep_labels": [True, False, False, False, False, False, False, False]
          }
      ],
+     # What a role's AI can be responsible for. `needs` is what a task must
+     # carry for a run ("pr": a linked pull request), `modes` how far the
+     # result may go (comment only, or send the task back).
+     AI_RESPONSIBILITIES: list[dict[str, any]] = [
+         {
+             "key": "code_review",
+             "name": "Code review",
+             "blurb": "Reviews the linked pull request and leaves inline comments.",
+             "needs": "pr",
+             "modes": ["comment", "request_changes"]
+         }
+     ],
+     AGENT_RUN_STATUSES: list[str] = ["queued", "running", "done", "failed", "skipped"],
+     # Caps on what one workspace's AI may do: runs per day, what one review
+     # reads (files, changed lines, input tokens, file calls in flight), the
+     # comments it posts and the length of a team's instructions.
+     AGENT_LIMITS: dict[str, int] = {
+         "daily_runs": 50,
+         "max_files": 60,
+         "max_changed_lines": 3000,
+         "max_input_tokens": 200000,
+         "files_in_flight": 4,
+         "max_comments": 20,
+         "max_instructions": 2000
+     },
      # Kind -> legacy status. A move writes both, so insights, GitHub sync
      # and the assistant never have to learn what a step is.
      KIND_STATUS: dict[str, str] = {

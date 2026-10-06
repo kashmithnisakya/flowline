@@ -72,7 +72,11 @@ people it tracks are roster members.
   (an entry hangs under its day; `days_between(root, since, until)` reads
   the days in a date range, filtered in the store's query) and
   `root ++> FilterSets ++> FilterSet` (named filter sets;
-  the box also holds the board's own filters); `Repo` and
+  the box also holds the board's own filters) and
+  `root ++> Roles ++> Role ++> Responsibility` (a role's AI responsibilities,
+  an `AI_RESPONSIBILITIES` key each) and `root ++> AgentRuns ++> AgentRun`
+  (one run of a responsibility on a task, naming both by jid; readers
+  `responsibilities_on_step`, `runs_of_task`, `run_by_key`); `Repo` and
   `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
@@ -411,8 +415,8 @@ Isolation is structural: authenticated walkers run on the caller's own root, so
 identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task`
 lookup base) before touching anything. `owned` climbs
-container edges (at most three hops: task, project, box; or log entry, day,
-box) and compares each
+container edges (at most three hops: task, project, box; log entry, day,
+box; or responsibility, role, box) and compares each
 parent's jid with the caller's root. `Root` is not a runtime name in
 `models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
 the webhook receiver cannot apply a delivery itself: it queues, the tenant
