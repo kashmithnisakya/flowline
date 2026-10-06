@@ -167,6 +167,9 @@ jobs:
             # The scheduled GitHub sync ticks every 5 minutes by default; the
             # webhook gate waits for one pass, so the serve job shortens it.
             echo "FLOWLINE_SYNC_INTERVAL_SECONDS=30"
+            # Below the workspaces the gate binds, so a tick really caps and
+            # the gate sees the next tick carry the rest.
+            echo "FLOWLINE_SYNC_MAX_WORKSPACES=2"
           } >> "$GITHUB_ENV"
 
       - name: Serve the app (jac run --no-dev, background)

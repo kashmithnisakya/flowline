@@ -25,9 +25,16 @@ SECRET = os.environ.get("GITHUB_APP_WEBHOOK_SECRET", "ci-webhook-secret")
 BOT = os.environ.get("GITHUB_APP_SLUG", "ci-app") + "[bot]"
 REPO = "ci-org/ci-repo"
 INST_A, INST_B, INST_A2, INST_D, INST_S = 111, 222, 333, 444, 666
+# The second workspace nobody opens, for the rotation check: with a cap per
+# tick, both it and INST_S must get a pass.
+INST_T = 777
 # The scheduled sync's interval as the server was booted (the env the CI
 # serve job and perf-serve.sh set); the default is the production one.
 SYNC_INTERVAL = int(os.environ.get("FLOWLINE_SYNC_INTERVAL_SECONDS") or "300")
+# Workspaces one tick takes, as the server was booted. A tick takes the ones
+# whose pass is oldest, so with a cap below the number this gate binds, every
+# workspace still comes up, a tick later.
+SYNC_MAX = int(os.environ.get("FLOWLINE_SYNC_MAX_WORKSPACES") or "20")
 # Never connected by any workspace, in this run or an earlier one against the
 # same store: the index is a docs-store row and outlives a single gate run.
 INST_NONE = 555
@@ -619,7 +626,7 @@ def main() -> int:
     # ---------------------------------------------------------- the schedule syncs a workspace nobody opens
     print("== scheduled sync")
     req(STUB, "POST", "/_stub/reset", {
-        "installations": [INST_A, INST_B, INST_A2, INST_D, INST_S],
+        "installations": [INST_A, INST_B, INST_A2, INST_D, INST_S, INST_T],
         "repos": {REPO: [issue(1, "open", "2026-09-02T10:00:00Z", title="Stub issue one")]},
     }, auth=False)
     login("s")
@@ -642,6 +649,25 @@ def main() -> int:
               found is not None and bool(st.get("last_sync_at")) and task_by_issue(1) is not None, (found, st.get("last_sync_at")))
         stored = walker("ListRepoIssues", {"repo_id": rid_s})
         check("  and stored the repo's issue page", bool(stored.get("synced_at")) and len(stored.get("rows", [])) >= 1, stored)
+
+        # #174: a tick takes at most SYNC_MAX workspaces, oldest pass first.
+        # A second workspace nobody opens must still get a pass, within the
+        # grace interval plus the ticks its turn needs.
+        token_s = TOKEN
+        login("t")
+        connect(INST_T)
+        token_t = TOKEN
+        rounds = 2 + -(-6 // max(SYNC_MAX, 1))
+        deadline = time.time() + rounds * SYNC_INTERVAL + 30
+        seen_t = ""
+        while not seen_t and time.time() < deadline:
+            time.sleep(3)
+            seen_t = walker("GithubStatus").get("last_sync_at") or ""
+        TOKEN = token_s
+        seen_s = walker("GithubStatus").get("last_sync_at") or ""
+        TOKEN = token_t
+        check(f"  and a tick capped at {SYNC_MAX} starves neither workspace",
+              bool(seen_t) and bool(seen_s), (seen_t, seen_s, rounds))
 
     print("webhook gate: " + ("PASS" if not FAILS else f"FAIL ({len(FAILS)})"))
     return 1 if FAILS else 0

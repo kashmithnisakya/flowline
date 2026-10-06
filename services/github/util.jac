@@ -302,19 +302,27 @@ def root_for_installation(installation_id: int) -> str {
 }
 
 
-# Every bound installation with the workspace that holds it: the registry
-# the scheduled sync walks. A store hiccup reads as no workspaces.
-def bound_installations -> list[dict[str, any]] {
+# The bound installations a tick should take next: the one whose pass is
+# oldest first (an unsynced row sorts by when it was bound), at most `limit`
+# of them, so one busy workspace cannot starve the rest and every workspace
+# comes up within ceil(workspaces / limit) ticks. A store hiccup reads as no
+# workspaces. limit <= 0 reads them all.
+def due_installations(limit: int = 0) -> list[dict[str, any]] {
     found: list[dict[str, any]] = [];
     try {
         db = shared_store();
         if db is None {
             return found;
         }
-        rows = db.rows(
-            "SELECT id, doc FROM jac_docs WHERE collection = :c ORDER BY id",
-            {"c": INSTALL_INDEX}
-        );
+        oldest = "SELECT id, doc FROM jac_docs WHERE collection = :c "
+            + "AND doc->>'root_jid' <> '' "
+            + "ORDER BY COALESCE(doc->>'synced_at', doc->>'bound_at', '') ASC, id";
+        args: dict[str, any] = {"c": INSTALL_INDEX};
+        if limit > 0 {
+            oldest += " LIMIT :n";
+            args["n"] = int(limit);
+        }
+        rows = db.rows(oldest, args);
         for (rid, raw) in rows {
             doc = raw if isinstance(raw, dict) else json.loads(str(raw));
             key = str(rid);
@@ -323,7 +331,8 @@ def bound_installations -> list[dict[str, any]] {
                     "installation_id": int(key) if key.isdigit() else 0,
                     "root_jid": str(doc.get("root_jid") or ""),
                     "bound_at": str(doc.get("bound_at") or ""),
-                    "webhook_seen_at": str(doc.get("webhook_seen_at") or "")
+                    "webhook_seen_at": str(doc.get("webhook_seen_at") or ""),
+                    "synced_at": str(doc.get("synced_at") or "")
                 }
             );
         }
@@ -489,6 +498,29 @@ def touch_installation(installation_id: int, seen_at: str) {
         );
     } except Exception as e {
         log.warning("installation index: touch failed: " + str(e));
+    }
+}
+
+
+def note_sync_at(installation_id: int) {
+    try {
+        db = shared_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps(
+                    {"synced_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                ),
+                "c": INSTALL_INDEX,
+                "i": str(installation_id)
+            }
+        );
+    } except Exception as e {
+        log.warning("installation index: sync stamp failed: " + str(e));
     }
 }
 
