@@ -41,7 +41,7 @@ def:pub TaskLine(
             <span className="hidden lg:contents">
                 <TaskCells task={task} today={today} color={dot}/>
             </span>
-            <span className="absolute top-1.5 right-1.5 lg:static">
+            <span className="absolute top-1.5 right-1.5 lg:static lg:justify-self-end">
                 <RowMove
                     task={task}
                     open={moveOpen}

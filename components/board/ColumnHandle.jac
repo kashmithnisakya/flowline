@@ -1,14 +1,14 @@
-"""The resize grip on a data column's left edge, sitting in the gap before
-it. The title column flexes, so dragging left widens the column and right
-narrows it; the arrow keys step 8px the same way. On hover or drag a guide
-line runs down the board to the last row on screen."""
-
-import from .columnWidths { MIN_WIDTH, MAX_WIDTH }
+"""The resize grip on a column's right edge, sitting in the gap after it.
+Dragging right widens that column only; the arrow keys step 8px. The drag
+starts from the column's measured width, so a title that fills the row
+works too. On hover or drag a guide line runs down the board."""
 import from .ColumnGuide { ColumnGuide }
 
 def:pub ColumnHandle(
     label: str,
     width: int,
+    lo: int,
+    hi: int,
     onResize: Callable[[float, bool], None],
     onFit: Callable[[], None]
 ) -> JsxElement {
@@ -29,38 +29,43 @@ def:pub ColumnHandle(
         lineH = bottom - float(grip.top);
     }
 
+    # The rendered width of the column the grip belongs to.
+    def columnWidth(e: any) -> float {
+        return float(e.currentTarget.parentElement.getBoundingClientRect().width);
+    }
+
     def down(e: any) {
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
         measure(e);
         startX = float(e.clientX);
-        startW = float(width);
+        startW = columnWidth(e);
         dragging = True;
     }
 
     def move(e: any) {
         if dragging {
-            onResize(startW - (float(e.clientX) - startX), False);
+            onResize(startW + (float(e.clientX) - startX), False);
         }
     }
 
     def up(e: any) {
         if dragging {
             dragging = False;
-            onResize(startW - (float(e.clientX) - startX), True);
+            onResize(startW + (float(e.clientX) - startX), True);
         }
     }
 
     def key(e: any) {
-        step = 0;
-        if e.key == "ArrowLeft" {
-            step = 8;
-        } elif e.key == "ArrowRight" {
-            step = -8;
+        step = 0.0;
+        if e.key == "ArrowRight" {
+            step = 8.0;
+        } elif e.key == "ArrowLeft" {
+            step = -8.0;
         }
-        if step != 0 {
+        if step != 0.0 {
             e.preventDefault();
-            onResize(float(width + step), True);
+            onResize(columnWidth(e) + step, True);
         }
     }
 
@@ -70,8 +75,8 @@ def:pub ColumnHandle(
             aria-orientation="vertical"
             aria-label={"Resize " + label + " column"}
             aria-valuenow={width}
-            aria-valuemin={MIN_WIDTH}
-            aria-valuemax={MAX_WIDTH}
+            aria-valuemin={lo}
+            aria-valuemax={hi}
             tabIndex={0}
             onPointerEnter={lambda (e: any) {
                 measure(e);
@@ -84,7 +89,7 @@ def:pub ColumnHandle(
             onPointerCancel={up}
             onDoubleClick={lambda { onFit(); }}
             onKeyDown={key}
-            className="group/grip absolute top-1/2 -left-3 z-10 flex h-5 w-3 -translate-y-1/2 cursor-col-resize touch-none justify-center outline-none"
+            className="group/grip absolute top-1/2 -right-3 z-10 flex h-5 w-3 -translate-y-1/2 cursor-col-resize touch-none justify-center outline-none"
         >
             <span
                 className={"h-full w-px rounded-full transition-colors "
