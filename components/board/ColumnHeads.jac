@@ -1,14 +1,32 @@
 """The board's column labels from lg up, once above every step group, on the
-same grid as a task row's cells. Each data column has a handle on its left
-edge: drag it (or focus it and use the arrow keys) to resize, double-click
-to fit its content. Widths stay in this browser."""
+same grid as a task row's cells. The title and each data column have a
+handle on their right edge: drag it (or use the arrow keys) to resize that
+column alone, double-click to fit (the title goes back to filling the row)."""
 
 import from "react" { useEffect }
 import from .TaskCells { GROUP_COLUMNS }
 import from .ColumnHandle { ColumnHandle }
-import from .columnWidths { clampWidth, fitWidth, loadWidths, keepWidths, applyWidths }
+import from .columnWidths {
+    clampWidth,
+    fitWidth,
+    headWidth,
+    loadWidths,
+    keepWidths,
+    applyWidths,
+    MIN_WIDTH,
+    MAX_WIDTH,
+    MIN_TITLE,
+    MAX_TITLE
+}
 
-glob LABELS: list[str] = ["People", "Priority", "Checklist", "Due", "GitHub"];
+glob LABELS: list[str] = [
+         "Task",
+         "People",
+         "Priority",
+         "Checklist",
+         "Due",
+         "GitHub"
+     ];
 
 def:pub ColumnHeads -> JsxElement {
     has widths: list[int] = loadWidths();
@@ -24,14 +42,40 @@ def:pub ColumnHeads -> JsxElement {
         []
     );
 
+    # While the title fills the row the columns hang off the right edge, so
+    # the first resize fixes the title where it is and the dragged edge follows.
     def resize(idx: int, w: float, save: bool) {
+        title = widths[0];
+        if title == 0 and idx != 0 {
+            title = clampWidth(0, headWidth(0));
+        }
         next_widths: list[int] = [];
         for (j, old) in enumerate(widths) {
-            next_widths.append(clampWidth(w) if j == idx else old);
+            if j == idx {
+                next_widths.append(clampWidth(idx, w));
+            } elif j == 0 {
+                next_widths.append(title);
+            } else {
+                next_widths.append(old);
+            }
         }
         widths = next_widths;
         if save {
             keepWidths(next_widths);
+        }
+    }
+
+    # The title's fit is filling the row again.
+    def fitColumn(idx: int) {
+        if idx == 0 {
+            next_widths: list[int] = [0];
+            for j in range(1, len(widths)) {
+                next_widths.append(widths[j]);
+            }
+            widths = next_widths;
+            keepWidths(next_widths);
+        } else {
+            resize(idx, float(fitWidth(idx)), True);
         }
     }
 
@@ -43,14 +87,19 @@ def:pub ColumnHeads -> JsxElement {
                 + GROUP_COLUMNS}
         >
             <span aria-hidden="true"/>
-            <span aria-hidden="true">Task</span>
             {for (i, label) in enumerate(LABELS) {
-                <span key={"h" + str(i)} className="relative min-w-0">
+                <span
+                    key={"h" + str(i)}
+                    data-head={str(i)}
+                    className="relative min-w-0"
+                >
                     <ColumnHandle
                         label={label}
                         width={widths[i]}
+                        lo={MIN_TITLE if i == 0 else MIN_WIDTH}
+                        hi={MAX_TITLE if i == 0 else MAX_WIDTH}
                         onResize={lambda (w: float, save: bool) { resize(i, w, save); }}
-                        onFit={lambda { resize(i, float(fitWidth(i)), True); }}
+                        onFit={lambda { fitColumn(i); }}
                     />
                     <span aria-hidden="true" className="block truncate">
                         <span data-col={str(i)}>{label}</span>
