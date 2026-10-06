@@ -47,9 +47,11 @@ No page load calls GitHub. The reconcile poll runs on a server schedule,
 | Interval | every 5 minutes (`SYNC_INTERVAL_SECONDS`, 300) | one worker per tick across workers and pods, through the runtime's `sched:` lease on the Postgres store |
 | Per-workspace lease | `SYNC_LEASE_SECONDS`, 240 s | `sync:<root jid>` in the store's `kv_state`; a pass that finds it held skips the workspace |
 | Grace after connect | one interval | a workspace bound inside the last interval is left to its GitHub page; its first pass is the next tick |
+| Workspaces per tick | 20 (`FLOWLINE_SYNC_MAX_WORKSPACES`) | the ones whose pass is oldest; the rest follow on the next ticks, so every workspace comes up within `ceil(workspaces / 20)` ticks |
 
-Each tick walks the `gh_installations` index (installation id to workspace
-root) and runs one `SyncGithub(auto=True)` pass in each workspace's own root:
+Each tick takes that many rows of the `gh_installations` index (installation id
+to workspace root), oldest pass first, and runs one `SyncGithub(auto=True)`
+pass in each workspace's own root:
 drain the webhook queue, then poll unless the workspace synced inside its
 cooldown (1 minute, or 15 while deliveries are flowing), then rewrite the open
 issue and pull request pages the GitHub page renders. The pass is bounded (5
@@ -68,8 +70,10 @@ warning per failure. **Sync now** and **Re-sync history** in Workspace's GitHub 
 run the walker by hand, ignore the cooldown, and hold the workspace's lease for
 `SYNC_LEASE_SECONDS`, so the schedule stays out of a workspace someone is
 syncing. `FLOWLINE_SYNC_INTERVAL_SECONDS` in the pod environment overrides the
-interval (the CI serve job sets 30 to observe a pass); a deployment leaves it
-unset.
+interval (the CI serve job sets 30 to observe a pass) and
+`FLOWLINE_SYNC_MAX_WORKSPACES` the workspaces one tick takes (the CI serve job
+sets 2, below the workspaces its gate binds, so a tick really caps); a
+deployment leaves both unset.
 
 ## Changing a running deployment
 

@@ -462,8 +462,14 @@ under `@schedule(trigger=ScheduleTrigger.STATIC, interval=SYNC_INTERVAL_SECONDS)
 (300 s; `FLOWLINE_SYNC_INTERVAL_SECONDS` overrides it for the gates, CI
 uses 30), registered by its import in `main.jac` like a walker. It runs in
 the app workers as the system identity, one worker per tick through the
-runtime's `sched:` lease on the Postgres store, walks the `gh_installations`
-index (`bound_installations`), skips a workspace bound inside the last
+runtime's `sched:` lease on the Postgres store, takes the
+`FLOWLINE_SYNC_MAX_WORKSPACES` (20) rows of the `gh_installations` index whose
+pass is oldest (`due_installations`, ordering on `synced_at` and falling back
+to `bound_at`, so one slow workspace delays the rest by a tick instead of
+blocking them and every workspace comes up within
+ceil(workspaces / the cap) ticks; `note_sync_at` stamps every row the tick
+takes, including one whose pass failed or whose lease was held elsewhere, or
+it would hold the head of the queue), skips a workspace bound inside the last
 interval (still being set up on its GitHub page), takes the per-workspace
 lease `sync:<root jid>` (`acquire_sync_lease`, `SYNC_LEASE_SECONDS` = 240,
 released after the pass) and spawns `SyncGithub(auto=True)` inside a pushed
