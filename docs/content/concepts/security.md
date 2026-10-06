@@ -7,7 +7,8 @@ one rule that every mutation follows by hand.
 
 ## Isolation is structural
 
-Every walker endpoint requires a JWT. The runtime resolves the caller's root
+Every walker endpoint is declared `walker:protect`, so it requires a JWT (a
+plain walker is private and not served at all). The runtime resolves the caller's root
 from the token and spawns the walker **on that root**. A traversal such as
 `[root --> ...]` can only reach nodes reachable from there, so a list walker
 cannot return another tenant's rows no matter how it filters. There are no
@@ -70,8 +71,7 @@ walker DeleteTask(find_task) {
 }
 ```
 
-The same pattern covers `find_project`, `find_member`, `find_step` and
-`find_log_entry`. A walker that takes a second id (an assignee, a reviewer, a
+The same pattern covers `find_project`, `find_member` and `find_step`. A walker that takes a second id (an assignee, a reviewer, a
 target project) resolves and checks that one too.
 
 !!! info "A foreign id is a silent no-op"
@@ -137,9 +137,11 @@ Before merging a change to walkers or `owned()`, run an API gate that signs up
 
 - cross-account reads return nothing;
 - foreign-jid `UpdateTask`, `MoveTask`, `DeleteTask`, `AssignToProject`,
-  `UpdateLogEntry`, `SaveProject` and `ArchiveMember` are no-ops;
+  `SaveProject`, `ArchiveMember`, `SaveFilterSet` and
+  `DeleteFilterSet` are no-ops, and `SetBoardFilters` stores no foreign set;
 - every list filter (`project_id`, `assignee_id`, `step_id`, `task_id`) yields
-  nothing for a foreign id.
+  nothing for a foreign id, and `RoadmapSnapshot` with a foreign project reads
+  empty.
 
 CI's webhook gate additionally checks that three workspaces stay isolated
 through the connect, poll and delivery paths. See

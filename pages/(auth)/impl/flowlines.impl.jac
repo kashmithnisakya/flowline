@@ -4,33 +4,41 @@ prev/next truth lives. Zoom and pan go through zoomTo/applyPan, which keep a
 piece of the drawing in view whatever the gesture."""
 
 impl FlowLinePage.boot -> None {
-    # The board persists its project filter under the same key, so the two
-    # tabs stay on the same project.
-    stored = localStorage.getItem("flowline_project")
-        or localStorage.getItem("standup_project")
-        or "";
-    picked = stored or "all";
+    picked = currentProject();
     projectId = picked;
-    storedView = localStorage.getItem("flowline_wf_view")
-        or localStorage.getItem("standup_wf_view")
-        or "";
+    storedView = localStorage.getItem("flowline_wf_view") or "";
     if storedView == "lanes" {
         lineView = "lanes";
     }
     # The workspace lists and the flow line go out together; neither waits.
     w: any = window;
     await w.Promise.all([loadShared(), reload(picked)]);
+    # No stored pick: the server opened on the default project, so name it
+    # (the pick's event then finds it on screen). A pick that is no longer
+    # active is replaced, and its event reloads the line.
+    known = False;
+    for p in projects {
+        if jid(p) == projectId and p.active {
+            known = True;
+        }
+    }
+    if not known {
+        fallback = defaultProject(projects);
+        if not projectId {
+            projectId = fallback;
+        }
+        pickProject(fallback);
+    }
 }
 
 impl FlowLinePage.loadShared -> None {
-    # Projects, roles, roster and iterations feed the filter, the lane
+    # Projects, roles and roster feed the filter, the lane
     # labels and the task dialog; the diagram loads fine without them, so a
     # failed read stays quiet. The flow line's name rides in the same view.
     ws = await loadWorkspace();
     projects = ws["projects"];
     roleRows = ws["roles"];
     roleMembers = ws["members"];
-    iterations = ws["iterations"];
     if ws["ok"] and ws["flow_name"] {
         lineName = ws["flow_name"];
     }
@@ -38,7 +46,7 @@ impl FlowLinePage.loadShared -> None {
 
 impl FlowLinePage.reload(pid: str) -> None {
     try {
-        result = root spawn GetFlowLine(project_id=pid if pid and pid != "all" else "");
+        result = root spawn GetFlowLine(project_id=pid);
         fresh: list[StepView] = result.reports[0] if result.reports else [];
         steps = fresh;
         loadTitles(fresh);
@@ -94,10 +102,7 @@ impl FlowLinePage.refreshPeek(stepId: str, pid: str) -> None {
         step = 1;
         while step <= wanted and step <= 20 {
             result = root spawn ListStepTasks(
-                step_id=stepId,
-                project_id=pid if pid and pid != "all" else "",
-                page=step,
-                page_size=50
+                step_id=stepId, project_id=pid, page=step, page_size=50
             );
             got = result.reports[0] if result.reports else None;
             if not got {
@@ -129,10 +134,7 @@ impl FlowLinePage.morePeek -> None {
     have = [t for t in peekTasks];
     try {
         result = root spawn ListStepTasks(
-            step_id=stepId,
-            project_id=pid if pid and pid != "all" else "",
-            page=wanted,
-            page_size=50
+            step_id=stepId, project_id=pid, page=wanted, page_size=50
         );
         got = result.reports[0] if result.reports else None;
         if got and peekRef.current == stepId {
@@ -249,7 +251,6 @@ impl FlowLinePage.openTask(tid: str) -> None {
         "status": key,
         "due_date": picked.due_date,
         "start_date": picked.start_date,
-        "iteration": picked.iteration_id or "none",
         "notes": "",
         "issue": picked.issue_link,
         "pr": picked.pr_link,
@@ -310,6 +311,14 @@ impl FlowLinePage.saveTask -> None {
     fromStep = peekId;
     landedName = stepName(landing);
     pid = projectId;
+    refusal = moveRefusal(
+        steps, landing, fromStep, taskForm["due_date"], taskForm["pr"]
+    );
+    if refusal {
+        toast.error(refusal);
+        taskSaving = False;
+        return;
+    }
     try {
         if project {
             added = 0;
@@ -330,7 +339,7 @@ impl FlowLinePage.saveTask -> None {
                 toast.success("Added " + str(added) + " assignee(s) to the project");
             }
         }
-        root spawn UpdateTask(
+        saved = root spawn UpdateTask(
             task_id=editTaskId,
             title=title,
             category=taskForm["category"],
@@ -345,9 +354,6 @@ impl FlowLinePage.saveTask -> None {
             step_id=landing,
             due_date=taskForm["due_date"],
             start_date=taskForm["start_date"],
-            iteration_id=taskForm["iteration"]
-                if taskForm["iteration"] != "none"
-                else "",
             notes=taskForm["notes"],
             issue_link=taskForm["issue"].strip(),
             pr_link=taskForm["pr"].strip(),
@@ -361,7 +367,9 @@ impl FlowLinePage.saveTask -> None {
         # ListStepTasks, so a save has to refresh both.
         await reload(pid);
         await refreshPeek(fromStep, pid);
-        if landing != fromStep and landedName {
+        if len(saved.reports or []) > 0 and saved.reports[0].refused {
+            toast.error(saved.reports[0].refused);
+        } elif landing != fromStep and landedName {
             toast.success("Saved · moved to " + landedName);
         }
     } except Exception as e {
@@ -388,10 +396,12 @@ impl FlowLinePage.deleteTask -> None {
     taskSaving = False;
 }
 
-impl FlowLinePage.selectProject(v: str) -> None {
+impl FlowLinePage.adoptProject(v: str) -> None {
+    if v == projectId {
+        return;
+    }
     openStep = peekId;
     projectId = v;
-    localStorage.setItem("flowline_project", v);
     await reload(v);
     await refreshPeek(openStep, v);
 }
@@ -700,40 +710,73 @@ impl FlowLinePage.linkSteps(fromId: str, toId: str) -> None {
     }
 }
 
-impl FlowLinePage.selectEdge(key: str, said: str, carried: str) -> None {
+impl FlowLinePage.selectEdge(key: str, fields: dict[str, str]) -> None {
     # Seeding the draft from the edge is what makes the editor an edit
     # rather than a retype.
     selectedEdge = key;
-    edgeDraft = said;
-    edgeCarry = carried;
+    edgeForm = fields;
 }
 
-impl FlowLinePage.commitEdgeLabel(
-    fromId: str, toId: str, said: str, carried: str
-) -> None {
-    # An empty `said` is a clear, not a no-op, which is why this goes through
-    # LabelTransition rather than re-drawing the arrow.
+impl FlowLinePage.editEdge(key: str, value: str) -> None {
+    drafted = {** edgeForm};
+    drafted[key] = value;
+    edgeForm = drafted;
+}
+
+impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> None {
+    # Every field goes together and an empty one clears, which is why this
+    # goes through LabelTransition rather than re-drawing the arrow.
     try {
         result = root spawn LabelTransition(
-            from_id=fromId, to_id=toId, label=said, carries=carried
+            from_id=fromId,
+            to_id=toId,
+            label=fields["label"] or "",
+            carries=fields["carries"] or "",
+            trigger=fields["trigger"] or "",
+            github_label=fields["github_label"] or "",
+            keep_label=fields["keep_label"] == "yes"
         );
         payload = result.reports[0] if result.reports else None;
         if payload and payload["ok"] {
             forgetWorkspace();
-            edgeDraft = payload["label"];
-            edgeCarry = payload["carries"];
             selectedEdge = "";
+            edgeForm = {};
             await reload(projectId);
             toast.success(
-                "Label removed"
-                    if not payload["label"] and not payload["carries"]
-                    else "Label saved"
+                "Transition cleared"
+                    if not payload["label"]
+                        and not payload["carries"]
+                        and not payload["trigger"]
+                        and not payload["github_label"]
+                    else "Transition saved"
             );
+        } elif payload and payload["message"] {
+            toast.error(payload["message"]);
         } else {
-            toast.error("Could not update that label");
+            toast.error("Could not update that transition");
         }
     } except Exception as e {
-        toast.error("Could not update that label");
+        toast.error("Could not update that transition");
+    }
+}
+
+impl FlowLinePage.commitRule(key: str, on: bool) -> None {
+    current = [
+        s
+        for s in steps
+        if s.id == selectedId
+    ];
+    if len(current) == 0 {
+        return;
+    }
+    due = on if key == "needs_due_date" else current[0].needs_due_date;
+    pr = on if key == "needs_pr" else current[0].needs_pr;
+    try {
+        root spawn SetStepRules(step_id=selectedId, needs_due_date=due, needs_pr=pr);
+        forgetWorkspace();
+        await reload(projectId);
+    } except Exception as e {
+        toast.error("Failed to update the step");
     }
 }
 
@@ -961,9 +1004,9 @@ impl FlowLinePage.contentBox(z: float) -> list[float] {
 }
 
 impl FlowLinePage.applyPan(x: float, y: float) -> None {
-    # Keep a strip of the drawing's box inside the viewport on both axes, then
-    # make sure part of a step is in it too: a box can be in view while every
-    # step sits beyond one of its corners.
+    # Pan only as far as there is drawing to see. On an axis where the whole
+    # drawing fits, it stays where the fit puts it (centred, or the lanes at
+    # their origin); where it overflows, its far edges stop at the frame.
     view: any = viewportRef.current;
     nx = x;
     ny = y;
@@ -971,64 +1014,69 @@ impl FlowLinePage.applyPan(x: float, y: float) -> None {
         z = float(zoomRef.current) if zoomRef.current else zoom;
         lanes = lineView == "lanes" and not editing;
         box = contentBox(z);
-        w = float(view.clientWidth);
-        h = float(view.clientHeight);
+        # Label chips hang past the outer nodes; the last render measured by
+        # how much, as the fit does.
+        laid: any = layoutRef.current;
+        mL = 0.0;
+        mT = 0.0;
+        mR = 0.0;
+        mB = 0.0;
+        if laid {
+            nb: list[float] = laid["nodes"];
+            eb: list[float] = laid["extent"];
+            mL = nb[0] - eb[0];
+            mT = nb[1] - eb[1];
+            mR = eb[2] - nb[2];
+            mB = eb[3] - nb[3];
+        }
         vx0 = laneLabelW() if lanes else 0.0;
-        keep = 72.0;
-        loX = vx0 + keep - box[2];
-        hiX = w - keep - box[0];
-        loY = keep - box[3];
-        hiY = h - keep - box[1];
-        if nx < loX {
-            nx = loX;
+        # The lanes start at the label gutter, where the fit leaves them, and
+        # keep PAN_MARGIN past their last card so it never meets the frame.
+        left = box[0] - mL;
+        right = box[2] + mR;
+        if lanes and left > vx0 {
+            left = vx0;
         }
-        if nx > hiX {
-            nx = hiX;
+        if lanes {
+            right = right + PAN_MARGIN;
         }
-        if ny < loY {
-            ny = loY;
-        }
-        if ny > hiY {
-            ny = hiY;
-        }
-        rects = panRects(z);
-        bestDx = 0.0;
-        bestDy = 0.0;
-        bestCost = -1.0;
-        for s in steps {
-            if s.id not in rects {
-                continue;
-            }
-            r = rects[s.id];
-            kx = 72.0 if r[2] > 72.0 else r[2];
-            ky = 48.0 if r[3] > 48.0 else r[3];
-            dx = 0.0;
-            dy = 0.0;
-            if r[0] + r[2] + nx < vx0 + kx {
-                dx = vx0 + kx - (r[0] + r[2] + nx);
-            } elif r[0] + nx > w - kx {
-                dx = w - kx - (r[0] + nx);
-            }
-            if r[1] + r[3] + ny < ky {
-                dy = ky - (r[1] + r[3] + ny);
-            } elif r[1] + ny > h - ky {
-                dy = h - ky - (r[1] + ny);
-            }
-            cost = abs(dx) + abs(dy);
-            if bestCost < 0.0 or cost < bestCost {
-                bestCost = cost;
-                bestDx = dx;
-                bestDy = dy;
-            }
-        }
-        if bestCost > 0.0 {
-            nx = nx + bestDx;
-            ny = ny + bestDy;
-        }
+        nx = panAxis(nx, left, right, vx0, float(view.clientWidth), lanes);
+        ny = panAxis(
+            ny,
+            box[1] if lanes else box[1] - mT,
+            box[3] if lanes else box[3] + mB,
+            0.0,
+            float(view.clientHeight),
+            lanes
+        );
     }
     panRef.current = [nx, ny];
     panX = nx;
     panY = ny;
+}
+
+impl FlowLinePage.panAxis(
+    want: float, lo: float, hi: float, v0: float, v1: float, pinned: bool
+) -> float {
+    # One axis of applyPan: the drawing spans lo..hi before panning and the
+    # frame v0..v1. A drawing that fits is centred, or held at the origin
+    # when `pinned` (lanes, whose bands are their own edge, so no margin);
+    # a larger one keeps both of its edges at or past the frame's.
+    gap = 0.0 if pinned else PAN_MARGIN;
+    span = hi - lo;
+    room = v1 - v0;
+    if span + 2.0 * gap <= room + 0.5 {
+        return 0.0 if pinned else v0 + (room - span) / 2.0 - lo;
+    }
+    least = v1 - gap - hi;
+    most = v0 + gap - lo;
+    if want < least {
+        return least;
+    }
+    if want > most {
+        return most;
+    }
+    return want;
 }
 
 impl FlowLinePage.zoomTo(z: float, sx: float, sy: float) -> None {
@@ -1111,11 +1159,17 @@ impl FlowLinePage.measureBox -> None {
     # these two, so an unconditional write would never settle.
     w = float(view.clientWidth);
     h = float(view.clientHeight);
+    resized = w != boxW or h != boxH;
     if w != boxW {
         boxW = w;
     }
     if h != boxH {
         boxH = h;
+    }
+    # A new frame size moves the bounds: keep the pan inside them.
+    if resized and fittedRef.current {
+        panNow: list[float] = panRef.current or [panX, panY];
+        applyPan(panNow[0], panNow[1]);
     }
 }
 
@@ -1196,6 +1250,17 @@ impl FlowLinePage.fitZoom -> None {
         best = clampZoom(byW if byW < byH else byH);
         if best > 1.0 {
             best = 1.0;
+        }
+        # A card grows past its base width to fit its badge and owner, which
+        # the span above cannot see, so shrink until the drawn box fits.
+        for _ in range(3) {
+            drawn = contentBox(best);
+            overW = (drawn[2] - drawn[0]) / (w - 48.0 - mL - mR);
+            overH = (drawn[3] - drawn[1]) / (h - 48.0 - mT - mB);
+            over = overW if overW > overH else overH;
+            if over > 1.0 {
+                best = clampZoom(best / over);
+            }
         }
         zoomRef.current = best;
         zoom = best;

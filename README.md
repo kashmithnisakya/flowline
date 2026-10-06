@@ -10,7 +10,7 @@ JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 it, the data graph, every API walker and deploying with jachammer (sources in
 [`docs/`](docs/)).
 
-![A tour of Flowline: sign in, the flow line you design, the board it becomes, a task on its flow line, and the log it writes](gifs/flowline-demo.gif)
+![A tour of Flowline: sign in to the board, tick a task's checklist and read how it got there, a move the next step's rule refuses, the flow line with its automatic arrows and its role lanes, the roadmap and the Overview](assets/demo/flowline-demo.gif)
 
 ## Draw your flow line, get your board
 
@@ -21,8 +21,9 @@ the board's columns become those steps, each in its own colour.
 Setup takes three steps: name the workspace and its first project, add people
 (or skip), then pick how work moves. **Simple** (recommended) is To do, Doing,
 Review and Done, with Review able to send work back to Doing. **Software team**
-is seven steps from writing the issue to done, with an architecture step for
-big changes, loops back from review and four roles. **Draw my own** goes to
+is seven steps across four roles from the GitHub issue pool to done: GitHub
+labels, a linked PR, a review and a merge move work along it, and steps can
+require a due date or a PR before work enters them. **Draw my own** goes to
 the flow line page so you draw the steps yourself. A template opens the board
 with a new task ready to type.
 
@@ -52,7 +53,8 @@ is why renaming a step never changes how anything behaves.
   (optionally) for a reviewer, a review-by date, a PR link or what is blocking it
 - **Multi-assignee tasks**, free-text categories and tags, repos attached to projects
 - **A Tasks table** of every task, searchable as you type and sortable, with
-  Working, Done, All and Needs attention scopes kept in the URL
+  Working, Done, All and Needs attention scopes kept in the URL, and a view
+  saved under a name and picked again (the board saves its filters the same way)
 - **Iterations and a roadmap**: plan tasks into time boxes, filter the board to
   the current one, and see work on a twelve-week timeline by its start and due
   dates or its iteration
@@ -113,7 +115,7 @@ Create one at <https://github.com/settings/apps/new>:
 | Request user authorization (OAuth) during installation | **on** |
 | Webhook | **Active**, URL `<HOST>/webhook/GithubEvent`, a secret you generate (`openssl rand -hex 32`) |
 | Subscribe to events | Issues · Pull request · Pull request review · Sub-issues (installation events are sent to every App on their own) |
-| Repository permissions | Issues: read and write · Pull requests: read · Metadata: read |
+| Repository permissions | Issues: read and write · Pull requests: read and write · Metadata: read |
 
 The OAuth-during-installation box is not optional. Installation ids are small
 integers, so completing a connection requires proving the person who
@@ -166,11 +168,14 @@ was being deployed. GitHub does not retry a failed delivery on its own; the
 App's Advanced tab lists every delivery with its response and a Redeliver
 button.
 
-Flowline writes to GitHub in two cases: an issue you explicitly create from a
-task, and, per repo and off by default ("Close the issue when its card moves
-to Done"), the issue's state: closing it when its card reaches your done step,
-and reopening it when the card moves back out. The receiver drops the App's own echo of either, so
-the card is not moved or logged twice. Titles, assignees and labels are never
+Flowline writes to GitHub in three cases: an issue you explicitly create from a
+task; per repo and off by default ("Close the issue when its card moves to
+Done"), the issue's state, closing it when its card reaches your done step and
+reopening it when the card moves back out; and per repo and off by default
+("Add the flow line's labels as work moves"), the labels on your flow line's
+arrows, such as `validated` or `ready-to-review`, added as work crosses them
+and taken off as it moves on. The receiver drops the App's own echo of each,
+so the card is not moved or logged twice. Titles and assignees are never
 written back.
 
 ## License

@@ -125,7 +125,78 @@ def fold_imports(day: LogDay, rows: list[LogEntry]) -> list[LogEntry] {
 }
 
 
-walker ListLogEntries {
+# The days in [since, until], newest first; two days on one date (a racing
+# first write) keep one order between requests.
+def days_newest_first(holder: Root, since: str, until: str) -> list[LogDay] {
+    days = days_between(holder, since, until);
+    days.sort(key=lambda (d: LogDay) { jid(d); });
+    days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
+    return days;
+}
+
+
+# Rows [start, start + size) of `days` (newest first), each day newest stamp
+# first. Whole days before the window are skipped on their counts and each
+# day in it answers only its slice. A short slice means the count drifted,
+# so that day is counted again and paged from what it loaded.
+def range_rows(days: list[LogDay], start: int, size: int) -> list[LogEntry] {
+    loaded: dict[str, list[LogEntry]] = {};
+    for d in days {
+        if not d.tallied {
+            loaded[jid(d)] = fill_day(d);
+        }
+    }
+    rows: list[LogEntry] = [];
+    offset = start;
+    for d in days {
+        if len(rows) >= size {
+            break;
+        }
+        if offset < d.entry_total {
+            stop = min(d.entry_total, offset + size - len(rows));
+            part = day_slice(d, offset, stop, loaded);
+            # A recount can leave the day shorter than the offset.
+            if offset < d.entry_total {
+                rows.extend(part);
+                offset = 0;
+                continue;
+            }
+        }
+        offset = offset - d.entry_total;
+    }
+    return rows;
+}
+
+
+# How many entries the days hold, from their counts (range_rows fills a day
+# not yet counted, so call it first).
+def range_total(days: list[LogDay]) -> int {
+    total = 0;
+    for d in days {
+        total = total + d.entry_total;
+    }
+    return total;
+}
+
+
+# Rows [offset, stop) of one day: from the store, or from fill_day's load
+# when the day was counted in this request or the store came back short.
+def day_slice(
+    d: LogDay, offset: int, stop: int, loaded: dict[str, list[LogEntry]]
+) -> list[LogEntry] {
+    key = jid(d);
+    if key not in loaded {
+        part = day_entries(d, offset, stop);
+        if len(part) == stop - offset {
+            return part;
+        }
+        loaded[key] = fill_day(d);
+    }
+    return loaded[key][offset:stop];
+}
+
+
+walker:protect ListLogEntries {
     """One page of the entries in [from_date, to_date], newest day first and
     newest stamp first within a day, so a later page lands under the rows on
     screen. `total` is the whole range, from the day counts. A `task_id`
@@ -154,68 +225,13 @@ walker ListLogEntries {
         if self.task_id {
             report self.task_page(root, p, size, start, end);
         } else {
-            days = days_between(root, self.from_date, self.to_date);
-            # Newest day first; two days on one date (a racing first write)
-            # keep one order between requests.
-            days.sort(key=lambda (d: LogDay) { jid(d); });
-            days.sort(key=lambda (d: LogDay) { d.date; }, reverse=True);
-            report self.range_page(days, p, size, start, end);
+            days = days_newest_first(root, self.from_date, self.to_date);
+            rows = range_rows(days, start, size);
+            total = range_total(days);
+            report LogPage(
+                rows=rows, page=p, page_size=size, has_more=total > end, total=total
+            );
         }
-    }
-
-    # Whole days before the page are skipped on their counts and each day in
-    # it answers only its slice. A short slice means the count drifted, so
-    # that day is counted again and paged from what it loaded.
-    def range_page(
-        days: list[LogDay], p: int, size: int, start: int, end: int
-    ) -> LogPage {
-        loaded: dict[str, list[LogEntry]] = {};
-        for d in days {
-            if not d.tallied {
-                loaded[jid(d)] = fill_day(d);
-            }
-        }
-        rows: list[LogEntry] = [];
-        offset = start;
-        for d in days {
-            if len(rows) >= size {
-                break;
-            }
-            if offset < d.entry_total {
-                stop = min(d.entry_total, offset + size - len(rows));
-                part = self.day_slice(d, offset, stop, loaded);
-                # A recount can leave the day shorter than the offset.
-                if offset < d.entry_total {
-                    rows.extend(part);
-                    offset = 0;
-                    continue;
-                }
-            }
-            offset = offset - d.entry_total;
-        }
-        total = 0;
-        for d in days {
-            total = total + d.entry_total;
-        }
-        return LogPage(
-            rows=rows, page=p, page_size=size, has_more=total > end, total=total
-        );
-    }
-
-    # Rows [offset, stop) of one day: from the store, or from fill_day's load
-    # when the day was counted in this request or the store came back short.
-    def day_slice(
-        d: LogDay, offset: int, stop: int, loaded: dict[str, list[LogEntry]]
-    ) -> list[LogEntry] {
-        key = jid(d);
-        if key not in loaded {
-            part = day_entries(d, offset, stop);
-            if len(part) == stop - offset {
-                return part;
-            }
-            loaded[key] = fill_day(d);
-        }
-        return loaded[key][offset:stop];
     }
 
     # A task's rows (the task sheet's history): one query across the range's
@@ -293,98 +309,6 @@ def log_totals(holder: Root, monday: str) -> LogTotals {
     return LogTotals(by_week=by_week, by_day=by_day, members=people);
 }
 
-
-walker LogCounts {
-    """The Overview's log numbers over the four weeks ending in `monday`'s
-    week."""
-    has monday: str = "",
-        reports: list[LogTotals] = [];
-
-    can count with Root entry {
-        report log_totals(here, self.monday);
-    }
-}
-
-
-walker LogActivity {
-    """Visit the Logs box, get-or-create the day in it, then append one
-    denormalized row under the day. Refuses writes no view could fetch
-    (empty date) or that would produce a blank authorless row (bad member)."""
-    has date: str,
-        member_id: str,
-        activity: str,
-        project_id: str = "",
-        category: str = "",
-        repo: str = "",
-        issue_link: str = "",
-        pr_link: str = "",
-        status: str = "",
-        notes: str = "",
-        reports: list[LogEntry] = [];
-
-    can start with Root entry {
-        if not self.date {
-            disengage;
-        }
-        probe = resolve(self.member_id);
-        if not isinstance(probe, Member) or not owned(here, probe) {
-            disengage;
-        }
-        visit logs_box(here);
-    }
-
-    # One day per date: an existing one anywhere in the log, else a new one
-    # in this box.
-    can open_day with Logs entry {
-        days = days_between(root, self.date, self.date);
-        if days {
-            visit [days[0]];
-        } else {
-            fresh = here ++> LogDay(date=self.date, entry_total=0, tallied=True);
-            on_attached(root, fresh);
-            visit fresh;
-        }
-    }
-
-    can add with LogDay entry {
-        # `here` is the LogDay; `root` is the caller's own root.
-        holder = root;
-        member_name = "";
-        tags_snap = "";
-        m = resolve(self.member_id);
-        if isinstance(m, Member) {
-            member_name = m.full_name();
-            tags_snap = ", ".join(m.tags);
-        }
-        project_name = "";
-        p = resolve(self.project_id);
-        if isinstance(p, Project) and owned(holder, p) {
-            project_name = p.name;
-        }
-        # Stamped like the automatic rows, so the time column and the
-        # digest's ordering treat manual entries the same way.
-        row = here ++> LogEntry(
-            date=here.date,
-            at=now_iso(),
-            activity=self.activity,
-            category=self.category,
-            repo=self.repo,
-            issue_link=self.issue_link,
-            pr_link=self.pr_link,
-            status=self.status,
-            notes=self.notes,
-            member_name=member_name,
-            tags=tags_snap,
-            project_name=project_name
-        );
-        note_entry(here, row);
-        if isinstance(m, Member) {
-            row +>:By():+> m;
-        }
-        report row;
-        disengage;
-    }
-}
 
 # The log day for a date, made on first write.
 def log_day(holder: Root, date: str) -> LogDay {
@@ -520,60 +444,5 @@ def sync_task_links(holder: Root, task: Task, note: str) -> None {
     target.pr_link = task.pr_link;
     if note {
         target.notes = note;
-    }
-}
-
-walker find_log_entry {
-    """Lookup base for log-entry mutations: resolve the jid, check it is ours
-    (LogEntry <- LogDay <- Logs <- root, the owned() climb), then visit."""
-    has entry_id: str = "";
-
-    can locate with Root entry {
-        target = resolve(self.entry_id);
-        if isinstance(target, LogEntry) and owned(here, target) {
-            visit [target];
-        }
-    }
-}
-
-walker UpdateLogEntry(find_log_entry) {
-    has activity: str = "",
-        category: str = "",
-        repo: str = "",
-        issue_link: str = "",
-        pr_link: str = "",
-        status: str = "",
-        notes: str = "",
-        reports: list[LogEntry] = [];
-
-    can apply with LogEntry entry {
-        here.activity = self.activity;
-        here.category = self.category;
-        here.repo = self.repo;
-        here.issue_link = self.issue_link;
-        here.pr_link = self.pr_link;
-        here.status = self.status;
-        here.notes = self.notes;
-        report here;
-        disengage;
-    }
-}
-
-walker DeleteLogEntries {
-    """Bulk delete: every id is ownership-checked before removal, the same
-    rule as the single-entry lookup base."""
-    has entry_ids: list[str] = [];
-
-    can remove with Root entry {
-        gone: list[str] = [];
-        for eid in self.entry_ids {
-            target = resolve(eid);
-            if isinstance(target, LogEntry) and owned(here, target) {
-                gone.append(jid(target));
-                forget_entry(target);
-                del target;
-            }
-        }
-        report {"deleted": gone};
     }
 }

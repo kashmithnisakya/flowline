@@ -503,6 +503,7 @@ def:pub AssistantDock(
                     size="icon"
                     className="size-9"
                     aria-label={"Stop dictating" if listening else "Dictate"}
+                    title={"Stop dictating" if listening else "Dictate"}
                     aria-pressed={listening}
                     onClick={toggleMic}
                 >
@@ -522,6 +523,7 @@ def:pub AssistantDock(
                 size="icon"
                 className="size-9"
                 aria-label="Send"
+                title="Send"
                 disabled={busy or not draft.strip()}
                 onClick={send}
             >

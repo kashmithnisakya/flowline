@@ -24,7 +24,7 @@ FAILS: list[str] = []
 # same-module @effects helper; recognition can vary between builds, so the
 # table of THIS build is asserted here.
 CACHED_READERS = [
-    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles", "ListIterations",
+    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
     "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus",
 ]
 # Task lists stay uncached on purpose: a colleague's move, a webhook drain or
@@ -35,7 +35,8 @@ LIVE_READERS = [
 ]
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
-    "SaveRole", "SaveStep", "SaveIteration", "AddRepo", "SyncGithub", "ApplyTemplate",
+    "SaveRole", "SaveStep", "AddRepo", "SyncGithub", "ApplyTemplate",
+    "SetBoardFilters", "SaveFilterSet", "DeleteFilterSet",
 ]
 
 
@@ -124,14 +125,16 @@ def all_rows():
         page += 1
 
 
-def board_rows():
-    rows, page, older, cats = [], 1, None, None
+def board_rows(project_id=""):
+    # One project's board (the default project when none is named), with
+    # the project the server scoped it to.
+    rows, page, older, cats, scoped = [], 1, None, None, None
     while True:
-        b = report("BoardSnapshot", {"page": page, "page_size": 500})
+        b = report("BoardSnapshot", {"page": page, "page_size": 500, "project_id": project_id})
         rows.extend(b.get("rows", []))
-        older, cats = b.get("older"), b.get("categories")
+        older, cats, scoped = b.get("older"), b.get("categories"), b.get("project_id")
         if not b.get("has_more"):
-            return rows, older, cats
+            return rows, older, cats, scoped
         page += 1
 
 
@@ -214,7 +217,10 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     rows = all_rows()
     counts = report("TaskCounts")
     history = report("TaskHistory")
-    steps = report("GetFlowLine", {"with_counts": True}) or []
+    # The flow line counts one project, like the board: per project, then
+    # summed against the brute-force pass over every row.
+    lines = {pid: report("GetFlowLine", {"with_counts": True, "project_id": pid}) or [] for pid in project_ids}
+    steps = lines[project_ids[0]]
     weeks = history.get("weeks", [])
     exp = brute_force(rows, steps, project_ids, member_ids, today, cutoff, weeks)
     ok_links = all(t["project_id"] == expected_links[t["id"]][0] and sorted(t["assignee_ids"]) == sorted(expected_links[t["id"]][1])
@@ -229,23 +235,54 @@ def assert_parity(label, project_ids, member_ids, expected_links):
     check(f"{label}: TaskCounts per-project tallies", got_projects == exp["projects"], f"{got_projects} vs {exp['projects']}")
     got_members = {m["member_id"]: {k: m[k] for k in ("open", "done_in_week")} for m in counts.get("members", [])}
     check(f"{label}: TaskCounts per-member tallies", got_members == exp["members"], f"{got_members} vs {exp['members']}")
-    check(f"{label}: TaskCounts done_by_week sums to this month's moves",
-          sum(counts.get("done_by_week", [])) == sum(1 for t in rows if moved_to_done(t) and done_day(t) >= weeks[-4] if weeks) if weeks else True,
-          f"{counts.get('done_by_week')}")
-    brows, older, cats = board_rows()
-    check(f"{label}: BoardSnapshot rows, older and categories",
+    # Done per week comes from the weekly counts, so it must match both the
+    # brute-force pass and TaskHistory's last four weeks, and the Overview
+    # must answer the same numbers as TaskCounts.
+    check(f"{label}: TaskCounts done_by_week equals the brute-force weeks",
+          bool(weeks) and counts.get("done_by_week") == exp["history"]["finished"][-4:],
+          f"{counts.get('done_by_week')} vs {exp['history']['finished'][-4:]}")
+    snap = report("OverviewSnapshot", {"attention_size": 1}).get("counts", {})
+
+    def keyed(totals, field, key):
+        return {row[key]: {k: v for k, v in row.items() if not k.startswith("_")} for row in totals.get(field, [])}
+    same = {k: snap.get(k) == counts.get(k) for k in ("open", "overdue", "blocked", "done_by_week")}
+    same["projects"] = keyed(snap, "projects", "project_id") == keyed(counts, "projects", "project_id")
+    same["members"] = keyed(snap, "members", "member_id") == keyed(counts, "members", "member_id")
+    check(f"{label}: OverviewSnapshot counts equal TaskCounts", all(same.values()), f"{same}")
+    brows, older, cats = [], 0, None
+    for pid in project_ids:
+        rows_p, older_p, cats, scoped = board_rows(pid)
+        brows.extend(rows_p)
+        older += older_p
+        check(f"{label}: BoardSnapshot scopes to the project it was asked for",
+              scoped == pid and all(r["project_id"] == pid for r in rows_p), (scoped, pid, len(rows_p)))
+    check(f"{label}: BoardSnapshot rows, older and categories, summed over the projects",
           sorted(r["id"] for r in brows) == exp["board_ids"] and older == exp["older"] and cats == exp["categories"],
           f"{len(brows), older, cats} vs {len(exp['board_ids']), exp['older'], exp['categories']}")
+    first_rows, first_older, _, scoped = board_rows("")
+    check(f"{label}: BoardSnapshot with no project opens on the earliest-created one",
+          scoped == project_ids[0] and sorted(r["id"] for r in first_rows) == sorted(r["id"] for r in brows if r["project_id"] == project_ids[0]),
+          (scoped, project_ids[0], len(first_rows)))
+    foreign_rows, _, _, scoped = board_rows("n:Project:00000000-0000-4000-8000-000000000000")
+    check(f"{label}: BoardSnapshot with an unknown project falls back to the default project",
+          scoped == project_ids[0] and len(foreign_rows) == len(first_rows), (scoped, len(foreign_rows)))
     got_history = {k: history.get(k) for k in ("added", "finished", "scope", "done")}
     check(f"{label}: TaskHistory added/finished/scope/done", got_history == exp["history"], f"{got_history} vs {exp['history']}")
-    got_counts = {s["id"]: s["task_count"] for s in steps}
-    check(f"{label}: GetFlowLine step counts", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    got_counts = {}
+    for pid in project_ids:
+        for s in lines[pid]:
+            got_counts[s["id"]] = got_counts.get(s["id"], 0) + s["task_count"]
+    check(f"{label}: GetFlowLine step counts, summed over the projects", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    default_line = report("GetFlowLine", {"with_counts": True}) or []
+    check(f"{label}: GetFlowLine with no project counts the earliest-created one",
+          [(s["id"], s["task_count"]) for s in default_line] == [(s["id"], s["task_count"]) for s in steps], (default_line, steps))
     # The titles ride on the flow line so the page's close zoom makes no
-    # request: per step, the first two rows the panel would page.
-    got_titles = {s["id"]: s.get("task_titles") for s in steps}
-    exp_titles = {s["id"]: [t["title"] for t in (report("ListStepTasks", {"step_id": s["id"], "page_size": 2}) or {}).get("rows", [])]
-                  for s in steps}
-    check(f"{label}: GetFlowLine step titles are the panel's first two", got_titles == exp_titles, f"{got_titles} vs {exp_titles}")
+    # request: per step and project, the first two rows the panel would page.
+    for pid in project_ids:
+        got_titles = {s["id"]: s.get("task_titles") for s in lines[pid]}
+        exp_titles = {s["id"]: [t["title"] for t in (report("ListStepTasks", {"step_id": s["id"], "page_size": 2, "project_id": pid}) or {}).get("rows", [])]
+                      for s in lines[pid]}
+        check(f"{label}: GetFlowLine step titles are the panel's first two", got_titles == exp_titles, f"{got_titles} vs {exp_titles}")
     totals = {sc: report("ListTasks", {"scope": sc, "page_size": 1}) for sc in ("working", "older", "done", "attention", "all")}
     got_totals = {sc: totals[sc].get("total") for sc in totals}
     exp_totals = {sc: exp[sc] for sc in totals}
@@ -317,7 +354,7 @@ def parity_suite(project_id, member_id, tag):
     row = made["to rehome"]
     moved = report("UpdateTask", {"task_id": row["id"], "title": row["title"], "category": "Moved", "tags": [], "estimate": 0,
                                   "priority": row["priority"], "status": row["status"], "step_id": row["step_id"], "due_date": "",
-                                  "start_date": "", "iteration_id": "", "notes": "", "issue_link": "", "pr_link": "",
+                                  "start_date": "", "notes": "", "issue_link": "", "pr_link": "",
                                   "reviewer_id": "", "review_due": "", "assignee_ids": [m2_id], "project_id": p2_id})
     check("parity: re-parented task reports its new project and assignee",
           moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
@@ -340,15 +377,15 @@ def entry_id(row):
     return find_key(row, "id", "_jac_id")
 
 
-def log_paging_suite(member_id):
+def log_paging_suite(project_id, tag):
     # The log pages in the store: whole days are skipped on their counts and
-    # a day answers its slice by a unique key. Pages must partition the range
-    # in one order at any page size, and the counts must follow every write.
+    # a day answers its slice by a unique key. Task events are its only
+    # writer, so the gate makes a few; pages must partition the range in one
+    # order at any page size.
     span = {"from_date": "2020-01-01", "to_date": "2030-12-31"}
-    for date, n in (("2025-06-02", 3), ("2025-06-03", 2), ("2025-06-04", 1)):
-        for i in range(n):
-            got = report("LogActivity", {"date": date, "member_id": member_id, "activity": f"log gate {date} #{i}"})
-            check(f"log: LogActivity writes an entry on {date}", got.get("date") == date, str(got)[:160])
+    for i in range(3):
+        made = report("CreateTask", {"title": f"Log probe {tag} #{i}", "project_id": project_id})
+        report("MoveTask", {"task_id": made.get("id", ""), "status": "In Progress"})
     whole = report("ListLogEntries", {**span, "page_size": 500})
     rows = whole.get("rows", [])
     ids = [entry_id(r) for r in rows]
@@ -370,59 +407,64 @@ def log_paging_suite(member_id):
           and past.get("total") == total, str(past)[:160])
     clamp = report("ListLogEntries", {**span, "page_size": 100000})
     check("log: page_size clamps to 500", clamp.get("page_size") == 500, str(clamp.get("page_size")))
-    gone = report("DeleteLogEntries", {"entry_ids": [ids[1]]})
-    check("log: DeleteLogEntries removes the entry", gone.get("deleted") == [ids[1]], str(gone))
-    left = [i for i in ids if i != ids[1]]
-    after = log_pages({**span, "page_size": 2})
-    check("log: the day count follows a delete", [entry_id(r) for p in after for r in p.get("rows", [])] == left
-          and all(p.get("total") == total - 1 for p in after), f"{[p.get('total') for p in after]}")
-    moved = Counter(r.get("task_id") for r in rows if r.get("task_id") and entry_id(r) != ids[1])
+    moved = Counter(r.get("task_id") for r in rows if r.get("task_id"))
     task_id = moved.most_common(1)[0][0] if moved else ""
-    mine = [entry_id(r) for r in rows if r.get("task_id") == task_id and entry_id(r) != ids[1]]
+    mine = [entry_id(r) for r in rows if r.get("task_id") == task_id]
     only = report("ListLogEntries", {**span, "task_id": task_id, "page_size": 500})
     check("log: task_id keeps that task's rows, in the range's order",
           bool(task_id) and [entry_id(r) for r in only.get("rows", [])] == mine and only.get("total") == len(mine),
           f"{task_id} {len(mine)}")
 
 
-def log_counts_suite(member_id, project_id, tag):
-    # The log's counts come from the days' tallies, kept on write. They must
-    # equal a count of the entries themselves, before and after a delete, and
-    # the Overview's blocked reason comes from the task's own Blocked line.
+def log_counts_suite(project_id, tag):
+    # The Overview's log numbers come from the days' tallies, kept on write.
+    # They must equal a count of the entries themselves after new task
+    # events, and the blocked reason comes from the task's own Blocked line.
     today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
     monday = today - timedelta(days=today.weekday())
     starts = [(monday - timedelta(days=7 * (3 - i))).isoformat() for i in range(4)]
     days = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
+    window = {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
+              "attention_size": 50}
 
     def parity(label):
         rows = [r for p in log_pages({"from_date": starts[0], "to_date": days[6], "page_size": 500}) for r in p.get("rows", [])]
         by_week = [sum(1 for r in rows if starts[i] <= r["date"] < (starts[i + 1] if i < 3 else days[6] + "~")) for i in range(4)]
         by_day = [sum(1 for r in rows if r["date"] == d) for d in days]
-        people = {}
-        for r in rows:
-            if r["date"] in days:
-                for name in [n.strip() for n in r.get("member_name", "").split(",") if n.strip()]:
-                    people.setdefault(name, [0] * 7)[days.index(r["date"])] += 1
-        got = report("LogCounts", {"monday": monday.isoformat()})
-        got_people = {m["name"]: m["by_day"] for m in got.get("members", [])}
+        got = report("OverviewSnapshot", window).get("logs", {})
         check(f"log counts: {label} equal a count of the entries",
-              got.get("by_week") == by_week and got.get("by_day") == by_day and got_people == people,
-              f"{got.get('by_week')} vs {by_week}; {got.get('by_day')} vs {by_day}; {got_people} vs {people}")
+              got.get("by_week") == by_week and got.get("by_day") == by_day,
+              f"{got.get('by_week')} vs {by_week}; {got.get('by_day')} vs {by_day}")
 
-    made = [entry_id(report("LogActivity", {"date": today.isoformat(), "member_id": member_id, "activity": f"counts {tag} #{i}"}))
-            for i in range(2)]
-    parity("after two notes today")
-    report("DeleteLogEntries", {"entry_ids": made[:1]})
-    parity("after a delete")
+    parity("before this suite's writes")
     task = report("CreateTask", {"title": f"Blocked probe {tag}", "priority": "High", "project_id": project_id})
     report("MoveTask", {"task_id": task.get("id", ""), "status": "Blocked"})
     report("SetMoveInfo", {"task_id": task.get("id", ""), "note": f"waiting on keys {tag}"})
     parity("after a move and its note")
-    snap = report("OverviewSnapshot", {"monday": monday.isoformat(), "from_date": (today - timedelta(days=14)).isoformat(),
-                                       "attention_size": 50})
+    # The assistant's snapshot counts the period from the days' tallies and
+    # carries its newest lines, oldest first.
+    rows = [r for p in log_pages({"from_date": starts[0], "to_date": days[6], "page_size": 500}) for r in p.get("rows", [])]
+    digest = report("Digest", {"from_date": starts[0], "to_date": days[6]})
+    counted = {}
+    for r in rows:
+        for name in [n.strip() for n in r.get("member_name", "").split(",") if n.strip()]:
+            counted[name] = counted.get(name, 0) + 1
+    got_people = {p["name"]: p["log_entries"] for p in digest.get("people", [])}
+    check("digest: the period's log counts equal a count of the entries",
+          digest.get("log_entries_in_period") == len(rows) and all(counted.get(n, 0) == c for n, c in got_people.items()),
+          f"{digest.get('log_entries_in_period')} vs {len(rows)}; {got_people} vs {counted}")
+    check("digest: activity is the newest lines, oldest first",
+          [a["what"] for a in digest.get("activity", [])] == [r["activity"] for r in rows[:200]][::-1],
+          f"{len(digest.get('activity', []))} lines")
+    snap = report("OverviewSnapshot", window)
     item = next((b for b in snap.get("blocked", []) if b.get("task_id") == task.get("id")), {})
     check("overview: a blocked task's reason is the note on its Blocked line",
           item.get("reason") == f"waiting on keys {tag}" and item.get("since") == today.isoformat(), str(item)[:200])
+    moved = [t for t in report("ListTasks", {"scope": "done", "page_size": 500}).get("rows", [])
+             if t.get("done_at", "")[:10] in days and t.get("done_at") != t.get("created_at")]
+    by_day = [sum(1 for t in moved if t["done_at"][:10] == d) for d in days]
+    check("overview: done per day counts this week's moves to Done",
+          snap.get("counts", {}).get("done_by_day") == by_day, f"{snap.get('counts', {}).get('done_by_day')} vs {by_day}")
 
 
 def history_pages_suite(project_id):
@@ -461,6 +503,197 @@ def history_pages_suite(project_id):
             check(f"history: '{label}' pages of {size} say total {len(want)} of {scope_total}",
                   all(p.get("total") == len(want) and p.get("scope_total") == scope_total for p in pages),
                   str([(p.get("total"), p.get("scope_total")) for p in pages][:4]))
+
+
+def history_store_suite(project_id, member_id):
+    # The history scopes page in the store for every sort and filter but a
+    # search or a tag. Each page run must equal a Python sort of the whole
+    # history (ties by id), with totals, across titles that differ only in
+    # case, accents and punctuation; a search takes the loaded path.
+    far, rank = "9999-12-31", {"High": 0, "Medium": 1, "Low": 2}
+    titles = ["alpha", "Alpha-2", "ábaco", "Zeta", "zeta!", "émile", "Émile", "beta", "Beta",
+              "_under", "123 go", "ümlaut", "alpha"]
+    cats = ["bug", "Bug", "Feature", "", "feature"]
+    for i, title in enumerate(titles):
+        t = report("CreateTask", {
+            "title": title, "category": cats[i % 5], "priority": ["High", "Medium", "Low"][i % 3],
+            "due_date": "" if i % 3 == 0 else f"2026-10-{10 + i:02d}", "estimate": [0.0, 1.5, 3.0][i % 3],
+            "assignee_ids": [member_id] if i % 2 else [], "project_id": project_id})
+        if i % 3 == 1:
+            report("MoveTask", {"task_id": t.get("id", ""), "status": "Done"})
+        elif i % 5 == 2:
+            report("MoveTask", {"task_id": t.get("id", ""), "status": "Blocked"})
+    rows = all_rows()
+    tallied = sum(p["total"] for p in report("TaskCounts").get("projects", []))
+    check("store history: the paged history holds every task once",
+          len(rows) == tallied == len({r["id"] for r in rows}), f"{len(rows)} rows, {tallied} tallied")
+    steps = report("GetFlowLine", {"with_counts": False}) or []
+    order = sorted(sorted(steps, key=lambda s: s["sort_order"]), key=lambda s: s["x"])
+    keys = [s["id"] for s in order]
+    first_kind = {}
+    for i, s in enumerate(order):
+        first_kind.setdefault(s["kind"], i)
+
+    def column(r):
+        if r["step_id"] in keys:
+            return keys.index(r["step_id"])
+        return first_kind.get(STATUS_KIND.get(r["status"], "active"), 0)
+    key_of = {
+        "title": lambda r: r["title"].lower(), "category": lambda r: r["category"].lower(),
+        "priority": lambda r: rank.get(r["priority"], 1), "estimate": lambda r: r["estimate"],
+        "due": lambda r: r["due_date"] or far, "created": lambda r: r["created_at"],
+        "updated": lambda r: r["updated_at"],
+    }
+
+    def expected(keep, sort, desc, scope):
+        out = sorted((r for r in rows if keep(r)), key=lambda r: r["id"])
+        if sort == "step":
+            out.sort(key=lambda r: r["sort_order"])
+            out.sort(key=column, reverse=desc)
+        elif sort:
+            out.sort(key=key_of[sort], reverse=desc)
+        elif scope == "done":
+            out.sort(key=lambda r: r["updated_at"], reverse=True)
+        else:
+            out.sort(key=lambda r: r["sort_order"])
+        return [r["id"] for r in out]
+
+    def paged(body):
+        ids, pages, page = [], [], 1
+        while page <= 100:
+            got = report("ListTasks", {**body, "page": page, "page_size": 4})
+            pages.append(got)
+            ids.extend(r["id"] for r in got.get("rows", []))
+            if not got.get("has_more"):
+                break
+            page += 1
+        return ids, pages
+    done = lambda r: r["status"] == "Done"
+    blocked_col = keys[column(next(r for r in rows if r["status"] == "Blocked"))]
+    filters = [
+        ("no filter", {}, lambda r: True),
+        ("category", {"category": "bug"}, lambda r: r["category"] == "bug"),
+        ("priority", {"priority": "High"}, lambda r: r["priority"] == "High"),
+        ("estimated", {"estimated": "yes"}, lambda r: r["estimate"] > 0),
+        ("unestimated", {"estimated": "no"}, lambda r: r["estimate"] <= 0),
+        ("assignee", {"assignee_id": member_id}, lambda r: member_id in r["assignee_ids"]),
+        ("column", {"column": blocked_col}, lambda r: keys[column(r)] == blocked_col),
+        ("project and assignee", {"project_id": project_id, "assignee_id": member_id},
+         lambda r: r["project_id"] == project_id and member_id in r["assignee_ids"]),
+        ("priority and column", {"priority": "Low", "column": blocked_col},
+         lambda r: r["priority"] == "Low" and keys[column(r)] == blocked_col),
+    ]
+    cases = [("all", "", sort, desc, {}, lambda r: True) for sort in [""] + list(key_of) + ["step"]
+             for desc in (False, True)]
+    cases += [("all", name, sort, desc, body, keep) for name, body, keep in filters[1:]
+              for sort, desc in (("title", False), ("step", True), ("due", True))]
+    cases += [("done", name, sort, False, body, keep) for name, body, keep in filters[:3]
+              for sort in ("", "priority", "step")]
+    bad = []
+    for scope, name, sort, desc, body, keep in cases:
+        want = expected(lambda r: (scope == "all" or done(r)) and keep(r), sort, desc, scope)
+        ids, pages = paged({"scope": scope, "sort": sort, "sort_dir": "desc" if desc else "asc", **body})
+        whole = len(rows) if scope == "all" else sum(1 for r in rows if done(r))
+        if ids != want or any(p.get("total") != len(want) or p.get("scope_total") != whole for p in pages):
+            bad.append(f"{scope}/{name}/{sort or 'default'}/{'desc' if desc else 'asc'}: "
+                       f"{len(ids)} vs {len(want)}, totals {[p.get('total') for p in pages][:2]}")
+    check(f"store history: {len(cases)} sort and filter runs page exactly as a full sort", not bad, bad[:4])
+    ids, pages = paged({"scope": "all", "q": "a", "priority": "High", "column": blocked_col, "sort": "title"})
+    want = expected(lambda r: "a" in r["title"].lower() and r["priority"] == "High"
+                    and keys[column(r)] == blocked_col, "title", False, "all")
+    check("store history: a search with priority and column filters (loaded path) agrees", ids == want,
+          f"{ids} vs {want}")
+    empty = report("ListTasks", {"scope": "all", "column": "no-such-column", "page_size": 5})
+    check("store history: an unknown column matches nothing", empty.get("total") == 0 and not empty.get("rows"),
+          str(empty)[:200])
+
+
+def sign_up(tag):
+    # A second account for the tenant checks: its token, or "" on failure.
+    email, password = f"ci-{tag}@flowline-ci.invalid", f"Ci-{tag}-Xy7!"
+    req("POST", "/user/register", {"identities": [{"type": "email", "value": email}],
+                                   "credential": {"type": "password", "password": password},
+                                   "profile": {"org_name": "CI Other"}})
+    _, _, raw = req("POST", "/user/login", {"identity": {"type": "email", "value": email},
+                                           "credential": {"type": "password", "password": password}})
+    return str(find_key(json.loads(raw) if raw else {}, "token", "access_token") or "")
+
+
+def filter_sets_suite(project_id, member_id, tag):
+    # Saved filters: sets validate and keep only the board's keys, the board's
+    # own filters round-trip through BoardSnapshot, a delete forgets the set
+    # as the board's, and another account can reach none of it.
+    global TOKEN
+
+    def sets():
+        return report("GetWorkspace").get("filter_sets", [])
+
+    def board():
+        b = report("BoardSnapshot", {"page_size": 1, "with_workspace": True})
+        return b.get("board_filters"), b.get("board_set"), b.get("board_saved")
+
+    check("filters: a fresh account has no sets and no board filters",
+          sets() == [] and board() == ({}, "", False), f"{sets()} {board()}")
+    for body, error in (({"name": "  ", "filters": {"priority": "High"}}, "invalid"),
+                        ({"name": "Nothing", "filters": {"project": "all", "bogus": "x"}}, "empty"),
+                        ({"name": "Elsewhere", "page": "log", "filters": {"priority": "High"}}, "invalid"),
+                        ({"name": "Table", "page": "tasks", "filters": {"priority": "High"}}, "invalid")):
+        got = report("SaveFilterSet", body)
+        check(f"filters: SaveFilterSet refuses {body['name']!r} as {error}",
+              got.get("ok") is False and got.get("error") == error, str(got))
+    mine = report("SaveFilterSet", {"name": "  Mine  ", "filters": {
+        "project": project_id, "priority": "High", "done": "hide", "tag": "All", "estimate": "maybe", "bogus": "x"}})
+    mine_id = (mine.get("set") or {}).get("id", "")
+    check("filters: a set keeps the board's keys set away from their default, trimmed name",
+          mine.get("ok") and mine["set"].get("name") == "Mine" and mine["set"].get("page") == "board"
+          and mine["set"].get("filters") == {"priority": "High", "done": "hide"}, str(mine))
+    dup = report("SaveFilterSet", {"name": "MINE", "filters": {"priority": "Low"}})
+    check("filters: a name is unique on its page ignoring case", dup.get("error") == "duplicate", str(dup))
+    other = report("SaveFilterSet", {"name": "Z" * 80, "filters": {"assignee": member_id}})
+    other_id = (other.get("set") or {}).get("id", "")
+    check("filters: a long name is cut to 60 characters", other.get("ok") and len(other["set"]["name"]) == 60, str(other))
+    clash = report("SaveFilterSet", {"set_id": other_id, "name": "mine", "filters": {"assignee": member_id}})
+    check("filters: a rename cannot take another set's name", clash.get("error") == "duplicate", str(clash))
+    renamed = report("SaveFilterSet", {"set_id": other_id, "name": "Priya's work", "filters": {"assignee": member_id}})
+    check("filters: a set renames in place", renamed.get("ok") and renamed["set"].get("id") == other_id
+          and renamed["set"].get("name") == "Priya's work", str(renamed))
+    check("filters: GetWorkspace lists the sets by name",
+          [(s.get("name"), s.get("id")) for s in sets()] == [("Mine", mine_id), ("Priya's work", other_id)], str(sets()))
+    kept = report("SetBoardFilters", {"filters": {"project": project_id, "priority": "Low", "junk": "1"}, "set_id": mine_id})
+    check("filters: SetBoardFilters keeps the board's keys (not the project) and a set of this account",
+          kept.get("filters") == {"priority": "Low"} and kept.get("set_id") == mine_id, str(kept))
+    check("filters: BoardSnapshot carries the board's filters with the workspace",
+          board() == ({"priority": "Low"}, mine_id, True), str(board()))
+    poll = report("BoardSnapshot", {"page_size": 1})
+    check("filters: the poll carries no filters", poll.get("board_saved") is False and poll.get("filter_sets") == [],
+          str({k: poll.get(k) for k in ("board_saved", "filter_sets")}))
+    gone = report("DeleteFilterSet", {"set_id": mine_id})
+    check("filters: DeleteFilterSet deletes the set", gone.get("deleted") == mine_id, str(gone))
+    check("filters: deleting the board's set forgets it and keeps the filters",
+          board() == ({"priority": "Low"}, "", True)
+          and [s.get("id") for s in sets()] == [other_id], f"{board()} {sets()}")
+    again = report("DeleteFilterSet", {"set_id": mine_id})
+    check("filters: a deleted set is not found", again.get("error") == "not_found", str(again))
+    made = [report("SaveFilterSet", {"name": f"Set {i:02d}", "filters": {"priority": "High"}}) for i in range(49)]
+    full = report("SaveFilterSet", {"name": "One too many", "filters": {"priority": "High"}})
+    check("filters: a page holds 50 sets", all(m.get("ok") for m in made) and full.get("error") == "full",
+          f"{sum(1 for m in made if m.get('ok'))} {full}")
+    for m in made:
+        report("DeleteFilterSet", {"set_id": (m.get("set") or {}).get("id", "")})
+
+    home = TOKEN
+    TOKEN = sign_up(f"{tag}b")
+    if check("filters: a second account signs in", bool(TOKEN)):
+        check("filters: another account sees none of the sets", sets() == [], str(sets()))
+        for name, body in (("rename", {"set_id": other_id, "name": "Taken", "filters": {"priority": "High"}}),
+                           ("delete", {"set_id": other_id})):
+            got = report("SaveFilterSet" if name == "rename" else "DeleteFilterSet", body)
+            check(f"filters: another account cannot {name} a set", got.get("error") == "not_found", str(got))
+        took = report("SetBoardFilters", {"filters": {"priority": "High"}, "set_id": other_id})
+        check("filters: another account cannot point its board at a set", took.get("set_id") == "", str(took))
+    TOKEN = home
+    check("filters: the set is untouched", [(s.get("id"), s.get("name")) for s in sets()] == [(other_id, "Priya's work")],
+          str(sets()))
 
 
 def effects_table(html: str) -> dict:
@@ -588,7 +821,7 @@ def main() -> int:
     # ride instead of the notes and the items, which GetTask carries.
     status, payload, reports = walker("UpdateTask", {
         "task_id": task_id, "title": f"CI task {tag}", "category": "", "tags": [], "estimate": 0, "priority": "High",
-        "status": "Backlog", "step_id": "", "due_date": "", "start_date": "", "iteration_id": "",
+        "status": "Backlog", "step_id": "", "due_date": "", "start_date": "",
         "notes": "First line of the notes.\nSecond line.", "issue_link": "", "pr_link": "", "reviewer_id": "",
         "review_due": "", "assignee_ids": [], "project_id": project_id})
     check("UpdateTask reports the notes", status == 200 and bool(reports)
@@ -634,7 +867,7 @@ def main() -> int:
     # flow line's record and the GitHub connection view, in one call.
     status, payload, reports = walker("GetWorkspace")
     ws = reports[0] if reports and isinstance(reports[0], dict) else {}
-    lists = ("members", "projects", "steps", "repos", "roles", "iterations")
+    lists = ("members", "projects", "steps", "repos", "roles", "filter_sets")
     check("GetWorkspace reports the workspace lists",
           status == 200 and all(isinstance(ws.get(k), list) for k in lists)
           and isinstance(ws.get("github"), dict) and "flow_name" in ws, f"{status} {payload}")
@@ -649,9 +882,11 @@ def main() -> int:
           f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
 
     parity_suite(project_id, member_id, tag)
-    log_paging_suite(member_id)
-    log_counts_suite(member_id, project_id, tag)
+    log_paging_suite(project_id, tag)
+    log_counts_suite(project_id, tag)
     history_pages_suite(project_id)
+    history_store_suite(project_id, member_id)
+    filter_sets_suite(project_id, member_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))

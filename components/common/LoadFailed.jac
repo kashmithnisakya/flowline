@@ -16,7 +16,7 @@ def:pub LoadFailed(
 ) -> JsxElement {
     return
         <div
-            className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-destructive/40 bg-destructive/5 px-6 py-14 text-center animate-in fade-in slide-in-from-top-1"
+            className="flex flex-col items-center gap-4 rounded-xl border border-destructive/40 bg-destructive/5 px-6 py-14 text-center animate-in fade-in slide-in-from-top-1"
             role="alert"
         >
             <WarnIcon size={28} className="text-destructive"/>

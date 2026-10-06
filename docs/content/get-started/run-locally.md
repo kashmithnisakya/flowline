@@ -87,8 +87,8 @@ fine until you [connect a real GitHub App](github-app.md).
 4. **Pick how work moves**: Simple (To do, Doing, Review, Done; recommended),
    Software team (seven steps and four roles), or Draw my own. A template
    opens the board with a new task ready to type (`/board?new=1`); Draw my own
-   goes to the flow line page to draw the steps yourself. The board's
-   columns are the steps you end up with. See
+   goes to the flow line page to draw the steps yourself. The board's step
+   groups are the steps you end up with. See
    [Flow lines](../concepts/flow-lines.md).
 
 Setup resumes at the first unfinished step, and once a flow line exists
@@ -100,9 +100,10 @@ Setup resumes at the first unfinished step, and once a flow line exists
 | --- | --- |
 | `/` | The public landing page |
 | `/login` | Sign in; `?mode=signup` opens the sign-up tab |
-| `/board`, `/tasks`, `/roadmap`, `/log`, `/overview`, `/flowlines`, `/workspace`, `/github` | The app (signed in) |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace` | The app (signed in) |
 | `/setup` | The setup wizard |
-| `/workspace?tab=preferences` | The theme (`/settings` redirects here) |
+| `/workspace?tab=github` | The GitHub connection (`/github`, the App's callback, renders the same section) |
+| `/workspace?tab=preferences` | The theme |
 | `/docs` | The runtime's Swagger UI for every walker, unless `[serve] docs_enabled = false` |
 | `/healthz/live`, `/healthz/ready` | Liveness and readiness probes |
 

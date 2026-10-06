@@ -97,7 +97,7 @@ def run(page, tag: str) -> list[str]:
     expect(page.get_by_role("radio", name="Simple")).to_have_attribute("aria-checked", "true")
     page.get_by_role("button", name="Open the board", exact=True).click()
 
-    step("board: opens with the create dialog on the template's columns")
+    step("board: opens with the create dialog on the template's steps")
     settle(page, "/board", "Board")
     dialog = page.locator("[role=dialog][data-state=open]")
     expect(dialog).to_be_visible()
@@ -143,24 +143,26 @@ def run(page, tag: str) -> list[str]:
     dialog.get_by_role("button", name="Save", exact=True).click()
     expect(dialog).to_be_hidden()
 
-    step("board: the card renders and survives a reload")
+    step("board: the task row renders and survives a reload")
     card = page.get_by_role("button", name=title)
     expect(card).to_be_visible()
     page.reload()
     expect(page.get_by_role("button", name=title)).to_be_visible()
 
-    step("board: the card opens the dialog")
+    step("board: the row opens the dialog")
     page.get_by_role("button", name=title).first.click()
     dialog = page.locator("[role=dialog][data-state=open]")
     expect(dialog.get_by_text("Edit task", exact=True)).to_be_visible()
     dialog.get_by_role("button", name="Cancel", exact=True).click()
     expect(dialog).to_be_hidden()
 
-    step("overview and log pages render")
+    step("flow line, roadmap and overview pages render")
+    page.get_by_role("link", name="Flow line", exact=True).click()
+    settle(page, "/flowlines", "Flow line")
+    page.get_by_role("link", name="Roadmap", exact=True).click()
+    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
     page.get_by_role("link", name="Overview", exact=True).click()
     expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
-    page.get_by_role("link", name="Log", exact=True).click()
-    expect(page.get_by_role("heading", name="Log", exact=True)).to_be_visible()
 
     read_cache_once(page)
     github_install_once(page)
@@ -194,9 +196,9 @@ def read_cache_once(page) -> None:
 
     # The board's snapshot primes the app's workspace cache (lib/workspace),
     # so the pages after it mount on it without a request.
-    step("cache: board, tasks, roadmap, board make no GetWorkspace and one /user/me")
-    page.get_by_role("link", name="Tasks", exact=True).click()
-    expect(page.get_by_role("heading", name="Tasks", exact=True)).to_be_visible()
+    step("cache: board, flow line, roadmap, board make no GetWorkspace and one /user/me")
+    page.get_by_role("link", name="Flow line", exact=True).click()
+    settle(page, "/flowlines", "Flow line")
     page.get_by_role("link", name="Roadmap", exact=True).click()
     expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
     page.get_by_role("link", name="Board", exact=True).click()
@@ -224,8 +226,8 @@ def read_cache_once(page) -> None:
     assert not calls, f"tab switches made {len(calls)} requests: {calls}"
 
     # A roster write drops the cache: the People tab's own refetch is the one
-    # request, and /tasks then mounts on it.
-    step("cache: a People-tab save then tasks makes exactly one GetWorkspace")
+    # request, and the roadmap then mounts on it.
+    step("cache: a People-tab save then the roadmap makes exactly one GetWorkspace")
     page.locator('a[href="/workspace?tab=people"]').first.click()
     expect(page.get_by_role("button", name="Add person", exact=True).first).to_be_visible()
     page.wait_for_timeout(1000)
@@ -238,8 +240,8 @@ def read_cache_once(page) -> None:
     dialog.get_by_role("button", name="Add person", exact=True).click()
     expect(dialog).to_be_hidden()
     expect(page.get_by_text("Cache Probe", exact=True).first).to_be_visible()
-    page.get_by_role("link", name="Tasks", exact=True).click()
-    expect(page.get_by_role("heading", name="Tasks", exact=True)).to_be_visible()
+    page.get_by_role("link", name="Roadmap", exact=True).click()
+    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
     page.wait_for_timeout(1500)
     workspace = [u for u in hits if u.endswith("/walker/GetWorkspace")]
     assert len(workspace) == 1, f"GetWorkspace was requested {len(workspace)} times after the save, expected 1"
@@ -294,7 +296,9 @@ def github_install_once(page) -> None:
     page.on("response", record)
     page.goto(f"{BASE}/github?code=stub-code&installation_id={INSTALLATION}"
               f"&setup_action=install&state={state}&tab=github")
-    settle(page, "/github", "GitHub")
+    # The install lands on /github, which renders the Workspace's GitHub
+    # section and moves the address to /workspace?tab=github once it is done.
+    settle(page, r"/(github|workspace\?tab=github)", "GitHub")
     try:
         expect(page.get_by_text("@stub-org", exact=True)).to_be_visible()
         expect(page.get_by_role("button", name="Disconnect", exact=True)).to_be_visible()

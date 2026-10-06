@@ -8,6 +8,8 @@ import from models {
     Task,
     Member,
     AssignedTo,
+    WorkflowSteps,
+    WorkflowStep,
     projects_of,
     members_of,
     seeded_done,
@@ -220,6 +222,27 @@ def ensure_history(holder: Root) {
 }
 
 
+# The tasks table's sort keys (Task.keep_keys) for every project that has
+# none yet (an empty `keys_at`): one full load per such project, once. True
+# when it filled any: a pushed query in this request cannot see the fields
+# yet, so the caller pages the loaded rows instead.
+def ensure_keys(holder: Root) -> bool {
+    stamp = now_iso();
+    filled = False;
+    for p in projects_of(holder) {
+        if p.keys_at {
+            continue;
+        }
+        for t in [p-->[?:Task]] {
+            t.keep_keys();
+        }
+        p.keys_at = stamp;
+        filled = True;
+    }
+    return filled;
+}
+
+
 # The cutoff Done tasks fall behind is applied in the store's query
 # (`done_at < cutoff` in the models readers), the same test as done_day
 # once ensure_tallies has filled `done_at` on every Done row.
@@ -227,4 +250,36 @@ def ensure_history(holder: Root) {
 # so ties stay deterministic across two requests.
 def order_working(rows: list[Task]) {
     rows.sort(key=lambda (t: Task) { t.sort_order; });
+}
+
+
+# Arrows saved before #274 (Sep 27 2026) hold their GitHub label under
+# "trigger_label". Rename it to "github_label" once per workspace, stamped
+# on the box; every path that reads an arrow's label calls this first.
+def ensure_arrows(holder: Root) -> None {
+    boxes = [holder-->[?:WorkflowSteps]];
+    if not boxes or boxes[0].arrows_at {
+        return;
+    }
+    for s in [boxes[0]-->[?:WorkflowStep]] {
+        if any(["trigger_label" in t for t in s.transitions]) {
+            s.transitions = [renamed_arrow(t) for t in s.transitions];
+        }
+    }
+    boxes[0].arrows_at = now_iso();
+}
+
+
+def renamed_arrow(t: dict[str, str]) -> dict[str, str] {
+    if "trigger_label" not in t {
+        return t;
+    }
+    out = {
+        k: v
+        for (k, v) in t.items()
+        if k != "trigger_label"
+    };
+    out["github_label"] = t.get("github_label", "") or t["trigger_label"];
+    out["keep_label"] = t.get("keep_label", "");
+    return out;
 }

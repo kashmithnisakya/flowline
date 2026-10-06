@@ -5,22 +5,22 @@ onto the same set. Class strings are whole literals for Tailwind's scanner.
 """
 
 glob HUES: list[str] = [
-         "bg-[#2E6C97] text-white",
-         "bg-[#5550AC] text-white",
-         "bg-[#8A5A00] text-white",
-         "bg-[#A34B83] text-white",
-         "bg-[#387A51] text-white",
-         "bg-[#4F5753] text-white",
-         "bg-[#B3261E] text-white",
-         "bg-[#245A80] text-white"
+         "bg-avatar-1 text-white",
+         "bg-avatar-2 text-white",
+         "bg-avatar-3 text-white",
+         "bg-avatar-4 text-white",
+         "bg-avatar-5 text-white",
+         "bg-avatar-6 text-white",
+         "bg-avatar-7 text-white",
+         "bg-avatar-8 text-white"
      ],
      KEY_HUE: dict[str, str] = {
-         "sky": "bg-[#2E6C97] text-white",
-         "indigo": "bg-[#5550AC] text-white",
-         "amber": "bg-[#8A5A00] text-white",
-         "rose": "bg-[#A34B83] text-white",
-         "emerald": "bg-[#387A51] text-white",
-         "slate": "bg-[#4F5753] text-white"
+         "sky": "bg-avatar-1 text-white",
+         "indigo": "bg-avatar-2 text-white",
+         "amber": "bg-avatar-3 text-white",
+         "rose": "bg-avatar-4 text-white",
+         "emerald": "bg-avatar-5 text-white",
+         "slate": "bg-avatar-6 text-white"
      },
      DOTS: list[str] = [
          "bg-chart-1",
@@ -77,7 +77,7 @@ def:pub Avatar(
 ) -> JsxElement {
     return
         <span
-            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold leading-none tracking-normal "
+            className={"inline-flex shrink-0 select-none items-center justify-center rounded-md font-semibold leading-none tracking-normal "
                 + SIZES.get(size, SIZES["sm"])
                 + " "
                 + hueFor(name, color)
@@ -105,7 +105,7 @@ def:pub AvatarStack(names: list[str], max: int = 3, size: str = "xs") -> JsxElem
             {if extra > 0 {
                 <span
                     key="more"
-                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-mono font-medium text-muted-foreground ring-2 ring-card "
+                    className={"inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-medium text-muted-foreground ring-2 ring-card "
                         + SIZES.get(size, SIZES["xs"])}
                 >
                     {"+" + str(extra)}

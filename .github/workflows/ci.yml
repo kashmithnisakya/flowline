@@ -48,6 +48,11 @@ jobs:
       - name: jac --version
         run: jac --version
 
+      # Since 0.37.23 `jac check` fails (E1138) on an import of a dependency
+      # jac.toml declares but the environment lacks, so install them first.
+      - name: jac install (python + npm dependencies)
+        run: jac install
+
       # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
       # those files verbatim from the registry, so holding them to the
       # formatter would go red on the next install. They still get linted and
@@ -162,6 +167,9 @@ jobs:
             # The scheduled GitHub sync ticks every 5 minutes by default; the
             # webhook gate waits for one pass, so the serve job shortens it.
             echo "FLOWLINE_SYNC_INTERVAL_SECONDS=30"
+            # Below the workspaces the gate binds, so a tick really caps and
+            # the gate sees the next tick carry the rest.
+            echo "FLOWLINE_SYNC_MAX_WORKSPACES=2"
           } >> "$GITHUB_ENV"
 
       - name: Serve the app (jac run --no-dev, background)
@@ -174,6 +182,9 @@ jobs:
 
       - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
         run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
+
+      - name: Automation gate (entry rules, label, merge and review triggers, PR linking)
+        run: python3 tests/smoke/automation_gate.py http://localhost:8000 http://127.0.0.1:8099
 
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log

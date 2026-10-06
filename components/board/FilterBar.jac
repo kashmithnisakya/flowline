@@ -1,9 +1,9 @@
-"""The board toolbar: a title filter, Project, Assignee and Priority, the rest
-under More, and on the right the Done window and the task count. An active
+"""The board toolbar: a title filter, Assignee and Priority, the rest under
+More, and on the right the Done window and the task count. An active
 filter reads as an outlined "Label: value" with a clear button. Below md it
 folds into the title filter plus a Filters button that opens a sheet."""
 
-import from ...models { Project, MemberView, IterationView }
+import from ...models { MemberView }
 import from ..ui.checkbox { Checkbox }
 import from ..ui.button { Button }
 import from ..ui.dropdown_menu {
@@ -11,6 +11,8 @@ import from ..ui.dropdown_menu {
     DropdownMenuTrigger,
     DropdownMenuContent,
     DropdownMenuRadioGroup,
+    DropdownMenuItem,
+    DropdownMenuCheckboxItem,
     DropdownMenuRadioItem,
     DropdownMenuSub,
     DropdownMenuSubTrigger,
@@ -25,6 +27,7 @@ import from ..ui.select {
 }
 import from ..ui.sheet { Sheet, SheetContent, SheetHeader, SheetTitle }
 import from ..ui.skeleton { Skeleton }
+import from .columnWidths { resetWidths }
 
 glob CHEVRON_D: str = "m4.5 6.5 3.5 3.5 3.5-3.5";
 
@@ -67,7 +70,7 @@ def FilterMenu(
     onChange: Callable[[str], None]
 ) -> JsxElement {
     active = value != allValue;
-    shown = optionLabel(options, value);
+    shown = optionLabel(options, value) if value else label;
     return
         <DropdownMenu>
             {if active {
@@ -103,7 +106,11 @@ def FilterMenu(
                     </button>
                 </span>
             } else {
-                <DropdownMenuTrigger key="off" className="toolbar-filter">
+                <DropdownMenuTrigger
+                    key="off"
+                    className="toolbar-filter"
+                    data-active="false"
+                >
                     {label}
                     <Chevron/>
                 </DropdownMenuTrigger>
@@ -144,13 +151,11 @@ def SheetSelect(
 }
 
 def:pub FilterBar(
-    projects: list[Project],
     members: list[MemberView],
     project: str,
     assignee: str,
     category: str,
     hideDone: bool,
-    onProject: Callable[[str], None],
     onAssignee: Callable[[str], None],
     onCategory: Callable[[str], None],
     onHideDone: Callable[[], None],
@@ -160,10 +165,6 @@ def:pub FilterBar(
     estimate: str = "All",
     onTag: Callable[[str], None] = None,
     onEstimate: Callable[[str], None] = None,
-    # "All", "current", "none" or an iteration jid; hidden with none defined.
-    iterations: list[IterationView] = [],
-    iteration: str = "All",
-    onIteration: Callable[[str], None] = None,
     priority: str = "All",
     onPriority: Callable[[str], None] = None,
     query: str = "",
@@ -171,6 +172,10 @@ def:pub FilterBar(
     onClear: Callable[[], None] = None,
     shownCount: int = 0,
     doneDays: int = 7,
+    hideEmpty: bool = False,
+    onHideEmpty: Callable[[], None] = None,
+    onExpandAll: Callable[[], None] = None,
+    onCollapseAll: Callable[[], None] = None,
     # The first load: the count is not known yet, so its slot holds a block.
     busy: bool = False
 ) -> JsxElement {
@@ -179,12 +184,8 @@ def:pub FilterBar(
     shownMembers = [
         m
         for m in members
-        if project == "all" or project in m.project_ids
+        if not project or project in m.project_ids
     ];
-    projectOptions: list[list[str]] = [["all", "All projects"]];
-    for p in projects {
-        projectOptions.append([jid(p), p.name]);
-    }
     assigneeOptions: list[list[str]] = [["All", "Everyone"]];
     for m in shownMembers {
         assigneeOptions.append([m.id, m.name]);
@@ -208,14 +209,6 @@ def:pub FilterBar(
         ["yes", "Estimated"],
         ["no", "Unestimated"]
     ];
-    iterationOptions: list[list[str]] = [
-        ["All", "All iterations"],
-        ["current", "Current iteration"]
-    ];
-    for it in iterations {
-        iterationOptions.append([it.id, it.name]);
-    }
-    iterationOptions.append(["none", "No iteration"]);
 
     def setTag(v: str) {
         if onTag {
@@ -225,11 +218,6 @@ def:pub FilterBar(
     def setEstimate(v: str) {
         if onEstimate {
             onEstimate(v);
-        }
-    }
-    def setIteration(v: str) {
-        if onIteration {
-            onIteration(v);
         }
     }
     def setPriority(v: str) {
@@ -250,13 +238,11 @@ def:pub FilterBar(
 
     picked = 0;
     for on in [
-        project != "all",
         assignee != "All",
         priority != "All",
         category != "All",
         tag != "All",
-        estimate != "All",
-        iteration != "All"
+        estimate != "All"
     ] {
         if on {
             picked = picked + 1;
@@ -264,7 +250,6 @@ def:pub FilterBar(
     }
     anything = picked > 0 or bool(query.strip());
     showTags = len(tags) > 0 or tag != "All";
-    showIterations = len(iterations) > 0 or iteration != "All";
     countLabel = str(shownCount) + (" task" if shownCount == 1 else " tasks");
     doneLabel = "Done from last " + str(doneDays) + " days";
 
@@ -344,18 +329,8 @@ def:pub FilterBar(
 
     return
         <div className="min-w-0">
-            <div
-                data-board-toolbar="true"
-                className="toolbar hidden rounded-md border-x md:flex"
-            >
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
                 {SearchBox("w-[210px]")}
-                <FilterMenu
-                    label="Project"
-                    value={project}
-                    allValue="all"
-                    options={projectOptions}
-                    onChange={onProject}
-                />
                 <FilterMenu
                     label="Assignee"
                     value={assignee}
@@ -398,16 +373,6 @@ def:pub FilterBar(
                         allValue="All"
                         options={estimateOptions}
                         onChange={setEstimate}
-                    />
-                }}
-                {if iteration != "All" {
-                    <FilterMenu
-                        key="iteration"
-                        label="Iteration"
-                        value={iteration}
-                        allValue="All"
-                        options={iterationOptions}
-                        onChange={setIteration}
                     />
                 }}
                 <DropdownMenu>
@@ -474,54 +439,70 @@ def:pub FilterBar(
                                 </DropdownMenuRadioGroup>
                             </DropdownMenuSubContent>
                         </DropdownMenuSub>
-                        {if showIterations {
-                            <DropdownMenuSub key="iterations">
-                                <DropdownMenuSubTrigger>
-                                    Iteration
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    className="max-h-80 w-52 overflow-y-auto"
-                                >
-                                    <DropdownMenuRadioGroup
-                                        value={iteration}
-                                        onValueChange={setIteration}
-                                    >
-                                        {for o in iterationOptions {
-                                            <DropdownMenuRadioItem
-                                                key={o[0]}
-                                                value={o[0]}
-                                            >
-                                                {o[1]}
-                                            </DropdownMenuRadioItem>
-                                        }}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                        }}
                     </DropdownMenuContent>
                 </DropdownMenu>
                 {if anything {
                     <button
                         key="clearall"
                         type="button"
-                        className="toolbar-filter text-primary! hover:bg-transparent! hover:underline"
+                        className="toolbar-filter border-transparent!"
                         onClick={lambda { clearAll(); }}
                     >
-                        Clear filters
+                        Clear
                     </button>
                 }}
                 <div
-                    className="ml-auto flex items-center gap-3 text-[12.5px] text-muted-foreground"
+                    className="ml-auto flex items-center gap-2 text-[12px] text-text-tertiary"
                 >
-                    <label
-                        className="flex cursor-pointer items-center gap-2 whitespace-nowrap"
-                    >
-                        <Checkbox
-                            checked={not hideDone}
-                            onCheckedChange={lambda { onHideDone(); }}
-                        />
-                        {doneLabel}
-                    </label>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            className="toolbar-filter"
+                            data-active="false"
+                        >
+                            Display
+                            <Chevron/>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            collisionPadding={16}
+                            className="w-56"
+                        >
+                            <DropdownMenuCheckboxItem
+                                checked={not hideDone}
+                                onCheckedChange={lambda { onHideDone(); }}
+                            >
+                                {doneLabel}
+                            </DropdownMenuCheckboxItem>
+                            {if onHideEmpty {
+                                <DropdownMenuCheckboxItem
+                                    key="empty"
+                                    checked={hideEmpty}
+                                    onCheckedChange={lambda { onHideEmpty(); }}
+                                >
+                                    Hide empty groups
+                                </DropdownMenuCheckboxItem>
+                            }}
+                            {if onExpandAll {
+                                <DropdownMenuItem
+                                    key="expand"
+                                    onClick={lambda { onExpandAll(); }}
+                                >
+                                    Expand all groups
+                                </DropdownMenuItem>
+                            }}
+                            {if onCollapseAll {
+                                <DropdownMenuItem
+                                    key="collapse"
+                                    onClick={lambda { onCollapseAll(); }}
+                                >
+                                    Collapse all groups
+                                </DropdownMenuItem>
+                            }}
+                            <DropdownMenuItem onClick={lambda { resetWidths(); }}>
+                                Reset column widths
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     {if busy {
                         <Skeleton key="count" className="h-3 w-14"/>
                     } else {
@@ -559,12 +540,6 @@ def:pub FilterBar(
                     </SheetHeader>
                     <div className="grid gap-3 px-4 py-4">
                         <SheetSelect
-                            label="Project"
-                            value={project}
-                            options={projectOptions}
-                            onChange={onProject}
-                        />
-                        <SheetSelect
                             label="Assignee"
                             value={assignee}
                             options={assigneeOptions}
@@ -597,15 +572,6 @@ def:pub FilterBar(
                             options={estimateOptions}
                             onChange={setEstimate}
                         />
-                        {if showIterations {
-                            <SheetSelect
-                                key="iteration"
-                                label="Iteration"
-                                value={iteration}
-                                options={iterationOptions}
-                                onChange={setIteration}
-                            />
-                        }}
                         <label className="flex items-center gap-2 pt-1 text-[13px]">
                             <Checkbox
                                 checked={not hideDone}

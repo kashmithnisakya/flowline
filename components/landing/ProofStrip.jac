@@ -8,7 +8,7 @@ def:pub ProofStrip -> JsxElement {
     return
         <ul
             aria-label="Facts about Flowline"
-            className="flex flex-wrap border-y font-mono text-[12.5px] text-muted-foreground"
+            className="flex flex-wrap border-y text-[12.5px] text-muted-foreground"
         >
             <li className={FACT}>MIT licensed</li>
             <li className={FACT}>

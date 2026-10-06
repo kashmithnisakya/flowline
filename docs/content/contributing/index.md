@@ -14,17 +14,18 @@ flowline/
 ├── jac.toml                 # project, dependencies, serve, scale, placement
 ├── services/                # the walker API, one folder per section
 │   ├── projects/  roster/  tasks/  board/  log/
-│   ├── flowlines/  iterations/  insights/  assistant/
+│   ├── flowlines/  roadmap/  filters/  workspace/
+│   ├── insights/  assistant/
 │   ├── github/    # github.jac, events.jac (webhook), util.jac
 │   └── util.jac   # server-only helpers (dates, paging, tags)
 ├── pages/                   # file-based routes
 │   ├── layout.jac           # path-aware app chrome
 │   ├── (public)/            # /, /login, /auth/callback
-│   └── (auth)/              # /board, /flowlines, /overview, /log, ...
+│   └── (auth)/              # /board, /flowlines, /roadmap, /overview, ...
 │       └── impl/            # page handler bodies
 ├── components/              # presentational components by area
 │   └── ui/                  # jac-shadcn registry copies: never edit
-├── lib/                     # session, dates, theme, voice, utils
+├── lib/                     # session, project, workspace, filters, dates, ...
 ├── styles/global.css        # brand and step colour tokens, both palettes
 ├── brand/                   # logo.jac and social.jac draw assets/brand/
 ├── tests/smoke/             # CI gates: deploy, API, webhook, browser

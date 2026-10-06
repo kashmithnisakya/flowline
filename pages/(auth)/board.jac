@@ -1,9 +1,10 @@
-"""flowline - Board page (/board): the org's flow line as a kanban. The columns
-ARE the flow line steps in designed order, so board and Flow line tab cannot
-disagree; with no flow line yet it falls back to the six statuses. Stateful
-shell: data and handlers here; route strip, toolbar, lanes and sheet are
-presentational."""
+"""flowline - Board page (/board): one project's work as the flow line's
+steps, stacked. The groups ARE the flow line steps in designed order, so the
+board and the Flow line page cannot disagree; with no flow line yet it falls
+back to the six statuses. Stateful shell: data and handlers here; header,
+strip, toolbar, groups and sheet are presentational."""
 
+import from "@jac/runtime" { jacIsLoggedIn }
 import from ...models {
     Project,
     MemberView,
@@ -12,7 +13,7 @@ import from ...models {
     StepView,
     RepoView,
     RoleView,
-    IterationView
+    FilterSetView
 }
 # The one client import of constants.jac. Beyond sharing the status/kind
 # mapping, it is what makes the compiler emit constants.js at all: the client
@@ -32,22 +33,37 @@ import from ...services.tasks.tasks {
 }
 import from ...services.github.github { SyncGithub, CreateIssueFromTask }
 import from ...services.github.events { DrainGithubEvents }
+import from ...services.filters.filters { SetBoardFilters }
 import from ...components.board.FilterBar { FilterBar }
-import from ...components.board.KanbanColumn { KanbanColumn }
+import from ...components.common.FilterSets { FilterSetMenu }
+import from ...components.board.BoardHeader { BoardHeader }
+import from ...components.board.FlowStrip { FlowStrip }
+import from ...components.board.StepGroup { StepGroup }
+import from ...components.board.OlderDone { OlderDone }
+import from ...components.board.ColumnHeads { ColumnHeads }
+import from ...components.board.FilteredEmpty { FilteredEmpty }
+import from ...components.board.BoardSkeleton { BoardSkeleton, rememberGroups }
+import from ...components.board.NoFlowLine { NoFlowLine }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.board.MoveDialog { MoveDialog }
-import from ...components.board.RouteStrip { RouteStrip }
 import from ...components.ui.button { Button }
-import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
-import from ...lib.session { LANES_KEY }
+import from ...lib.project { currentProject, pickProject }
 import from ...lib.workspace { rememberWorkspace, forgetWorkspace }
 import from "sonner" { toast }
 import from "react" { useEffect }
-import from ...components.common.glyphs { Spinner }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
 import from ...lib.dates { todayIso, dueTone }
 import from ...lib.utils { fmtEstimate, parseEstimate }
+import from ...lib.filters {
+    defaultProject,
+    filterKey,
+    filterValue,
+    trimFilters,
+    readBoardFilters,
+    keepBoardFilters
+}
+import from ...components.flowlines.kinds { DOT_FILL, colorKey, moveRefusal }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -59,7 +75,6 @@ glob BLANK_TASK: dict[str, str] = {
          "status": "Backlog",
          "due_date": "",
          "start_date": "",
-         "iteration": "none",
          "notes": "",
          "issue": "",
          "pr": "",
@@ -87,7 +102,6 @@ glob BLANK_TASK: dict[str, str] = {
          "status",
          "due_date",
          "start_date",
-         "iteration",
          "notes",
          "issue",
          "pr",
@@ -108,28 +122,8 @@ glob SYNC_ROUNDS: int = 40,
      # are live (one keyed store read per tick, no GitHub call); a quiet
      # connection drains once per task poll instead.
      DRAIN_MS: int = 20000,
-     # The lane grid, shared by the lanes and their first-load skeleton.
-     # Lanes are minmax(252px,1fr): they share the width when they all fit
-     # and the grid scrolls sideways once seven of them no longer do. The
-     # md:-mr-1 md:pr-1 pair gives the last card list's 4px overhang a home
-     # in the scroller's padding, so it neither scrolls nor clips a focus ring.
-     LANE_GRID: str = "relative grid snap-x snap-mandatory auto-cols-[100%] grid-flow-col items-start gap-4 overflow-x-auto overscroll-x-contain pb-2 md:-mr-1 md:snap-none md:auto-cols-[minmax(252px,1fr)] md:grid-rows-[minmax(0,1fr)] md:items-stretch md:gap-2.5 md:pr-1",
-     # Node and card title widths for the skeleton, so it reads as a board.
-     NODE_WIDTHS: list[int] = [96, 88, 120, 104, 128, 96, 92],
-     CARD_WIDTHS: list[str] = ["w-4/5", "w-3/5", "w-[70%]", "w-1/2"];
-
-# How many lanes the skeleton draws: the count the last load saw in this
-# browser, else six (the legacy statuses).
-def guessLanes -> int {
-    raw = "";
-    try {
-        raw = localStorage.getItem(LANES_KEY) or "";
-    } except Exception as e {
-        raw = "";
-    }
-    n = int(raw) if raw else 6;
-    return n if n >= 3 and n <= 10 else 6;
-}
+     # A filter change reaches the account once the picking pauses this long.
+     SAVE_FILTERS_MS: int = 800;
 
 
 def:pub BoardPage -> JsxPage {
@@ -162,6 +156,8 @@ def:pub BoardPage -> JsxPage {
         roleRows: list[RoleView] = [],
         projects: list[Project] = [],
         steps: list[StepView] = [],
+        # The flow line's name, over the strip.
+        flowName: str = "Flow line",
         repos: list[RepoView] = [],
         ghConnected: bool = False,
         # A delivery reached the server inside its live window (the snapshot
@@ -180,20 +176,33 @@ def:pub BoardPage -> JsxPage {
         # The newest snapshot load owns the state: an older one still paging
         # neither paints its pages nor fetches the rest.
         loadReqRef: Ref[any] = Ref(),
-        fProject: str = "all",
+        # The project on screen, the scope every page shares (lib/project).
+        # "" only until page 1 says which one the server opened on.
+        fProject: str = currentProject(),
+        # The project the loaded rows belong to. While it differs from
+        # fProject a switch is in flight, and the rows on screen stay
+        # rather than blanking until the new set lands.
+        loadedProject: str = "",
         fAssignee: str = "All",
         fCategory: str = "All",
         # A tag the card must carry, or "All"; the estimate filter is "All",
         # "yes" (estimated) or "no" (unestimated). Client-side, like the rest.
         fTag: str = "All",
         fEstimate: str = "All",
-        # "All", "current" (whichever iterations hold today), "none" or a jid.
-        fIteration: str = "All",
         fPriority: str = "All",
-        iterations: list[IterationView] = [],
+        # The account's saved sets, the one the filters came from ("" none),
+        # its name as this browser last saw it (the first frame's label), and
+        # whether the account's filters have been taken: every change after
+        # that is saved, compared as filterKey + "|" + set on savedRef.
+        filterSets: list[FilterSetView] = [],
+        activeSet: str = "",
+        lastSetName: str = "",
+        filtersReady: bool = False,
+        savedRef: Ref[any] = Ref(),
         # Live search over the loaded board: matches a task title or its
         # issue/PR number, so one box covers "payment" and "412".
         boardQuery: str = "",
+        hideEmpty: bool = False,
         hideDone: bool = False,
         dialogOpen: bool = False,
         editingId: str = "",
@@ -221,28 +230,18 @@ def:pub BoardPage -> JsxPage {
         # palette) opens that card once the first load has landed; "new"
         # opens the create dialog (/board?new=1).
         pendingTaskId: str = "",
-        # The lane scroller and what it shows: keys of lanes mostly on screen
-        # (comma-joined, so an unchanged view is a no-op write), the lane most
-        # on screen (the phone tab), lanes past the right edge, the lane
-        # height on md+ and whether the md+ layout applies.
-        lanesRef: Ref[any] = Ref(),
-        frameRef: Ref[any] = Ref(),
-        viewKeys: str = "",
-        activeLane: str = "",
-        hiddenAfter: int = 0,
-        laneH: int = 0,
-        wideView: bool = True;
+        # Step groups folded shut (column keys); Done starts folded.
+        closed: list[str] = [],
+        doneOpen: bool = False;
 
     async can with entry {
         movesRef.current = 0;
-        stored = localStorage.getItem("flowline_project")
-            or localStorage.getItem("standup_project")
-            or "";
-        if stored {
-            fProject = stored;
-            # boot() runs in this same tick, where `fProject` still reads
-            # "all"; the ref carries the effective filter across.
-            filterRef.current = stored + "|All|All";
+        # The first frame shows the filters this browser last saw; the
+        # account's own replace them when page 1 lands.
+        kept = readBoardFilters();
+        if kept["ok"] {
+            adoptFilters(kept["filters"], kept["set"]);
+            lastSetName = kept["name"];
         }
         w: any = window;
         params: any = new(w.URLSearchParams, w.location.search);
@@ -306,8 +305,9 @@ def:pub BoardPage -> JsxPage {
             window.addEventListener("flowline:open-task", onOpenTask);
             window.addEventListener("flowline:new-task", onNewTask);
             timer = window.setInterval(lambda { pollTick(); }, POLL_MS);
-            onResize = lambda { scheduleMeasure(); };
-            window.addEventListener("resize", onResize);
+            # The sidebar (or another page's picker) scopes the board.
+            onProject = lambda (e: any) { setProjectFilter(str(e.detail or "")); };
+            window.addEventListener("flowline:project", onProject);
             # "/" focuses the title filter, N opens a new task (beside a sheet
             # too) and J/K step the open sheet through the cards, unless the
             # keys are being typed or a dialog or menu has them. "/" in the
@@ -353,7 +353,9 @@ def:pub BoardPage -> JsxPage {
             };
             window.addEventListener("keydown", onKey);
             return lambda {
-                window.removeEventListener("resize", onResize);
+                # A change still inside its pause is saved on the way out.
+                persistFilters();
+                window.removeEventListener("flowline:project", onProject);
                 window.removeEventListener("keydown", onKey);
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("flowline:refresh", onRefresh);
@@ -380,43 +382,28 @@ def:pub BoardPage -> JsxPage {
         [ghConnected, webhookLive, loading, drainTick]
     );
 
-    # Measure after the lanes lay out, and again whenever what sits above
-    # them or how many there are changes.
+    # Every filter change after the account's filters were taken reaches
+    # the account, once the picking pauses.
     useEffect(
         lambda {
-            frame: any = window.requestAnimationFrame(lambda { measureLanes(); });
-            return lambda { window.cancelAnimationFrame(frame); };
+            timer: any = 0;
+            if filtersReady {
+                timer = window.setTimeout(
+                    lambda { persistFilters(); }, SAVE_FILTERS_MS
+                );
+            }
+            return lambda { if timer { window.clearTimeout(timer); }};
         },
         [
-            loading,
-            len(steps),
-            len(tasks),
-            loadFailed,
-            workingTruncated,
-            hideDone,
-            fProject,
+            filtersReady,
+            activeSet,
             fAssignee,
             fCategory,
             fTag,
             fEstimate,
-            fIteration,
             fPriority,
-            bool(boardQuery),
-            dialogOpen
+            hideDone
         ]
-    );
-
-    # An open sheet covers the right of the board, so the lanes gain room
-    # past their end and the open card scrolls out from under it.
-    useEffect(
-        lambda {
-            frame: any = 0;
-            if dialogOpen and editingId and wideView {
-                frame = window.requestAnimationFrame(lambda { revealCard(editingId); });
-            }
-            return lambda { if frame { window.cancelAnimationFrame(frame); }};
-        },
-        [dialogOpen, editingId, wideView]
     );
 
     async def boot -> None;
@@ -468,23 +455,22 @@ def:pub BoardPage -> JsxPage {
     def setProjectFilter(v: str) -> None;
     def setAssigneeFilter(v: str) -> None;
     def setCategoryFilter(v: str) -> None;
-    def filtersOn(pid: str, who: str, cat: str) -> bool;
+    def filtersOn(who: str, cat: str) -> bool;
     def clearFilters -> None;
-    # Lane geometry: which lanes are on screen, the lane height on md+, and
-    # scrolling a lane (or the first one past the edge) into view.
-    def measureLanes -> None;
-    def scheduleMeasure -> None;
-    def scrollToLane(key: str) -> None;
-    def scrollToHidden -> None;
-    def revealCard(tid: str) -> None;
-    # Where an open task sheet starts on screen (md+), else -1: the lanes
-    # under it count as out of view.
-    def sheetEdge -> float;
+    # The saved filters: the filters on screen in their stored form, taking
+    # a stored dict (a set, the account's, this browser's copy), dropping
+    # values that name a row gone from the lists, and saving to the account.
+    def boardFilters -> dict[str, str];
+    def adoptFilters(filters: dict[str, str], setId: str) -> None;
+    def takeAccountFilters(data: any) -> None;
+    def dropStaleFilters -> None;
+    async def persistFilters -> None;
+    def applySet(view: FilterSetView) -> None;
+    def showAllTasks -> None;
+    def absorbSet(view: FilterSetView) -> None;
+    def dropSet(setId: str) -> None;
     # J/K with the sheet open: the next or previous card in board order.
     def stepCard(delta: int) -> None;
-    # A drag near either edge of the lanes scrolls them, so a card can reach
-    # a lane that starts off screen.
-    def dragEdgeScroll(e: DragEvent) -> None;
     def setField(key: str, value: str) -> None;
     def setMoveField(key: str, value: str) -> None;
     def toggleAssignee(memberId: str) -> None;
@@ -543,16 +529,17 @@ def:pub BoardPage -> JsxPage {
     # numbers, so typing digits finds "#412" and typing words finds a title.
     bq = boardQuery.strip().lower();
 
+    # The filters on screen as a saved set stores them, and the board's sets.
+    nowFilters = boardFilters();
+    boardSets: list[FilterSetView] = [
+        s
+        for s in filterSets
+        if s.page == "board"
+    ];
+
     # One filter predicate for both the working set and the older-Done list,
     # so a new condition is added once. hideDone and the older-list's own
     # showAllDone guard stay at the call sites, since they differ per list.
-    todayDay = todayIso();
-    currentIterations: list[str] = [];
-    for it in iterations {
-        if it.start_date <= todayDay and it.end_date >= todayDay {
-            currentIterations.append(it.id);
-        }
-    }
 
     def matches(t: TaskRow) -> bool {
         # The issue/PR number lives in the synced numeric field OR the tail of
@@ -566,17 +553,11 @@ def:pub BoardPage -> JsxPage {
             or (bool(issueTail) and bq in issueTail.lower())
             or (bool(prTail) and bq in prTail.lower());
         return hit
-            and (fProject == "all" or t.project_id == fProject)
+            and (not fProject or loadedProject != fProject or t.project_id == fProject)
             and (fAssignee == "All" or fAssignee in t.assignee_ids)
             and (fCategory == "All" or t.category == fCategory)
             and (fTag == "All" or fTag in t.tags)
             and (fPriority == "All" or t.priority == fPriority)
-            and (
-                fIteration == "All"
-                or (fIteration == "none" and not t.iteration_id)
-                or (fIteration == "current" and t.iteration_id in currentIterations)
-                or (bool(t.iteration_id) and t.iteration_id == fIteration)
-            )
             and (
                 fEstimate == "All"
                 or (fEstimate == "yes" and t.estimate > 0.0)
@@ -660,21 +641,18 @@ def:pub BoardPage -> JsxPage {
         }
     }
 
-    # One pass over the filtered set per lane: its rows, overdue count and
-    # colour, shared by the route strip, the lanes and the move menus.
+    # One pass over the filtered set per step: its rows, overdue count and
+    # colour, shared by the strip, the groups and the move menus.
     colLabels: list[str] = [columnLabel(k) for k in colKeys];
     colColors: list[str] = [];
-    laneRows: list[list[TaskRow]] = [];
-    laneCounts: list[int] = [];
-    laneOverdue: list[int] = [];
+    groupRows: list[list[TaskRow]] = [];
+    groupCounts: list[int] = [];
+    groupOverdue: list[int] = [];
     for key in colKeys {
-        stepColor = columnColor(key);
         kind = columnKind(key);
-        if stepColor {
-            colColors.append(stepColor);
-        } else {
-            colColors.append(KIND_COLORS[kind] if kind in KIND_COLORS else "slate");
-        }
+        colColors.append(
+            columnColor(key) or (KIND_COLORS[kind] if kind in KIND_COLORS else "slate")
+        );
         rows: list[TaskRow] = (recentDone + olderShown)
             if key == doneKey
             else [
@@ -682,8 +660,8 @@ def:pub BoardPage -> JsxPage {
                 for t in visible
                 if columnKeyOf(t) == key
             ];
-        laneRows.append(rows);
-        laneCounts.append(len(rows));
+        groupRows.append(rows);
+        groupCounts.append(len(rows));
         late = 0;
         if key != doneKey {
             for t in rows {
@@ -692,13 +670,14 @@ def:pub BoardPage -> JsxPage {
                 }
             }
         }
-        laneOverdue.append(late);
+        groupOverdue.append(late);
     }
-    inView: list[str] = [
-        k
-        for k in viewKeys.split(",")
-        if k
-    ];
+    route: dict[str, any] = {
+        "keys": colKeys,
+        "labels": colLabels,
+        "colors": colColors,
+        "steps": steps
+    };
     shownCount = len(visible) + len(olderShown);
     selectedId = editingId if dialogOpen else "";
     editingCreated = "";
@@ -715,196 +694,110 @@ def:pub BoardPage -> JsxPage {
     } elif switchTo["kind"] == "new" {
         switchLabel = "a new task";
     }
-    laneGuess = guessLanes();
-    laneStyle: dict[str, str] = {};
-    if wideView and laneH > 0 {
-        laneStyle["height"] = str(laneH) + "px";
-    }
-    if wideView and dialogOpen and editingId {
-        laneStyle["paddingRight"] = "436px";
-    }
-    if wideView and hiddenAfter > 0 {
-        # The right edge fades while lanes sit past it.
-        laneStyle["maskImage"] = "linear-gradient(to right, #000 calc(100% - 56px), transparent)";
-        laneStyle["WebkitMaskImage"] = "linear-gradient(to right, #000 calc(100% - 56px), transparent)";
+    openCount = len(
+        [
+            t
+            for t in tasks
+            if t.status != "Done"
+        ]
+    );
+    blockedCount = len(
+        [
+            t
+            for t in tasks
+            if t.status == "Blocked"
+        ]
+    );
+    anyFilter = (
+        fAssignee != "All"
+        or fPriority != "All"
+        or fCategory != "All"
+        or fTag != "All"
+        or fEstimate != "All"
+        or bool(boardQuery.strip())
+    );
+    hiddenByFilters = len(tasks) - len(visible);
+    headerCounts: list[list[str]] = [
+        [str(openCount), "open", ""],
+        [str(blockedCount), "blocked", "alarm" if blockedCount > 0 else ""],
+        [str(len(recentDone)), "done in the last 7 days", ""]
+    ];
+    if anyFilter and hiddenByFilters > 0 {
+        headerCounts.append([str(hiddenByFilters), "hidden by filters", ""]);
     }
 
-    def loadFrame -> JsxElement {
-        return
-            <div className="flex min-w-0 flex-col gap-3" aria-busy="true">
-                <nav
-                    aria-label="Steps"
-                    className="hidden min-w-0 items-center gap-3 md:flex"
-                >
-                    <div
-                        className="flex min-w-0 flex-1 items-center overflow-hidden py-0.5"
-                    >
-                        {for i in range(laneGuess) {
-                            <div
-                                key={"rs" + str(i)}
-                                className="flex shrink-0 items-center"
-                            >
-                                {if i > 0 {
-                                    <span
-                                        key="w"
-                                        aria-hidden="true"
-                                        className="h-0.5 w-[18px] shrink-0 bg-wire"
-                                    />
-                                }}
-                                <Skeleton
-                                    className="h-7 rounded-md"
-                                    style={{"width": str(NODE_WIDTHS[i % 7]) + "px"}}
-                                />
-                            </div>
-                        }}
-                    </div>
-                </nav>
-                <FilterBar
-                    projects={activeProjects}
-                    members={activeMembers}
-                    project={fProject}
-                    assignee={fAssignee}
-                    category={fCategory}
-                    hideDone={hideDone}
-                    onProject={setProjectFilter}
-                    onAssignee={setAssigneeFilter}
-                    onCategory={setCategoryFilter}
-                    onHideDone={lambda { hideDone = not hideDone; }}
-                    query={boardQuery}
-                    onQuery={lambda (v: str) { boardQuery = v; }}
-                    onClear={clearFilters}
-                    busy={True}
-                />
-                <div
-                    ref={lanesRef if loading else None}
-                    data-board-lanes="true"
-                    className={LANE_GRID}
-                    style={laneStyle}
-                >
-                    {for i in range(laneGuess) {
-                        <section
-                            key={"sk" + str(i)}
-                            data-lane={"sk" + str(i)}
-                            className="flex min-w-0 snap-start flex-col rounded-md md:h-full"
-                        >
-                            <div
-                                className="mx-0.5 flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-border pl-0.5"
-                            >
-                                <Skeleton className="size-[13px] rounded-full"/>
-                                <Skeleton
-                                    className={"h-3 " + ("w-24" if i % 2 else "w-16")}
-                                />
-                                <Skeleton className="h-3 w-3"/>
-                            </div>
-                            <div
-                                className="-mx-1 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-1.5 pt-2 pb-3"
-                            >
-                                {for j in range(2 + (i % 2)) {
-                                    <div
-                                        key={"c" + str(j)}
-                                        className="flex shrink-0 flex-col gap-1 rounded-md border bg-card px-2.5 pt-2 pb-2"
-                                    >
-                                        <div className="flex h-[18px] items-center">
-                                            <Skeleton
-                                                className={"h-3 "
-                                                    + CARD_WIDTHS[(i + j) % 4]}
-                                            />
-                                        </div>
-                                        <div
-                                            className="flex min-h-6 items-center gap-1.5"
-                                        >
-                                            <Skeleton className="h-2.5 w-20"/>
-                                            <Skeleton
-                                                className="ml-auto size-6 rounded-full"
-                                            />
-                                        </div>
-                                    </div>
-                                }}
-                            </div>
-                        </section>
-                    }}
-                </div>
-            </div>;
+    def expandAll {
+        closed = [];
+        doneOpen = True;
+    }
+
+    def collapseAll {
+        closed = [
+            k
+            for k in colKeys
+            if k != doneKey
+        ];
+        doneOpen = False;
+    }
+
+    def isOpen(key: str) -> bool {
+        return doneOpen if key == doneKey else key not in closed;
+    }
+
+    def toggleGroup(key: str) {
+        if key == doneKey {
+            doneOpen = not doneOpen;
+        } elif key in closed {
+            closed = [
+                k
+                for k in closed
+                if k != key
+            ];
+        } else {
+            closed = closed + [key];
+        }
+    }
+
+    allOpen = len(
+        [
+            k
+            for k in colKeys
+            if not isOpen(k)
+        ]
+    )
+        == 0;
+
+    def toggleAll {
+        doneOpen = not allOpen;
+        closed = []
+            if not allOpen
+            else [
+                k
+                for k in colKeys
+                if k != doneKey
+            ];
     }
 
     return
-        <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex min-h-9 flex-wrap items-center gap-3">
-                <h1 className="page-title">Board</h1>
-                {if loading or (not noFlowLine and not nothingLoaded) {
-                    <div key="actions" className="ml-auto flex items-center gap-2">
-                        {if ghConnected {
-                            <Button
-                                key="sync"
-                                variant="outline"
-                                disabled={syncing}
-                                aria-label={"Sync GitHub" if not syncing else None}
-                                title="Sync GitHub"
-                                onClick={syncGithub}
-                            >
-                                {if syncing {
-                                    <Spinner key="sp"/>
-                                } else {
-                                    <svg
-                                        key="icon"
-                                        width={14}
-                                        height={14}
-                                        viewBox="0 0 16 16"
-                                        aria-hidden="true"
-                                    >
-                                        <path
-                                            d="M13 4.5V2m0 2.5h-2.5M13 4.5A5.5 5.5 0 1 0 13.5 9"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={1.6}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                } }
-                                <span className="max-sm:hidden">
-                                    {(syncNote or "Syncing…")
-                                        if syncing
-                                        else "Sync GitHub"}
-                                </span>
-                            </Button>
-                        }}
-                        <Button
-                            aria-label="New task"
-                            disabled={loading}
-                            onClick={lambda { openCreate(""); }}
-                        >
-                            <svg
-                                width={14}
-                                height={14}
-                                viewBox="0 0 16 16"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    d="M8 3v10M3 8h10"
-                                    stroke="currentColor"
-                                    strokeWidth={1.8}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            New task
-                            <span
-                                aria-hidden="true"
-                                className="ml-0.5 font-mono text-xs max-md:hidden"
-                            >
-                                N
-                            </span>
-                        </Button>
-                    </div>
-                }}
-            </div>
+        <div className="flex min-w-0 flex-col gap-6">
+            <BoardHeader
+                projects={activeProjects}
+                project={fProject}
+                counts={headerCounts}
+                ghConnected={ghConnected}
+                syncing={syncing}
+                syncNote={syncNote}
+                busy={loading}
+                onSync={syncGithub}
+                onNew={lambda { openCreate(""); }}
+            />
             {if workingTruncated and not loading {
                 <div
                     key="truncated"
-                    className="rounded-md border border-warning/50 bg-card px-3 py-2 text-xs text-warning"
+                    className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning"
                     role="status"
                 >
-                    More open work than the board loads at once, so some cards are missing. Narrow the filters, or archive what is finished.
+                    More open work than the board loads at once, so some tasks are missing. Narrow the filters, or archive what is finished.
                 </div>
             }}
             {if loadFailed and not nothingLoaded and not loading {
@@ -915,7 +808,7 @@ def:pub BoardPage -> JsxPage {
                     retrying={retrying}
                 />
             }}
-            <Reveal ready={not loading} frame={loadFrame()} className="min-w-0">
+            <Reveal ready={not loading} frame={<BoardSkeleton/>} className="min-w-0">
                 {if nothingLoaded {
                     <LoadFailed
                         key="failed"
@@ -924,167 +817,127 @@ def:pub BoardPage -> JsxPage {
                         retrying={retrying}
                     />
                 } elif noFlowLine {
-                    <div key="noflowline" className="flex min-w-0 flex-col gap-6 pt-2">
-                        <div className="flex max-w-lg flex-col items-start gap-3">
-                            <h2 className="section-title text-lg">
-                                Your board follows your flow line
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                Each column here is a step your team moves work through, in the order you draw them. Start from a template, or draw the steps yourself.
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <Button
-                                    onClick={lambda { window.location.href = "/flowlines"; }}
-                                >
-                                    Pick a template
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    onClick={lambda { window.location.href = "/flowlines"; }}
-                                >
-                                    Draw the steps yourself
-                                </Button>
-                            </div>
-                        </div>
-                        <div
-                            aria-hidden="true"
-                            className="grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(4,minmax(0,252px))]"
-                        >
-                            {for i in [0, 1, 2, 3] {
-                                <div
-                                    key={"ghost" + str(i)}
-                                    className={"flex flex-col gap-1.5"
-                                        + (" max-md:hidden" if i > 1 else "")}
-                                >
-                                    <div
-                                        className="flex h-9 items-center border-b-2 border-border px-0.5"
-                                    >
-                                        <span
-                                            className="h-2.5 w-20 rounded-xs bg-muted"
-                                        />
-                                    </div>
-                                    {for j in range(3 - (i % 2)) {
-                                        <div
-                                            key={"g" + str(i) + "-" + str(j)}
-                                            className="flex h-[62px] flex-col justify-center gap-2 rounded-md border border-border bg-card/60 px-2.5"
-                                        >
-                                            <span
-                                                className="h-2.5 w-4/5 rounded-xs bg-muted"
-                                            />
-                                            <span
-                                                className="h-2 w-1/2 rounded-xs bg-muted"
-                                            />
-                                        </div>
-                                    }}
-                                </div>
-                            }}
-                        </div>
-                    </div>
+                    <NoFlowLine key="noflowline"/>
                 } else {
-                    <div key="board" className="flex min-w-0 flex-col gap-3">
-                        <div className="hidden md:block">
-                            <RouteStrip
-                                keys={colKeys}
-                                labels={colLabels}
-                                colors={colColors}
-                                counts={laneCounts}
-                                inView={inView}
-                                active={activeLane}
-                                hiddenAfter={hiddenAfter}
-                                onPick={scrollToLane}
-                                onMore={scrollToHidden}
-                            />
-                        </div>
-                        <FilterBar
-                            projects={activeProjects}
-                            members={activeMembers}
-                            project={fProject}
-                            assignee={fAssignee}
-                            category={fCategory}
-                            hideDone={hideDone}
-                            onProject={setProjectFilter}
-                            onAssignee={setAssigneeFilter}
-                            onCategory={setCategoryFilter}
-                            onHideDone={lambda { hideDone = not hideDone; }}
-                            categories={allCategories}
-                            tags={allTags}
-                            tag={fTag}
-                            estimate={fEstimate}
-                            onTag={lambda (v: str) { fTag = v; }}
-                            onEstimate={lambda (v: str) { fEstimate = v; }}
-                            iterations={iterations}
-                            iteration={fIteration}
-                            onIteration={lambda (v: str) { fIteration = v; }}
-                            priority={fPriority}
-                            onPriority={lambda (v: str) { fPriority = v; }}
-                            query={boardQuery}
-                            onQuery={lambda (v: str) { boardQuery = v; }}
-                            onClear={clearFilters}
-                            shownCount={shownCount}
+                    <div key="board" className="flex min-w-0 flex-col gap-5">
+                        <FlowStrip
+                            name={flowName}
+                            keys={colKeys}
+                            labels={colLabels}
+                            colors={colColors}
+                            counts={groupCounts}
                         />
-                        <div className="md:hidden">
-                            <RouteStrip
-                                tabs={True}
-                                keys={colKeys}
-                                labels={colLabels}
-                                colors={colColors}
-                                counts={laneCounts}
-                                inView={inView}
-                                active={activeLane}
-                                hiddenAfter={0}
-                                onPick={scrollToLane}
-                                onMore={scrollToHidden}
-                            />
-                        </div>
                         <div
-                            ref={lanesRef}
-                            data-board-lanes="true"
-                            onScroll={lambda { scheduleMeasure(); }}
-                            onDragOverCapture={lambda (e: DragEvent) { dragEdgeScroll(
-                                e
-                            ); }}
-                            className={LANE_GRID}
-                            style={laneStyle}
+                            data-board-toolbar="true"
+                            className="flex flex-wrap items-center gap-2"
                         >
+                            <FilterBar
+                                members={activeMembers}
+                                project={fProject}
+                                assignee={fAssignee}
+                                category={fCategory}
+                                hideDone={hideDone}
+                                onAssignee={setAssigneeFilter}
+                                onCategory={setCategoryFilter}
+                                onHideDone={lambda { hideDone = not hideDone; }}
+                                categories={allCategories}
+                                tags={allTags}
+                                tag={fTag}
+                                estimate={fEstimate}
+                                onTag={lambda (v: str) { fTag = v; }}
+                                onEstimate={lambda (v: str) { fEstimate = v; }}
+                                priority={fPriority}
+                                onPriority={lambda (v: str) { fPriority = v; }}
+                                query={boardQuery}
+                                onQuery={lambda (v: str) { boardQuery = v; }}
+                                onClear={clearFilters}
+                                shownCount={shownCount}
+                                hideEmpty={hideEmpty}
+                                onHideEmpty={lambda { hideEmpty = not hideEmpty; }}
+                                onExpandAll={expandAll}
+                                onCollapseAll={collapseAll}
+                            />
+                            <FilterSetMenu
+                                sets={boardSets}
+                                activeId={activeSet}
+                                filters={nowFilters}
+                                members={members}
+                                onApply={applySet}
+                                onAll={showAllTasks}
+                                onSaved={absorbSet}
+                                onDeleted={dropSet}
+                                lastName={lastSetName}
+                            />
+                            <Button
+                                variant="ghost"
+                                className="rounded-full text-muted-foreground"
+                                onClick={toggleAll}
+                            >
+                                {"Collapse all" if allOpen else "Expand all"}
+                            </Button>
+                        </div>
+                        {if anyFilter and shownCount == 0 {
+                            <FilteredEmpty
+                                key="none"
+                                hidden={hiddenByFilters}
+                                onClear={clearFilters}
+                            />
+                        }}
+                        {if not (anyFilter and shownCount == 0) {
+                            <ColumnHeads key="heads"/>
+                        }}
+                        <div className="flex flex-col gap-2">
                             {for (ci, key) in enumerate(colKeys) {
-                                <KanbanColumn
-                                    key={key}
-                                    columnKey={key}
-                                    label={colLabels[ci]}
-                                    kind={columnKind(key)}
-                                    color={columnColor(key)}
-                                    tasks={laneRows[ci]}
-                                    onOpen={openEdit}
-                                    onArrowMove={arrowMove}
-                                    onDropTask={moveTo}
-                                    onDropBeside={moveBeside}
-                                    doneKey={doneKey}
-                                    extraCount={olderTotal
-                                        if key == doneKey and not hideDone
-                                        else 0}
-                                    showingAll={showAllDone
-                                        if key == doneKey and not hideDone
-                                        else False}
-                                    onToggleOlder={toggleOlder}
-                                    moreOlder={olderMore if key == doneKey else False}
-                                    loadingOlder={loadingOlder
-                                        if key == doneKey
-                                        else False}
-                                    olderShown={len(olderShown)
-                                        if key == doneKey
-                                        else 0}
-                                    onMoreOlder={lambda { loadOlder(
-                                        olderPage + 1, fProject, fAssignee, fCategory
-                                    ); }}
-                                    onAddTask={openCreate}
-                                    overdueCount={laneOverdue[ci]}
-                                    keys={colKeys}
-                                    labels={colLabels}
-                                    colors={colColors}
-                                    steps={steps}
-                                    selectedId={selectedId}
-                                    doneHidden={hideDone and key == doneKey}
-                                />
+                                <>
+                                    {if (not hideEmpty)
+                                        or groupCounts[ci] > 0
+                                        or key == doneKey {
+                                        <StepGroup
+                                            key={key}
+                                            columnKey={key}
+                                            label={colLabels[ci]}
+                                            kind={columnKind(key)}
+                                            color={colColors[ci]}
+                                            dot={DOT_FILL[colorKey(colColors[ci])]}
+                                            tasks={groupRows[ci]}
+                                            open={isOpen(key)}
+                                            overdue={groupOverdue[ci]}
+                                            today={today}
+                                            selectedId={selectedId}
+                                            doneKey={doneKey}
+                                            route={route}
+                                            onToggle={lambda { toggleGroup(key); }}
+                                            onOpen={openEdit}
+                                            onMove={arrowMove}
+                                            onDropTask={moveTo}
+                                            onDropBeside={moveBeside}
+                                            onAdd={openCreate
+                                                if key != doneKey
+                                                else None}
+                                            empty={"Done tasks are hidden"
+                                                if hideDone and key == doneKey
+                                                else "No tasks here"}
+                                            footer={<OlderDone
+                                                total={olderTotal
+                                                    if not hideDone
+                                                    else 0}
+                                                showing={showAllDone and not hideDone}
+                                                shown={len(olderShown)}
+                                                more={olderMore}
+                                                loading={loadingOlder}
+                                                onToggle={toggleOlder}
+                                                onMore={lambda { loadOlder(
+                                                    olderPage + 1,
+                                                    fProject,
+                                                    fAssignee,
+                                                    fCategory
+                                                ); }}
+                                            />
+                                                if key == doneKey
+                                                else None}
+                                        />
+                                    }}
+                                </>
                             }}
                         </div>
                     </div>
@@ -1122,7 +975,6 @@ def:pub BoardPage -> JsxPage {
                 familyDone={famDone}
                 parentTaskId={famParentId}
                 parentLabel={famParentLabel}
-                iterations={iterations}
                 onOpenTask={openTaskById}
                 taskId={editingId}
                 onLoaded={absorbDetails}

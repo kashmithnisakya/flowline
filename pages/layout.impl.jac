@@ -5,6 +5,12 @@
 impl Shell.loadMe -> None {
     try {
         data: any = await fetchMe();
+        # A dead token ended the session inside fetchMe: nothing to show, and
+        # the route guard takes an app page to sign-in. Flipping `loggedIn`
+        # here would remount the page under it (the login page lost its note).
+        if not jacIsLoggedIn() {
+            return;
+        }
         profile: any = data["profile"] if data["profile"] else {};
         name = str(profile["org_name"]) if profile["org_name"] else "";
         if name {

@@ -1,8 +1,9 @@
-# Daily log
+# Activity log
 
-Read, count, add, edit and delete log entries. Most entries are
-written by the board as tasks move; see [The
-daily log](../concepts/daily-log.md) for how. Source: `services/log/log.jac`.
+Read the activity trail task events write. Nothing writes an entry by hand:
+creating, moving and checking off tasks, and GitHub imports, add the lines;
+see [The activity log](../concepts/activity-log.md). Source:
+`services/log/log.jac`.
 { .fl-lede }
 
 ::: walker ListLogEntries
@@ -10,8 +11,7 @@ daily log](../concepts/daily-log.md) for how. Source: `services/log/log.jac`.
 **Reports** one [`LogPage`](types.md#logpage) of raw
 [`LogEntry`](../concepts/data-graph.md#logentry) nodes for the inclusive date
 range: `page_size` defaults to 200 and is capped at 500. Rows are ordered by
-date (newest first), then stamp (newest first), then id, which is the order
-the log page shows, so a page fetched behind the first only adds rows below
+date (newest first), then stamp (newest first), then id, so a page fetched behind the first only adds rows below
 what is on screen. The page is cut in the store, so a request loads its own
 rows, not the whole range, and `total` comes from the days' counts. An empty
 or inverted range, or a workspace with no log, reports an empty page.
@@ -45,44 +45,6 @@ curl -X POST $BASE/walker/ListLogEntries -H "Authorization: Bearer $TOKEN" \
 ]
 ```
 
-::: walker LogCounts
-
-**Reports** one [`LogTotals`](types.md#logtotals): entries per week for the four
-weeks ending in `monday`'s week (oldest first), per day for that week, and per
-person for that week. `member_name` is split on commas, so an entry with two
-assignees counts for both. An empty `monday` starts the week today. It reads
-the days' tallies, so it costs the same however busy the weeks were.
-
-::: walker LogActivity
-
-A hand-written entry.
-
-**Reports** the new `LogEntry` node.
-**No-op when** `date` is empty, or `member_id` is not an owned member
-(archived members are allowed).
-**Side effects** creates the `Logs` box and the day on first use, snapshots the
-member's full name and tags and the project's name onto the entry, and links
-the entry to the member with a `By` edge. The project id itself is not stored;
-an unknown project leaves `project_name` empty.
-
-::: walker UpdateLogEntry
-
-**Reports** the updated `LogEntry` node.
-
-!!! warning "Every editable field is overwritten"
-
-    `activity`, `category`, `repo`, `issue_link`, `pr_link`, `status` and
-    `notes` are all written, so an omitted field is blanked. Send the whole
-    entry back. The date, time, author, tags, project and task link never
-    change. Automatic entries can be edited too.
-
-::: walker DeleteLogEntries
-
-**Reports** `{"deleted": [<ids actually deleted>]}`. Unknown and foreign ids are
-skipped silently, and an emptied day is left in place.
-
-## Lookup base
-
-The base the jid-addressed walkers above extend: it resolves the id, checks ownership and only then visits. It is not an HTTP endpoint.
-
-::: walker find_log_entry h3
+The Overview's log numbers (entries per week, per weekday and per person)
+come from `logs` inside [`OverviewSnapshot`](insights.md#overviewsnapshot),
+which reads the days' tallies rather than the entries.

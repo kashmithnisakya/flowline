@@ -1,7 +1,7 @@
-"""flowline - GitHub page (/github): the App installation, the repositories it
-reads and what each one is allowed to do on its own. GitHub sends the install
-round trip back to this URL as query params, so the mount handler finishes it
-first and scrubs the params (the nonce is one-shot).
+"""The Workspace's GitHub section: the App installation, the repositories it
+reads and what each one may do on its own. GitHub sends the install round
+trip to /github, which renders this section, so the mount handler finishes
+it first and scrubs the params (the nonce is one-shot).
 """
 
 import from ...lib.session { GITHUB_KEY }
@@ -27,6 +27,7 @@ import from ...services.github.github {
     SetRepoAutoSync,
     SetRepoAutoDone,
     SetRepoAutoClose,
+    SetRepoLabelSync,
     SyncGithub
 }
 import from ...services.roster.roster { ListRepos, AddRepo }
@@ -205,13 +206,13 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     # bookmarked or shared and survives a refresh.
     can with (repoId, tab, searchQuery) entry {
         w: any = window;
-        if str(w.location.pathname) == "/github" and repoId {
-            qs = "?repo=" + repoId + "&tab=" + tab;
+        if repoId {
+            qs = "?tab=github&repo=" + repoId + "&view=" + tab;
             if searchQuery {
                 qs = qs + "&q=" + encodeURIComponent(searchQuery);
             }
             blank: dict[str, any] = {};
-            w.history.replaceState(blank, "", "/github" + qs);
+            w.history.replaceState(blank, "", "/workspace" + qs);
         }
     }
 
@@ -231,6 +232,7 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
     async def toggleAutoSync(rid: str, enabled: bool) -> None;
     async def toggleAutoDone(rid: str, enabled: bool) -> None;
     async def toggleAutoClose(rid: str, enabled: bool) -> None;
+    async def toggleLabelSync(rid: str, enabled: bool) -> None;
     async def loadIssues(reset: bool, refresh: bool) -> None;
     async def loadPulls(reset: bool, refresh: bool) -> None;
     async def refreshList -> None;
@@ -424,8 +426,8 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
 
     return
         <div className="flex w-full flex-col gap-5">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <h1 className="page-title">GitHub</h1>
+            <div className="flex min-h-8 flex-wrap items-center gap-x-6 gap-y-2">
+                <h1 className="page-title text-xl">GitHub</h1>
                 {if connected and not loading {
                     <div
                         key="conn"
@@ -590,6 +592,9 @@ def:pub GithubSection(openNonce: int = 0) -> JsxElement {
                                                 r.id, v
                                             ); }}
                                             onClose={lambda (v: bool) { toggleAutoClose(
+                                                r.id, v
+                                            ); }}
+                                            onLabels={lambda (v: bool) { toggleLabelSync(
                                                 r.id, v
                                             ); }}
                                         />

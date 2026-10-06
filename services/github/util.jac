@@ -12,11 +12,20 @@ import requests;
 import jwt;
 import json;
 import logging;
+import from urllib.parse { quote }
 
 # Re-exported so callers get the guard and the request helpers from one
 # place; the definition itself is Python-free and lives in models.jac.
-import from models { valid_full_name, Task, Repo, GithubConnection }
-import from jaclang.server.shared_store { open_docs_store }
+import from services.util { ensure_arrows }
+import from models {
+    valid_full_name,
+    Task,
+    Repo,
+    GithubConnection,
+    WorkflowStep,
+    steps_of
+}
+import from jaclang.server.shared_store { shared_store }
 
 # The two bases are overridable so the smoke suite can point the app at
 # tests/smoke/github_stub.py; a deployment never sets them.
@@ -196,7 +205,7 @@ def bind_installation(installation_id: int, root_jid: str) -> bool {
         "bound_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -219,7 +228,7 @@ def unbind_installation(installation_id: int) -> bool {
         return False;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -236,6 +245,35 @@ def unbind_installation(installation_id: int) -> bool {
 }
 
 
+# Drop an installation's row only while it still names `root_jid`, so a
+# workspace that took the installation over in the meantime keeps it. True
+# when this call removed the row (its queued deliveries go with it).
+def release_binding(installation_id: int, root_jid: str) -> bool {
+    if installation_id <= 0 or not root_jid {
+        return False;
+    }
+    try {
+        db = shared_store();
+        if db is None {
+            return False;
+        }
+        gone = db.rows(
+            "DELETE FROM jac_docs WHERE collection = :c AND id = :i "
+                + "AND doc->>'root_jid' = :r RETURNING id",
+            {"c": INSTALL_INDEX, "i": str(installation_id), "r": root_jid}
+        );
+        if not gone {
+            return False;
+        }
+        drop_deliveries(installation_id);
+        return True;
+    } except Exception as e {
+        log.warning("installation index: release failed: " + str(e));
+        return False;
+    }
+}
+
+
 # The root jid bound to an installation, or "" when none is. Never raises:
 # a store hiccup reads as unknown, and callers treat unknown as ignore.
 def root_for_installation(installation_id: int) -> str {
@@ -243,7 +281,7 @@ def root_for_installation(installation_id: int) -> str {
         return "";
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "";
         }
@@ -264,19 +302,27 @@ def root_for_installation(installation_id: int) -> str {
 }
 
 
-# Every bound installation with the workspace that holds it: the registry
-# the scheduled sync walks. A store hiccup reads as no workspaces.
-def bound_installations -> list[dict[str, any]] {
+# The bound installations a tick should take next: the one whose pass is
+# oldest first (an unsynced row sorts by when it was bound), at most `limit`
+# of them, so one busy workspace cannot starve the rest and every workspace
+# comes up within ceil(workspaces / limit) ticks. A store hiccup reads as no
+# workspaces. limit <= 0 reads them all.
+def due_installations(limit: int = 0) -> list[dict[str, any]] {
     found: list[dict[str, any]] = [];
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return found;
         }
-        rows = db.rows(
-            "SELECT id, doc FROM jac_docs WHERE collection = :c ORDER BY id",
-            {"c": INSTALL_INDEX}
-        );
+        oldest = "SELECT id, doc FROM jac_docs WHERE collection = :c "
+            + "AND doc->>'root_jid' <> '' "
+            + "ORDER BY COALESCE(doc->>'synced_at', doc->>'bound_at', '') ASC, id";
+        args: dict[str, any] = {"c": INSTALL_INDEX};
+        if limit > 0 {
+            oldest += " LIMIT :n";
+            args["n"] = int(limit);
+        }
+        rows = db.rows(oldest, args);
         for (rid, raw) in rows {
             doc = raw if isinstance(raw, dict) else json.loads(str(raw));
             key = str(rid);
@@ -285,7 +331,8 @@ def bound_installations -> list[dict[str, any]] {
                     "installation_id": int(key) if key.isdigit() else 0,
                     "root_jid": str(doc.get("root_jid") or ""),
                     "bound_at": str(doc.get("bound_at") or ""),
-                    "webhook_seen_at": str(doc.get("webhook_seen_at") or "")
+                    "webhook_seen_at": str(doc.get("webhook_seen_at") or ""),
+                    "synced_at": str(doc.get("synced_at") or "")
                 }
             );
         }
@@ -332,7 +379,7 @@ def enqueue_delivery(
         "payload": payload
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "unavailable";
         }
@@ -353,7 +400,7 @@ def enqueue_delivery(
 def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]] {
     found: list[dict[str, any]] = [];
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return found;
         }
@@ -378,7 +425,7 @@ def pending_deliveries(installation_id: int, limit: int) -> list[dict[str, any]]
 
 def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -400,7 +447,7 @@ def mark_delivered(delivery_id: str, applied_at: str, outcome: str) {
 # Applied rows stay a week as the delivery log, then go.
 def purge_deliveries(installation_id: int, before: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -418,7 +465,7 @@ def purge_deliveries(installation_id: int, before: str) {
 
 def drop_deliveries(installation_id: int) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -436,7 +483,7 @@ def drop_deliveries(installation_id: int) {
 # means on the GitHub tab even while the deliveries wait in the queue.
 def touch_installation(installation_id: int, seen_at: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -455,12 +502,35 @@ def touch_installation(installation_id: int, seen_at: str) {
 }
 
 
+def note_sync_at(installation_id: int) {
+    try {
+        db = shared_store();
+        if db is None {
+            return;
+        }
+        db.rows(
+            "UPDATE jac_docs SET doc = doc || CAST(:p AS jsonb) "
+                + "WHERE collection = :c AND id = :i",
+            {
+                "p": json.dumps(
+                    {"synced_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                ),
+                "c": INSTALL_INDEX,
+                "i": str(installation_id)
+            }
+        );
+    } except Exception as e {
+        log.warning("installation index: sync stamp failed: " + str(e));
+    }
+}
+
+
 def installation_seen_at(installation_id: int) -> str {
     if installation_id <= 0 {
         return "";
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return "";
         }
@@ -492,7 +562,7 @@ def acquire_sync_lease(root_jid: str, owner: str, ttl_seconds: int) -> bool {
         return False;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -506,7 +576,7 @@ def acquire_sync_lease(root_jid: str, owner: str, ttl_seconds: int) -> bool {
 
 def release_sync_lease(root_jid: str, owner: str) {
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -544,7 +614,7 @@ def store_repo_list(
         "items": items
     };
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return False;
         }
@@ -569,7 +639,7 @@ def read_repo_list(repo_id: str, kind: str, state: str) -> dict[str, any] {
         return nothing;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return nothing;
         }
@@ -595,7 +665,7 @@ def drop_repo_lists(repo_id: str) {
         return;
     }
     try {
-        db = open_docs_store();
+        db = shared_store();
         if db is None {
             return;
         }
@@ -679,6 +749,8 @@ def gh_request(
             resp = requests.patch(
                 GITHUB_API + path, headers=headers, json=body_out, timeout=10
             );
+        } elif method == "DELETE" {
+            resp = requests.delete(GITHUB_API + path, headers=headers, timeout=10);
         } else {
             resp = requests.get(
                 GITHUB_API + path, headers=headers, params=query, timeout=10
@@ -788,26 +860,15 @@ def sync_issue_state(holder: Root, t: Task, closed: bool, stamp: str) -> str {
         or (t.gh_issue_state == "closed") == closed {
         return "";
     }
-    opted = False;
-    for r in [holder-->[?:Repo]] {
-        if r.full_name == t.gh_repo and r.auto_close {
-            opted = True;
-        }
-    }
-    if not opted {
+    if not repo_policy(holder, t.gh_repo, "auto_close") {
         return "";
     }
-    conns = [holder-->[?:GithubConnection]];
-    c = conns[0] if conns else None;
-    if not isinstance(c, GithubConnection)
-        or c.installation_id == 0
-        or c.status == "invalid" {
+    access = write_access(holder);
+    if not access {
         return "";
     }
-    token = installation_token(c.installation_id);
-    if not token {
-        return "";
-    }
+    c = access[0];
+    token = str(access[1]);
     where = t.gh_repo + " #" + str(t.gh_issue_number);
     want = "closed" if closed else "open";
     result = gh_request(
@@ -818,15 +879,7 @@ def sync_issue_state(holder: Root, t: Task, closed: bool, stamp: str) -> str {
         {"state": want}
     );
     if not result["ok"] {
-        if result.get("error") == "unauthorized" {
-            c.status = "invalid";
-        }
-        log.warning(
-            "issue state write-back skipped for "
-                + where
-                + ": "
-                + str(result.get("message") or result.get("error"))
-        );
+        write_failed(c, result, "issue state write-back skipped for " + where);
         return "";
     }
     item = result["data"];
@@ -837,4 +890,216 @@ def sync_issue_state(holder: Root, t: Task, closed: bool, stamp: str) -> str {
     }
     t.gh_synced_at = stamp;
     return ("closed " if closed else "reopened ") + where;
+}
+
+
+# A repo's write-back switch ("auto_close" or "label_sync") for one tracked
+# repo of this workspace; False when the repo is not tracked.
+def repo_policy(holder: Root, full_name: str, policy: str) -> bool {
+    for r in [holder-->[?:Repo]] {
+        if r.full_name == full_name {
+            return bool(getattr(r, policy, False));
+        }
+    }
+    return False;
+}
+
+
+# [connection, token] when this workspace may write to GitHub now, else [].
+def write_access(holder: Root) -> list[any] {
+    conns = [holder-->[?:GithubConnection]];
+    c = conns[0] if conns else None;
+    if not isinstance(c, GithubConnection)
+        or c.installation_id == 0
+        or c.status == "invalid" {
+        return [];
+    }
+    token = installation_token(c.installation_id);
+    return [c, token] if token else [];
+}
+
+
+# A refused write never blocks the move that asked for it: log it for the
+# operator, and a revoked token marks the connection for the reconnect banner.
+def write_failed(c: any, result: dict[str, any], what: str) {
+    if result.get("error") == "unauthorized" and isinstance(c, GithubConnection) {
+        c.status = "invalid";
+    }
+    log.warning(what + ": " + str(result.get("message") or result.get("error")));
+}
+
+
+# The name as the task last saw it on GitHub ("" when absent), so a removal
+# names the label exactly and an add is skipped when it is already there.
+def held_label(held: list[str], name: str) -> str {
+    for h in held {
+        if h.lower() == name.lower() {
+            return h;
+        }
+    }
+    return "";
+}
+
+
+# The label writes one move makes, for a repo with label_sync: crossing an
+# arrow adds its GitHub label (on the PR when the arrow carries one and a PR
+# is linked, else the issue); leaving a step takes off the labels of the
+# arrows into it that are not kept. `already` is the label GitHub just added to
+# move the task, which needs no write. Returns the move's log tail, or "".
+def sync_step_labels(
+    holder: Root, t: Task, from_id: str, to_id: str, already: str
+) -> str {
+    if not from_id
+        or from_id == to_id
+        or t.gh_issue_number <= 0
+        or not valid_full_name(t.gh_repo)
+        or not repo_policy(holder, t.gh_repo, "label_sync") {
+        return "";
+    }
+    ensure_arrows(holder);
+    adding = "";
+    on_pr = False;
+    leaving: list[str] = [];
+    for st in steps_of(holder) {
+        for tr in st.transitions {
+            named = tr.get("github_label", "");
+            if jid(st) == from_id and tr["to"] == to_id {
+                adding = named;
+                on_pr = tr.get("carries", "") == "pr" and t.pr_number > 0;
+            }
+            if tr["to"] == from_id
+                and named
+                and tr.get("keep_label", "") != "yes"
+                and named not in leaving {
+                leaving.append(named);
+            }
+        }
+    }
+    # [label, "pr" | "issue", "add" | "drop"], only what GitHub needs.
+    writes: list[list[str]] = [];
+    for gone in leaving {
+        if gone.lower() == adding.lower() {
+            continue;
+        }
+        on_its_pr = held_label(t.pr_labels, gone) if t.pr_number > 0 else "";
+        if on_its_pr {
+            writes.append([on_its_pr, "pr", "drop"]);
+        }
+        on_issue = held_label(t.gh_labels, gone);
+        if on_issue {
+            writes.append([on_issue, "issue", "drop"]);
+        }
+    }
+    held = t.pr_labels if on_pr else t.gh_labels;
+    if adding and adding.lower() != already.lower() and not held_label(held, adding) {
+        writes.append([adding, "pr" if on_pr else "issue", "add"]);
+    }
+    if not writes {
+        return "";
+    }
+    access = write_access(holder);
+    if not access {
+        return "";
+    }
+    notes: list[str] = [];
+    for w in writes {
+        number = t.pr_number if w[1] == "pr" else t.gh_issue_number;
+        base = "/repos/" + t.gh_repo + "/issues/" + str(number) + "/labels";
+        if w[2] == "add" {
+            result = gh_request(str(access[1]), "POST", base, {}, {"labels": [w[0]]});
+        } else {
+            result = gh_request(
+                str(access[1]), "DELETE", base + "/" + quote(w[0], safe="")
+            );
+        }
+        # A label already gone answers 404; the task's copy follows either way.
+        if not result["ok"] and not (w[2] == "drop" and result.get("status") == 404) {
+            write_failed(access[0], result, "label write-back skipped for " + w[0]);
+            continue;
+        }
+        if w[1] == "pr" {
+            t.pr_labels = shift_label(t.pr_labels, w[0], w[2] == "add");
+        } else {
+            t.gh_labels = shift_label(t.gh_labels, w[0], w[2] == "add");
+        }
+        notes.append(
+            ("labelled " if w[2] == "add" else "removed ") + w[0] + " on GitHub"
+        );
+    }
+    return " · ".join(notes);
+}
+
+
+# The task's copy of a label list with one name added or taken off, so the
+# next sync reads Flowline's own write as already seen, not as new.
+def shift_label(held: list[str], name: str, on: bool) -> list[str] {
+    kept = [
+        h
+        for h in held
+        if h.lower() != name.lower()
+    ];
+    return kept + [name] if on else kept;
+}
+
+
+# GitHub label colours for a step's colour key (the light palette's inks).
+glob LABEL_COLORS: dict[str, str] = {
+         "sky": "2E6C97",
+         "indigo": "5550AC",
+         "amber": "A1711A",
+         "rose": "A34B83",
+         "emerald": "387A51",
+         "slate": "6A726E"
+     };
+
+
+# Create every GitHub label the flow line's arrows name in one repo, coloured
+# like the step each arrow leads into, so a first write does not make a grey
+# one. A label the repo already has is left as it is. Returns how many were
+# made, or -1 when this workspace cannot write to GitHub right now.
+def ensure_repo_labels(holder: Root, full_name: str) -> int {
+    access = write_access(holder);
+    if not access or not valid_full_name(full_name) {
+        return -1;
+    }
+    ensure_arrows(holder);
+    steps = steps_of(holder);
+    names: dict[str, str] = {};
+    for st in steps {
+        names[jid(st)] = st.name;
+    }
+    colours: dict[str, str] = {};
+    for st in steps {
+        colours[jid(st)] = LABEL_COLORS.get(st.color, "6A726E");
+    }
+    made = 0;
+    seen: list[str] = [];
+    for st in steps {
+        for tr in st.transitions {
+            named = tr.get("github_label", "");
+            if not named or named.lower() in seen {
+                continue;
+            }
+            seen.append(named.lower());
+            result = gh_request(
+                str(access[1]),
+                "POST",
+                "/repos/" + full_name + "/labels",
+                {},
+                {
+                    "name": named,
+                    "color": colours.get(tr["to"], "6A726E"),
+                    "description": (
+                        "Flowline: " + st.name + " → " + names.get(tr["to"], "")
+                    )[:100]
+                }
+            );
+            if result["ok"] {
+                made = made + 1;
+            } elif result.get("status") != 422 {
+                write_failed(access[0], result, "label setup skipped for " + named);
+            }
+        }
+    }
+    return made;
 }

@@ -287,6 +287,5 @@ impl WorkspacePage.selectTab(value: str) -> None {
     # stops a refresh replaying a burned install nonce.
     w: any = window;
     blank: dict[str, any] = {};
-    here = str(w.location.pathname);
-    w.history.replaceState(blank, "", here + "?tab=" + value);
+    w.history.replaceState(blank, "", "/workspace?tab=" + value);
 }

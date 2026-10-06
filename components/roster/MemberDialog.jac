@@ -135,7 +135,7 @@ def:pub MemberDialog(
                                     key={c}
                                     type="button"
                                     title={c}
-                                    className={"h-6 w-6 rounded-full "
+                                    className={"h-6 w-6 rounded-md "
                                         + DOT_FILL[c]
                                         + (
                                             " ring-2 ring-ring ring-offset-2 ring-offset-card"
@@ -153,7 +153,7 @@ def:pub MemberDialog(
                                     + (
                                         "border-foreground font-semibold text-foreground"
                                             if not form["color"]
-                                            else "border-dashed border-border text-muted-foreground hover:text-foreground"
+                                            else "border-border text-muted-foreground hover:text-foreground"
                                     )}
                                 onClick={lambda { onField("color", ""); }}
                             >

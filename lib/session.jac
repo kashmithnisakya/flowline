@@ -8,7 +8,9 @@ the workspace rail and the Organization form paint them before /user/me
 answers on the next load.
 """
 
+import from "@jac/runtime" { jacIsLoggedIn, jacLogout }
 import from .workspace { forgetWorkspace }
+import from .project { PROJECT_KEY }
 
 glob ORG_KEY: str = "flowline-org",
      ACCOUNT_KEY: str = "flowline-account";
@@ -16,20 +18,22 @@ glob ORG_KEY: str = "flowline-org",
 # The first-load frames' shape caches (what the last visit of each page
 # looked like in this browser). Session-scoped like the name: dropped when
 # a session starts or ends, so another account never inherits them.
-glob:pub LANES_KEY: str = "flowline-lanes",
+glob:pub STEPS_KEY: str = "flowline-steps",
      OVERVIEW_SHAPE_KEY: str = "flowline-overview-shape",
-     LOG_SHAPE_KEY: str = "flowline-log-shape",
      ROADMAP_SHAPE_KEY: str = "flowline-roadmap-shape",
-     GITHUB_KEY: str = "flowline-github";
+     GITHUB_KEY: str = "flowline-github",
+     # The account's board filters as this browser last saw them (lib/filters).
+     BOARD_FILTERS_KEY: str = "flowline-board-filters";
 
 glob SESSION_KEYS: list[str] = [
          ORG_KEY,
          ACCOUNT_KEY,
-         LANES_KEY,
+         STEPS_KEY,
          OVERVIEW_SHAPE_KEY,
-         LOG_SHAPE_KEY,
          ROADMAP_SHAPE_KEY,
-         GITHUB_KEY
+         GITHUB_KEY,
+         BOARD_FILTERS_KEY,
+         PROJECT_KEY
      ],
      ME: dict[str, any] = {"promise": None, "data": None};
 
@@ -98,10 +102,17 @@ def authHeaders -> dict[str, str] {
 }
 
 # One GET /user/me; {} when logged out or on error, and only a good answer
-# is kept, so a failed read is retried by the next caller.
+# is kept, so a failed read is retried by the next caller. A 401 means the
+# stored token is dead (expired, or from a store that is gone): it ends the
+# session, and the login page's `flowline_session` marker says it expired.
 async def readMe -> dict[str, any] {
     try {
         response = await fetch("/user/me", {"headers": authHeaders()});
+        if response.status == 401 {
+            forgetSession();
+            jacLogout();
+            return {};
+        }
         if not response.ok {
             return {};
         }
@@ -120,6 +131,10 @@ async def:pub fetchMe -> dict[str, any] {
     if ME["data"] {
         return ME["data"];
     }
+    # No token, no session: nothing to read and nothing for a 401 to end.
+    if not jacIsLoggedIn() {
+        return {};
+    }
     if not ME["promise"] {
         ME["promise"] = readMe();
     }
@@ -129,6 +144,17 @@ async def:pub fetchMe -> dict[str, any] {
         ME["promise"] = None;
     }
     return data;
+}
+
+# True when a token is stored and the server still takes it. `jacIsLoggedIn`
+# only sees that a token exists; this asks /user/me (the same read the
+# layout makes). A network error keeps the session: only a 401 ends it.
+async def:pub checkSession -> bool {
+    if not jacIsLoggedIn() {
+        return False;
+    }
+    await fetchMe();
+    return jacIsLoggedIn();
 }
 
 # The account's profile dict ({} when logged out or on error).

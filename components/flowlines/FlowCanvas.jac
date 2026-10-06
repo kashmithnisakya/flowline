@@ -18,15 +18,16 @@ import from .geometry {
     placeChips
 }
 import from .lanes { LANE_LABEL_W, laneRects, laneWires }
-import from .kinds { KIND_LABEL, KIND_TONE, DOT_FILL, CARRY_LABEL, colorKey }
-import from ..common.KindGlyph { KindGlyph }
+import from .kinds { DOT_FILL, CARRY_LABEL, colorKey, triggerNote }
+import from .EdgeEditor { EdgeEditor }
+import from .StepNode { StepNode }
 import from ..ui.button { Button }
-import from ..ui.input { Input }
 
-glob CHIP_FONT: str = "12px 'Archivo Variable', Arial, sans-serif",
-     NAME_FONT: str = "600 14px 'Archivo Variable', Arial, sans-serif",
-     META_FONT: str = "12px 'Archivo Variable', Arial, sans-serif",
-     COUNT_FONT: str = "12px 'IBM Plex Mono', Menlo, monospace",
+glob EDGE_EDITOR_H: float = 370.0,
+     CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
+     NAME_FONT: str = "600 12.5px 'Geist Variable', Arial, sans-serif",
+     META_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
+     COUNT_FONT: str = "12px 'Geist Mono Variable', Menlo, monospace",
      # Below this zoom the transitions keep their lines but drop their words:
      # at a whole-line overview the chips would bury the steps.
      CHIP_MIN_ZOOM: float = 0.45;
@@ -102,14 +103,26 @@ def bandAnchors(anchors: list[list[float]], lo: float, hi: float) -> list[list[f
 }
 
 
+# A drawn transition's stored fields, the edge editor's starting draft.
+def edgeFields(l: dict[str, any]) -> dict[str, str] {
+    return {
+        "label": str(l["label"]),
+        "carries": str(l["carries"]),
+        "trigger": str(l["trigger"]),
+        "github_label": str(l["github_label"]),
+        "keep_label": "yes" if l["keep_label"] else ""
+    };
+}
+
+
 def:pub FlowCanvas(
     steps: list[StepView],
     live: dict[str, list[float]] = {},
     selectedId: str = "",
     connectFrom: str = "",
     selectedEdge: str = "",
-    edgeDraft: str = "",
-    edgeCarry: str = "",
+    # The selected transition's draft: label, carries, trigger, github_label.
+    edgeForm: dict[str, str] = {},
     zoom: float = 1.0,
     panX: float = 0.0,
     panY: float = 0.0,
@@ -130,10 +143,9 @@ def:pub FlowCanvas(
     layoutRef: Ref[any] = None,
     viewportRef: Ref[any] = None,
     onSelect: Callable[[str], None] = None,
-    onSelectEdge: Callable[[str, str, str], None] = None,
-    onEdgeDraft: Callable[[str], None] = None,
-    onEdgeCarry: Callable[[str], None] = None,
-    onSaveEdgeLabel: Callable[[str, str, str, str], None] = None,
+    onSelectEdge: Callable[[str, dict[str, str]], None] = None,
+    onEdgeField: Callable[[str, str], None] = None,
+    onSaveEdge: Callable[[str, str, dict[str, str]], None] = None,
     onDeleteEdge: Callable[[str, str], None] = None,
     onCanvasClick: Callable[[], None] = None,
     onAddStep: Callable[[], None] = None
@@ -168,25 +180,22 @@ def:pub FlowCanvas(
     }
     laneMode = len(lanes) > 0;
     detail = detailOf(zoom);
-    # What each node's text needs: border and padding (22), swatch and gap
-    # (16) beside the name; below LOW detail the name alone, above it also
-    # the count, kind word and glyph. A lane column sizes to the name, count
-    # and glyph, and shows the kind word where it fits. All go to the page.
+    # What each node's text needs (StepNode's anatomy): padding (22) around
+    # the pill (padding 20, glyph and gap 17, name); above LOW detail the
+    # count chip beside it, and in flow mode room for the owner below.
     needLow: dict[str, float] = {};
     needMid: dict[str, float] = {};
     needLane: dict[str, float] = {};
     need: dict[str, float] = {};
-    metaNeed: dict[str, float] = {};
     for s in steps {
-        wantName = 16.0 + textWidth(s.name, NAME_FONT, 8.0);
-        kindWord = KIND_LABEL[s.kind] if s.kind in KIND_LABEL else s.kind;
-        countText = str(s.task_count) + (" task" if s.task_count == 1 else " tasks");
-        wantCount = textWidth(countText, COUNT_FONT, 7.3) + 8.0 + 18.0;
-        wantMeta = wantCount + textWidth(kindWord, META_FONT, 6.6);
-        metaNeed[s.id] = wantMeta + 22.0;
-        needLow[s.id] = wantName + 22.0;
-        needMid[s.id] = (wantMeta if wantMeta > wantName else wantName) + 22.0;
-        needLane[s.id] = (wantCount if wantCount > wantName else wantName) + 22.0;
+        wantPill = 37.0 + textWidth(s.name, NAME_FONT, 7.6);
+        countText = str(s.task_count) + (" done" if s.kind == "done" else " open");
+        wantRow = wantPill + 8.0 + textWidth(countText, COUNT_FONT, 7.3) + 12.0;
+        owner = s.owner.strip() if s.owner else "";
+        wantOwner = textWidth("Anyone" if owner == "anyone" else owner, META_FONT, 6.6);
+        needLow[s.id] = wantPill + 22.0;
+        needLane[s.id] = wantRow + 22.0;
+        needMid[s.id] = (wantOwner if wantOwner > wantRow else wantRow) + 22.0;
         if detail == "low" {
             need[s.id] = needLow[s.id];
         } else {
@@ -289,7 +298,16 @@ def:pub FlowCanvas(
                         "my": mid[1],
                         "back": target.sort_order < s.sort_order,
                         "label": s.next_labels[i] if i < len(s.next_labels) else "",
-                        "carries": s.next_carries[i] if i < len(s.next_carries) else ""
+                        "carries": s.next_carries[i] if i < len(s.next_carries) else "",
+                        "trigger": s.next_triggers[i]
+                            if i < len(s.next_triggers)
+                            else "",
+                        "github_label": s.next_github_labels[i]
+                            if i < len(s.next_github_labels)
+                            else "",
+                        "keep_label": s.next_keep_labels[i]
+                            if i < len(s.next_keep_labels)
+                            else False
                     }
                 );
             }
@@ -302,8 +320,12 @@ def:pub FlowCanvas(
         carried = str(l["carries"]);
         said = str(l["label"]);
         tag = CARRY_LABEL[carried] if carried in CARRY_LABEL else "";
-        text = tag + (" · " if tag and said else "") + said;
+        # A transition that moves work on its own says so after its words.
+        auto = " · auto" if l["trigger"] else "";
+        text = tag + (" · " if tag and said else "") + said + auto;
         l["tag"] = tag;
+        l["auto"] = auto;
+        l["note"] = triggerNote(str(l["trigger"]), str(l["github_label"]));
         l["text"] = text if showChips and selectedEdge != l["key"] else "";
         l["cw"] = textWidth(text, CHIP_FONT, 6.2) + CHIP_PAD_X * 2.0 + 1.0
             if text
@@ -392,19 +414,26 @@ def:pub FlowCanvas(
     }
     edgeFromName = "";
     edgeToName = "";
-    edgeSaid = "";
-    edgeHad = "";
+    edgeHad = False;
+    # The editor opens below the arrow, lifted as far as it must be to stay
+    # inside the viewport: the canvas clips what overflows, Save included.
+    edgeTop = 0.0;
     if activeFound {
+        edgeTop = float(activeEdge["my"]) + panY + 14.0;
+        pane: any = viewportRef.current if viewportRef else None;
+        paneH = float(pane.clientHeight) if pane else 0.0;
+        if paneH > 0.0 and edgeTop + EDGE_EDITOR_H > paneH {
+            edgeTop = paneH - EDGE_EDITOR_H - 8.0;
+        }
+        if edgeTop < 8.0 {
+            edgeTop = 8.0;
+        }
         edgeFromName = byId[activeEdge["from"]].name;
         edgeToName = byId[activeEdge["to"]].name;
-        edgeSaid = activeEdge["label"];
-        edgeHad = str(activeEdge["carries"]);
+        edgeHad = bool(
+            activeEdge["label"] or activeEdge["carries"] or activeEdge["trigger"]
+        );
     }
-    carryPicks: list[dict[str, str]] = [
-        {"key": "", "text": "None"},
-        {"key": "issue", "text": "Issue"},
-        {"key": "pr", "text": "PR"}
-    ];
     connecting = bool(connectFrom);
 
     # Lane bands and labels in viewport px: the bands follow the pan, the
@@ -511,9 +540,7 @@ def:pub FlowCanvas(
                                     }}
                                     onClick={lambda (e: MouseEvent) {
                                         e.stopPropagation();
-                                        onSelectEdge(
-                                            l["key"], l["label"], str(l["carries"])
-                                        );
+                                        onSelectEdge(l["key"], edgeFields(l));
                                     }}
                                 />
                             }}
@@ -554,9 +581,7 @@ def:pub FlowCanvas(
                                 onClick={lambda (e: MouseEvent) { if editing
                                     and onSelectEdge {
                                     e.stopPropagation();
-                                    onSelectEdge(
-                                        l["key"], l["label"], str(l["carries"])
-                                    );
+                                    onSelectEdge(l["key"], edgeFields(l));
                                 }}}
                             >
                                 {if l["tag"] {
@@ -565,6 +590,15 @@ def:pub FlowCanvas(
                                     </span>
                                 }}
                                 {l["label"]}
+                                {if l["auto"] {
+                                    <span
+                                        key="auto"
+                                        className="text-primary"
+                                        title={l["note"]}
+                                    >
+                                        {l["auto"]}
+                                    </span>
+                                }}
                             </span>
                         }}
                         {if selectedEdge == l["key"] {
@@ -580,144 +614,22 @@ def:pub FlowCanvas(
                     </div>
                 }}
                 {for s in steps {
-                    <button
+                    <StepNode
                         key={s.id}
-                        type="button"
-                        data-step={s.id}
-                        title={s.name + (" · " + s.blurb if s.blurb else "")}
-                        className={"group absolute flex flex-col overflow-hidden rounded-md border bg-card px-[9px] py-[7px] text-left transition-[border-color,box-shadow,opacity] duration-150 "
-                            + (
-                                "z-20 border-primary ring-1 ring-primary"
-                                    if selectedId == s.id or connectFrom == s.id
-                                    else "z-10 border-border"
-                            )
-                            + (" shadow-md" if dragId == s.id else "")
-                            + (
-                                " cursor-pointer hover:border-primary"
-                                    if connecting and s.id != connectFrom
-                                    else (
-                                        ""
-                                            if editing or selectedId == s.id
-                                            else " cursor-pointer hover:border-input"
-                                    )
-                            )
-                            + (" opacity-40" if dimStep(s.id) else "")}
-                        style={{
-                            "left": str(rects[s.id][0]) + "px",
-                            "top": str(rects[s.id][1]) + "px",
-                            "width": str(rects[s.id][2]) + "px",
-                            "height": str(rects[s.id][3]) + "px"
-                        }}
-                        onClick={lambda (e: MouseEvent) {
-                            e.stopPropagation();
-                            if onSelect {
-                                onSelect(s.id);
-                            }
-                        }}
-                    >
-                        <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                                className={"step-swatch " + DOT_FILL[colorKey(s.color)]}
-                                aria-hidden="true"
-                            />
-                            <span
-                                className="min-w-0 truncate text-sm leading-5 font-semibold text-foreground"
-                            >
-                                {s.name}
-                            </span>
-                        </span>
-                        {if detail != "low" {
-                            <span
-                                key="meta"
-                                className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-xs leading-[18px]"
-                            >
-                                <span className="num shrink-0 text-muted-foreground">
-                                    {str(s.task_count)
-                                        + (" task" if s.task_count == 1 else " tasks")}
-                                </span>
-                                <span
-                                    className={"flex min-w-0 items-center gap-1 "
-                                        + (
-                                            KIND_TONE[s.kind]
-                                                if s.kind in KIND_TONE
-                                                else "text-subtle"
-                                        )}
-                                >
-                                    {if rects[s.id][2] >= metaNeed[s.id] {
-                                        <span key="word" className="truncate">
-                                            {KIND_LABEL[s.kind]
-                                                if s.kind in KIND_LABEL
-                                                else s.kind}
-                                        </span>
-                                    }}
-                                    <KindGlyph kind={s.kind} size={14}/>
-                                </span>
-                            </span>
-                        }}
-                        {if detail == "high" and s.id in stepTitles {
-                            <span
-                                key="titles"
-                                className="mt-1 flex min-w-0 flex-col border-t pt-1"
-                            >
-                                {for tt in nodeTitles(s, stepTitles) {
-                                    <span
-                                        key={tt}
-                                        className="truncate text-xs leading-[17px] text-foreground"
-                                    >
-                                        {tt}
-                                    </span>
-                                }}
-                                {if s.task_count > len(nodeTitles(s, stepTitles)) {
-                                    <span
-                                        key="more"
-                                        className="text-xs leading-[17px] text-subtle"
-                                    >
-                                        {str(
-                                            s.task_count
-                                                - len(nodeTitles(s, stepTitles))
-                                        )
-                                            + " more"}
-                                    </span>
-                                }}
-                            </span>
-                        }}
-                        {if editing {
-                            <span key="ports" aria-hidden="true">
-                                <span
-                                    className={"pointer-events-none absolute left-1/2 top-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute bottom-0 left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute left-0 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                                <span
-                                    className={"pointer-events-none absolute right-0 top-1/2 size-2 translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-card transition-opacity duration-150 "
-                                        + (
-                                            "opacity-100"
-                                                if selectedId == s.id
-                                                else "opacity-0 group-hover:opacity-100"
-                                        )}
-                                />
-                            </span>
-                        }}
-                    </button>
+                        step={s}
+                        rect={rects[s.id]}
+                        detail={detail}
+                        titles={nodeTitles(s, stepTitles)}
+                        showTitles={detail == "high" and s.id in stepTitles}
+                        showOwner={not laneMode}
+                        selected={selectedId == s.id or connectFrom == s.id}
+                        portsOn={selectedId == s.id}
+                        target={connecting and s.id != connectFrom}
+                        editing={editing}
+                        dragging={dragId == s.id}
+                        dim={dimStep(s.id)}
+                        onSelect={onSelect}
+                    />
                 }}
             </div>
             {if laneMode {
@@ -797,7 +709,7 @@ def:pub FlowCanvas(
                     className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-4"
                 >
                     <div
-                        className="flex max-w-sm flex-col items-center gap-1 rounded-md border border-dashed bg-card px-8 py-10 text-center"
+                        className="flex max-w-sm flex-col items-center gap-1 rounded-2xl border bg-card px-8 py-10 text-center"
                     >
                         <p className="text-sm font-semibold">A blank canvas</p>
                         <p className="text-sm text-muted-foreground">
@@ -820,109 +732,25 @@ def:pub FlowCanvas(
                 </div>
             }}
             {if activeFound {
-                <div
+                <EdgeEditor
                     key="edgeeditor"
-                    className="absolute z-40 w-64 -translate-x-1/2 rounded-xl border bg-popover p-2.5 shadow-lg"
-                    style={{
-                        "left": str(float(activeEdge["mx"]) + panX) + "px",
-                        "top": str(float(activeEdge["my"]) + panY + 14.0) + "px"
-                    }}
-                    onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
-                    onPointerDown={lambda (e: any) { e.stopPropagation(); }}
-                >
-                    <div
-                        className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground"
-                    >
-                        <span className="truncate">{edgeFromName}</span>
-                        <span aria-hidden="true">→</span>
-                        <span className="truncate">{edgeToName}</span>
-                    </div>
-                    <Input
-                        autoFocus={True}
-                        value={edgeDraft}
-                        placeholder="What has to be true to move on"
-                        className="h-8 text-[13px]"
-                        onChange={lambda (e: any) { if onEdgeDraft {
-                            onEdgeDraft(e.target.value);
-                        }}}
-                        onKeyDown={lambda (e: any) { if e.key == "Enter"
-                            and onSaveEdgeLabel {
-                            onSaveEdgeLabel(
-                                activeEdge["from"],
-                                activeEdge["to"],
-                                edgeDraft,
-                                edgeCarry
-                            );
-                        }}}
-                    />
-                    <div className="mt-2 flex items-center gap-1">
-                        <span className="mr-1 text-xs text-muted-foreground">
-                            Carries
-                        </span>
-                        {for pick in carryPicks {
-                            <button
-                                key={pick["text"]}
-                                type="button"
-                                aria-pressed={edgeCarry == pick["key"]}
-                                className={"rounded-sm border px-1.5 py-0.5 text-xs transition-colors "
-                                    + (
-                                        "border-input bg-muted font-semibold text-foreground"
-                                            if edgeCarry == pick["key"]
-                                            else "border-transparent text-muted-foreground hover:text-foreground"
-                                    )}
-                                onClick={lambda { if onEdgeCarry {
-                                    onEdgeCarry(pick["key"]);
-                                }}}
-                            >
-                                {pick["text"]}
-                            </button>
-                        }}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-1">
-                        <Button
-                            size="sm"
-                            onClick={lambda { if onSaveEdgeLabel {
-                                onSaveEdgeLabel(
-                                    activeEdge["from"],
-                                    activeEdge["to"],
-                                    edgeDraft,
-                                    edgeCarry
-                                );
-                            }}}
-                        >
-                            Save
-                        </Button>
-                        <div className="flex items-center gap-1">
-                            {if edgeSaid or edgeHad {
-                                <Button
-                                    key="clear"
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Take the wording and the tag off this transition, keep the transition"
-                                    className="text-muted-foreground"
-                                    onClick={lambda { if onSaveEdgeLabel {
-                                        onSaveEdgeLabel(
-                                            activeEdge["from"], activeEdge["to"], "", ""
-                                        );
-                                    }}}
-                                >
-                                    Clear
-                                </Button>
-                            }}
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                title="Remove this transition"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={lambda { if onDeleteEdge {
-                                    onDeleteEdge(activeEdge["from"], activeEdge["to"]);
-                                }}}
-                            >
-                                Delete
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                    fromName={edgeFromName}
+                    toName={edgeToName}
+                    form={edgeForm}
+                    left={float(activeEdge["mx"]) + panX}
+                    top={edgeTop}
+                    clearable={edgeHad}
+                    onField={onEdgeField}
+                    onSave={lambda { if onSaveEdge {
+                        onSaveEdge(activeEdge["from"], activeEdge["to"], edgeForm);
+                    }}}
+                    onClear={lambda { if onSaveEdge {
+                        onSaveEdge(activeEdge["from"], activeEdge["to"], {});
+                    }}}
+                    onDelete={lambda { if onDeleteEdge {
+                        onDeleteEdge(activeEdge["from"], activeEdge["to"]);
+                    }}}
+                />
             }}
         </div>;
 }

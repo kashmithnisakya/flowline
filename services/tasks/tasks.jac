@@ -2,6 +2,7 @@
 
 import from models {
     Project,
+    Projects,
     Member,
     Task,
     TaskView,
@@ -12,7 +13,6 @@ import from models {
     ProjectTally,
     MemberTally,
     WorkflowStep,
-    Iteration,
     AssignedTo,
     OnProject,
     HasRole,
@@ -38,14 +38,8 @@ import from models {
     project_done_since,
     project_done_before,
     project_done_before_in,
-    recent_tasks,
-    tasks_stamped,
-    recent_done_before,
-    done_before_stamped,
-    project_recent,
-    project_stamped,
-    project_recent_done_before,
-    project_done_before_stamped,
+    done_since_count,
+    project_done_since_count,
     project_working,
     step_column_peak,
     step_column_below,
@@ -82,21 +76,27 @@ import from services.util {
     done_day,
     moved_to_done,
     ensure_tallies,
-    ensure_history
+    ensure_history,
+    ensure_keys,
+    ensure_arrows
 }
+import from services.tasks.history {
+    HistoryBase,
+    Column,
+    SORT_FIELDS,
+    board_columns,
+    sorted_window,
+    column_window,
+    parts_count
+}
+import from jaclang.lib.jaclib { QPred }
 import from services.log.log { record_task_event, sync_task_links }
-import from services.github.util { sync_issue_state }
+import from services.github.util { sync_issue_state, sync_step_labels }
 import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 
 # The legacy status a step stands for. Every move writes both, so the rest of
 # the app keeps reading `status` and never has to know about steps.
-# An iteration id the caller may plan into: its own iteration, else "".
-def owned_iteration(holder: Root, iteration_id: str) -> str {
-    it = resolve(iteration_id);
-    return iteration_id if isinstance(it, Iteration) and owned(holder, it) else "";
-}
-
 
 def status_for_step(holder: Root, step_id: str) -> str {
     step = resolve(step_id);
@@ -137,6 +137,118 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
     return holders;
 }
 
+# What a move onto a step does beyond the step: the step's owner takes the
+# task (`handed`, from handoff_target), a move across Done writes the issue
+# state back, and the arrow crossed writes its GitHub labels (not `moved_by`,
+# the label that moved it). Returns the log line's tail, "" when none applied.
+def landing_tail(
+    holder: Root, t: Task, handed: list[Member], was: str, from_step: str, moved_by: str
+) -> str {
+    tail = "";
+    if handed {
+        target = handed[0];
+        already = [t->:AssignedTo:->];
+        if len(already) != 1 or jid(already[0]) != jid(target) {
+            t.assignee_ids = link_assignees(holder, t, [jid(target)]);
+            tail = tail + " · " + target.full_name();
+        }
+    }
+    if (t.status == "Done") != (was == "Done") {
+        wrote = sync_issue_state(holder, t, t.status == "Done", t.updated_at);
+        if wrote {
+            tail = tail + " · " + wrote;
+        }
+    }
+    labelled = sync_step_labels(holder, t, from_step, t.step_id, moved_by);
+    if labelled {
+        tail = tail + " · " + labelled;
+    }
+    return tail;
+}
+
+# Move `t` to the end of `step`'s column as a drag there would, and log why.
+# `peaks` keeps each column's top per step id across one pass: a pushed
+# query does not see this request's writes, so two landings would tie.
+def land_on_step(
+    holder: Root,
+    t: Task,
+    step: WorkflowStep,
+    why: str,
+    stamp: str,
+    peaks: dict[str, float],
+    moved_by: str
+) {
+    sid = jid(step);
+    if sid not in peaks {
+        top = step_column_peak(holder, sid);
+        peaks[sid] = top[0].sort_order if top else 0.0;
+    }
+    peaks[sid] = peaks[sid] + 1024.0;
+    handed = handoff_target(holder, t, step);
+    was = t.status;
+    from_step = t.step_id;
+    t.step_id = sid;
+    t.set_status(
+        KIND_STATUS[step.kind] if step.kind in KIND_STATUS else "In Progress", stamp
+    );
+    t.sort_order = peaks[sid];
+    t.updated_at = stamp;
+    tail = landing_tail(holder, t, handed, was, from_step, moved_by);
+    record_task_event(holder, t, "Moved to " + step.name + " · " + why + tail, stamp);
+}
+
+# A GitHub fact the flow line can act on: follow the first transition out
+# of the task's step whose trigger is `trigger` (for "label", one waiting
+# for a label in `added`). A target whose entry rule turns the task away
+# keeps it where it is, and the log says why. True when the task moved.
+def follow_trigger(
+    holder: Root,
+    t: Task,
+    trigger: str,
+    added: list[str],
+    why: str,
+    stamp: str,
+    peaks: dict[str, float]
+) -> bool {
+    ensure_arrows(holder);
+    source = resolve(t.step_id) if t.step_id else None;
+    if not isinstance(source, WorkflowStep) or not owned(holder, source) {
+        return False;
+    }
+    fresh = [a.strip().lower() for a in added];
+    for tr in source.transitions {
+        if tr.get("trigger", "") != trigger {
+            continue;
+        }
+        if trigger == "label"
+            and tr.get("github_label", "").strip().lower() not in fresh {
+            continue;
+        }
+        target = resolve(tr["to"]);
+        if not isinstance(target, WorkflowStep) or not owned(holder, target) {
+            continue;
+        }
+        refused = target.refusal(t.due_date, t.pr_link);
+        if refused {
+            record_task_event(
+                holder, t, "Stayed on " + source.name + " · " + refused, stamp
+            );
+            return False;
+        }
+        land_on_step(
+            holder,
+            t,
+            target,
+            why,
+            stamp,
+            peaks,
+            tr.get("github_label", "") if trigger == "label" else ""
+        );
+        return True;
+    }
+    return False;
+}
+
 # -------------------------------------------------------------------- tasks
 
 # How well a title matches a search: exact, then prefix, then anywhere. Lower
@@ -170,12 +282,12 @@ def order_attention(rows: list[Task]) {
 
 
 glob PRIORITY_RANK: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2},
+     # A date no done_at reaches: the done scope is Done before it.
      FAR_FUTURE: str = "9999-12-31";
 
-# A date no done_at reaches: the done scope is Done before it.
 # A task's board column as a number, by the board's placement rule: its own
 # step, else the status itself (no flow line), else the first column of its
-# status's kind. `rank` and `kind_rank` come from sort_tasks.
+# status's kind. `rank` and `kind_rank` come from column_ranks.
 def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int {
     if t.step_id in rank {
         return rank[t.step_id];
@@ -188,6 +300,37 @@ def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int
 }
 
 
+# The board's column keys in order (canvas x, ties by sort_order; without a
+# flow line the columns are STATUSES) with each key's rank and each kind's
+# first column, for column_rank.
+def column_ranks(holder: Root) -> tuple[list[str], dict[str, int], dict[str, int]] {
+    order = steps_of(holder);
+    order.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
+    order.sort(key=lambda (s: WorkflowStep) { s.x; });
+    keys: list[str] = [];
+    rank: dict[str, int] = {};
+    kind_rank: dict[str, int] = {};
+    for (i, s) in enumerate(order) {
+        keys.append(jid(s));
+        rank[jid(s)] = i;
+        if s.kind not in kind_rank {
+            kind_rank[s.kind] = i;
+        }
+    }
+    if len(order) == 0 {
+        for (i, st) in enumerate(STATUSES) {
+            keys.append(st);
+            rank[st] = i;
+            kind = STATUS_KIND[st] if st in STATUS_KIND else "active";
+            if kind not in kind_rank {
+                kind_rank[kind] = i;
+            }
+        }
+    }
+    return (keys, rank, kind_rank);
+}
+
+
 # The table view's user-chosen column sort, over node fields only so it runs
 # on the full match set before paging. Priority sorts by urgency; step sorts
 # in board column order, cards in board order within a column; undated tasks
@@ -195,28 +338,7 @@ def column_rank(t: Task, rank: dict[str, int], kind_rank: dict[str, int]) -> int
 def sort_tasks(holder: Root, rows: list[Task], field: str, reverse: bool) {
     rows.sort(key=lambda (t: Task) { jid(t); });
     if field == "step" {
-        # The board's column order: canvas x, ties by sort_order. Without a
-        # flow line the columns are STATUSES in order.
-        order = steps_of(holder);
-        order.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
-        order.sort(key=lambda (s: WorkflowStep) { s.x; });
-        rank: dict[str, int] = {};
-        kind_rank: dict[str, int] = {};
-        for (i, s) in enumerate(order) {
-            rank[jid(s)] = i;
-            if s.kind not in kind_rank {
-                kind_rank[s.kind] = i;
-            }
-        }
-        if len(order) == 0 {
-            for (i, st) in enumerate(STATUSES) {
-                rank[st] = i;
-                kind = STATUS_KIND[st] if st in STATUS_KIND else "active";
-                if kind not in kind_rank {
-                    kind_rank[kind] = i;
-                }
-            }
-        }
+        (keys, rank, kind_rank) = column_ranks(holder);
         rows.sort(key=lambda (t: Task) { t.sort_order; });
         rows.sort(
             key=lambda (t: Task) { column_rank(t, rank, kind_rank); }, reverse=reverse
@@ -246,19 +368,19 @@ def sort_tasks(holder: Root, rows: list[Task], field: str, reverse: bool) {
 }
 
 
-walker ListTasks {
+walker:protect ListTasks {
     """One page of tasks. `scope` picks the working set the board renders
     ("working": open plus Done reached in the last `done_days`), the history
     behind its "+N older" ("older": Done before that cutoff, newest first),
     every Done task ("done"), what the Overview calls needs-attention
     (blocked first, then most overdue) ("attention"), or everything ("all").
-    The scope and a category filter are pushed into the store's query, so a
-    working page loads the working set alone; the history scopes load what
-    they page over. `q` and the other filters read node fields on those
-    rows. `older` on an unfiltered working page counts the Done rows the
-    cutoff left out, from the project tallies, so the board's "+N older"
-    needs no second call. Every ordering ends in the jid so two rows that
-    tie on the sort key cannot swap between one page and the next."""
+    A history scope with no title search or tag filter pages in the store
+    (services/tasks/history.jac): scope, filters and sort become the query,
+    so a page loads its own rows. The live scopes, and a search or tag
+    filter, page their loaded pool. `older` on an unfiltered working page
+    counts the Done rows the cutoff left out, from the project tallies. Every
+    ordering ends in the jid so two rows that tie on the sort key cannot
+    swap between one page and the next."""
     has scope: str = "working",
         q: str = "",
         project_id: str = "",
@@ -268,8 +390,10 @@ walker ListTasks {
         # estimate) or "no" (unestimated).
         tag: str = "",
         estimated: str = "",
-        # An iteration jid, "none" for tasks in no iteration, or "" for any.
-        iteration_id: str = "",
+        # A priority, and a board column (a step jid, or a status when the
+        # workspace has no flow line), each "" for any.
+        priority: str = "",
+        column: str = "",
         # The table view's column sort; empty keeps the scope's own order.
         sort: str = "",
         sort_dir: str = "asc",
@@ -279,111 +403,169 @@ walker ListTasks {
         reports: list[TaskPage] = [];
 
     # A project filter visits that project and pages its own children;
-    # otherwise the page is built over every project from the root.
+    # otherwise the page is built over every project from the root. Keys
+    # filled in this request are invisible to a pushed query until the next
+    # one, so that request pages what ensure_keys loaded.
     can start with Root entry {
         ensure_tallies(here);
+        fresh = ensure_keys(here);
         if self.project_id {
             p = resolve(self.project_id);
-            if isinstance(p, Project) and owned(here, p) {
-                visit [p];
-            } else {
+            if not (isinstance(p, Project) and owned(here, p)) {
                 report self.page_of(here, [], []);
+            } elif fresh {
+                report self.page_of(here, self.pool_of(here, [p]), [p]);
+            } else {
+                visit [p];
             }
         } else {
-            cut = self.history_page(here, []);
+            cut = None if fresh else self.store_page(here, []);
             report cut or self.page_of(here, self.pool_of(here, []), []);
         }
     }
 
     can gather with Project entry {
-        cut = self.history_page(root, [here]);
+        cut = self.store_page(root, [here]);
         report cut or self.page_of(root, self.pool_of(root, [here]), [here]);
         disengage;
     }
 
-    # An unfiltered history page in updated order, newest first (the table's
-    # default), is cut in the store: the rows up to the page's end plus every
-    # row that ties with the last of them, so it matches a full load exactly.
-    # Anything else answers None and pages the loaded pool.
-    def history_page(holder: Root, projects: list[Project]) -> TaskPage | None {
-        newest = (self.sort == "updated" and self.sort_dir == "desc")
-            or (not self.sort and self.scope in ["older", "done"]);
-        filtered = bool(
-            self.q.strip()
-                or self.category
-                or self.tag
-                or self.estimated
-                or self.iteration_id
-                or self.assignee_id
-        );
-        cutoff = FAR_FUTURE if self.scope == "done" else done_cutoff(self.done_days);
-        if not newest
-            or filtered
-            or self.scope not in ["older", "done", "all"]
-            or (self.scope == "older" and not cutoff) {
+    # A history scope without a title search or a tag filter, paged in the
+    # store: its rows, and its total from the tallies or from counts in the
+    # store. Anything else answers None and pages the loaded pool.
+    def store_page(holder: Root, projects: list[Project]) -> TaskPage | None {
+        if self.scope not in ["older", "done", "all"] or self.q.strip() or self.tag {
             return None;
         }
         (p, size, start, end) = page_bounds(self.page, self.page_size, 50, 500);
-        rows = self.recent(holder, projects, cutoff, end);
-        if len(rows) >= end and len(rows) > 0 {
-            held = [jid(t) for t in rows];
-            for t in self.stamped(
-                holder, projects, cutoff, rows[len(rows) - 1].updated_at
-            ) {
-                if jid(t) not in held {
-                    rows.append(t);
-                }
-            }
+        cutoff = done_cutoff(self.done_days) if self.scope == "older" else FAR_FUTURE;
+        whole = self.history_total(holder, [], cutoff);
+        empty = TaskPage(
+            rows=[], page=p, page_size=size, has_more=False, total=0, scope_total=whole
+        );
+        base = self.history_base(holder, projects, cutoff);
+        if base is None or not cutoff {
+            return empty;
         }
-        rows.sort(key=lambda (t: Task) { jid(t); });
-        rows.sort(key=lambda (t: Task) { t.updated_at; }, reverse=True);
-        total = self.history_total(holder, projects, cutoff);
+        columns: list[Column] = [];
+        parts: list[list[QPred]] = [[]];
+        if self.sort == "step" or self.column {
+            columns = board_columns(holder);
+        }
+        if self.column {
+            columns = [
+                c
+                for c in columns
+                if c.key == self.column
+            ];
+            if len(columns) == 0 {
+                return empty;
+            }
+            parts = columns[0].parts;
+        }
+        rows: list[Task] = [];
+        if self.sort == "step" {
+            rows = column_window(base, columns, self.sort_dir == "desc", start, end);
+        } else {
+            (field, desc) = self.store_order();
+            rows = sorted_window(base, parts, field, desc, start, end);
+        }
+        # Every column together is the whole query, so only a column filter
+        # counts its parts; with no filter the tallies answer.
+        total = self.history_total(holder, projects, cutoff)
+            if not self.narrowed()
+            else parts_count(base, parts);
         return TaskPage(
-            rows=hydrate_rows(holder, rows[start:end]),
+            rows=hydrate_rows(holder, rows),
             page=p,
             page_size=size,
             has_more=total > end,
             total=total,
-            scope_total=self.history_total(holder, [], cutoff) if projects else total
+            scope_total=whole
         );
     }
 
-    # The scope's first `n` rows in updated order, and the rows stamped `at`.
-    def recent(
-        holder: Root, projects: list[Project], cutoff: str, n: int
-    ) -> list[Task] {
-        if self.scope == "all" {
-            return project_recent(projects[0], n)
-                if projects
-                else recent_tasks(holder, n);
+    # Where the store's query starts and what every row must meet: the
+    # scope and the filters. An assignee starts from the member, back over
+    # AssignedTo; a foreign or unknown one, or no projects box, is None.
+    def history_base(
+        holder: Root, projects: list[Project], cutoff: str
+    ) -> HistoryBase | None {
+        preds: list[QPred] = [];
+        if self.scope != "all" {
+            preds.append(QPred(field="status", op="==", value="Done"));
         }
-        return project_recent_done_before(projects[0], cutoff, n)
-            if projects
-            else recent_done_before(holder, cutoff, n);
+        if self.scope == "older" {
+            preds.append(QPred(field="done_at", op="<", value=cutoff));
+        }
+        if self.category {
+            preds.append(QPred(field="category", op="==", value=self.category));
+        }
+        if self.priority {
+            preds.append(QPred(field="priority", op="==", value=self.priority));
+        }
+        if self.estimated == "yes" {
+            preds.append(QPred(field="estimate", op=">", value=0.0));
+        } elif self.estimated == "no" {
+            preds.append(QPred(field="estimate", op="<=", value=0.0));
+        }
+        if self.assignee_id {
+            m = resolve(self.assignee_id);
+            if not isinstance(m, Member) or not owned(holder, m) {
+                return None;
+            }
+            if projects {
+                preds.append(
+                    QPred(field="project_id", op="==", value=jid(projects[0]))
+                );
+            }
+            return HistoryBase(origin=[m], via="member", preds=preds);
+        }
+        if projects {
+            return HistoryBase(origin=[projects[0]], via="project", preds=preds);
+        }
+        boxes = [holder-->[?:Projects]];
+        if not boxes {
+            return None;
+        }
+        return HistoryBase(origin=[boxes[0]], via="box", preds=preds);
     }
 
-    def stamped(
-        holder: Root, projects: list[Project], cutoff: str, at: str
-    ) -> list[Task] {
-        if self.scope == "all" {
-            return project_stamped(projects[0], at)
-                if projects
-                else tasks_stamped(holder, at);
+    # The table's column sort, else the scope's own order: newest update
+    # first for the Done history, board order for everything.
+    def store_order -> tuple[str, bool] {
+        if self.sort {
+            field = SORT_FIELDS[self.sort]
+                if self.sort in SORT_FIELDS
+                else "updated_at";
+            return (field, self.sort_dir == "desc");
         }
-        return project_done_before_stamped(projects[0], cutoff, at)
-            if projects
-            else done_before_stamped(holder, cutoff, at);
+        if self.scope in ["older", "done"] {
+            return ("updated_at", True);
+        }
+        return ("sort_order", False);
+    }
+
+    # Any filter besides a project visit, which the tallies already answer.
+    def narrowed -> bool {
+        return bool(
+            self.category
+                or self.priority
+                or self.estimated
+                or self.assignee_id
+                or self.column
+        );
     }
 
     # The scope's size from the tallies: every task, every Done task, or the
-    # Done tasks less those reached since the cutoff.
+    # Done tasks less a count in the store of those reached since the cutoff.
     def history_total(holder: Root, projects: list[Project], cutoff: str) -> int {
         if projects {
             pr = projects[0];
             if self.scope == "all" {
                 return pr.task_total;
             }
-            return pr.done_total - len(project_done_since(pr, cutoff))
+            return pr.done_total - project_done_since_count(pr, cutoff)
                 if self.scope == "older"
                 else pr.done_total;
         }
@@ -391,7 +573,7 @@ walker ListTasks {
         if self.scope == "all" {
             return totals[0];
         }
-        return totals[1] - len(done_since(holder, cutoff))
+        return totals[1] - done_since_count(holder, cutoff)
             if self.scope == "older"
             else totals[1];
     }
@@ -438,15 +620,9 @@ walker ListTasks {
         needle = self.q.lower().strip();
         today = today_iso();
         cutoff = done_cutoff(self.done_days);
-        filtered = bool(
-            needle
-                or self.category
-                or self.tag
-                or self.estimated
-                or self.iteration_id
-                or self.project_id
-                or self.assignee_id
-        );
+        filtered = bool(needle or self.tag or self.project_id or self.narrowed());
+        # A column filter places each row by the board's rule.
+        (keys, rank, kind_rank) = column_ranks(holder) if self.column else ([], {}, {});
         picked: list[Task] = [];
         recent_done = 0;
         for t in pool {
@@ -465,12 +641,10 @@ walker ListTasks {
             if self.estimated == "no" and t.estimate > 0.0 {
                 continue;
             }
-            if self.iteration_id == "none" and t.iteration_id {
+            if self.priority and t.priority != self.priority {
                 continue;
             }
-            if self.iteration_id
-                and self.iteration_id != "none"
-                and t.iteration_id != self.iteration_id {
+            if self.column and keys[column_rank(t, rank, kind_rank)] != self.column {
                 continue;
             }
             if self.scope == "attention" and not needs_attention(t, today) {
@@ -533,7 +707,7 @@ walker ListTasks {
             } elif self.scope == "all" {
                 return tally_totals(holder)[0];
             } elif self.scope == "older" {
-                return tally_totals(holder)[1] - len(done_since(holder, cutoff))
+                return tally_totals(holder)[1] - done_since_count(holder, cutoff)
                     if cutoff
                     else 0;
             }
@@ -568,29 +742,24 @@ walker ListTasks {
     }
 }
 
-# The Monday the Overview's four-week window ends in, and where it starts.
-def week_anchor(monday: str) -> str {
-    return monday if len(monday) >= 10 else today_iso();
+# The Monday of the week the Overview's window ends in: `monday` snapped to
+# its week, or this week's. The weekly counts are keyed by these Mondays.
+def week_of(monday: str) -> str {
+    anchor = monday if len(monday) >= 10 else today_iso();
+    return week_start(anchor) or anchor;
 }
 
 
-def tally_since(monday: str) -> str {
-    return shift_day(week_anchor(monday), -21);
-}
-
-
-# Every Overview number. `open` is every open task and `recent` the Done
-# tasks since tally_since(monday); the all-time totals per project come
-# from the tallies kept on write, so no history is loaded.
+# Every Overview number. `open` is every open task and `week_done` the Done
+# tasks since week_of(monday). Done per week is the projects' weekly counts
+# and the all-time totals their tallies, both kept on write, so the only
+# Done rows read are this week's (for who finished what).
 def task_totals(
-    holder: Root, open: list[Task], recent: list[Task], names: TaskNames, monday: str
+    holder: Root, open: list[Task], week_done: list[Task], names: TaskNames, monday: str
 ) -> TaskTotals {
-    week0 = week_anchor(monday);
+    week0 = week_of(monday);
     today = today_iso();
-    # Week bounds up front: shift_day parses a date, so calling it per task
-    # would be four parses per row.
     starts = [shift_day(week0, -7 * (3 - i)) for i in range(4)];
-    ends = [shift_day(starts[i], 7) for i in range(4)];
     by_week = [0, 0, 0, 0];
     open_count = 0;
     overdue_count = 0;
@@ -599,6 +768,8 @@ def task_totals(
     active_by_project: dict[str, int] = {};
     open_by_member: dict[str, int] = {};
     done_by_member: dict[str, int] = {};
+    days = [shift_day(week0, i) for i in range(7)];
+    by_day = [0, 0, 0, 0, 0, 0, 0];
     for t in open {
         open_count = open_count + 1;
         if t.status == "Blocked" {
@@ -625,28 +796,27 @@ def task_totals(
                 + 1;
         }
     }
-    for t in recent {
-        if not moved_to_done(t) {
+    for t in week_done {
+        if not moved_to_done(t) or done_day(t) < week0 {
             continue;
         }
-        day = done_day(t);
-        for i in range(4) {
-            if day >= starts[i] and day < ends[i] {
-                by_week[i] = by_week[i] + 1;
-            }
+        if done_day(t) in days {
+            at = days.index(done_day(t));
+            by_day[at] = by_day[at] + 1;
         }
-        if day >= week0 {
-            for who in names.ids_of(t) {
-                done_by_member[who] = (
-                    done_by_member[who] if who in done_by_member else 0
-                )
-                    + 1;
-            }
+        for who in names.ids_of(t) {
+            done_by_member[who] = (done_by_member[who] if who in done_by_member else 0)
+                + 1;
         }
     }
     tallies: list[ProjectTally] = [];
     for pr in projects_of(holder) {
         pid = jid(pr);
+        for (i, week) in enumerate(starts) {
+            if week in pr.week_finished {
+                by_week[i] = by_week[i] + pr.week_finished[week];
+            }
+        }
         tallies.append(
             ProjectTally(
                 project_id=pid,
@@ -673,6 +843,7 @@ def task_totals(
         overdue=overdue_count,
         blocked=blocked_count,
         done_by_week=by_week,
+        done_by_day=by_day,
         projects=tallies,
         members=people,
         categories=categories_of(holder)
@@ -680,19 +851,20 @@ def task_totals(
 }
 
 
-walker TaskCounts {
+walker:protect TaskCounts {
     """The Overview's numbers over the whole history: open tasks, Done per
-    week for the four weeks ending in `monday`'s week, and total/done per
-    project."""
+    week for the four weeks ending in `monday`'s week (from the weekly
+    counts), and total/done per project (from the tallies)."""
     has monday: str = "",
         reports: list[TaskTotals] = [];
 
     can count with Root entry {
         ensure_tallies(here);
+        ensure_history(here);
         report task_totals(
             here,
             open_tasks(here),
-            done_since(here, tally_since(self.monday)),
+            done_since(here, week_of(self.monday)),
             task_names(here),
             self.monday
         );
@@ -700,7 +872,7 @@ walker TaskCounts {
 }
 
 
-walker TaskHistory {
+walker:protect TaskHistory {
     """The Overview's charts over time: for the `weeks` weeks ending in
     `monday`'s week, tasks added and moved to Done per week plus running
     scope and done totals. `project_id` narrows it to that project. It reads
@@ -737,8 +909,7 @@ walker TaskHistory {
     # The window's Mondays, oldest first: the weeks the counts are kept by.
     def starts -> list[str] {
         count = min(max(self.weeks, 4), 52);
-        anchor = week_anchor(self.monday);
-        week0 = week_start(anchor) or anchor;
+        week0 = week_of(self.monday);
         return [shift_day(week0, -7 * (count - 1 - i)) for i in range(count)];
     }
 
@@ -777,7 +948,7 @@ walker TaskHistory {
 }
 
 
-walker CreateTask {
+walker:protect CreateTask {
     has title: str,
         category: str = "",
         tags: list[str] = [],
@@ -787,7 +958,6 @@ walker CreateTask {
         step_id: str = "",
         due_date: str = "",
         start_date: str = "",
-        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         assignee_ids: list[str] = [],
@@ -817,6 +987,12 @@ walker CreateTask {
                 step = self.step_id;
             }
         }
+        # A step's entry rule holds from the first write: a new task has no
+        # PR, so a step that needs one is never where work starts.
+        chosen = resolve(step) if step else None;
+        if isinstance(chosen, WorkflowStep) and chosen.refusal(self.due_date, "") {
+            disengage;
+        }
         # The end of the column: its top card, one bounded query.
         top = (
             step_column_peak(holder, step) if step else status_column_peak(holder, col)
@@ -833,7 +1009,6 @@ walker CreateTask {
             step_id=step,
             due_date=self.due_date,
             start_date=iso_day(self.start_date),
-            iteration_id=owned_iteration(holder, self.iteration_id),
             notes=self.notes,
             issue_link=self.issue_link,
             created_at=stamp,
@@ -843,6 +1018,7 @@ walker CreateTask {
             project_id=jid(here)
         );
         on_attached(holder, fresh);
+        fresh.keep_keys();
         fresh.assignee_ids = link_assignees(holder, fresh, self.assignee_ids);
         count_task(here, fresh, 1);
         note_category(holder, fresh.category);
@@ -883,7 +1059,7 @@ walker find_task {
     }
 }
 
-walker UpdateTask(find_task) {
+walker:protect UpdateTask(find_task) {
     has title: str = "",
         category: str = "",
         tags: list[str] = [],
@@ -893,7 +1069,6 @@ walker UpdateTask(find_task) {
         step_id: str = "",
         due_date: str = "",
         start_date: str = "",
-        iteration_id: str = "",
         notes: str = "",
         issue_link: str = "",
         pr_link: str = "",
@@ -907,15 +1082,28 @@ walker UpdateTask(find_task) {
         # `here` is the task; `root` is the caller's own root.
         holder = root;
         landing = self.status;
+        refused = "";
+        was_step = here.step_id;
+        # A change of step meets the target's entry rule with the due date
+        # and PR link this same save writes; a refused step stays put.
         if self.step_id {
             mapped = status_for_step(holder, self.step_id);
-            if mapped {
+            target = resolve(self.step_id);
+            if mapped
+                and self.step_id != here.step_id
+                and isinstance(target, WorkflowStep) {
+                refused = target.refusal(self.due_date, self.pr_link.strip());
+            }
+            if refused {
+                landing = here.status;
+            } elif mapped {
                 landing = mapped;
                 here.step_id = self.step_id;
             }
         }
         was = here.status;
-        moved = landing and landing != was;
+        # Two steps can share a kind, so a new step is a move on its own.
+        moved = (landing and landing != was) or here.step_id != was_step;
         here.title = self.title;
         was_category = here.category;
         here.category = self.category;
@@ -928,8 +1116,8 @@ walker UpdateTask(find_task) {
         here.priority = self.priority;
         here.set_status(landing, now_iso());
         here.due_date = self.due_date;
+        here.keep_keys();
         here.start_date = iso_day(self.start_date);
-        here.iteration_id = owned_iteration(holder, self.iteration_id);
         here.notes = self.notes;
         here.issue_link = self.issue_link;
         here.pr_link = self.pr_link;
@@ -954,7 +1142,9 @@ walker UpdateTask(find_task) {
             }
         }
         if moved {
-            line = "Moved to " + here.status;
+            now_on = resolve(here.step_id) if here.step_id else None;
+            line = "Moved to "
+                + (now_on.name if isinstance(now_on, WorkflowStep) else here.status);
             # A move always crosses Done or not; only crossing it writes back.
             if here.status == "Done" or was == "Done" {
                 wrote = sync_issue_state(
@@ -964,14 +1154,20 @@ walker UpdateTask(find_task) {
                     line = line + " · " + wrote;
                 }
             }
+            labelled = sync_step_labels(holder, here, was_step, here.step_id, "");
+            if labelled {
+                line = line + " · " + labelled;
+            }
             record_task_event(holder, here, line, here.updated_at);
         }
-        report here.to_view();
+        view = here.to_view();
+        view.refused = refused;
+        report view;
         disengage;
     }
 }
 
-walker GetTask(find_task) {
+walker:protect GetTask(find_task) {
     """One task by jid, owner-checked by find_task: the full TaskView, which
     is what the task sheet loads when it opens (a list row carries no notes
     or checklist items), and a deep link to a card the board's working set
@@ -985,7 +1181,7 @@ walker GetTask(find_task) {
 }
 
 
-walker ListTaskTitles {
+walker:protect ListTaskTitles {
     """The working set as id and title only, for the assistant's citations:
     the rows and order of ListTasks(scope="working"), at most `limit` (capped
     at 500), with nothing else on the wire."""
@@ -1027,7 +1223,7 @@ def checklist_rows(t: Task) -> list[dict[str, any]] {
 }
 
 
-walker AddChecklistItem(find_task) {
+walker:protect AddChecklistItem(find_task) {
     """Append one item to the task's checklist. Blank text or a full list
     (CHECKLIST_MAX) adds nothing; the task view is reported either way."""
     has text: str = "",
@@ -1047,7 +1243,7 @@ walker AddChecklistItem(find_task) {
 }
 
 
-walker SetChecklistItem(find_task) {
+walker:protect SetChecklistItem(find_task) {
     """Check, uncheck or rename one item: `done` is "yes", "no" or "" to leave
     it, `text` renames when not blank. Checking an item off writes a log
     line with the progress; nothing else does."""
@@ -1108,7 +1304,7 @@ walker SetChecklistItem(find_task) {
 }
 
 
-walker RemoveChecklistItem(find_task) {
+walker:protect RemoveChecklistItem(find_task) {
     """Drop one item from the task's checklist; an unknown id removes nothing."""
     has item_id: str = "",
         reports: list[TaskView] = [];
@@ -1130,7 +1326,7 @@ walker RemoveChecklistItem(find_task) {
 }
 
 
-walker SetMoveInfo(find_task) {
+walker:protect SetMoveInfo(find_task) {
     """The move handoff, all fields optional. Review gets a reviewer, an
     ETA and a PR link; Blocked and Changes Requested get a note. Partial
     by design; anything left empty stays untouched."""
@@ -1169,7 +1365,7 @@ walker SetMoveInfo(find_task) {
     }
 }
 
-walker MoveTask(find_task) {
+walker:protect MoveTask(find_task) {
     """The drag-drop / arrow-move endpoint. Server-authoritative: a move
     appends to the end of the target column, unless `before_id`/`after_id`
     asks for the spot beside that card there (a stale anchor appends). A
@@ -1179,7 +1375,6 @@ walker MoveTask(find_task) {
     legacy status-only move."""
     has status: str = "",
         step_id: str = "",
-        step_name: str = "",
         before_id: str = "",
         after_id: str = "",
         reports: list[TaskView] = [];
@@ -1192,6 +1387,7 @@ walker MoveTask(find_task) {
         # Read before step_id is rewritten below: a positioned drop in the
         # card's own column stays a reorder for the writes further down.
         positioned = bool(self.before_id or self.after_id);
+        was_step = here.step_id;
         reorder = False;
         # Who the move hands the task to: one member, or empty. A list, not
         # an Optional: the checker does not narrow `Member | None` through
@@ -1206,16 +1402,26 @@ walker MoveTask(find_task) {
             }
             landing = mapped;
             reorder = positioned and self.step_id == here.step_id;
-            # Only a CHANGE of step is a hand-off. Re-dropping a card in its
-            # own column (a reorder) must not reassign it.
+            # Only a CHANGE of step is a hand-off, and only a change meets
+            # the step's entry rule. Re-dropping a card in its own column (a
+            # reorder) must not reassign it.
             if self.step_id != here.step_id {
                 step = resolve(self.step_id);
                 if isinstance(step, WorkflowStep) {
+                    refused = step.refusal(here.due_date, here.pr_link);
+                    if refused {
+                        view = here.to_view();
+                        view.refused = refused;
+                        report view;
+                        disengage;
+                    }
                     handed = handoff_target(holder, here, step);
                 }
             }
             here.step_id = self.step_id;
-            label = self.step_name or mapped;
+            # The log names the step itself; status_for_step checked it.
+            landed = resolve(self.step_id);
+            label = landed.name if isinstance(landed, WorkflowStep) else mapped;
         } else {
             reorder = positioned and not here.step_id and landing == here.status;
             # A status-only move (the assistant, a merged PR, an org with no
@@ -1231,29 +1437,13 @@ walker MoveTask(find_task) {
             here.updated_at = now_iso();
         }
         # A hand-off replaces the assignees: the card changes hands, it does
-        # not gain a hand. The log line names who it went to.
-        note = "Moved to " + label;
-        took = False;
-        if handed {
-            target = handed[0];
-            already = [here->:AssignedTo:->];
-            if len(already) != 1 or jid(already[0]) != jid(target) {
-                here.assignee_ids = link_assignees(holder, here, [jid(target)]);
-                note = note + " · " + target.full_name();
-                took = True;
-            }
-        }
-        # Crossing Done is the one move that writes back to GitHub, for repos
-        # that opted in: landing closes the issue, leaving reopens it. The
-        # write rides on the move's own log line.
-        if (landing == "Done") != (was == "Done") {
-            wrote = sync_issue_state(holder, here, landing == "Done", here.updated_at);
-            if wrote {
-                note = note + " · " + wrote;
-            }
-        }
-        if landing != was or took {
-            record_task_event(holder, here, note, here.updated_at);
+        # not gain a hand. The tail names who it went to and any write-back
+        # a move across Done made, on the move's own log line.
+        tail = landing_tail(holder, here, handed, was, was_step, "");
+        if landing != was or tail or here.step_id != was_step {
+            record_task_event(
+                holder, here, "Moved to " + label + tail, here.updated_at
+            );
         }
         report here.to_view();
         disengage;
@@ -1358,7 +1548,7 @@ walker MoveTask(find_task) {
     }
 }
 
-walker DeleteTask(find_task) {
+walker:protect DeleteTask(find_task) {
     can remove with Task entry {
         gone = jid(here);
         for p in task_project(here) {

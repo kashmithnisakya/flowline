@@ -5,6 +5,7 @@ per call, never reported). Every walker but GithubStatus reports ONE envelope,
 server schedule (services/github/schedule.jac) and by hand; no walker a page
 load calls reaches GitHub."""
 
+import re;
 import from jaclang.lib.effects { effects }
 import from models {
     Project,
@@ -41,7 +42,7 @@ import from models {
 }
 import from services.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from services.log.log { record_task_event, log_imports }
-import from services.tasks.tasks { find_task, status_for_step }
+import from services.tasks.tasks { find_task, status_for_step, follow_trigger }
 import from services.github.util {
     missing_config,
     install_url,
@@ -63,6 +64,8 @@ import from services.github.util {
     acquire_sync_lease,
     read_repo_list,
     store_repo_list,
+    sync_step_labels,
+    ensure_repo_labels,
     log
 }
 import from constants { STATUSES, MERGE_SUGGEST_STATUSES }
@@ -104,7 +107,10 @@ glob INSTALL_WINDOW_MINUTES: float = 15.0,
      SUB_ISSUE_CAP: int = 20,
      # Queued webhook deliveries applied per drain; a longer backlog drains
      # over successive calls.
-     DRAIN_LIMIT: int = 200;
+     DRAIN_LIMIT: int = 200,
+     # GitHub's closing keywords: "Closes #12" or "fixes org/repo#12" in a
+     # PR body links the PR to the task tracking that issue.
+     CLOSING_REF: str = r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:([\w.-]+/[\w.-]+))?#(\d+)";
 
 # Ceilings, because walker endpoints have no built-in pagination or rate
 # limiting: a hostile client should only ever burn its own installation's
@@ -200,7 +206,7 @@ def read_connection(holder: Root) -> GithubConnectionView {
 }
 
 
-walker GithubStatus {
+walker:protect GithubStatus {
     """Cheap, no GitHub call: every page showing GitHub UI opens with it."""
     has reports: list[GithubConnectionView] = [];
 
@@ -210,7 +216,7 @@ walker GithubStatus {
 }
 
 
-walker StartGithubInstall {
+walker:protect StartGithubInstall {
     """Hands back the install URL carrying a one-shot nonce, stored server-side
     and burned on use so a forged callback cannot bind another installation."""
     has reports: list[dict[str, any]] = [];
@@ -240,7 +246,7 @@ walker StartGithubInstall {
 }
 
 
-walker CompleteGithubInstall {
+walker:protect CompleteGithubInstall {
     """Finish the round trip GitHub redirected back from. Two checks before
     anything is stored: the nonce matches the one this workspace issued (CSRF),
     and the GitHub user can actually see the claimed installation, since
@@ -330,7 +336,7 @@ walker CompleteGithubInstall {
 }
 
 
-walker DisconnectGithub {
+walker:protect DisconnectGithub {
     """Forgets the installation. Imported tasks and their links stay: they
     are this workspace's own data, not GitHub's."""
     has reports: list[dict[str, any]] = [];
@@ -351,7 +357,7 @@ walker DisconnectGithub {
 
 # ---------------------------------------------------------------- reads
 
-walker ListGithubRepos {
+walker:protect ListGithubRepos {
     """One GitHub page (100) of the repos this installation was granted,
     filtered by `query` after the fetch, so a page under a query can run
     short. `attached` marks the ones already tracked in the workspace;
@@ -805,7 +811,7 @@ def empty_page(page: int) -> dict[str, any] {
 }
 
 
-walker ListRepoIssues {
+walker:protect ListRepoIssues {
     """One page of a repo's issues. Page 1 comes from the page the sync
     stored (`synced_at`, `stale`) and never calls GitHub; `refresh` or a
     later page reads GitHub, and page 1 then replaces the stored one.
@@ -837,7 +843,7 @@ walker ListRepoIssues {
 }
 
 
-walker ListRepoPulls {
+walker:protect ListRepoPulls {
     """One page of a repo's pull requests, served the way ListRepoIssues is:
     page 1 from the store unless `refresh`, later pages from GitHub."""
     has repo_id: str = "",
@@ -865,7 +871,7 @@ walker ListRepoPulls {
 }
 
 
-walker SearchRepoItems {
+walker:protect SearchRepoItems {
     """One page of GitHub search results scoped to one repo. `kind` picks issues
     or PRs; rows use the list walkers' shapes. GitHub allows ~30 searches a
     minute, so the client only calls on an explicit action. Foreign repo: empty."""
@@ -1015,11 +1021,18 @@ def auto_done_land(
         peak = status_peak(holder, "Done");
     }
     peak = peak + 1024.0;
+    from_step = t.step_id;
     t.set_status("Done", stamp);
     t.step_id = step_id;
     t.sort_order = peak;
     t.updated_at = stamp;
-    record_task_event(holder, t, "Moved to " + step_name + " · " + why, stamp);
+    labelled = sync_step_labels(holder, t, from_step, step_id, "");
+    record_task_event(
+        holder,
+        t,
+        "Moved to " + step_name + " · " + why + (" · " + labelled if labelled else ""),
+        stamp
+    );
     return peak;
 }
 
@@ -1084,6 +1097,7 @@ def file_issue_item(
         title=str(item.get("title") or ("Issue #" + str(number))),
         category="",
         tags=clean_tags(label_names(item)),
+        gh_labels=label_names(item),
         priority="Medium",
         status=landing,
         step_id=landing_step,
@@ -1103,6 +1117,7 @@ def file_issue_item(
         project_id=jid(target_project)
     );
     on_attached(holder, fresh);
+    fresh.keep_keys();
     count_task(target_project, fresh, 1);
     # Map GitHub assignees onto roster members by username. Anyone without
     # a match is simply left off; we never invent people.
@@ -1120,7 +1135,7 @@ def file_issue_item(
 }
 
 
-walker ImportIssues {
+walker:protect ImportIssues {
     """Turn chosen issues into tasks, once each: (gh_repo, gh_issue_number) is
     the identity. Closed issues land on the done step, the rest on the chosen
     step; `step_id` wins over `status`, which only applies with no flow line."""
@@ -1187,6 +1202,7 @@ walker ImportIssues {
         skipped: list[int] = [];
         failed: list[int] = [];
         peaks: dict[str, float] = {};
+        step_peaks: dict[str, float] = {};
         for number in wanted {
             if number <= 0 {
                 continue;
@@ -1224,6 +1240,17 @@ walker ImportIssues {
                 done_step,
                 peaks
             );
+            if fresh.gh_labels {
+                follow_trigger(
+                    here,
+                    fresh,
+                    "label",
+                    fresh.gh_labels,
+                    "labelled " + ", ".join(fresh.gh_labels),
+                    now_iso(),
+                    step_peaks
+                );
+            }
             filed.append(fresh);
             imported.append(fresh.to_view());
         }
@@ -1233,7 +1260,7 @@ walker ImportIssues {
 }
 
 
-walker CreateIssueFromTask(find_task) {
+walker:protect CreateIssueFromTask(find_task) {
     """Open a GitHub issue for this task. The one and only write to GitHub,
     and one-way: later task edits never touch the issue."""
     has repo_id: str = "",
@@ -1308,7 +1335,7 @@ walker CreateIssueFromTask(find_task) {
 }
 
 
-walker SetRepoAutoSync {
+walker:protect SetRepoAutoSync {
     """Turn auto-filing of new issues on or off for one repo. Enabling
     clears the cursor so the next sync backfills the repo's history; the
     (gh_repo, gh_issue_number) identity keeps re-runs duplicate-free."""
@@ -1331,7 +1358,7 @@ walker SetRepoAutoSync {
 }
 
 
-walker SetRepoAutoDone {
+walker:protect SetRepoAutoDone {
     """Per-repo policy: a merged PR or a closed issue moves the linked card
     to the done step on the next sync. Off, the board only shows nudges."""
     has repo_id: str = "",
@@ -1350,7 +1377,29 @@ walker SetRepoAutoDone {
 }
 
 
-walker SetRepoAutoClose {
+walker:protect SetRepoLabelSync {
+    """Per-repo policy, off by default: a move across an arrow with a GitHub
+    label writes that label to the issue or its PR, and leaving a step takes
+    off the labels not kept. Turning it on creates the flow line's labels in
+    the repo, coloured like their steps; `labels` says how many were new."""
+    has repo_id: str = "",
+        enabled: bool = False,
+        reports: list[dict[str, any]] = [];
+
+    can set with Root entry {
+        target = resolve(self.repo_id);
+        if not isinstance(target, Repo) or not owned(here, target) {
+            report {"ok": False, "error": "not_found", "message": "Unknown repo."};
+            disengage;
+        }
+        target.label_sync = self.enabled;
+        made = ensure_repo_labels(here, target.full_name) if self.enabled else 0;
+        report {"ok": True, "repo": repo_view(target), "labels": made};
+    }
+}
+
+
+walker:protect SetRepoAutoClose {
     """Per-repo policy, the reverse of auto_done and off by default: a card
     landing on Done closes its GitHub issue and one leaving Done reopens it.
     The receiver drops the App's own echo, so neither is applied twice."""
@@ -1397,6 +1446,8 @@ obj SyncContext {
         done_name: str = "Done",
         members: list[Member] = [],
         peaks: dict[str, float] = {},
+        # Each step's column top, for tasks the flow line's triggers move.
+        step_peaks: dict[str, float] = {},
         done_peak: float = -1.0,
         family_calls: int = 0,
         # Linked tasks this increment looked at (a lookup that hit).
@@ -1551,23 +1602,112 @@ def stamp_pr_updated(t: Task, item: dict[str, any]) {
 }
 
 
-# One PR off the stream: refresh the linked task's PR state and, for an
-# opted-in repo, land a merge on the done step. Unlinked PRs are skipped.
+# The issue numbers a PR body closes in `full_name`, in the order written.
+def closed_refs(full_name: str, body: str) -> list[int] {
+    found: list[int] = [];
+    for hit in re.finditer(CLOSING_REF, body, re.IGNORECASE) {
+        named = hit.group(1) or full_name;
+        number = int(hit.group(2));
+        if named.lower() == full_name.lower() and number not in found {
+            found.append(number);
+        }
+    }
+    return found;
+}
+
+
+# The task a PR belongs to, as a list (empty when none). A PR nobody linked
+# yet joins the first task whose issue its body closes, unless that task
+# already carries a PR: the one a person pasted wins.
+def pr_task(ctx: SyncContext, full_name: str, item: dict[str, any]) -> list[Task] {
+    number = int(item.get("number") or 0);
+    if number <= 0 {
+        return [];
+    }
+    hits = pull_task(ctx, full_name, number);
+    if hits {
+        return hits;
+    }
+    for ref in closed_refs(full_name, str(item.get("body") or "")) {
+        for t in issue_task(ctx, full_name, ref) {
+            if t.pr_number or t.pr_link {
+                continue;
+            }
+            t.pr_number = number;
+            t.pr_link = str(item.get("html_url") or "");
+            key = full_name + "#" + str(number);
+            ctx.task_by_pr[key] = t;
+            ctx.looked_pr[key] = True;
+            ctx.linked = ctx.linked + 1;
+            record_task_event(
+                ctx.holder,
+                t,
+                "Linked PR " + full_name + " #" + str(number),
+                event_time(item)
+            );
+            return [t];
+        }
+    }
+    return [];
+}
+
+
+# Labels newly on `now` against what the task held; the held list moves on.
+def added_labels(held: list[str], now: list[str]) -> list[str] {
+    return [
+        name
+        for name in now
+        if name not in held
+    ];
+}
+
+
+# One PR off the stream: link it to its issue's task, refresh the PR state,
+# and let the flow line act on a new label or a merge. A merge nothing on
+# the flow line waits for lands on the done step for an opted-in repo.
 def apply_pr_item(
     ctx: SyncContext, full_name: str, key: str, item: dict[str, any]
 ) -> None {
-    hits = pull_task(ctx, full_name, int(item.get("number") or 0));
+    hits = pr_task(ctx, full_name, item);
     if not hits {
         return;
     }
     pt = hits[0];
+    labels = label_names(item);
+    fresh_labels = added_labels(pt.pr_labels, labels);
+    pt.pr_labels = labels;
+    if fresh_labels {
+        follow_trigger(
+            ctx.holder,
+            pt,
+            "label",
+            fresh_labels,
+            "labelled " + ", ".join(fresh_labels),
+            event_time(item),
+            ctx.step_peaks
+        );
+    }
     fresh_pr = pr_state_of(item);
     if fresh_pr and fresh_pr != pt.pr_state {
         pt.pr_state = fresh_pr;
         ctx.refreshed = ctx.refreshed + 1;
-        # Merged means done, but only for opted-in repos and only from
-        # statuses where the chip would suggest it.
+        followed = fresh_pr == "merged"
+            and follow_trigger(
+                ctx.holder,
+                pt,
+                "pr_merged",
+                [],
+                "PR merged",
+                event_time(item),
+                ctx.step_peaks
+            );
+        if followed {
+            ctx.auto_done_moves = ctx.auto_done_moves + 1;
+        }
+        # Otherwise merged means done, but only for opted-in repos and only
+        # from statuses where the chip would suggest it.
         if fresh_pr == "merged"
+            and not followed
             and full_name in ctx.merge_done
             and pt.status in MERGE_SUGGEST_STATUSES {
             ctx.done_peak = auto_done_land(
@@ -1620,6 +1760,17 @@ def apply_issue_item(
             remember_issue(ctx, key, fresh);
             ctx.filed.append(fresh);
             ctx.auto_added = ctx.auto_added + 1;
+            if fresh.gh_labels {
+                follow_trigger(
+                    ctx.holder,
+                    fresh,
+                    "label",
+                    fresh.gh_labels,
+                    "labelled " + ", ".join(fresh.gh_labels),
+                    event_time(item),
+                    ctx.step_peaks
+                );
+            }
         }
         return False;
     }
@@ -1665,6 +1816,21 @@ def apply_issue_item(
     if logins != t.gh_assignees {
         t.gh_assignees = logins;
         ctx.refreshed = ctx.refreshed + 1;
+    }
+    # A label newly on the issue can move the task along the flow line.
+    labels = label_names(item);
+    fresh_labels = added_labels(t.gh_labels, labels);
+    t.gh_labels = labels;
+    if fresh_labels and t.status != "Done" {
+        follow_trigger(
+            ctx.holder,
+            t,
+            "label",
+            fresh_labels,
+            "labelled " + ", ".join(fresh_labels),
+            event_time(item),
+            ctx.step_peaks
+        );
     }
     # Sub-issue family: counts ride the stream. A family that shrank to
     # nothing releases its children here; one that moved asks for the child
@@ -1807,7 +1973,7 @@ def apply_pull(
 ) -> dict[str, any] {
     number = int(item.get("number") or 0);
     key = full_name + "#" + str(number);
-    hits = pull_task(ctx, full_name, number) if number > 0 else [];
+    hits = pr_task(ctx, full_name, item);
     if not hits {
         return delivery_outcome("unlinked", key);
     }
@@ -1847,9 +2013,21 @@ def apply_review(
     if at and t.pr_review_at and at <= t.pr_review_at {
         return delivery_outcome("stale", key);
     }
+    was_verdict = t.pr_review_state;
     t.pr_review_state = verdict;
     if at > t.pr_review_at {
         t.pr_review_at = at;
+    }
+    if verdict == "changes_requested" and was_verdict != verdict {
+        follow_trigger(
+            ctx.holder,
+            t,
+            "changes_requested",
+            [],
+            "changes requested",
+            at or ctx.stamp,
+            ctx.step_peaks
+        );
     }
     t.gh_synced_at = ctx.stamp;
     ctx.refreshed = ctx.refreshed + 1;
@@ -2096,7 +2274,7 @@ def refresh_repo_lists(ctx: SyncContext, full_name: str) -> bool {
 }
 
 
-walker SyncGithub {
+walker:protect SyncGithub {
     """One bounded increment of the GitHub sync. Every tracked repo's issues
     stream (issues AND pull requests, oldest update first) is read from the
     repo's cursor and each item goes through apply_issue_item or

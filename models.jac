@@ -4,9 +4,8 @@ path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
 root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
-root ++> Logs ++> LogDay ++> LogEntry and root ++> Iterations ++> Iteration;
-repos and the GitHub connection hang off the root directly. `owned()` climbs
-those container edges.
+root ++> Logs ++> LogDay ++> LogEntry and root ++> FilterSets ++> FilterSet; repos and the GitHub connection hang off
+the root directly. `owned()` climbs those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -59,7 +58,7 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, WorkflowSteps)
         or isinstance(owner, Logs)
         or isinstance(owner, LogDay)
-        or isinstance(owner, Iterations)
+        or isinstance(owner, FilterSets)
     );
 }
 
@@ -93,6 +92,10 @@ node Project {
     has name: str,
         description: str = "",
         active: bool = True,
+        # When it was made (SaveProject stamps it); the board and the flow
+        # line open on the earliest. Empty on a project from before the
+        # stamp, which sorts first, by name.
+        created_at: str = "",
         # All-time tallies kept on every task write, so no count loads the
         # history. `seeded_done_total` is the Done tasks created already
         # Done (history, not throughput). An empty `tallies_at` means never
@@ -106,7 +109,10 @@ node Project {
         # An empty `history_at` means not counted yet; ensure_history fills it.
         week_added: dict[str, int] = {},
         week_finished: dict[str, int] = {},
-        history_at: str = "";
+        history_at: str = "",
+        # When its tasks' sort keys (Task.keep_keys) were last filled; empty
+        # means never, and ensure_keys fills them from one full load.
+        keys_at: str = "";
 }
 
 # Roles are HasRole edges to Role nodes, never names on the member.
@@ -139,7 +145,10 @@ node Repo {
         auto_done: bool = False,
         # The reverse direction: a card landing on Done closes its issue,
         # and one leaving Done reopens it.
-        auto_close: bool = False;
+        auto_close: bool = False,
+        # A move across an arrow with a GitHub label adds that label to the
+        # issue or its PR, and leaving the step takes the ones not kept off.
+        label_sync: bool = False;
 }
 
 node Task {
@@ -197,6 +206,10 @@ node Task {
         # event. The card's assignees are the roster's and stay the
         # workspace's to set; these say what GitHub thinks.
         gh_assignees: list[str] = [],
+        # GitHub's labels on the issue and on the linked PR, refreshed by the
+        # sync. A label trigger fires on one newly added to either.
+        gh_labels: list[str] = [],
+        pr_labels: list[str] = [],
         # The linked PR's review conversation: "requested" from a review
         # request, then the verdict a review submits. Its own clock, because
         # the PR's updated_at does not move when someone reviews it.
@@ -208,16 +221,30 @@ node Task {
         # The card's own breakdown: {"id", "text", "done"} in display order.
         # Written only by the checklist walkers, never by UpdateTask.
         checklist: list[dict[str, any]] = [],
-        # The Iteration this task is planned into, by jid ("" for none), and
-        # when work on it starts. Fields, not edges, so list rows stay
-        # hop-free; the roadmap falls back to the iteration's dates.
-        iteration_id: str = "",
+        # When work on the task starts; the roadmap draws it to the due date.
         start_date: str = "",
         # The container project's jid and the assignees' jids, kept in step
         # with the edges at every write point so a list row needs no hop.
         # The edges stay the truth: `owned` climbs the container edge.
         project_id: str = "",
-        assignee_ids: list[str] = [];
+        assignee_ids: list[str] = [],
+        # The tasks table's sort keys, so the store can order and page the
+        # history: the jid (the tiebreak), title and category as sort_text,
+        # priority as urgency, the due date with undated last (keep_keys).
+        row_key: str = "",
+        title_key: str = "",
+        category_key: str = "",
+        priority_rank: int = 1,
+        due_key: str = "";
+
+    # Called wherever title, category, priority or due date is written.
+    def keep_keys {
+        self.row_key = jid(self);
+        self.title_key = sort_text(self.title);
+        self.category_key = sort_text(self.category);
+        self.priority_rank = {"High": 0, "Medium": 1, "Low": 2}.get(self.priority, 1);
+        self.due_key = self.due_date or "9999-12-31";
+    }
 
     # Every status write goes through here, so `done_at` stays true to the
     # move into Done (kept while the task stays Done, cleared when it
@@ -308,7 +335,6 @@ node Task {
             gh_sub_done=self.gh_sub_done,
             pr_number=self.pr_number,
             pr_state=self.pr_state,
-            iteration_id=self.iteration_id,
             start_date=self.start_date,
             note_lead=note_lead(self.notes),
             checklist_done=counts[0],
@@ -440,10 +466,29 @@ node WorkflowStep {
         sort_order: float = 0.0,
         # Outgoing transitions in draw order, one per target step:
         # {"to": step jid, "label": what has to be true to cross, "carries":
-        # "issue" | "pr" | ""}. Cycles are allowed; self-loops are refused.
+        # "issue" | "pr" | "", "trigger": a TRANSITION_TRIGGERS value,
+        # "github_label": the arrow's GitHub label (a "label" trigger waits
+        # for it; crossing the arrow writes it for a label_sync repo),
+        # "keep_label": "yes" to leave it on after the task moves on}.
         transitions: list[dict[str, str]] = [],
+        # Entry rules: no task lands here, by hand or by a trigger, without
+        # a due date or a linked PR.
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         created_at: str = "",
         updated_at: str = "";
+
+    # Why a task with this due date and PR link may not land here, or ""
+    # when it may.
+    def refusal(due_date: str, pr_link: str) -> str {
+        if self.needs_due_date and not due_date {
+            return self.name + " needs a due date";
+        }
+        if self.needs_pr and not pr_link {
+            return self.name + " needs a linked PR";
+        }
+        return "";
+    }
 }
 
 # Boxes, one of each per root, made on first write by the *_box helpers.
@@ -463,21 +508,31 @@ node Roles {}
 # on the template: one with a `roles` list brings fixed roles.
 node WorkflowSteps {
     has name: str = "Flow line",
-        template_key: str = "";
+        template_key: str = "",
+        # When ensure_arrows (services/util.jac) moved this flow line's arrows
+        # to the "github_label" key; "" means not yet.
+        arrows_at: str = "";
 }
 
 node Logs {}
 
-# A time box the team plans in: a name and an inclusive ISO date span. Tasks
-# point at one through Task.iteration_id.
-node Iteration {
-    has name: str,
-        start_date: str,
-        end_date: str,
-        created_at: str = "";
+# The board's filters as the account left them (`board`, only the keys set
+# away from their default in constants.BOARD_FILTERS), the saved set they
+# came from, and when they were last written ("" means never).
+node FilterSets {
+    has board: dict[str, str] = {},
+        board_set: str = "",
+        board_at: str = "";
 }
 
-node Iterations {}
+# A named set of filters for one page, stored like FilterSets.board.
+node FilterSet {
+    has name: str,
+        page: str = "board",
+        filters: dict[str, str] = {},
+        created_at: str = "",
+        updated_at: str = "";
+}
 
 edge HasRepo: Project --> Repo {}
 edge AssignedTo: Task --> Member {}
@@ -520,7 +575,6 @@ obj TaskRow {
         gh_sub_done: int = 0,
         pr_number: int = 0,
         pr_state: str = "",
-        iteration_id: str = "",
         start_date: str = "",
         done_at: str = "",
         # The first line of the notes (at most NOTE_LEAD_MAX characters):
@@ -538,7 +592,10 @@ obj TaskView(TaskRow) {
         gh_synced_at: str = "",
         gh_assignees: list[str] = [],
         pr_review_state: str = "",
-        checklist: list[dict[str, any]] = [];
+        checklist: list[dict[str, any]] = [],
+        # Set when a write asked for a step whose entry rule the task fails:
+        # the step stayed, and this says why.
+        refused: str = "";
 }
 
 # A task by id and title, for the assistant's citations: nothing else rides.
@@ -601,9 +658,11 @@ obj TaskTotals {
     has open: int = 0,
         overdue: int = 0,
         blocked: int = 0,
-        # Done per week for the four weeks ending on the given Monday's week,
-        # oldest first. A Done task only remembers its last update.
+        # Tasks moved to Done per week for the four weeks ending in the given
+        # Monday's week, oldest first (a task created already Done is not).
         done_by_week: list[int] = [],
+        # Tasks moved to Done on each day of that Monday's week, Monday first.
+        done_by_day: list[int] = [],
         projects: list[ProjectTally] = [],
         members: list[MemberTally] = [],
         # Every category in use, so a filter built from the working set
@@ -648,7 +707,8 @@ obj RepoView {
         project_name: str,
         auto_sync: bool = False,
         auto_done: bool = False,
-        auto_close: bool = False;
+        auto_close: bool = False,
+        label_sync: bool = False;
 }
 
 obj RoleView {
@@ -659,17 +719,15 @@ obj RoleView {
         sort_order: float;
 }
 
-obj IterationView {
+obj FilterSetView {
     has id: str,
         name: str,
-        start_date: str,
-        end_date: str;
+        page: str,
+        filters: dict[str, str];
 }
 
-def iteration_view(it: Iteration) -> IterationView {
-    return IterationView(
-        id=jid(it), name=it.name, start_date=it.start_date, end_date=it.end_date
-    );
+def filter_set_view(s: FilterSet) -> FilterSetView {
+    return FilterSetView(id=jid(s), name=s.name, page=s.page, filters=dict(s.filters));
 }
 
 def role_view(r: Role) -> RoleView {
@@ -689,11 +747,16 @@ obj StepView {
         sort_order: float,
         owner: str = "",
         blurb: str = "",
+        needs_due_date: bool = False,
+        needs_pr: bool = False,
         prev_ids: list[str] = [],
         next_ids: list[str] = [],
-        # Index-aligned with next_ids, all three read off the step's field.
+        # Index-aligned with next_ids, all read off the step's field.
         next_labels: list[str] = [],
         next_carries: list[str] = [],
+        next_triggers: list[str] = [],
+        next_github_labels: list[str] = [],
+        next_keep_labels: list[bool] = [],
         # How much work is sitting here, counted per request in GetFlowLine
         # because it depends on the project filter the caller asked for.
         task_count: int = 0,
@@ -761,7 +824,8 @@ def repo_view(r: Repo) -> RepoView {
         project_name=project_name,
         auto_sync=r.auto_sync,
         auto_done=r.auto_done,
-        auto_close=r.auto_close
+        auto_close=r.auto_close,
+        label_sync=r.label_sync
     );
 }
 
@@ -779,6 +843,22 @@ def projects_of(holder: Root) -> list[Project] {
         out.extend([box-->[?:Project]]);
     }
     return out;
+}
+
+
+# The project the board and the flow line open on when none is picked: the
+# earliest-created active one (created_at, then name, then jid; stable
+# passes, the last one primary). None when no project is active.
+def default_project(holder: Root) -> Project | None {
+    live = [
+        p
+        for p in projects_of(holder)
+        if p.active
+    ];
+    live.sort(key=lambda (p: Project) { jid(p); });
+    live.sort(key=lambda (p: Project) { p.name.lower(); });
+    live.sort(key=lambda (p: Project) { p.created_at; });
+    return live[0] if live else None;
 }
 
 
@@ -800,10 +880,20 @@ def roles_of(holder: Root) -> list[Role] {
 }
 
 
-def iterations_of(holder: Root) -> list[Iteration] {
-    out: list[Iteration] = [];
-    for box in [holder-->[?:Iterations]] {
-        out.extend([box-->[?:Iteration]]);
+def filter_sets_of(holder: Root) -> list[FilterSet] {
+    out: list[FilterSet] = [];
+    for box in [holder-->[?:FilterSets]] {
+        out.extend([box-->[?:FilterSet]]);
+    }
+    return out;
+}
+
+
+# One page's saved sets, the page pushed into the store's query.
+def page_filter_sets(holder: Root, which: str) -> list[FilterSet] {
+    out: list[FilterSet] = [];
+    for box in [holder-->[?:FilterSets]] {
+        out.extend([box-->[?:FilterSet, page==which]]);
     }
     return out;
 }
@@ -1085,67 +1175,20 @@ def project_done_before(p: Project, cutoff: str) -> list[Task] {
 }
 
 
-# The history in updated order, for a page the store cuts: the first `n`
-# rows, newest first, and every row stamped exactly `at` (the tie at a
-# page's end). "Done" is Done before `cutoff` (the done scope passes a date
-# no task reaches). Across the projects, or under one.
-def recent_tasks(holder: Root, n: int) -> list[Task] {
-    out: list[Task] = [];
+# How many Done tasks reached Done on or after `since`: len() of the pushed
+# reference, which reads only those rows (a count in the store once
+# jaseci-labs/jac#9416 lands).
+def done_since_count(holder: Root, since: str) -> int {
+    n = 0;
     for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, -updated_at]][:n]);
+        n = n + len([box-->[?:Project]-->[?:Task, status=="Done", done_at>=since]]);
     }
-    return out;
+    return n;
 }
 
 
-def tasks_stamped(holder: Root, at: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, updated_at==at]]);
-    }
-    return out;
-}
-
-
-def recent_done_before(holder: Root, cutoff: str, n: int) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n]
-        );
-    }
-    return out;
-}
-
-
-def done_before_stamped(holder: Root, cutoff: str, at: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]]
-        );
-    }
-    return out;
-}
-
-
-def project_recent(p: Project, n: int) -> list[Task] {
-    return [p-->[?:Task, -updated_at]][:n];
-}
-
-
-def project_stamped(p: Project, at: str) -> list[Task] {
-    return [p-->[?:Task, updated_at==at]];
-}
-
-
-def project_recent_done_before(p: Project, cutoff: str, n: int) -> list[Task] {
-    return [p-->[?:Task, status=="Done", done_at<cutoff, -updated_at]][:n];
-}
-
-
-def project_done_before_stamped(p: Project, cutoff: str, at: str) -> list[Task] {
-    return [p-->[?:Task, status=="Done", done_at<cutoff, updated_at==at]];
+def project_done_since_count(p: Project, since: str) -> int {
+    return len([p-->[?:Task, status=="Done", done_at>=since]]);
 }
 
 
@@ -1193,28 +1236,9 @@ def mismatched_on_step(holder: Root, step: str, landing: str) -> list[Task] {
 }
 
 
-def tasks_in_iteration(holder: Root, it_id: str) -> list[Task] {
-    out: list[Task] = [];
-    for box in [holder-->[?:Projects]] {
-        out.extend([box-->[?:Project]-->[?:Task, iteration_id==it_id]]);
-    }
-    return out;
-}
-
-
-# The Done tasks whose span (task_span in the iterations service) can
-# overlap [lo, hi]: due or start inside the window, one on each side of it,
-# or an iteration touching it. A superset on purpose: the caller applies
-# the exact span test, so these only have to be cheap and complete. The
-# iteration ids are few, so each is its own query.
-def done_in_window(
-    holder: Root,
-    lo: str,
-    hi: str,
-    window_ids: list[str],
-    after_ids: list[str],
-    before_ids: list[str]
-) -> list[Task] {
+# The Done tasks whose dates can overlap [lo, hi]: due or start inside the
+# window, or one on each side of it. The roadmap applies the exact span test.
+def done_in_window(holder: Root, lo: str, hi: str) -> list[Task] {
     seen: dict[str, bool] = {};
     out: list[Task] = [];
     for box in [holder-->[?:Projects]] {
@@ -1228,24 +1252,6 @@ def done_in_window(
         found.extend(
             [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, due_date>hi]]
         );
-        found.extend(
-            [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date<lo, start_date>hi]]
-        );
-        for it_id in window_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", iteration_id==it_id]]
-            );
-        }
-        for it_id in after_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", start_date!="", start_date<lo, iteration_id==it_id]]
-            );
-        }
-        for it_id in before_ids {
-            found.extend(
-                [box-->[?:Project]-->[?:Task, status=="Done", due_date!="", due_date>hi, iteration_id==it_id]]
-            );
-        }
         for t in found {
             if jid(t) not in seen {
                 seen[jid(t)] = True;
@@ -1511,6 +1517,13 @@ def status_peak(holder: Root, col: str) -> float {
 }
 
 
+# A text's sort key: lowercase UTF-8 as hex, which orders by code point under
+# any database collation, the order a Python sort of `text.lower()` gives.
+def sort_text(text: str) -> str {
+    return text.lower().encode("utf-8").hex();
+}
+
+
 # ------------------------------------------------------------ task tallies
 
 # A Done task created already Done (a closed issue filed by a back-fill, a
@@ -1742,12 +1755,12 @@ def roles_box(holder: Root) -> Roles {
 }
 
 
-def iterations_box(holder: Root) -> Iterations {
-    found = [holder-->[?:Iterations]];
+def filter_sets_box(holder: Root) -> FilterSets {
+    found = [holder-->[?:FilterSets]];
     if found {
         return found[0];
     }
-    box = holder ++> Iterations();
+    box = holder ++> FilterSets();
     on_attached(holder, box);
     return box;
 }
@@ -1856,11 +1869,17 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
     next_ids: list[str] = [];
     next_labels: list[str] = [];
     next_carries: list[str] = [];
+    next_triggers: list[str] = [];
+    next_github_labels: list[str] = [];
+    next_keep_labels: list[bool] = [];
     for t in s.transitions {
         if t["to"] in known {
             next_ids.append(t["to"]);
             next_labels.append(t["label"]);
             next_carries.append(t["carries"]);
+            next_triggers.append(t.get("trigger", ""));
+            next_github_labels.append(t.get("github_label", ""));
+            next_keep_labels.append(t.get("keep_label", "") == "yes");
         }
     }
     return StepView(
@@ -1870,13 +1889,18 @@ def step_view(s: WorkflowStep, steps: list[WorkflowStep]) -> StepView {
         color=s.color,
         owner=s.owner,
         blurb=s.blurb,
+        needs_due_date=s.needs_due_date,
+        needs_pr=s.needs_pr,
         x=s.x,
         y=s.y,
         sort_order=s.sort_order,
         prev_ids=prev_ids,
         next_ids=next_ids,
         next_labels=next_labels,
-        next_carries=next_carries
+        next_carries=next_carries,
+        next_triggers=next_triggers,
+        next_github_labels=next_github_labels,
+        next_keep_labels=next_keep_labels
     );
 }
 

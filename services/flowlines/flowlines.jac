@@ -19,7 +19,7 @@ import from models {
     resolve,
     on_attached,
     owned,
-    working_tasks,
+    default_project,
     project_working,
     tasks_on_step,
     tasks_on_steps,
@@ -28,13 +28,20 @@ import from models {
     roles_box,
     steps_box
 }
-import from services.util { now_iso, page_bounds, done_cutoff, ensure_tallies }
+import from services.util {
+    now_iso,
+    page_bounds,
+    done_cutoff,
+    ensure_tallies,
+    ensure_arrows
+}
 import from constants {
     STEP_KINDS,
     KIND_COLORS,
     KIND_STATUS,
     STATUS_KIND,
     CARRY_KINDS,
+    TRANSITION_TRIGGERS,
     FLOW_LINE_TEMPLATES
 }
 
@@ -52,19 +59,21 @@ def restatus_tasks(holder: Root, step: WorkflowStep) {
 }
 
 
-# The tasks the flow line counts and lists: the board's working set (open
-# plus Done reached in the last `done_days`), for one project or all. The
-# done step therefore shows recent Done the way the board's column does.
+# The tasks the flow line counts and lists: one project's working set (open
+# plus Done reached in the last `done_days`), the board's scope. An empty
+# `project_id` is the default project, as on the board; a foreign or
+# unknown id is nothing.
 def flow_pool(holder: Root, project_id: str, done_days: int) -> list[Task] {
     cutoff = done_cutoff(done_days);
-    if project_id {
-        p = resolve(project_id);
-        if not isinstance(p, Project) or not owned(holder, p) {
-            return [];
-        }
-        return project_working(p, cutoff);
+    if not project_id {
+        first = default_project(holder);
+        return project_working(first, cutoff) if first is not None else [];
     }
-    return working_tasks(holder, cutoff);
+    p = resolve(project_id);
+    if not isinstance(p, Project) or not owned(holder, p) {
+        return [];
+    }
+    return project_working(p, cutoff);
 }
 
 
@@ -98,13 +107,32 @@ def safe_coord(v: float) -> float {
 }
 
 
+# One stored transition. A trigger outside TRANSITION_TRIGGERS is none; the
+# GitHub label is the arrow's whatever its trigger (a "label" trigger waits
+# for it), capped at GitHub's 50 characters, and only a label can be kept.
+def transition(
+    to: str, label: str, carries: str, trigger: str, github: str, keep: bool
+) -> dict[str, str] {
+    fired = trigger.strip() if trigger.strip() in TRANSITION_TRIGGERS else "";
+    named = github.strip()[:50];
+    return {
+        "to": to,
+        "label": label.strip(),
+        "carries": carries.strip() if carries.strip() in CARRY_KINDS else "",
+        "trigger": fired,
+        "github_label": named,
+        "keep_label": "yes" if keep and named else ""
+    };
+}
+
+
 @effects(reads=["WorkflowSteps"], writes=[])
 def read_flow_line_meta(box: WorkflowSteps) -> dict[str, str] {
     return {"name": box.name, "template_key": box.template_key};
 }
 
 
-walker GetFlowLineMeta {
+walker:protect GetFlowLineMeta {
     """Read-only: a GET must not write, so a workspace with no box yet
     reports the defaults without creating one."""
     has reports: list[dict[str, str]] = [];
@@ -121,7 +149,7 @@ walker GetFlowLineMeta {
 }
 
 
-walker RenameFlowLine {
+walker:protect RenameFlowLine {
     has name: str = "",
         reports: list[dict[str, str]] = [];
 
@@ -151,6 +179,7 @@ glob STEP_TITLES: int = 2;
 def read_flow_line(
     box: WorkflowSteps, holder: Root, project_id: str, with_counts: bool, done_days: int
 ) -> list[StepView] {
+    ensure_arrows(holder);
     views: list[StepView] = [];
     line_steps = [box-->[?:WorkflowStep]];
     for st in line_steps {
@@ -201,7 +230,7 @@ def read_flow_line(
 }
 
 
-walker GetFlowLine {
+walker:protect GetFlowLine {
     """The org's steps, each carrying how much work sits on it; `project_id`
     narrows the count. Computed here so the placement rule (step first, then
     the legacy status fallback) has one implementation for board and view.
@@ -227,7 +256,7 @@ walker GetFlowLine {
 }
 
 
-walker ListStepTasks {
+walker:protect ListStepTasks {
     """One page of the work sitting on one step, for the panel the flow line
     view opens. Placement reuses GetFlowLine's rule over the same working
     set (`done_days`) so list and count never disagree; the walk touches
@@ -285,7 +314,7 @@ walker ListStepTasks {
 }
 
 
-walker ApplyTemplate {
+walker:protect ApplyTemplate {
     """Seed the org's flow line from one template, atomically. Idempotent by
     refusal: with any step already present the existing flow line is reported
     instead, so a double-click cannot overlay two flow lines."""
@@ -330,6 +359,10 @@ walker ApplyTemplate {
                 color=s["color"],
                 owner=str(s["owner"]) if "owner" in s else "",
                 blurb=str(s["blurb"]) if "blurb" in s else "",
+                needs_due_date=bool(s["needs_due_date"])
+                    if "needs_due_date" in s
+                    else False,
+                needs_pr=bool(s["needs_pr"]) if "needs_pr" in s else False,
                 x=s["x"],
                 y=s["y"],
                 sort_order=order,
@@ -349,17 +382,33 @@ walker ApplyTemplate {
         if "link_carries" in chosen {
             cargo = chosen["link_carries"];
         }
+        fires: list[str] = [];
+        if "link_triggers" in chosen {
+            fires = chosen["link_triggers"];
+        }
+        matches: list[str] = [];
+        if "link_github_labels" in chosen {
+            matches = chosen["link_github_labels"];
+        }
+        keeps: list[bool] = [];
+        if "link_keep_labels" in chosen {
+            keeps = chosen["link_keep_labels"];
+        }
         raw_links: list[list[int]] = chosen["links"];
         for (i, pair) in enumerate(raw_links) {
             source = made[pair[0]];
             target = made[pair[1]];
-            said = wording[i] if i < len(wording) else "";
-            carried = cargo[i] if i < len(cargo) else "";
-            if carried not in CARRY_KINDS {
-                carried = "";
-            }
             source.transitions = source.transitions
-                + [{"to": jid(target), "label": said, "carries": carried}];
+                + [
+                    transition(
+                        jid(target),
+                        wording[i] if i < len(wording) else "",
+                        cargo[i] if i < len(cargo) else "",
+                        fires[i] if i < len(fires) else "",
+                        matches[i] if i < len(matches) else "",
+                        keeps[i] if i < len(keeps) else False
+                    )
+                ];
         }
         # Remember which template this was. Scratch flow lines never come
         # through here and keep the default "".
@@ -410,7 +459,7 @@ walker find_step {
 }
 
 
-walker SaveStep {
+walker:protect SaveStep {
     """Empty step_id creates; otherwise updates the addressed one. Update is
     partial on purpose (empty means keep): the inspector edits one field at a
     time and must not blank the others."""
@@ -494,7 +543,7 @@ walker SaveStep {
 }
 
 
-walker MoveStep(find_step) {
+walker:protect MoveStep(find_step) {
     """Persist the designer position after a drag, fired on mouse-up."""
     has x: float = 0.0,
         y: float = 0.0,
@@ -515,7 +564,25 @@ walker MoveStep(find_step) {
 }
 
 
-walker DeleteStep(find_step) {
+walker:protect SetStepRules(find_step) {
+    """The step's entry rules, both sent every time: a task lands here only
+    with a due date (`needs_due_date`) and a linked PR (`needs_pr`). Tasks
+    already sitting here stay; the rules gate the next move in."""
+    has needs_due_date: bool = False,
+        needs_pr: bool = False,
+        reports: list[StepView] = [];
+
+    can apply with WorkflowStep entry {
+        here.needs_due_date = self.needs_due_date;
+        here.needs_pr = self.needs_pr;
+        here.updated_at = now_iso();
+        report step_view(here, steps_of(root));
+        disengage;
+    }
+}
+
+
+walker:protect DeleteStep(find_step) {
     """Removes the step and every transition into it (its own go with it);
     any task on it falls back to its status. Refuses to remove the LAST start
     or done step: an org with no way in or out has a board work cannot leave."""
@@ -570,7 +637,7 @@ walker DeleteStep(find_step) {
 }
 
 
-walker DeleteFlowLine {
+walker:protect DeleteFlowLine {
     """Removes every step and transition so the flow line can be designed again.
     Walks the caller's own root (no jid input, nothing to owned()-check).
     Tasks fall back to their status as after DeleteStep; name and roles stay;
@@ -601,7 +668,7 @@ walker DeleteFlowLine {
 }
 
 
-walker LinkTransition {
+walker:protect LinkTransition {
     """Draw a transition from_id -> to_id, both ends owned-checked. Loops and
     branches are legal; a self-loop is refused and a duplicate reports success."""
     has from_id: str = "",
@@ -610,9 +677,14 @@ walker LinkTransition {
         label: str = "",
         # "issue" or "pr" (CARRY_KINDS); anything else is stored as untagged.
         carries: str = "",
+        # What moves a task across on its own (TRANSITION_TRIGGERS), and the
+        # arrow's GitHub label (what a "label" trigger waits for).
+        trigger: str = "",
+        github_label: str = "",
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
+        ensure_arrows(here);
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -641,29 +713,46 @@ walker LinkTransition {
             };
             disengage;
         }
-        carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
-        said = self.label.strip();
-        to = jid(target);
+        fresh = transition(
+            jid(target),
+            self.label,
+            self.carries,
+            self.trigger,
+            self.github_label,
+            False
+        );
+        to = fresh["to"];
         # Re-drawing an arrow is how its label gets edited: a non-empty
-        # label or tag replaces the stored one, an empty one keeps it.
+        # label, tag or trigger replaces the stored one, an empty one keeps it.
         kept: list[dict[str, str]] = [];
         duplicate = False;
         for t in source.transitions {
             if t["to"] == to {
                 duplicate = True;
+                had = transition(
+                    to,
+                    t["label"],
+                    t["carries"],
+                    t.get("trigger", ""),
+                    t.get("github_label", ""),
+                    t.get("keep_label", "") == "yes"
+                );
                 kept.append(
-                    {
-                        "to": to,
-                        "label": said or t["label"],
-                        "carries": carried or t["carries"]
-                    }
+                    transition(
+                        to,
+                        fresh["label"] or had["label"],
+                        fresh["carries"] or had["carries"],
+                        fresh["trigger"] or had["trigger"],
+                        fresh["github_label"] or had["github_label"],
+                        had["keep_label"] == "yes"
+                    )
                 );
             } else {
                 kept.append(t);
             }
         }
         if not duplicate {
-            kept.append({"to": to, "label": said, "carries": carried});
+            kept.append(fresh);
         }
         source.transitions = kept;
         report {"ok": True, "linked": True, "duplicate": duplicate};
@@ -671,18 +760,24 @@ walker LinkTransition {
 }
 
 
-walker LabelTransition {
+walker:protect LabelTransition {
     """Set or clear what has to be true to cross an existing transition, and
-    what it carries. Unlike LinkTransition, empty here means CLEAR, the only
-    way to take the wording off an arrow without deleting it. The editor
-    saves both fields together, so both are always sent."""
+    what it carries and what moves a task across on its own. Unlike
+    LinkTransition, empty here means CLEAR, the only way to take the wording,
+    the trigger or the GitHub label off an arrow without deleting it. The
+    editor saves every field together, so all are always sent."""
     has from_id: str = "",
         to_id: str = "",
         label: str = "",
         carries: str = "",
+        trigger: str = "",
+        github_label: str = "",
+        # Leave the GitHub label on once the task moves past this arrow's step.
+        keep_label: bool = False,
         reports: list[dict[str, any]] = [];
 
     can start with Root entry {
+        ensure_arrows(here);
         source = resolve(self.from_id);
         target = resolve(self.to_id);
         if not isinstance(source, WorkflowStep) or not owned(here, source) {
@@ -703,15 +798,20 @@ walker LabelTransition {
         if not isinstance(target, WorkflowStep) {
             disengage;
         }
-        said = self.label.strip();
-        carried = self.carries.strip() if self.carries.strip() in CARRY_KINDS else "";
-        to = jid(target);
+        fresh = transition(
+            jid(target),
+            self.label,
+            self.carries,
+            self.trigger,
+            self.github_label,
+            self.keep_label
+        );
         found = False;
         kept: list[dict[str, str]] = [];
         for t in source.transitions {
-            if t["to"] == to {
+            if t["to"] == fresh["to"] {
                 found = True;
-                kept.append({"to": to, "label": said, "carries": carried});
+                kept.append(fresh);
             } else {
                 kept.append(t);
             }
@@ -720,13 +820,29 @@ walker LabelTransition {
             report {"ok": False, "error": "not_found"};
             disengage;
         }
+        # A label trigger with no label to wait for would never fire.
+        if fresh["trigger"] == "label" and not fresh["github_label"] {
+            report {
+                "ok": False,
+                "error": "match_required",
+                "message": "Name the label that moves work along this arrow."
+            };
+            disengage;
+        }
         source.transitions = kept;
-        report {"ok": True, "label": said, "carries": carried};
+        report {
+            "ok": True,
+            "label": fresh["label"],
+            "carries": fresh["carries"],
+            "trigger": fresh["trigger"],
+            "github_label": fresh["github_label"],
+            "keep_label": fresh["keep_label"] == "yes"
+        };
     }
 }
 
 
-walker UnlinkTransition {
+walker:protect UnlinkTransition {
     has from_id: str = "",
         to_id: str = "",
         reports: list[dict[str, any]] = [];

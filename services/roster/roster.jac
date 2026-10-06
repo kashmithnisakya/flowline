@@ -86,7 +86,7 @@ def read_members(box: Members) -> list[MemberView] {
 }
 
 
-walker ListMembers {
+walker:protect ListMembers {
     has reports: list[list[MemberView]] = [];
 
     # A read never makes the box: no box, no members.
@@ -115,7 +115,7 @@ walker find_member {
     }
 }
 
-walker SaveMember {
+walker:protect SaveMember {
     """Empty member_id creates in the box; otherwise updates the addressed
     Member. The first name is required, the last optional. `roles` are
     names; each becomes a HasRole edge (and a Role node if new)."""
@@ -178,7 +178,7 @@ walker SaveMember {
     }
 }
 
-walker SetMemberRoles(find_member) {
+walker:protect SetMemberRoles(find_member) {
     """Overwrite ONLY the member's roles. The Roles tab toggles one role at
     a time; routing that through SaveMember would overwrite email,
     github_username and tags with whatever the caller happened to send."""
@@ -192,7 +192,7 @@ walker SetMemberRoles(find_member) {
     }
 }
 
-walker ArchiveMember(find_member) {
+walker:protect ArchiveMember(find_member) {
     """active=False, never delete, history edges must survive. Open
     (non-Done) tasks lose their AssignedTo edge so live work returns to
     Unassigned; Done-task edges stay for history."""
@@ -232,7 +232,7 @@ def read_roles(box: Roles) -> list[RoleView] {
 }
 
 
-walker ListRoles {
+walker:protect ListRoles {
     has reports: list[list[RoleView]] = [];
 
     can start with Root entry {
@@ -246,7 +246,7 @@ walker ListRoles {
     }
 }
 
-walker SaveRole {
+walker:protect SaveRole {
     """Create or update the role named `name` (get-or-create). `new_name`
     renames; members follow through their edge, step owners are rewritten;
     renaming onto an existing role is refused. Blurb overwrite is opt-in via
@@ -311,7 +311,7 @@ walker SaveRole {
     }
 }
 
-walker DeleteRole {
+walker:protect DeleteRole {
     """Deletes by name: the Role node (its HasRole edges go with it) and any
     flow line step owner naming it."""
     has name: str = "",
@@ -360,7 +360,7 @@ def read_repos(holder: Root) -> list[RepoView] {
 }
 
 
-walker ListRepos {
+walker:protect ListRepos {
     has reports: list[list[RepoView]] = [];
 
     can gather with Root entry {
@@ -368,7 +368,7 @@ walker ListRepos {
     }
 }
 
-walker AddRepo {
+walker:protect AddRepo {
     """Creates (or reuses) the repo node under root and points the given
     project at it. A project is required: the sync files every issue it
     finds under the repo's project, and a task always has one. Re-adding
@@ -405,7 +405,7 @@ walker AddRepo {
     }
 }
 
-walker RemoveRepo {
+walker:protect RemoveRepo {
     has repo_id: str;
 
     can remove with Root entry {

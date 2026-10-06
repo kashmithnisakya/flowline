@@ -45,7 +45,7 @@ or a sync.
   variables, and which are missing.
 - `status` is `ok` or `invalid` (a reconnect is needed).
 - `webhook_seen_at` is when a delivery for this installation last arrived;
-  the `/github` connection strip shows "Live · last event N ago" from it.
+  the GitHub section's connection strip shows "Live · last event N ago" from it.
 
 It also re-binds a valid connection whose `gh_installations` row is missing.
 
@@ -164,7 +164,7 @@ task gets the issue number, state and link, and the log records
 
 **Reports** `{"ok": true, "repo": RepoView}` or
 `{"ok": false, "error": "not_found", "message": "Unknown repo."}`.
-Turning `auto_sync` on ("Import issues into *project*" on `/github`) clears the
+Turning `auto_sync` on ("Import issues into *project*" in the GitHub section) clears the
 repo's cursor, so the next sync back-fills its issue history.
 
 ::: walker SetRepoAutoDone h3
@@ -174,10 +174,21 @@ on ("Move a card to Done when its issue closes or its pull request merges"), a
 closed issue or a merged PR (on a card In Progress or in Review) moves the card
 to the done step.
 
+::: walker SetRepoLabelSync h3
+
+**Reports** `{"ok": true, "repo": RepoView, "labels": <n>}` or `not_found`.
+With `label_sync` on ("Add the flow line's labels as work moves"), a move
+across an arrow with a GitHub label adds it (to the linked PR when the arrow
+carries a PR, else the issue), and leaving a step takes off the labels of the
+arrows into it that are not kept. Turning it on creates every label the flow
+line names in the repo, coloured like the step its arrow leads into; `labels`
+counts the new ones (a label the repo has is left as it is, and -1 means
+GitHub could not be written to). Writes need the App's Issues: read and write.
+
 ::: walker SetRepoAutoClose h3
 
 **Reports** `{"ok": true, "repo": RepoView}` or `not_found`. With `auto_close`
-on ("Close the issue when its card moves to Done" on `/github`), `MoveTask` and
+on ("Close the issue when its card moves to Done" in the GitHub section), `MoveTask` and
 `UpdateTask` close the linked issue when a card lands on Done and reopen it when
 the card leaves Done.
 

@@ -27,6 +27,7 @@ impl OverviewPage.loadAll -> None {
     try {
         data: any = await pending;
         counts = data["counts"] if data else None;
+        weekDone = data["counts"]["done_by_day"] if data else [0, 0, 0, 0, 0, 0, 0];
         logs = data["logs"] if data else None;
         attention = data["attention"] if data else [];
         attentionTotal = data["attention_total"] if data else 0;
@@ -50,21 +51,12 @@ impl OverviewPage.loadAll -> None {
         }
         blockedInfo = info;
         blockedList = every;
-        # Every task hangs under a project, so the tallies add up to all of
-        # them. The checklist's reads are needed until a card reaches Done.
+        # Every task hangs under a project, so the tallies add up to all of them.
         total = 0;
-        doneSum = 0;
         for pt in (data["counts"]["projects"] if data else []) {
             total = total + pt["total"];
-            doneSum = doneSum + pt["done"];
-        }
-        for v in (data["counts"]["done_by_week"] if data else []) {
-            doneSum = doneSum + v;
         }
         taskTotal = total;
-        if data and doneSum == 0 {
-            loadSetup();
-        }
     } except Exception as e {
         # The page shows the failure panel itself; no toast on top of it.
         failed = True;
@@ -105,196 +97,23 @@ impl OverviewPage.loadDue -> None {
     dueLoaded = True;
 }
 
-# This week's log, a day wider on each side: rows carry the server's UTC
-# date, and the page buckets them by the local day of their stamp. Every
-# page is absorbed as it lands, so the first one paints; `full` is False
-# while more is coming or when the page cap cut the read short.
-impl OverviewPage.fetchWeekLog(monday: str) -> any {
-    rows: list[any] = [];
-    pageNo = 1;
-    more = True;
-    while more and pageNo <= 10 {
-        result = root spawn ListLogEntries(
-            from_date=shiftDay(monday, -1),
-            to_date=shiftDay(monday, 7),
-            page=pageNo,
-            page_size=500
-        );
-        got = result.reports[0] if result.reports else None;
-        if not got {
-            more = False;
-        } else {
-            for row in got.rows {
-                rows.append(row);
-            }
-            more = got.has_more;
-            absorbWeekLog(rows, not more);
-        }
-        pageNo = pageNo + 1;
-    }
-    return {"rows": rows, "full": not more};
-}
-
-# Tasks that entered Done per local weekday. A task counts once, on the day
-# of its last move into Done, and only while its last move left it in Done,
-# so a reopened card drops out and the bars add up to the week's figure.
-impl OverviewPage.loadMoves -> None {
-    monday = mondayOf(todayIso());
-    mine = False;
-    key = "log:" + monday;
-    if not inflight(key) {
-        LOADS[key] = fetchWeekLog(monday);
-        mine = True;
-    }
-    movesLoaded = False;
-    movesFailed = False;
-    pending: any = LOADS[key];
-    try {
-        # The pages paint as they land (absorbWeekLog); this only waits.
-        await pending;
-    } except Exception as e {
-        movesFailed = True;
-    }
-    if mine {
-        LOADS[key] = None;
-    }
-    movesLoaded = True;
-}
-
-# The week's figures from the rows in so far. `weekEntries` stays -1 until
-# the read is complete, so the entries figure and the People strip keep the
-# snapshot's numbers until every page is in.
-impl OverviewPage.absorbWeekLog(rows: list[any], full: bool) -> None {
-    today = todayIso();
-    monday = mondayOf(today);
-    days = [shiftDay(monday, i) for i in range(7)];
-    perDay = [0, 0, 0, 0, 0, 0, 0];
-    people: dict[str, list[int]] = {};
-    entriesWeek = 0;
-    movesOf: dict[str, list[dict[str, str]]] = {};
-    taskIds: list[str] = [];
-    sinceAt: dict[str, str] = {};
-    sinceDay: dict[str, str] = {};
-    handWeek = 0;
-    for row in rows {
-        stamp = row.at or row.date;
-        # A task event is dated by its own UTC stamp; a hand-written line
-        # keeps the day its author picked.
-        day = localDayOf(row.at, row.date)
-            if row.task_id and row.at[:10] == row.date
-            else row.date;
-        slot = -1;
-        for i in range(7) {
-            if days[i] == day {
-                slot = i;
-            }
-        }
-        if slot >= 0 {
-            entriesWeek = entriesWeek + 1;
-            for who in row.member_name.split(",") {
-                name = who.strip();
-                if name and name not in people {
-                    people[name] = [0, 0, 0, 0, 0, 0, 0];
-                }
-                if name {
-                    people[name][slot] = people[name][slot] + 1;
-                }
-            }
-        }
-        if not row.task_id {
-            if slot >= 0 {
-                handWeek = handWeek + 1;
-            }
-            continue;
-        }
-        tid = row.task_id;
-        if row.status == "Blocked" and (tid not in sinceAt or sinceAt[tid] < stamp) {
-            sinceAt[tid] = stamp;
-            sinceDay[tid] = day;
-        }
-        if row.status and row.activity.startswith("Moved to ") {
-            if tid not in movesOf {
-                movesOf[tid] = [];
-                taskIds.append(tid);
-            }
-            movesOf[tid].append({"stamp": stamp, "status": row.status, "day": day});
-        }
-    }
-    for tid in taskIds {
-        moves = movesOf[tid];
-        moves.sort(key=lambda (m: dict) { m["stamp"]; });
-        last = "";
-        entered = "";
-        for m in moves {
-            if m["status"] == "Done" and last != "Done" {
-                entered = m["day"];
-            }
-            last = m["status"];
-        }
-        if last == "Done" and entered {
-            for i in range(7) {
-                if days[i] == entered {
-                    perDay[i] = perDay[i] + 1;
-                }
-            }
-        }
-    }
-    doneMoves = perDay;
-    blockedSince = sinceDay;
-    handEntries = handWeek;
-    weekPeople = people;
-    weekEntries = entriesWeek if full else -1;
-    movesLoaded = True;
-}
-
-# What the first-run checklist ticks off: a flow line, its first column, the
-# template it came from, and whether GitHub is configured and connected.
-impl OverviewPage.fetchSetup -> any {
-    line = root spawn GetFlowLine(with_counts=False);
-    views = line.reports[0] if line.reports else [];
-    meta = root spawn GetFlowLineMeta();
-    key = meta.reports[0]["template_key"] if meta.reports else "";
+# The workspace view (shared, cached a minute): the flow line for the row
+# pills and the checklist, its template, and the GitHub connection.
+impl OverviewPage.loadShared -> None {
+    ws = await loadWorkspace();
     named = "";
     for tpl in FLOW_LINE_TEMPLATES {
-        if key and tpl["key"] == key {
+        if ws["template_key"] and tpl["key"] == ws["template_key"] {
             named = tpl["name"];
         }
     }
-    gh = root spawn GithubStatus();
-    conn = gh.reports[0] if gh.reports else None;
-    return {
-        "steps": len(views),
-        "first": views[0].name if len(views) > 0 else "",
-        "template": named,
-        "configured": bool(conn and conn.configured),
-        "connected": bool(conn and conn.connected),
-        "login": conn.account_login if conn else ""
-    };
-}
-
-impl OverviewPage.loadSetup -> None {
-    mine = False;
-    if not inflight("setup") {
-        LOADS["setup"] = fetchSetup();
-        mine = True;
-    }
-    pending: any = LOADS["setup"];
-    try {
-        got: any = await pending;
-        stepCount = got["steps"];
-        firstStepName = got["first"];
-        templateName = got["template"];
-        ghConfigured = got["configured"];
-        ghConnected = got["connected"];
-        ghLogin = got["login"];
-    } except Exception as e {
-        # A checklist with defaults still points at every next step.
-        templateName = "";
-    }
-    if mine {
-        LOADS["setup"] = None;
-    }
-    setupLoaded = True;
+    gh: any = ws["github"];
+    steps = ws["steps"];
+    templateName = named;
+    ghConfigured = bool(gh and gh.configured);
+    ghConnected = bool(gh and gh.connected);
+    ghLogin = gh.account_login if gh else "";
+    sharedLoaded = True;
 }
 
 impl OverviewPage.fetchHistory(projectId: str, weeks: int) -> any {

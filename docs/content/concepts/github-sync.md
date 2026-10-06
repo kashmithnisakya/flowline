@@ -103,10 +103,10 @@ event's own time.
 
 | Event | Effect on the board |
 | --- | --- |
-| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an `auto_sync` repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees and the sub-issue counts. A close on an `auto_done` repo moves the card to the done step. |
+| `issues` opened, closed, reopened, assigned, labeled... | For an unlinked issue on an `auto_sync` repo with a project: a new task on the first start step (closed issues land on Done). For a linked task: the issue state, GitHub's assignees, its labels and the sub-issue counts. A newly added label can move the task along a `label` [trigger](flow-lines.md#automation). A close on an `auto_done` repo moves the card to the done step. |
 | `issues` deleted or transferred | The task is unlinked from the issue (`gh_issue_number = 0`). |
-| `pull_request` | The linked task's PR state (`open`, `draft`, `closed`, `merged`). A merge on an `auto_done` repo moves a card that is In Progress or in Review to done. `review_requested` marks the review as requested. |
-| `pull_request_review` | `approved` or `changes_requested` becomes the task's review state. Comments and dismissals are ignored. |
+| `pull_request` | A PR nobody linked joins the first task whose issue its body closes (`Closes #12`) and that has no PR yet. Then the linked task's PR state (`open`, `draft`, `closed`, `merged`) and labels. A newly added label can fire a `label` trigger and a merge a `pr_merged` trigger; a merge no trigger takes moves a card that is In Progress or in Review to done on an `auto_done` repo. `review_requested` marks the review as requested. |
+| `pull_request_review` | `approved` or `changes_requested` becomes the task's review state, and a new `changes_requested` fires that trigger. Comments and dismissals are ignored. The poll reads no reviews, so this trigger needs webhooks. |
 | `sub_issues` | Links or unlinks a child task's parent and refreshes the parent's done/total counts. |
 | `installation` deleted, suspended, unsuspended | Marks the connection invalid (and unbinds it on delete) or valid again. |
 | `installation_repositories` removed | Turns off `auto_sync`, `auto_done` and `auto_close` for those repos. Tasks and links stay. |
@@ -127,7 +127,7 @@ workspace in that workspace's own root (`sync_connected_workspaces` in
 has the constants and the lease). Opening a page never triggers it. The pass
 polls on a cooldown: **every 15 minutes while deliveries are flowing** (one
 arrived in the last hour), **every tick otherwise**; a workspace nobody opens
-catches up all the same. **Sync now** on `/github` and the board's Sync button
+catches up all the same. **Sync now** in Workspace's GitHub section and the board's Sync button
 run the same walker by hand and ignore the cooldown. It catches history from
 before the webhook existed and anything delivered while the app was down.
 
@@ -144,7 +144,7 @@ before the webhook existed and anything delivered while the app was down.
    `has_more`, so the client (or the next tick) calls again.
 6. A pass that reached the end of every stream rewrites the stored **open
    issue and pull request pages** of each tracked repo (`lists` in the
-   report), which is what `/github` renders.
+   report), which is what the GitHub section renders.
 
 It also adopts hand-pasted PR links: a task whose `pr_link` points at a pull
 request in a tracked repo gets its `pr_number` filled in.
@@ -160,17 +160,18 @@ GitHub, each on an explicit action.
 
 ## Per-repo policy
 
-Each flag is a switch in the repository's automation panel on `/github`.
+Each flag is a switch in the repository's automation panel in Workspace's GitHub section (`/workspace?tab=github`).
 
 | Flag | Switch | Default | Effect |
 | --- | --- | --- | --- |
 | `auto_sync` | Import issues into *project* | off | File new issues as tasks. Turning it on clears the cursor, so the next sync back-fills the repo's history. |
 | `auto_done` | Move a card to Done when its issue closes or its pull request merges | off | A closed issue, or a merged PR on a card In Progress or in Review, moves the card to the done step. |
 | `auto_close` | Close the issue when its card moves to Done | off | A card landing on Done closes its GitHub issue; a card leaving Done reopens it. |
+| `label_sync` | Add the flow line's labels as work moves | off | A move writes the crossed arrow's GitHub label and takes the left step's unkept labels off. Turning it on creates the labels in the repo. |
 
 ## Writing back to GitHub
 
-flowline writes to GitHub in exactly two cases:
+flowline writes to GitHub in exactly three cases:
 
 1. **Opening an issue from a task** (`CreateIssueFromTask`), an explicit action.
 2. **Keeping an issue's state with its card**, only on repos with
@@ -178,12 +179,18 @@ flowline writes to GitHub in exactly two cases:
    closes the issue, and a move that leaves Done reopens it. The write is noted
    on the move's own log line (`Moved to Done · closed org/repo #12`,
    `Moved to Implement · reopened org/repo #12`).
+3. **Keeping the flow line's labels with its work**, only on repos with
+   `label_sync`, inside the same moves and the moves the flow line's triggers
+   make: crossing an arrow with a GitHub label adds it to the issue or its PR,
+   and leaving a step takes the unkept ones off (see
+   [Flow lines](flow-lines.md#automation)). The task's own copy of its labels
+   moves with each write, so the next poll does not read Flowline's label as
+   new and fire a trigger on it.
 
-GitHub then sends an `issues.closed` or `issues.reopened` delivery for that
-write, sent by `<slug>[bot]`, and the receiver drops it as an `echo`, so the
-card is not moved or logged twice. The other direction is deliberately
-one-way: an issue reopened on GitHub does not move its card, and titles,
-assignees and labels are never written back.
+GitHub then sends a delivery for each write, sent by `<slug>[bot]`, and the
+receiver drops it as an `echo`, so the card is not moved or logged twice. An
+issue reopened on GitHub does not move its card, a label removed on GitHub
+moves nothing, and titles and assignees are never written back.
 
 ## When a connection goes invalid
 

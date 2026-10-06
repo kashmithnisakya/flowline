@@ -11,8 +11,7 @@ import from ...models {
     StepView,
     RoleView,
     TaskRow,
-    TaskView,
-    IterationView
+    TaskView
 }
 import from ...services.tasks.tasks { GetTask }
 import from ..common.Markdown { Markdown }
@@ -21,7 +20,7 @@ import from ..common.Avatar { AvatarStack }
 import from .Checklist { ChecklistEditor }
 import from .MoveMenu { MoveMenu, routeFrom }
 import from .TravelLog { TravelLog }
-import from ..log.DatePicker { DatePicker }
+import from ..common.DatePicker { DatePicker }
 import from ..ui.button { Button }
 import from ..ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
 import from ..ui.input { Input }
@@ -57,10 +56,10 @@ glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
      },
      # Property values read as text until hovered: ghost triggers and fields.
      GHOST_SELECT: str = "h-8 w-full min-w-0 justify-between border-transparent bg-transparent px-2 font-normal shadow-none hover:bg-accent data-[state=open]:bg-accent [&>svg:last-child]:opacity-0 hover:[&>svg:last-child]:opacity-100 data-[state=open]:[&>svg:last-child]:opacity-100",
-     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:border-border md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
+     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:bg-bg-hover md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
      # Targets whose letter keys belong to a select or menu, not the sheet.
      WIDGET_ROLES: str = "[role=combobox], [role=listbox], [role=menu], [role=option], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [data-slot=select-trigger]",
-     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-accent!";
+     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-bg-hover!";
 
 # One label/value row of the property list.
 def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
@@ -70,7 +69,7 @@ def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
                 + ("items-start" if top else "items-center")}
         >
             <dt
-                className={"text-[13px] text-muted-foreground "
+                className={"text-[13px] text-text-tertiary "
                     + ("pt-1.5" if top else "")}
             >
                 {label}
@@ -202,8 +201,6 @@ def:pub TaskDialog(
     taskId: str = "",
     onLoaded: Callable[[TaskView], None] = None,
     onChecklist: Callable[[TaskView], None] = None,
-    # The workspace's iterations; the form's "iteration" is a jid or "none".
-    iterations: list[IterationView] = [],
     # Move now (the board): the sheet's Move menu calls this with a column
     # key. Without it a pick only sets the Step field, applied on Save.
     onMove: Callable[[str], None] = None,
@@ -482,9 +479,8 @@ def:pub TaskDialog(
         else "";
     hereColor = colors[hereIdx] if hereIdx >= 0 else "slate";
 
-    # The lanes picture's caption: which step of how many, who owns it, and
-    # who on this project holds that role (the person a move would hand to).
-    showLanes = editing and len(steps) > 0;
+    # Under the Step row: which step of how many, who owns it, and who on
+    # this project holds that role (the person a move would hand to).
     hereStep: list[StepView] = [
         s
         for s in steps
@@ -518,37 +514,6 @@ def:pub TaskDialog(
                         if len(held) > 0
                         else " · no one on this project"
                 );
-        }
-    }
-    # The route list in column order: each step with who owns it and who on
-    # this project holds that role.
-    routeSteps: list[StepView] = [];
-    routeWho: list[str] = [];
-    routePool = inProject if hasProject else members;
-    for k in columnKeys {
-        for s in steps {
-            if s.id == k {
-                owner = (s.owner or "").strip();
-                holders: list[str] = [];
-                for m in routePool {
-                    if owner and owner in m.roles {
-                        holders.append(m.name);
-                    }
-                }
-                who = "";
-                if owner == "anyone" {
-                    who = "anyone";
-                } elif owner {
-                    who = owner
-                        + (
-                            " · " + ", ".join(holders)
-                                if len(holders) > 0
-                                else " · no one on this project"
-                        );
-                }
-                routeSteps.append(s);
-                routeWho.append(who);
-            }
         }
     }
     # CreateTask takes no reviewer or pull request, so those rows wait for
@@ -651,7 +616,7 @@ def:pub TaskDialog(
                 data-beside={"true" if besideNow else "false"}
                 aria-modal={"false" if besideNow else "true"}
                 showCloseButton={False}
-                className="gap-0 bg-card p-0 text-card-foreground outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[420px]"
+                className="gap-0 bg-bg-elevated p-0 text-text-primary outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-[480px]"
                 style={{
                     "top": str(topPx) + "px",
                     "right": str(rightPx) + "px",
@@ -763,8 +728,8 @@ def:pub TaskDialog(
                                 data-task-title="true"
                                 aria-label="Title"
                                 placeholder="What needs doing?"
-                                className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[19px] leading-snug hover:border-border md:text-[19px]"
-                                style={{"fontWeight": 650, "fontStretch": "108%"}}
+                                className="-mx-2 h-auto w-[calc(100%+1rem)] border-transparent bg-transparent px-2 py-1 text-[18px] leading-snug font-semibold hover:bg-bg-hover md:text-[18px]"
+                                style={{"fontWeight": 600}}
                                 value={form["title"]}
                                 onChange={lambda (e: ChangeEvent) { onField(
                                     "title", e.target.value
@@ -778,7 +743,7 @@ def:pub TaskDialog(
                             />
                         </div>
                         <dl className="grid grid-cols-[minmax(0,1fr)] gap-y-px">
-                            <PropRow label="Step">
+                            <PropRow label="Step" top={bool(editing and whereLine)}>
                                 <Select
                                     value={hereKey}
                                     onValueChange={lambda (v: str) { onField(
@@ -802,6 +767,15 @@ def:pub TaskDialog(
                                         }}
                                     </SelectContent>
                                 </Select>
+                                {if editing and whereLine {
+                                    <p
+                                        key="where"
+                                        className="px-2 pb-1 text-xs text-muted-foreground"
+                                        title={whereLine}
+                                    >
+                                        {whereLine}
+                                    </p>
+                                }}
                             </PropRow>
                             <PropRow label="Project">
                                 <Select
@@ -829,7 +803,7 @@ def:pub TaskDialog(
                             <PropRow label="Assignees" top={outsideSelected}>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger
-                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring data-[state=open]:bg-accent"
+                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[var(--focus-ring)] data-[state=open]:bg-bg-selected"
                                         aria-label="Assignees"
                                     >
                                         {if len(pickedNames) > 0 {
@@ -952,29 +926,7 @@ def:pub TaskDialog(
                                     />
                                 </PropRow>
                             }}
-                            <PropRow label="Due">
-                                <DatePicker
-                                    value={form["due_date"]}
-                                    clearable={True}
-                                    className={GHOST_DATE
-                                        + (
-                                            " text-subtle!"
-                                                if not form["due_date"]
-                                                else ""
-                                        )}
-                                    onChange={lambda (d: str) { onField(
-                                        "due_date", d
-                                    ); }}
-                                />
-                            </PropRow>
-                            <PropRow
-                                label="Start date"
-                                top={bool(
-                                    form["start_date"]
-                                        and form["due_date"]
-                                        and form["start_date"] > form["due_date"]
-                                )}
-                            >
+                            <PropRow label="Start date">
                                 <DatePicker
                                     value={form["start_date"]}
                                     clearable={True}
@@ -988,6 +940,28 @@ def:pub TaskDialog(
                                         "start_date", d
                                     ); }}
                                 />
+                            </PropRow>
+                            <PropRow
+                                label="Due"
+                                top={bool(
+                                    form["start_date"]
+                                        and form["due_date"]
+                                        and form["start_date"] > form["due_date"]
+                                )}
+                            >
+                                <DatePicker
+                                    value={form["due_date"]}
+                                    clearable={True}
+                                    className={GHOST_DATE
+                                        + (
+                                            " text-subtle!"
+                                                if not form["due_date"]
+                                                else ""
+                                        )}
+                                    onChange={lambda (d: str) { onField(
+                                        "due_date", d
+                                    ); }}
+                                />
                                 {if form["start_date"]
                                     and form["due_date"]
                                     and form["start_date"] > form["due_date"] {
@@ -999,42 +973,6 @@ def:pub TaskDialog(
                                     </p>
                                 }}
                             </PropRow>
-                            {if len(iterations) > 0 or form["iteration"] != "none" {
-                                <PropRow key="iteration" label="Iteration">
-                                    <Select
-                                        value={form["iteration"]}
-                                        onValueChange={lambda (v: str) { onField(
-                                            "iteration", v
-                                        ); }}
-                                    >
-                                        <SelectTrigger
-                                            className={GHOST_SELECT
-                                                + (
-                                                    " text-subtle"
-                                                        if form["iteration"] == "none"
-                                                        else ""
-                                                )}
-                                            aria-label="Iteration"
-                                        >
-                                            <SelectValue placeholder="No iteration"/>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">
-                                                No iteration
-                                            </SelectItem>
-                                            {for it in iterations {
-                                                <SelectItem key={it.id} value={it.id}>
-                                                    {it.name
-                                                        + " · "
-                                                        + prettyDay(it.start_date)
-                                                        + " to "
-                                                        + prettyDay(it.end_date)}
-                                                </SelectItem>
-                                            }}
-                                        </SelectContent>
-                                    </Select>
-                                </PropRow>
-                            }}
                             <PropRow label="Priority">
                                 <Select
                                     value={form["priority"]}
@@ -1115,7 +1053,7 @@ def:pub TaskDialog(
                                         <Input
                                             aria-label="Pull request link"
                                             className={GHOST_INPUT
-                                                + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                                + " min-w-0 flex-1 num text-xs md:text-xs"}
                                             placeholder="Paste a pull request link"
                                             value={form["pr"]}
                                             onChange={lambda (e: ChangeEvent) { onField(
@@ -1145,7 +1083,7 @@ def:pub TaskDialog(
                                     <Input
                                         aria-label="GitHub issue link"
                                         className={GHOST_INPUT
-                                            + " min-w-0 flex-1 font-mono text-xs md:text-xs"}
+                                            + " min-w-0 flex-1 num text-xs md:text-xs"}
                                         placeholder="Paste a GitHub issue link"
                                         value={form["issue"]}
                                         onChange={lambda (e: ChangeEvent) { onField(
@@ -1381,78 +1319,6 @@ def:pub TaskDialog(
                                 since={createdAt}
                                 refreshKey={historyKey}
                             />
-                        }}
-                        {if showLanes {
-                            <details
-                                key="lanes"
-                                className="group grid grid-cols-[minmax(0,1fr)] gap-2"
-                            >
-                                <summary
-                                    className="flex cursor-pointer list-none items-baseline gap-2 text-[13px] font-semibold [&::-webkit-details-marker]:hidden"
-                                >
-                                    <svg
-                                        width={12}
-                                        height={12}
-                                        viewBox="0 0 16 16"
-                                        aria-hidden="true"
-                                        className="shrink-0 self-center text-subtle transition-transform duration-150 group-open:rotate-90"
-                                    >
-                                        <path
-                                            d="m6 3.5 4.5 4.5L6 12.5"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={1.8}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                    <span className="shrink-0 whitespace-nowrap">
-                                        On the flow line
-                                    </span>
-                                    <span
-                                        className="min-w-0 truncate text-xs font-normal text-muted-foreground"
-                                        title={whereLine}
-                                    >
-                                        {whereLine}
-                                    </span>
-                                </summary>
-                                <ol className="mt-2 border-t" data-route-list="true">
-                                    {for (ri, rs) in enumerate(routeSteps) {
-                                        <li
-                                            key={rs.id}
-                                            aria-current={"step"
-                                                if rs.id == hereKey
-                                                else "false"}
-                                            className={"flex min-h-8 items-center gap-3 border-b px-1 py-1 text-[13px] "
-                                                + (
-                                                    "font-semibold text-foreground"
-                                                        if rs.id == hereKey
-                                                        else "text-muted-foreground"
-                                                )}
-                                        >
-                                            <StepName
-                                                name={rs.name}
-                                                color={rs.color}
-                                                className="shrink-0"
-                                            />
-                                            {if rs.id == hereKey {
-                                                <span
-                                                    key="here"
-                                                    className="shrink-0 text-xs font-normal text-muted-foreground"
-                                                >
-                                                    current
-                                                </span>
-                                            }}
-                                            <span
-                                                className="ml-auto min-w-0 truncate text-right text-xs font-normal text-muted-foreground"
-                                                title={routeWho[ri]}
-                                            >
-                                                {routeWho[ri]}
-                                            </span>
-                                        </li>
-                                    }}
-                                </ol>
-                            </details>
                         }}
                     </div>
                 </div>

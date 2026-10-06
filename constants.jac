@@ -29,6 +29,26 @@ glob STATUSES: list[str] = [
      # What a transition carries: an issue (no code yet) or a PR (code,
      # waiting on a person). Empty is fine and means untagged.
      CARRY_KINDS: list[str] = ["issue", "pr"],
+     # What moves a task along a transition on its own, from the step the
+     # arrow leaves: a GitHub label added to the issue or its PR (the
+     # transition's `match` names it), the PR merging, a review asking for
+     # changes. Empty means only a person moves it.
+     TRANSITION_TRIGGERS: list[str] = ["", "label", "pr_merged", "changes_requested"],
+     # The board's filters as the account and a saved set store them: each
+     # key with the value that means "no filter". A stored dict keeps only
+     # the keys set to something else; the title search is never stored.
+     # The project is the scope every page shares (lib/project), not a filter.
+     BOARD_FILTERS: list[list[str]] = [
+         ["assignee", "All"],
+         ["priority", "All"],
+         ["category", "All"],
+         ["tag", "All"],
+         ["estimate", "All"],
+         ["done", "show"]
+     ],
+     # Each page a saved filter set can belong to, with its keys.
+     FILTER_TABLES: dict[str, list[list[str]]] = {"board": BOARD_FILTERS},
+     FILTER_SET_PAGES: list[str] = ["board"],
      # Prebuilt flows, recommended first. The key persists on the flow line
      # (WorkflowSteps.template_key), so rename a template, never re-key it.
      # Roles, link_labels and link_carries are optional per template.
@@ -73,131 +93,115 @@ glob STATUSES: list[str] = [
          {
              "key": "jaseci",
              "name": "Software team",
-             "description": "Seven steps from writing the issue to done, with a design step for big changes and loops back from review. Adds four roles.",
-             # The four Jaseci roles. ApplyTemplate seeds these as Role
-             # nodes (editable org data from then on); colors match the
-             # step each role owns so the Roles tab echoes the canvas.
+             "description": "Seven steps from the GitHub issue pool to Done: validate, pick, review the PR, then oversight decides. GitHub labels and merges move the work. Adds four roles.",
+             # The four roles. ApplyTemplate seeds these as Role nodes
+             # (editable org data from then on); colors match the step each
+             # role owns so the Roles tab echoes the canvas.
              "roles": [
                  {
                      "name": "Product Engineer",
-                     "blurb": "Triages, reviews, merges.",
+                     "blurb": "Validates issues, reviews PRs.",
                      "color": "indigo"
                  },
                  {
-                     "name": "Builder",
-                     "blurb": "Implements. Many PRs, fast.",
+                     "name": "Model Pilot Engineer",
+                     "blurb": "Picks issues and ships the PRs.",
                      "color": "amber"
                  },
                  {
                      "name": "Architect",
-                     "blurb": "Designs the approach for big changes.",
+                     "blurb": "Makes the design decisions for big changes.",
                      "color": "slate"
                  },
                  {
-                     "name": "De-slop",
-                     "blurb": "Final pass. Decides done.",
+                     "name": "Model Oversight Engineer",
+                     "blurb": "Checks merged work. Decides done.",
                      "color": "rose"
                  }
              ],
-             # Triage is `start`, not `handoff`: triaged-but-unstarted work
-             # must report Backlog, not Review. Two start steps is fine; the
-             # no-step fallback lands on the first of the kind (Specify).
+             # Unassigned and Validated are both `start`: validated but
+             # unpicked work is still Backlog. Ready needs a due date and In
+             # review a linked PR, whether a label or a person moves it.
              "steps": [
                  {
-                     "name": "Specify",
+                     "name": "Incoming",
                      "kind": "start",
                      "color": "sky",
                      "owner": "anyone",
-                     "blurb": "write the issue, anyone",
+                     "blurb": "new issues from GitHub",
                      "x": 60.0,
                      "y": 40.0
                  },
                  {
-                     "name": "Triage",
+                     "name": "Ready",
                      "kind": "start",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "sets priority, nothing skips this",
+                     "blurb": "validated, prioritised, dated",
+                     "needs_due_date": True,
                      "x": 60.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Architecturing",
+                     "name": "Building",
+                     "kind": "active",
+                     "color": "amber",
+                     "owner": "Model Pilot Engineer",
+                     "blurb": "one engineer; a linked PR is fetched",
+                     "x": 400.0,
+                     "y": 480.0
+                 },
+                 {
+                     "name": "Design",
                      "kind": "active",
                      "color": "slate",
                      "owner": "Architect",
                      "blurb": "big changes only",
                      "x": 400.0,
-                     "y": 560.0
+                     "y": 700.0
                  },
                  {
-                     "name": "Implement",
-                     "kind": "active",
-                     "color": "amber",
-                     "owner": "Builder",
-                     "blurb": "drive the model, add tests",
-                     "x": 740.0,
-                     "y": 430.0
-                 },
-                 {
-                     "name": "Review & merge",
+                     "name": "In review",
                      "kind": "handoff",
                      "color": "indigo",
                      "owner": "Product Engineer",
-                     "blurb": "nothing passes without this",
-                     "x": 860.0,
+                     "blurb": "PR open, being reviewed",
+                     "needs_pr": True,
+                     "x": 740.0,
                      "y": 260.0
                  },
                  {
-                     "name": "Refactor",
-                     "kind": "active",
+                     "name": "Final check",
+                     "kind": "handoff",
                      "color": "rose",
-                     "owner": "De-slop",
-                     "blurb": "decides done",
-                     "x": 1210.0,
-                     "y": 560.0
+                     "owner": "Model Oversight Engineer",
+                     "blurb": "is the solution right?",
+                     "x": 1080.0,
+                     "y": 480.0
                  },
                  {
                      "name": "Done",
                      "kind": "done",
                      "color": "emerald",
-                     "owner": "De-slop",
-                     "blurb": "terminal",
-                     "x": 1560.0,
-                     "y": 560.0
+                     "owner": "Model Oversight Engineer",
+                     "blurb": "correct, no polish needed",
+                     "x": 1420.0,
+                     "y": 480.0
                  }
              ],
-             # Forward first, then the send-back: review that can only
-             # approve is a review nobody needs. Merged work has no direct
-             # road to Done - it goes through De-slop, which is what marks it.
-             "links": [
-                 [0, 1],
-                 [1, 0],
-                 [1, 2],
-                 [1, 3],
-                 [2, 3],
-                 [3, 4],
-                 [4, 3],
-                 [4, 5],
-                 [5, 6]
-             ],
-             # Kept short: two of these share a pair of steps, and long chips
-             # collide. Index-aligned with `links`, as is `link_carries`.
+             "links": [[0, 1], [1, 2], [2, 3], [3, 2], [2, 4], [4, 2], [4, 5], [5, 6]],
+             # Index-aligned with `links`, as are the carries and triggers.
              "link_labels": [
-                 "to PE first",
-                 "PE too",
-                 "needs architecturing",
-                 "small, straight to build",
-                 "approach agreed",
-                 "ready and tested",
-                 "big changes, back to builder",
-                 "merged",
-                 "decides & marks done"
+                 "validated, with priority",
+                 "picked up",
+                 "needs a design decision",
+                 "decision made",
+                 "ready to review",
+                 "changes requested",
+                 "PR merged",
+                 "correct, no polish"
              ],
-             # What crosses each arrow: an issue until there is code, a PR
-             # after. Read the legend under the canvas.
              "link_carries": [
-                 "issue",
                  "issue",
                  "issue",
                  "issue",
@@ -206,7 +210,32 @@ glob STATUSES: list[str] = [
                  "pr",
                  "pr",
                  "pr"
-             ]
+             ],
+             # What moves a task along the arrow without a person (see
+             # TRANSITION_TRIGGERS). `link_github_labels` is each arrow's GitHub
+             # label: what a label trigger waits for, and what crossing the
+             # arrow writes for a repo with label sync; only `validated` stays.
+             "link_triggers": [
+                 "label",
+                 "",
+                 "",
+                 "",
+                 "label",
+                 "changes_requested",
+                 "pr_merged",
+                 ""
+             ],
+             "link_github_labels": [
+                 "validated",
+                 "",
+                 "needs-design",
+                 "",
+                 "ready-to-review",
+                 "changes-requested",
+                 "",
+                 ""
+             ],
+             "link_keep_labels": [True, False, False, False, False, False, False, False]
          }
      ],
      # Kind -> legacy status. A move writes both, so insights, GitHub sync

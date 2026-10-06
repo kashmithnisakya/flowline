@@ -54,7 +54,7 @@ Then read the actual port out of the startup log rather than assuming 8000.
 
 ## Architecture
 
-Multi-tenant kanban + daily-log tracker. **The account is the organization**:
+Multi-tenant flow line and task tracker. **The account is the organization**:
 there is no `Organization` node. The organization's name (`org_name`) lives in
 the account profile at `GET`/`PATCH /user/me`: signup sends an empty profile
 and the setup wizard writes the name. The app asks for no personal name; the
@@ -71,15 +71,19 @@ people it tracks are roster members.
   line's name and template key) and `root ++> Logs ++> LogDay ++> LogEntry`
   (an entry hangs under its day; `days_between(root, since, until)` reads
   the days in a date range, filtered in the store's query) and
-  `root ++> Iterations ++> Iteration` (time boxes; a task points at one
-  through its `iteration_id` field, like `step_id`, and `DeleteIteration`
-  clears it); `Repo` and `GithubConnection` hang off the root directly.
+  `root ++> FilterSets ++> FilterSet` (named filter sets;
+  the box also holds the board's own filters); `Repo` and
+  `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
   `SetMemberRoles` inputs are still names), `HasRepo`, `By` (a log entry to
   its member).
   There is no edge between steps: a step keeps its outgoing transitions in
-  its own `transitions` field (`{to, label, carries}`), so `DeleteStep`
+  its own `transitions` field (`{to, label, carries, trigger, github_label,
+  keep_label}`; arrows saved before Sep 27 2026 said `trigger_label`, and
+  `ensure_arrows` in `services/util.jac` renames it once per workspace,
+  stamped `WorkflowSteps.arrows_at`, so a new reader of an arrow's label
+  calls it first), so `DeleteStep`
   strips the removed step's id from every other step's list, and
   `step_view(s, steps)` reads incoming ids off the whole flow line and
   drops a transition to a step that is gone. **A task's project is its
@@ -93,16 +97,22 @@ people it tracks are roster members.
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `iterations` (iteration CRUD and `RoadmapSnapshot`),
+  `roadmap` (`RoadmapSnapshot`, one project's dated tasks), `filters` (the
+  saved-filter writers),
   `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
-  roles, iterations, flow line meta and GitHub connection in one read;
+  roles, saved filter sets, flow line meta and GitHub
+  connection in one read;
   `BoardSnapshot` fills its workspace fields from the same
   `workspace_view` helper, so there is one definition of those lists), and
   `github` with `github.jac`, `events.jac`, `schedule.jac` (the scheduled
   sync, a function, not a walker) and `util.jac`) plus
-  `services/util.jac` for shared server-only helpers. Walkers are **bare
-  (JWT-required)**; there are no `:pub` walkers. **Keep walker ability
-  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.18: the endpoint
+  `services/util.jac` for shared server-only helpers. Every endpoint walker
+  is **`walker:protect`** (JWT-required); there are no `:pub` walkers. Since
+  jac 0.37.23 a plain `walker` or `def` is private: not served and not
+  callable from the client, so a new endpoint without `:protect` 404s and
+  its page fails to build (E5082). The `find_*` lookup bases and the
+  scheduled `sync_connected_workspaces` stay plain on purpose. **Keep walker ability
+  bodies inline, not in an `.impl.jac` annex**, still on jac 0.37.21: the endpoint
   effect pass does not follow an ability body into an annex, so an annexed
   walker is classified as a pure read, the client caches it, and a save no
   longer invalidates anything (every write-then-refetch shows stale data;
@@ -135,23 +145,41 @@ people it tracks are roster members.
   `!=`, `<`, `<=`, `>`, `>=`, a comma is AND, a trailing field name or
   `-field` orders, `[:n]` bounds; no OR, and a left side must be a declared
   field name, else E5094). The readers in `models.jac` are those queries:
-  `open_tasks`, `done_since`, `done_before`, `working_tasks` (the board's
-  working set), their `project_*` twins, the per-step and
-  per-iteration lookups, the column readers (`step_column_peak` and
+  `open_tasks`, `done_since`, `done_before`, `working_tasks` (the working set across projects; the board reads
+  its project's `project_working`), their `project_*` twins, the per-step
+  lookups, the column readers (`step_column_peak` and
   friends, for the drag order) and the GitHub lookups (`tasks_by_issue`,
   `tasks_by_pr`, `children_of`, `status_peak`). Only `all_tasks`,
-  `done_tasks` and `done_before` load history, and only the explicit
-  history scopes of `ListTasks` (`older`, `done`, `all`, the palette's
-  search) call them, and not for an unfiltered page in updated order,
-  newest first (the table's default): `history_page` cuts that one in the
-  store (`recent_tasks` and friends, `-updated_at` with `[:end]`) and adds
-  every row stamped like the prefix's last (`tasks_stamped`), because a sync
-  pass stamps many rows alike and the store orders ties arbitrarily. All-time totals are tallies kept on write:
+  `done_tasks` and `done_before` load history, and only a search (`q`, the
+  palette too) or a `tag` filter on a history scope of `ListTasks` calls
+  them: the store has no substring or list-membership predicate yet
+  (jaseci-labs/jac#9413). Every other `older` / `done` / `all` page is
+  answered in the store by `services/tasks/history.jac`: scope and filters
+  become predicates, the sort an order ending in `Task.row_key` (the jid,
+  so a page cut is exact), `[start:end]` the page. A total comes from the
+  tallies; only under a filter is it `len()` of the reference, which on
+  0.37.21 reads the matching rows for a signed-in caller (the store counts
+  only without one, jaseci-labs/jac#9416), so the step sort walks columns
+  with LIMIT windows instead of counting them. The filter set is chosen per request, so it builds the query from
+  `jaclang.lib.jaclib` (`GraphQuery`, `QHop`, `QPred`, `QOrder`, `refs`),
+  the parts a graph literal compiles to, over a fixed list of fields. Sort
+  keys are fields kept by `Task.keep_keys` wherever title, category,
+  priority or due date is written (`CreateTask`, `UpdateTask`,
+  `file_issue_item`): `title_key` / `category_key` are `sort_text` (the
+  lowercase text's UTF-8 as hex, one order under any collation, the order a
+  Python sort of `.lower()` gives, which merging several parts needs),
+  `priority_rank`, `due_key` (undated last); `ensure_keys` fills a project
+  once (`Project.keys_at`), and a request that filled keys pages what it
+  loaded, since the store cannot see those writes until the next one. A
+  board column (the step sort and the `column` filter) is its own step plus,
+  in the first column of a kind, one part per status of that kind with every
+  current step id excluded (`board_columns`). All-time totals are tallies kept on write:
   `Project.task_total`, `done_total`, `seeded_done_total` (created already
   Done: history, not throughput), the Overview's weekly history
   (`Project.week_added` / `week_finished`, keyed by the week's Monday from
   `history_days` and `week_start`, filled once per project by
-  `ensure_history`, which only `TaskHistory` calls, and moved by
+  `ensure_history`, which `TaskHistory`, `TaskCounts` and
+  `OverviewSnapshot` call, and moved by
   `shift_history` on the same writes plus the sync's `reseed`) and
   `Projects.categories` (exact: `note_category` adds, `forget_category`
   drops after a two-row lookup).
@@ -163,7 +191,7 @@ people it tracks are roster members.
   `file_issue_item`, `ArchiveMember`), so `hydrate_rows` / `rows_from`
   build a page from fields plus `task_names` (two roster lists), never a
   hop; `to_view()` still hops and is for a single task. **A list reports
-  `TaskRow`**, what the card, the table row, the roadmap bar, the step
+  `TaskRow`**, what the board row, the roadmap bar, the step
   panel and the Overview's queues render: the note's first line as
   `note_lead` (200 characters) and `checklist_done` / `checklist_total`
   instead of the notes and the items, and no `gh_assignees`,
@@ -175,15 +203,17 @@ people it tracks are roster members.
   `ensure_tallies(holder)` in `services/util.jac` fills tallies, link
   fields and a missing `done_at` for a project whose `tallies_at` is empty
   (one full load, once; `SaveProject` stamps a new project) and every
-  counting or listing walker calls it first. Two runtime facts shape this
-  (jac 0.37.18, verified in scratch apps): a field write is not visible to
-  a pushed query later in the same request, only to the next one, so a
-  walker that writes and then looks the same row up keeps it in a local
-  (the sync's lookup caches, `others()` in `MoveTask`, the `except_id` in
-  `forget_category`); and `jac fmt` collapses `field in list` inside a
-  filter into one name (`ninwanted`), so there is no pushed `in`: short
-  lists loop one query per value, a GitHub page over `LOOKUP_ONE_BY_ONE`
-  numbers runs one range query kept to the page in Python. Loading costs
+  counting or listing walker calls it first. Two runtime facts shape this:
+  a field write is not visible to a pushed query later in the same
+  request, only to the next one (verified on 0.37.18 in scratch apps,
+  jaseci-labs/jac#9264, still open at 0.37.21), so a walker that writes
+  and then looks the same row up keeps it in a local (the sync's lookup
+  caches, `others()` in `MoveTask`, the `except_id` in `forget_category`);
+  and nothing pushes an `in` yet: through 0.37.18 `jac fmt` collapsed
+  `field in list` inside a filter into one name (`ninwanted`; fixed in
+  0.37.19), so short lists loop one query per value and a GitHub page over
+  `LOOKUP_ONE_BY_ONE` numbers runs one range query kept to the page in
+  Python; a pushed `in` is a follow-up. Loading costs
   about 0.2 ms per Task row locally plus 1 to 2 ms per query, so a walker's
   time is its working set: 209 rows at 1,500 tasks is about 60 ms.
 - **The browser caches a declared reader for 60 s; the task lists are
@@ -202,7 +232,7 @@ people it tracks are roster members.
   another module imports is not recognised (`workspace_view`, imported by
   `board.jac`, lost its decorator; `GetWorkspace` reports through its own
   `read_workspace`), so a reader's helper is its own. Declared: `GetWorkspace`,
-  `ListMembers`, `ListProjects`, `ListRoles`, `ListIterations`,
+  `ListMembers`, `ListProjects`, `ListRoles`,
   `GetFlowLine`, `GetFlowLineMeta`, `ListRepos`, `GithubStatus`. Never
   declare a task list (`BoardSnapshot`, `ListTasks`, `OverviewSnapshot`,
   `ListLogEntries`, `TaskCounts`, `TaskHistory`, `RoadmapSnapshot`,
@@ -218,16 +248,18 @@ people it tracks are roster members.
   (`BoardData` carries the whole `WorkspaceView`), `forgetWorkspace()`
   drops it and `forgetSession` drops it too. **Every client call site that
   writes roster data calls `forgetWorkspace()` right after the write, before
-  its refetch** (members, projects, roles, iterations, steps and
+  its refetch** (members, projects, roles, steps and
   transitions, the template and flow line name, repos and their switches,
-  the GitHub connection, a sync, an assignment to a project, the org
-  rename through `patchProfile`); a new writer must do the same or the
-  next page shows the old roster for a minute. Recognition can vary between
+  the GitHub connection, a sync, an assignment to a project, a saved
+  filter set, the org rename through `patchProfile`); a new writer must do
+  the same or the next page shows the old roster for a minute. Recognition can vary between
   builds, so `tests/smoke/api_gate.py` asserts the served table per build
   (the readers cacheable, the task lists not, the mutators writing) and
-  `browser_gate.py` counts the requests (board, tasks, roadmap, board make
-  one `/user/me` and no `GetWorkspace`; a People-tab save then tasks makes
-  exactly one). The trap that hid the cache
+  `browser_gate.py` counts the requests (board, flow line, roadmap, board
+  make one `/user/me` and no `GetWorkspace`; a People-tab save then the
+  roadmap makes exactly one). The sidebar's projects list never reads the
+  workspace: `rememberWorkspace` fires `flowline:workspace` and the sidebar
+  redraws from `cachedProjects()`. The trap that hid the cache
   until Sep 2026: a server `def:pub` in a module the client imports
   (`statusChip` in `components/flowlines/kinds.jac`) makes that module
   register a partial effects table at load, which the runtime uses instead
@@ -248,10 +280,10 @@ people it tracks are roster members.
   `working` (open plus Done reached in the last `done_days`, what the board
   renders, `older` counting what the cutoff left out from the tallies, on
   an unfiltered page only), `older`, `done`, `all`; `q` is a server-side
-  title search ranked exact, prefix, contains. `scope_total` on every
-  page is the scope's count with no filter on (the pool when the page
-  loaded the whole scope, else a tally or one more pushed read), so the
-  table says "12 of 210" off its own page. `ListLogEntries` orders a day
+  title search ranked exact, prefix, contains (the palette and the
+  assistant search through it). `scope_total` on every page is the
+  scope's count with no filter on (the pool when the page loaded the whole
+  scope, else a tally or one more pushed read). `ListLogEntries` orders a day
   by stamp, newest first, the order every view shows, so a page fetched
   behind the first only adds rows below what is on screen, and it pages
   in the store: whole days are skipped on `LogDay.entry_total` and a day
@@ -263,9 +295,10 @@ people it tracks are roster members.
   read. A GitHub import logs once per batch (`log_imports`, called at the
   end of `ImportIssues`, a sync pass and a drain): one issue keeps its own
   line, more grow the day's `Imported N issues from org/repo` line for that
-  repo and status (`item_count`, no task), which the log page folds with
-  the single lines. The log's counts (`log_totals`, so `LogCounts` and the
-  Overview) read each day's `entry_total` and `member_counts`, kept by the
+  repo and status (`item_count`, no task). Task events are the log's only
+  writers (`record_task_event`, `log_imports`); nothing writes an entry by
+  hand. The log's counts (`log_totals`, the Overview's `logs`) read each
+  day's `entry_total` and `member_counts`, kept by the
   same helpers; `fill_day` tallies a day written before them, once, and
   folds a backfill of more than `IMPORT_FOLD_MIN` single import lines for
   one repo and status into the day's batch line. The Overview's blocked
@@ -276,8 +309,10 @@ people it tracks are roster members.
   that set also keeps each step's first two titles (`StepView.task_titles`,
   the panel's order), so the flow line page's close zoom reads them off
   the line and makes no request.
-  The Overview adds up history through `TaskCounts` / `LogCounts` rather
-  than loading it. Every ordering ends in the jid, so a row cannot swap
+  The Overview adds up history through `TaskCounts` and its snapshot's
+  tallies rather than loading it; `TaskTotals.done_by_day` (this week's
+  moves to Done per weekday) comes from the week's Done rows it already
+  reads. Every ordering ends in the jid, so a row cannot swap
   pages between two requests (sorts are stable, so a `jid` pass first and
   the real key second gives a deterministic tiebreak).
 - **`constants.jac`**: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
@@ -293,9 +328,9 @@ people it tracks are roster members.
 An org designs its own steps on `/flowlines` (`WorkflowStep` nodes under the
 `WorkflowSteps` box, transitions stored on each step, cycles allowed on
 purpose). **The
-board's columns ARE those steps**, in `sort_order`, so the two views cannot
-disagree. The feature was called "workflow" until Aug 2026; the archetypes
-keep that name. `/workflow` redirects to `/flowlines` for old links.
+board's step groups ARE those steps**, in `sort_order`, stacked top to
+bottom, so the two views cannot disagree. The feature was called "workflow"
+until Aug 2026; the archetypes keep that name.
 
 Each step carries a semantic `kind` (`start` / `active` / `handoff` /
 `blocked` / `done`) behind the user's chosen name. **Roughly thirty places key
@@ -322,10 +357,51 @@ it was really closed and ages out of the board like any other task;
 `SyncGithub(full=True)` re-walks a repo and corrects rows an earlier import
 stamped with the sync time.
 
+**The flow line automates itself.** A step's entry rules
+(`needs_due_date`, `needs_pr`, `WorkflowStep.refusal`) gate every move onto
+it: `MoveTask` / `UpdateTask` keep the step and report `TaskView.refused`,
+`CreateTask` creates nothing, and the pages check first with
+`moveRefusal` (`components/flowlines/kinds.jac`). A transition's `trigger`
+(`TRANSITION_TRIGGERS`: `label` with its `github_label`, `pr_merged`,
+`changes_requested`) moves a task out of the step it leaves when the sync or
+a drain sees the fact: `follow_trigger` / `land_on_step` in
+`services/tasks/tasks.jac` (a drag's landing, hand-off and log line), called
+from `services/github/github.jac`. Labels fire on being newly added
+(`Task.gh_labels` / `pr_labels` hold what was seen), a PR links to the task
+whose issue its body closes (`pr_task`), and a merge a `pr_merged` arrow
+takes skips the repo's `auto_done`. `tests/smoke/automation_gate.py` drives
+all of it against the stub.
+
 Tasks with an empty `step_id` (written before flow lines existed, or whose step
-was deleted) fall back to `STATUS_KIND[status]` and render in the first column
-of that kind; an org with no flow line at all falls back to `STATUSES`. Both
+was deleted) fall back to `STATUS_KIND[status]` and render in the first group
+of that kind (the board's `columnKeyOf`, the roadmap's `stepGroups`); an org with no flow line at all falls back to `STATUSES`. Both
 fallbacks are load-bearing: do not assume a task has a step.
+
+### Every page is scoped to one project
+
+The board, the flow line and the roadmap show one project; the Overview is
+workspace-wide. **The project is a scope, not a filter**: it lives in this
+browser under `PROJECT_KEY` (`lib/project.jac`, `currentProject()`), and
+the sidebar's Projects list, the pages' `ProjectLine` picker (the only
+picker on a phone) and a default all go through `pickProject(id)`, which
+stores it and fires a `flowline:project` window event every mounted page
+listens to. `BOARD_FILTERS` has no project key and a saved set never
+carries one; `forgetSession` clears the pick with the other session keys.
+`BoardSnapshot`, `GetFlowLine` and `ListStepTasks` take `project_id`, and
+an empty id is the default project: `default_project(root)` in
+`models.jac`, the earliest-created active one (`Project.created_at`,
+stamped by `SaveProject`; a project from before the stamp sorts first, then
+name, then jid). `BoardSnapshot` answers the default for a foreign,
+archived or unknown id too and reports the project it used
+(`BoardData.project_id`), and the board then calls `pickProject` with it so
+every page follows. `RoadmapSnapshot` needs a project (a missing or
+foreign one reads empty). The client's copy of the rule is
+`defaultProject(projects)` in `lib/filters.jac`. Picking another project
+fetches its working set (`setProjectFilter` calls `loadBoard`); the rows on
+screen stay until the new set lands: `matches` filters rows by project only
+while `loadedProject` (the project the loaded rows belong to) equals
+`fProject`, else every row would blank for the length of the fetch. The API gate's parity suite reads both walkers per
+project and sums them.
 
 ### Security model: the one thing not to regress
 
@@ -333,8 +409,8 @@ Isolation is structural: authenticated walkers run on the caller's own root, so
 `[root --> …]` cannot reach another tenant. `jobj(id)` is owner-gated on
 0.37.7 (a foreign root or node resolves to `None`, even for the system
 identity), **but resolution is still not authorization.** Every jid-addressed
-mutation must call `owned(holder, target)` (or go through the `find_task` /
-`find_log_entry` lookup bases) before touching anything. `owned` climbs
+mutation must call `owned(holder, target)` (or go through the `find_task`
+lookup base) before touching anything. `owned` climbs
 container edges (at most three hops: task, project, box; or log entry, day,
 box) and compares each
 parent's jid with the caller's root. `Root` is not a runtime name in
@@ -365,15 +441,20 @@ in the tenant's session (from `DrainGithubEvents` or the start of
 binds that installation to this root (the workspace that last connected it),
 drops items older than the task's last applied `updated_at`, stamps the log
 with the event's own time, and applies through the helpers the poll uses.
-Neither side calls GitHub. The one write-back is the issue's state for a repo
-with `auto_close`: a move that crosses Done closes the issue (landing) or
-reopens it (leaving). It runs inside `MoveTask` / `UpdateTask` through
-`sync_issue_state` in `services/github/util.jac` (not in
-`services/github/github.jac`: that module imports `tasks`, so `tasks` cannot import
-it back); it rides on the move's own log line, and the receiver drops the
-App's echo by sender login so neither is applied a second time. An issue
-reopened on GitHub does not move its card; titles, assignees and labels are
-never written back.
+Neither side calls GitHub. Two write-backs ride on moves, both through
+`services/github/util.jac` (not `services/github/github.jac`: that module
+imports `tasks`, so `tasks` cannot import it back) and both per repo, off by
+default. `sync_issue_state` (`auto_close`): a move that crosses Done closes
+the issue (landing) or reopens it (leaving). `sync_step_labels`
+(`label_sync`): crossing an arrow with a `github_label` adds it (to the PR
+when the arrow carries one and a PR is linked), leaving a step takes the
+labels of arrows into it off unless `keep_label`, and the task's
+`gh_labels` / `pr_labels` move with each write so the next poll does not read
+it as new. Both run in `MoveTask`, `UpdateTask` and the trigger moves
+(`landing_tail`), ride on the move's own log line, and never block it; the
+receiver drops the App's echo by sender login. An issue reopened on GitHub
+does not move its task, a label removed there moves nothing, and titles and
+assignees are never written back.
 
 **No walker a page load calls reaches GitHub.** The poll is
 `sync_connected_workspaces` in `services/github/schedule.jac`, a plain `def`
@@ -381,18 +462,29 @@ under `@schedule(trigger=ScheduleTrigger.STATIC, interval=SYNC_INTERVAL_SECONDS)
 (300 s; `FLOWLINE_SYNC_INTERVAL_SECONDS` overrides it for the gates, CI
 uses 30), registered by its import in `main.jac` like a walker. It runs in
 the app workers as the system identity, one worker per tick through the
-runtime's `sched:` lease on the Postgres store, walks the `gh_installations`
-index (`bound_installations`), skips a workspace bound inside the last
+runtime's `sched:` lease on the Postgres store, takes the
+`FLOWLINE_SYNC_MAX_WORKSPACES` (20) rows of the `gh_installations` index whose
+pass is oldest (`due_installations`, ordering on `synced_at` and falling back
+to `bound_at`, so one slow workspace delays the rest by a tick instead of
+blocking them and every workspace comes up within
+ceil(workspaces / the cap) ticks; `note_sync_at` stamps every row the tick
+takes, including one whose pass failed or whose lease was held elsewhere, or
+it would hold the head of the queue), skips a workspace bound inside the last
 interval (still being set up on its GitHub page), takes the per-workspace
 lease `sync:<root jid>` (`acquire_sync_lease`, `SYNC_LEASE_SECONDS` = 240,
 released after the pass) and spawns `SyncGithub(auto=True)` inside a pushed
 context on that workspace's root (`Jac.create_j_context(user_root=jid)` +
 `push_request_context`; `here` and `root` in the walker are that root, so
 `owned()` works unchanged), commits, closes, and logs one `flowline.github`
-line per workspace with the counts. Schedule a function, never a walker: a
+line per workspace with the counts. A row whose root is gone
+(`MissingAnchorError` from `create_j_context`) or holds no connection for
+that installation is dropped there (`release_binding`, a delete that names
+the root it read); an invalid connection keeps its row for `unsuspend`. Schedule a function, never a walker: a
 decorated walker loses its `/walker/` route and logs a spurious error per
-fire on 0.37.18, and static fires do not serialise themselves, hence the
-lease. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
+fire (seen on 0.37.18). Since 0.37.20 the runtime claims each static tick
+once per service (jaseci-labs/jac#9201); the per-workspace lease stays,
+since it also keeps the schedule out of a workspace someone is syncing by
+hand. `SyncGithub` keeps drain-then-poll: the auto cooldown (1 min quiet,
 15 min while deliveries are live, both shorter than never) gates only the
 poll, the token is minted only when a poll will run, an invalid connection
 reports `invalid` without a call, and a manual sync (`auto=False`) holds the
@@ -422,31 +514,37 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/board`, `/tasks`, `/roadmap`, `/log`, `/overview`, `/flowlines`, `/workspace`, `/github`, `/setup` | `pages/(auth)/…` | auto-guarded |
-| `/settings`, `/projects`, `/roster`, `/workflow` | `pages/(auth)/…` | redirects only: `/settings` goes to `/workspace?tab=preferences` |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/github` | `pages/(auth)/github.jac` | the GitHub App's callback and setup URL: renders the Workspace page on its GitHub section |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
   would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
-  collides with the root layout. The chrome is a top bar grouped into daily
-  views and setup pages (`NAV_PAGES` in `CommandPalette.jac`, shared with the
-  palette and the phone tab bar), an account menu with the signed-in identity
-  and the theme, and `components/assistant/AssistantDock` (Ask), mounted once:
-  a docked column at 1280px and up, a sheet below. `/setup` gets only the mark
-  and Sign out.
-- **`/workspace` is every setting**: Organization, People, Projects, Roles and
-  Preferences (the theme) as `?tab=` sections from `components/workspace/`.
+  collides with the root layout. The chrome lives in `components/chrome/`:
+  a left sidebar at lg (1024px) and up (the workspace name, search, the pages in
+  `NAV_PAGES` from `CommandPalette.jac` in the order Flow line, Board,
+  Roadmap, Overview, the Projects list, then Ask, Workspace and the account
+  card with the theme and Sign out), and below lg a header over a five-tab
+  bar (those pages plus Workspace). `components/assistant/AssistantDock`
+  (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
+  `/setup` gets only the setup bar (mark and Sign out).
+- **`/workspace` is every setting**: Organization, People, Projects, Roles,
+  GitHub and Preferences (the theme) as `?tab=` sections from
+  `components/workspace/`.
   The page loads one `GetWorkspace` and hands the Projects and Roles
   sections their lists as props (open counts are the projects' own
   tallies), so a tab switch is a render, not a request; a section's write
   calls `forgetWorkspace()` and awaits the page's `loadAll` (`onChanged`)
-  rather than refetching a list of its own. GitHub lives at `/github`;
-  `?tab=github` and install round trips forward there with the query intact.
+  rather than refetching a list of its own. `/github` opens this page on the
+  GitHub section (`initialTab` reads the path), where `GithubSection`
+  finishes an install round trip and moves the address to
+  `/workspace?tab=github`; the section's own list view rides in `?view=`.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
-  components from `components/<area>/` (`board`, `tasks`, `roadmap`, `log`,
+  components from `components/<area>/` (`chrome`, `board`, `roadmap`,
   `dashboard` for the Overview, `flowlines`, `workspace`, `github`, `roster`,
-  `projects`, `assistant`, `auth`, `landing`, `common`).
+  `projects`, `assistant`, `auth`, `landing`, `common`). **A component is at
+  most 100 lines**: split into small files rather than growing one.
 - Form-heavy dialogs take a `dict` plus one `onField(key, value)` callback
   rather than a dozen props.
 - **`components/ui/`** is jac-shadcn: import only, never edit. When a
@@ -459,13 +557,9 @@ File-based routing with route groups:
 - **A list paints after its first page; the rest lands behind it.** The
   board's first load (`loadBoard`, `paintPages`) shows page 1 of
   `BoardSnapshot` and appends the pages behind it (the working set is one
-  `sort_order` run, so a later page lands under the cards on screen; the
+  `sort_order` run, so a later page lands under the rows on screen; the
   newest load owns the state through `loadReqRef`); a refetch keeps its
-  rows until the whole set is in. The log week (`weekPage`) and the
-  Overview's week log (`absorbWeekLog`) do the same. Nothing is fetched
-  twice on a mount: the log page starts on today rather than writing
-  `selectedDate` in an entry (the live-cell gotcha below), and the tasks
-  table's scope count rides on its page (`scope_total`).
+  rows until the whole set is in.
 - **A page fires the workspace read beside its own data, never after it.**
   `lib/workspace.jac` `loadWorkspace()` answers a dict keyed like
   `WorkspaceView` plus `ok` from its minute-long cache, or spawns
@@ -473,49 +567,58 @@ File-based routing with route groups:
   failed-load handling). Every page other than the
   board calls it as `loadShared` together with its own walker
   (`w.Promise.all(jobs)`), and no page awaits more than two calls in
-  sequence on mount; only `/github` has a dependent third (the issue list
-  once the repo is known). A refetch of one list after a save may still
+  sequence on mount; only the GitHub section has a dependent third (the
+  issue list once the repo is known). A refetch of one list after a save may still
   call that list's walker. Its two helpers are pinned `"client"` in
   `jac.toml`, like `lib/utils`.
 - **`lib/session.jac`** wraps `/user/me` (the runtime exports no helper)
   and reads it once per page load: `fetchMe` keeps the in-flight promise and
   the answer in module state, `fetchProfile` / `fetchOrgName` and the
   layout's `loadMe` go through it, and `patchProfile` or `forgetSession`
-  drops it.
+  drops it. `jacIsLoggedIn()` only sees that a token is stored, so a 401
+  from `/user/me` ends the session (`forgetSession` + `jacLogout`, keeping
+  the `flowline_session` marker for the login page's "expired" note), and
+  `/login` and the landing page ask `checkSession()` before trusting a
+  token; the board sends a visitor to `/setup` only while signed in.
   **`lib/dates.jac`** owns the calendar rules (`todayIso`, `daysUntil`,
-  `dueTone`, `dueLabel`): the card, the lane header and the overview all
-  derive "overdue" from it, so change it there or nowhere.
+  `dueTone`, `dueLabel`): the board row, the step header and the overview
+  all derive "overdue" from it, so change it there or nowhere.
 - **`components/common/`** holds the shared bits: `Avatar.jac` (initials
   avatars on eight fixed fills hashed from the name, `AvatarStack` for
   assignees), `KindGlyph.jac` (a step kind as a glyph), `StepName.jac` (a
-  step's swatch plus name), `CommandPalette.jac` (⌘K), `ErrorNote`,
-  `LoadFailed`, `glyphs`, `Markdown`.
-- **The visual system lives in `styles/global.css`.** Archivo (the
-  `wdth.css` import, so `font-stretch` works) for UI and display, IBM Plex
-  Mono for data, shadcn token names on a neutral ground with one rust
-  primary. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
+  step's swatch plus name), `StepBadge.jac` (a step as a solid pill, plus
+  `stepWash` / `stepInk` / `stepSolid` class helpers), `ProjectLine.jac`
+  (the project picker above a scoped page's title), `CommandPalette.jac`
+  (⌘K), `ErrorNote`, `LoadFailed`, `glyphs`, `Markdown`.
+- **The visual system lives in `styles/global.css`.** One token layer
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`,
+  `--status-*`, `--project-*`, `--avatar-*`, both themes) with the shadcn
+  names aliased onto it, so `components/ui/` follows unedited. Geist for UI,
+  Geist Mono only for data (`brand/` still draws the og image in Archivo and
+  Plex). The accent is for the primary button, focus rings, checked
+  controls and the logo only. Toolbar controls are 28px with one solid
+  border; radius steps by role (4 kbd, 6 controls and rows, 8 menus, 12
+  dialogs), and only avatars, dots and progress bars are round. Shared classes (`.page-title`, `.meta`, `.num`, `.toolbar`,
   `.toolbar-filter`, `.data-table`, `.step-swatch` ...) are defined there;
   the two that dress registry primitives sit outside `@layer` so they beat
   the primitives' utilities. Nothing renders below 12px, labels are
   sentence case, and only floating layers cast a shadow.
-- **Step colours are tokens.** `--step-<key>`, `-ink` (text) and `-wash`
-  (opaque canvas fill) in `styles/global.css` for both palettes; the tables
-  in `components/flowlines/kinds.jac` only name them (`bg-step-sky`). A new
-  colour key needs tokens in both palettes, and its key is what persists
-  (`rose` renders orchid, clear of the andon red).
+- **A step's colour is information, not decoration.** It shows only on
+  the 14px status icon (whose shape carries the kind): no washes, solid
+  pills or tinted bands. `--step-<key>` in `styles/global.css` for both
+  palettes; the tables in `components/flowlines/kinds.jac` only name them
+  (`bg-step-sky`). A new colour key needs a token in both palettes, and its
+  key is what persists (`rose` renders orchid, clear of the andon red).
 - **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
   sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
   so far" from `ListLogEntries` with `task_id`); only the board passes `beside`
-  so it stays non-modal next to the lanes. Clicking a step in the flow line
+  so it stays non-modal next to the step groups. Clicking a step in the flow line
   page's view mode floats `StepTasksPanel` over the diagram (a bottom sheet on
   phones), and a row opens the sheet on the same form dict and the same
-  `UpdateTask` / `DeleteTask` walkers the board drives it with. `/tasks`
-  does the same for its rows, and keeps scope, filters, sort and page in the
-  URL (`replaceState`, defaults omitted); its Step column and `ListTasks`
-  `sort="step"` follow the board's column order and placement rule. `/roadmap`
+  `UpdateTask` / `DeleteTask` walkers the board drives it with. `/roadmap`
   opens it from a bar. **`UpdateTask` overwrites every field**, so each page
-  that opens the sheet must carry `start_date` and `iteration` (a jid or
-  `"none"`) in its form and pass them on save, or a save clears them.
+  that opens the sheet must carry `start_date` in its form and pass it on
+  save, or a save clears it.
   **The sheet loads the open task's `TaskView` itself** (`GetTask` in its
   entry ability, since a list row carries no notes or checklist items): the
   checklist stays in the sheet's own state, the notes go to the page's form
@@ -529,7 +632,7 @@ File-based routing with route groups:
   save (`UpdateTask` overwrites every field it is sent) cannot clobber it. A
   page that opens `TaskDialog` passes `taskId`, `onLoaded` and an
   `onChecklist` that swaps the reported view into its rows (its
-  `checklist_done` / `checklist_total` are what the card shows).
+  `checklist_done` / `checklist_total` are what the row shows).
 - **The board polls, it does not react to focus.** `BoardSnapshot` every
   `POLL_MS` (60 s); a tab return refetches only when the snapshot on screen
   is older than that; `DrainGithubEvents` every `DRAIN_MS` (20 s) only while
@@ -537,7 +640,36 @@ File-based routing with route groups:
   `LIVE_WINDOW_MINUTES`, or a drain that just landed rows), otherwise once
   per poll ahead of the refresh. It never spawns `SyncGithub` on open: the
   server schedule polls (see the GitHub section above).
-- **Board deep links**: `/board?task=<id>` opens a card, `/board?new=1` the
+- **The board's filters live on the account.** `SetBoardFilters` saves
+  them 800 ms after a change (and on unmount); `BoardSnapshot` with
+  `with_workspace` carries them back, and the board takes them on its first
+  load only, so a later `loadAll` never reverts a change in flight. A
+  stored dict keeps only the keys set away from their default
+  (`BOARD_FILTERS` in `constants.jac`), so a new board filter needs a key
+  there plus a line in `boardFilters`, `adoptFilters` and `filterSummary`
+  (`lib/filters.jac`), or it neither saves nor restores. `lib/filters` also
+  keeps this browser's copy for the first frame. The board's title search
+  is never saved.
+- **Named filter sets are the board's.** `components/common/FilterSets.jac`
+  is the menu beside the board's filters; `FILTER_SET_PAGES` is
+  `["board"]`, a set's keys come from `FILTER_TABLES` in `constants.jac`,
+  and the server drops any other key.
+- **The board is the flow line's steps, stacked.** `components/board/`:
+  `FlowStrip` (every step as a pill with its count; a pill scrolls its
+  group into view), `StepGroup` (a `StepHeader` bar, then its rows; a drop
+  on the group moves the task there, and Done folds by default and pages
+  its older history through `OlderDone`), `TaskLine` (a row: `RowShell`
+  for click, Enter, M and drag-beside, `TaskTitle`, then `TaskCells` from
+  lg up on the `ROW_COLUMNS` grid under `ColumnHeads`, or `TaskMetaLine`
+  below lg, and `RowMove`, the step menu, mounted only while open).
+  Tailwind only sees class names written out whole in source, so a
+  responsive variant is its own literal (`ROW_COLUMNS`), never built by
+  string replacement. The grid's widths are the `--row-cols` variable
+  (default in `styles/global.css`); `ColumnHeads` lets the user resize the
+  five data columns (a double-click fits one to the cells tagged
+  `data-col`, the Display menu resets) and keeps them in this browser
+  (`columnWidths.jac`).
+- **Board deep links**: `/board?task=<id>` opens a task, `/board?new=1` the
   new-task sheet (setup lands there after applying a template); an already
   mounted board listens for `flowline:open-task` / `flowline:new-task` instead
   (the palette uses both paths).
@@ -605,7 +737,10 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   or edge name that was never imported (`STATUS_KIND`, `ForProject`) still
   type-checks clean, then raises `name '...' is not defined` at request time
   and 500s the walker. Only running the endpoint finds it, which is what the
-  API gate suite is for.
+  API gate suite is for. The same goes for a name a release dropped from a
+  runtime module: `open_docs_store` left `jaclang.server.shared_store` in
+  0.37.21 (jaseci-labs/jac#9241), every file still type-checked, and only
+  `jac run` reported it. Boot the app after every pin bump.
 - **A `#` comment among JSX children renders as visible text.** Comments are
   only comments outside the JSX tree; inside it they become a text node and
   ship to the page. Keep notes in the docstring or above the `return`.
@@ -641,10 +776,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   `flowline-account`, written when `/user/me` resolves), so it never shows
   the wordmark and then the name. A page renders its loaded frame with
   skeleton rows on the first data load only, sized by per-browser caches of
-  the last visit (the `*_KEY` globs in `lib/session.jac`: lanes, overview,
-  log, roadmap, GitHub; the log writes today's view and the roadmap the
-  unfiltered one). `forgetSession` clears every cache when a session starts
-  or ends, so another account never inherits a name or a shape. The swap to
+  the last visit (the `*_KEY` globs in `lib/session.jac`: the board's step
+  count, overview, roadmap, GitHub, the board's filters, and the scoped
+  project from `lib/project`). `forgetSession` clears every cache
+  when a session starts or ends, so another account never inherits a name
+  or a shape. The swap to
   the content goes through `components/common/Reveal` (a 150ms cross-fade in
   one grid cell, so no frame in between is blank; the frame comes back if
   `ready` drops with nothing on screen, a retry after a failed first load)
@@ -659,7 +795,8 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   without it a page's plain import of a walker pulls the whole module
   (abilities included) into the browser bundle and the build dies with
   "Client pathway failed to lower this edge reference shape". **A new
-  service module needs its own pin line.** The three `lib/utils`
+  service module needs its own pin line.** Since 0.37.23 a pin is placement
+  only: it never exposes a walker, `:protect` does. The three `lib/utils`
   helpers are pinned `"client"` because an evidence-free `def:pub` in a
   web-app is otherwise a server endpoint. `jac check <page> --placements`
   prints every verdict with its evidence.
@@ -678,6 +815,12 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 - **`len()` on a dict compiles to `.length`**, which is `undefined` on a plain
   JS object, so `len(d) > 0` is silently always false (it type-checks). Track
   emptiness with a separate `bool` field. `len()` on a list is fine.
+- **A local in a nested `def` or an `impl` must not reuse an enclosing name.**
+  The client codegen declares a local with `let` only when no enclosing
+  scope has the name, so `what = asked` in a component helper assigned to
+  the `what` prop (a `const`: "Assignment to constant variable" at runtime),
+  and a `rows` local in a page method would write the page's `has rows`.
+  `jac check` sees neither. Pick names no prop, `has` or render local uses.
 - **A name first assigned inside an `if` is block-scoped in the compiled JS**
   and is `ReferenceError` after the branch. Initialise it before the branch.
 - **A `has` flag cannot arbitrate a shared Escape.** A Radix dialog flips its
@@ -708,9 +851,15 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 - **A dependent entry reads the live cell, so an entry write fires it
   twice.** `can with [x] entry` runs on mount and reads `x` through the
   cell; an `entry` that assigns `x` in the same commit is visible to that
-  mount run, and the re-render's changed deps run it again (the log page
-  fetched its week twice, #225). A value known at render time is the `has`
-  default (`selectedDate: str = todayIso()`), never an entry assignment.
+  mount run, and the re-render's changed deps run it again (the old log
+  page fetched its week twice, #225). A value known at render time is the
+  `has` default (the board's `fProject: str = currentProject()`), never an
+  entry assignment.
+- **Open a dialog from a menu item only once the menu has closed.** The
+  menu's exit animation delays its unmount, and the unmount pulls focus out
+  of a dialog opened in `onSelect`, so the next keys land on `<body>`.
+  Record the ask in `onSelect` and open it from the content's
+  `onCloseAutoFocus` in a `setTimeout(0)` (`FilterSets.jac`).
 - **A Radix `Select` shows its placeholder only for the value `""`.** A
   sentinel such as `"none"` with no matching item renders an empty
   trigger and no muted styling. Seed `""` for "nothing picked" (project on
@@ -724,7 +873,7 @@ fixed by its #1808); the platform now resolves either spelling to the file.
 **API gates**: the suite lives in the scratchpad, not the repo; it signs up two
 accounts and asserts CRUD plus tenant isolation: cross-account reads return
 nothing, and foreign-jid `UpdateTask` / `MoveTask` / `DeleteTask` /
-`AssignToProject` / `UpdateLogEntry` / `SaveProject` / `ArchiveMember` are all
+`AssignToProject` / `SaveProject` / `ArchiveMember` are all
 no-ops, and every list filter (`project_id`, `assignee_id`, `step_id`,
 `task_id`) yields nothing for a foreign id. Paging gates: pages partition
 the set with no repeats, `total` is stable across pages, a page past the end
@@ -733,7 +882,8 @@ walkers or `owned()`. The repo's `tests/smoke/api_gate.py` carries the
 tally parity suite: tasks across statuses, projects, members and
 categories, some created Done and some moved there, then deletes and a
 re-parent, and `TaskCounts`, `BoardSnapshot`, `TaskHistory`, `GetFlowLine`
-counts and `ListTasks` totals must equal a brute-force pass over
+counts (the board and the flow line per project, summed) and `ListTasks`
+totals must equal a brute-force pass over
 `ListTasks(scope="all")` each time. Run it after touching a tally write
 point or a reader.
 
@@ -762,8 +912,9 @@ receiver and applied by the drain, three workspaces stay isolated; the App
 env and `GITHUB_API_BASE` / `GITHUB_WEB_BASE` come from the workflow, no
 secrets) and `tests/smoke/browser_gate.py` (Playwright: sign up, finish the
 three-step setup on the Simple template, land on the board with the new-task
-sheet open and the template's steps applied, create a task and see the card
-survive a reload, then land on GitHub's install redirect against the stub and
+sheet open and the template's steps applied, create a task and see its row
+survive a reload, render the flow line, roadmap and overview, then land on
+GitHub's install redirect against the stub and
 check the page finishes it with exactly one `CompleteGithubInstall` request). The `jac` job runs
 `jac fmt --check --lintfix` over every tracked `.jac` except
 `components/ui/` (registry copies get rewritten by `jac install --shadcn`),

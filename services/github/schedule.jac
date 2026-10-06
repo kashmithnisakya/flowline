@@ -2,14 +2,19 @@
 runtime's own sched: lease picks it across workers and pods) walks the
 gh_installations index and runs one SyncGithub(auto=True) pass in each bound
 workspace's own root, so no page load waits on GitHub. A per-workspace lease
-keeps two passes apart and yields to a manual sync."""
+keeps two passes apart and yields to a manual sync. A tick takes at most
+FLOWLINE_SYNC_MAX_WORKSPACES of them, oldest pass first, so a long pass
+delays the rest by a tick instead of blocking them."""
 
 import os;
 import from jaclang { JacRuntime as Jac }
+import from jaclang.runtime.exceptions { MissingAnchorError }
 import from models { GithubConnection }
 import from services.github.github { SyncGithub, SYNC_LEASE_SECONDS, connection_of }
 import from services.github.util {
-    bound_installations,
+    due_installations,
+    note_sync_at,
+    release_binding,
     acquire_sync_lease,
     release_sync_lease,
     lease_owner,
@@ -33,7 +38,37 @@ def interval_seconds -> int {
 }
 
 
-glob SYNC_INTERVAL_SECONDS: int = interval_seconds();
+# How many workspaces one tick takes. The rest come up on the next ticks,
+# oldest pass first. Zero or less means every bound workspace, one tick.
+def max_workspaces -> int {
+    raw = os.environ.get("FLOWLINE_SYNC_MAX_WORKSPACES") or "";
+    wanted = 20;
+    if raw {
+        try {
+            wanted = int(raw);
+        } except Exception {
+            wanted = 20;
+        }
+    }
+    return wanted if wanted > 0 else 0;
+}
+
+
+glob SYNC_INTERVAL_SECONDS: int = interval_seconds(),
+     SYNC_MAX_WORKSPACES: int = max_workspaces();
+
+
+# A binding outlives its workspace only when the root is gone or no longer
+# holds that installation (the connect race #187 fixed, a store reset). The
+# tick drops such a row instead of visiting it forever; an invalid
+# connection keeps its row, so an unsuspend delivery can still reach it.
+def drop_dead_binding(installation_id: int, root_jid: str, why: str) {
+    if release_binding(installation_id, root_jid) {
+        log.info(
+            "github sync: installation " + str(installation_id) + " unbound: " + why
+        );
+    }
+}
 
 
 # One pass in the workspace's own root: inside the walker `here` and `root`
@@ -41,14 +76,29 @@ glob SYNC_INTERVAL_SECONDS: int = interval_seconds();
 # back on the walker; a failure is logged and the tick moves on.
 def sync_workspace(root_jid: str, installation_id: int) {
     where = "github sync: installation " + str(installation_id);
-    ctx = Jac.create_j_context(user_root=root_jid);
+    try {
+        ctx = Jac.create_j_context(user_root=root_jid);
+    } except MissingAnchorError {
+        drop_dead_binding(installation_id, root_jid, "its workspace no longer exists");
+        return;
+    } except Exception as e {
+        log.warning(where + " raised " + type(e).__name__ + ": " + str(e));
+        return;
+    }
     token = Jac.push_request_context(ctx);
     try {
-        # A pass on cooldown reports the previous stamp back; a pass that
-        # ran stamps a new one, even with nothing to poll.
         holder: any = ctx.get_root();
         c = connection_of(holder);
-        was = c.last_sync_at if isinstance(c, GithubConnection) else "";
+        if not isinstance(c, GithubConnection)
+            or c.installation_id != installation_id {
+            drop_dead_binding(
+                installation_id, root_jid, "the workspace no longer holds it"
+            );
+            return;
+        }
+        # A pass on cooldown reports the previous stamp back; a pass that
+        # ran stamps a new one, even with nothing to poll.
+        was = c.last_sync_at;
         pass_walker: any = SyncGithub(auto=True);
         w: any = Jac.spawn(pass_walker, holder);
         Jac.commit();
@@ -101,7 +151,8 @@ def sync_workspace(root_jid: str, installation_id: int) {
 @schedule(trigger=ScheduleTrigger.STATIC, interval=SYNC_INTERVAL_SECONDS)
 def sync_connected_workspaces {
     owner = lease_owner();
-    for row in bound_installations() {
+    due = due_installations(SYNC_MAX_WORKSPACES);
+    for row in due {
         root_jid = str(row["root_jid"]);
         installation_id = int(row["installation_id"]);
         if not root_jid {
@@ -118,12 +169,25 @@ def sync_connected_workspaces {
                     + str(installation_id)
                     + " is leased elsewhere, skipped"
             );
+            # The holder's own pass covers it, so stamp and move on rather
+            # than offering it again at the head of the next tick.
+            note_sync_at(installation_id);
             continue;
         }
         try {
             sync_workspace(root_jid, installation_id);
         } finally {
+            # Stamped even when the pass failed: a workspace that fails every
+            # time must not hold the head of the queue.
+            note_sync_at(installation_id);
             release_sync_lease(root_jid, owner);
         }
+    }
+    if SYNC_MAX_WORKSPACES > 0 and len(due) >= SYNC_MAX_WORKSPACES {
+        log.info(
+            "github sync: took "
+                + str(len(due))
+                + " workspaces this tick, the oldest first; the rest follow"
+        );
     }
 }

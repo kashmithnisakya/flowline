@@ -7,7 +7,7 @@ nodes (`Project`, `LogEntry` and the rest) are documented on the
 
 ## Tasks
 
-A list reports `TaskRow`, what the cards, the table, the roadmap bars and the
+A list reports `TaskRow`, what the board's rows, the roadmap bars and the
 step panel render; `TaskView` is a `TaskRow` plus the notes, the checklist items
 and the GitHub-only fields, reported for one task by `GetTask` and by every task
 write.
@@ -34,9 +34,9 @@ write.
 
 ::: obj WorkspaceView h3
 
-## Iterations
+::: obj FilterSetView h3
 
-::: obj IterationView h3
+## Roadmap
 
 ::: obj RoadmapData h3
 
@@ -52,7 +52,7 @@ write.
 
 ::: obj StepView h3
 
-## Daily log
+## Activity log
 
 ::: obj LogPage h3
 

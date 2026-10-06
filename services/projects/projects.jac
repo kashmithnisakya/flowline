@@ -27,7 +27,7 @@ def read_projects(box: Projects) -> list[Project] {
 }
 
 
-walker ListProjects {
+walker:protect ListProjects {
     has reports: list[list[Project]] = [];
 
     # A read never makes the box: no box, no projects.
@@ -57,7 +57,7 @@ walker find_project {
     }
 }
 
-walker SaveProject {
+walker:protect SaveProject {
     """Empty project_id creates in the box; otherwise updates the addressed
     Project."""
     has project_id: str = "",
@@ -79,14 +79,16 @@ walker SaveProject {
         }
     }
 
-    # A new project's tallies are exact at zero, so it is stamped here and
-    # ensure_tallies never loads it.
+    # A new project's tallies and keys are exact at zero, so it is stamped
+    # here and ensure_tallies / ensure_keys never load it.
     can create with Projects entry {
         fresh = here ++> Project(
             name=self.name.strip(),
             description=self.description,
+            created_at=now_iso(),
             tallies_at=now_iso(),
-            history_at=now_iso()
+            history_at=now_iso(),
+            keys_at=now_iso()
         );
         on_attached(root, fresh);
         report fresh;
@@ -99,7 +101,7 @@ walker SaveProject {
     }
 }
 
-walker ArchiveProject(find_project) {
+walker:protect ArchiveProject(find_project) {
     """active=False, tasks and history keep pointing at it."""
     can archive with Project entry {
         here.active = False;
@@ -108,7 +110,7 @@ walker ArchiveProject(find_project) {
     }
 }
 
-walker AssignToProject {
+walker:protect AssignToProject {
     has member_id: str,
         project_id: str;
 
@@ -136,7 +138,7 @@ walker AssignToProject {
     }
 }
 
-walker UnassignFromProject {
+walker:protect UnassignFromProject {
     has member_id: str,
         project_id: str;
 

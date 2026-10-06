@@ -53,18 +53,13 @@ import from services.tasks.tasks {
     SetMoveInfo,
     DeleteTask
 }
-import from services.log.log {
-    ListLogEntries,
-    LogCounts,
-    LogActivity,
-    UpdateLogEntry,
-    DeleteLogEntries
-}
+import from services.log.log { ListLogEntries }
 import from services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
     SaveStep,
     MoveStep,
+    SetStepRules,
     DeleteStep,
     DeleteFlowLine,
     LinkTransition,
@@ -88,19 +83,16 @@ import from services.github.github {
     SyncGithub,
     SetRepoAutoSync,
     SetRepoAutoDone,
-    SetRepoAutoClose
+    SetRepoAutoClose,
+    SetRepoLabelSync
 }
 import from services.github.events { GithubEvent, DrainGithubEvents }
 # The scheduled sync registers through this import like a walker does.
 import from services.github.schedule { sync_connected_workspaces }
 import from services.board.board { BoardSnapshot }
 import from services.workspace.workspace { GetWorkspace }
-import from services.iterations.iterations {
-    ListIterations,
-    SaveIteration,
-    DeleteIteration,
-    RoadmapSnapshot
-}
+import from services.roadmap.roadmap { RoadmapSnapshot }
+import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
 import from services.insights.insights { Digest, OverviewSnapshot }
 import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
 

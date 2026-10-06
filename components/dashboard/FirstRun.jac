@@ -1,8 +1,9 @@
-"""First-run checklist: the page body while nothing can be counted, a rail
+"""First-run checklist: the page body while nothing can be counted, a side
 panel after that. The page computes every item from real state (key, title,
 detail, done, action, to, primary); a finished item keeps a quiet link."""
 
 import from "@jac/runtime" { Link }
+import from .Panel { Panel }
 import from ..common.KindGlyph { KindGlyph }
 import from ..ui.button { Button }
 
@@ -14,20 +15,16 @@ def:pub FirstRun(title: str, items: list[dict[str, any]]) -> JsxElement {
             if it["done"]
         ]
     );
+    count = <span className="num text-xs text-muted-foreground">
+        {str(finished) + " of " + str(len(items))}
+    </span>;
     return
-        <section className="surface min-w-0" aria-labelledby="first-run">
-            <div className="flex items-baseline gap-2 px-3.5 pt-3 pb-2">
-                <h2 id="first-run" className="section-title text-[15px]">{title}</h2>
-                <span className="num text-xs text-subtle">
-                    {str(finished) + " of " + str(len(items))}
-                </span>
-            </div>
-            <ol className="px-3.5 pb-1.5">
-                {for (i, it) in enumerate(items) {
+        <Panel id="first-run" title={title} aside={count}>
+            <ol className="space-y-1">
+                {for it in items {
                     <li
                         key={it["key"]}
-                        className={"grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2.5 py-2.5 text-[13.5px] "
-                            + ("border-t" if i > 0 else "")}
+                        className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl py-2 text-sm"
                     >
                         <span
                             className={"text-success" if it["done"] else "text-input"}
@@ -40,8 +37,8 @@ def:pub FirstRun(title: str, items: list[dict[str, any]]) -> JsxElement {
                             />
                         </span>
                         <div className="min-w-0">
-                            <p className="font-semibold">{it["title"]}</p>
-                            <p className="text-[12.5px] text-muted-foreground">
+                            <p className="font-medium">{it["title"]}</p>
+                            <p className="text-xs text-muted-foreground">
                                 {it["detail"]}
                             </p>
                         </div>
@@ -51,7 +48,7 @@ def:pub FirstRun(title: str, items: list[dict[str, any]]) -> JsxElement {
                             <Link
                                 key="redo"
                                 to={it["to"]}
-                                className="text-[13px] text-primary underline underline-offset-[3px] hover:decoration-2"
+                                className="text-sm text-primary underline underline-offset-[3px] hover:decoration-2"
                             >
                                 {it["action"]}
                             </Link>
@@ -68,5 +65,5 @@ def:pub FirstRun(title: str, items: list[dict[str, any]]) -> JsxElement {
                     </li>
                 }}
             </ol>
-        </section>;
+        </Panel>;
 }

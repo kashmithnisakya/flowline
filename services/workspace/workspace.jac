@@ -1,7 +1,8 @@
 """The workspace read: the roster, projects, flow line, repos, roles,
-iterations and GitHub connection every page renders beside its own rows,
-in one call. BoardSnapshot fills its workspace fields from the same helper,
-so the board and the other pages never disagree on a sort."""
+saved filter sets and GitHub connection every page renders
+beside its own rows, in one call. BoardSnapshot fills its workspace fields
+from the same helper, so the board and the other pages never disagree on a
+sort."""
 
 import from jaclang.lib.effects { effects }
 import from models {
@@ -12,10 +13,10 @@ import from models {
     RepoView,
     RoleView,
     StepView,
-    IterationView,
+    FilterSetView,
     GithubConnectionView,
-    iteration_view,
-    iterations_of,
+    filter_set_view,
+    filter_sets_of,
     member_view,
     repo_view,
     role_view,
@@ -31,7 +32,7 @@ import from services.github.github {
     ensure_bound,
     LIVE_WINDOW_MINUTES
 }
-import from services.util { minutes_since, ensure_tallies }
+import from services.util { minutes_since, ensure_tallies, ensure_arrows }
 
 obj WorkspaceView {
     """The workspace part of BoardData plus the flow line's own record
@@ -42,7 +43,8 @@ obj WorkspaceView {
         steps: list[StepView],
         repos: list[RepoView],
         roles: list[RoleView],
-        iterations: list[IterationView],
+        # Every page's saved filter sets, by name.
+        filter_sets: list[FilterSetView],
         github_connected: bool,
         flow_name: str,
         template_key: str,
@@ -80,11 +82,11 @@ def workspace_view(holder: Root) -> WorkspaceView {
         roles.append(role_view(ro));
     }
     roles.sort(key=lambda (rl: RoleView) { rl.sort_order; });
-    iterations: list[IterationView] = [];
-    for it in iterations_of(holder) {
-        iterations.append(iteration_view(it));
-    }
-    iterations.sort(key=lambda (iv: IterationView) { iv.start_date; });
+    filter_sets: list[FilterSetView] = [
+        filter_set_view(fs) for fs in filter_sets_of(holder)
+    ];
+    filter_sets.sort(key=lambda (fv: FilterSetView) { fv.id; });
+    filter_sets.sort(key=lambda (fv: FilterSetView) { fv.name.lower(); });
     # A read never makes the box: no box, the defaults.
     flow_name = "Flow line";
     template_key = "";
@@ -101,7 +103,7 @@ def workspace_view(holder: Root) -> WorkspaceView {
         steps=steps,
         repos=repos,
         roles=roles,
-        iterations=iterations,
+        filter_sets=filter_sets,
         github_connected=github.connected,
         flow_name=flow_name,
         template_key=template_key,
@@ -124,7 +126,8 @@ def workspace_view(holder: Root) -> WorkspaceView {
         "WorkflowSteps",
         "WorkflowStep",
         "Repo",
-        "Iteration",
+        "FilterSets",
+        "FilterSet",
         "GithubConnection"
     ],
     writes=[]
@@ -133,11 +136,12 @@ def read_workspace(holder: Root) -> WorkspaceView {
     # The projects ride with their tallies (the Projects tab's open counts),
     # so a project from before the tallies existed is filled here, once.
     ensure_tallies(holder);
+    ensure_arrows(holder);
     return workspace_view(holder);
 }
 
 
-walker GetWorkspace {
+walker:protect GetWorkspace {
     """Everything a page needs beside its own data, in one read: the lists
     BoardSnapshot carries with `with_workspace`, the flow line's name and
     template key, and the GitHub connection view. No GitHub call."""
