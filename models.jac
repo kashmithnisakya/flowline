@@ -567,7 +567,12 @@ node WorkflowSteps {
 
 node Logs {}
 
-node AgentRuns {}
+# The runs' box is also the workspace's AI switch: off until someone turns
+# it on, and nothing is queued while it is off.
+node AgentRuns {
+    has enabled: bool = False,
+        enabled_at: str = "";
+}
 
 # The board's filters as the account left them (`board`, only the keys set
 # away from their default in constants.BOARD_FILTERS), the saved set they
@@ -819,11 +824,23 @@ obj AgentRunView {
         finished_at: str;
 }
 
-def responsibility_view(r: Responsibility) -> ResponsibilityView {
-    owners = [r<--[?:Role]];
+# What the Roles editor reads: the switch and every role's responsibilities.
+obj AiSettings {
+    has enabled: bool,
+        enabled_at: str,
+        responsibilities: list[ResponsibilityView];
+}
+
+# `role_id` saves the hop to the role when the caller already holds it.
+def responsibility_view(r: Responsibility, role_id: str = "") -> ResponsibilityView {
+    owner = role_id;
+    if not owner {
+        owners = [r<--[?:Role]];
+        owner = jid(owners[0]) if owners else "";
+    }
     return ResponsibilityView(
         id=jid(r),
-        role_id=jid(owners[0]) if owners else "",
+        role_id=owner,
         key=r.key,
         enabled=r.enabled,
         on_steps=list(r.on_steps),
@@ -1079,6 +1096,17 @@ def run_by_key(holder: Root, said: str) -> list[AgentRun] {
         out.extend([box-->[?:AgentRun, run_key==said]]);
     }
     return out;
+}
+
+
+# Is the workspace's AI switch on? Off when no box was ever made.
+def ai_enabled(holder: Root) -> bool {
+    for box in [holder-->[?:AgentRuns]] {
+        if box.enabled {
+            return True;
+        }
+    }
+    return False;
 }
 
 

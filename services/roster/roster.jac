@@ -12,6 +12,7 @@ import from models {
     Task,
     Role,
     Roles,
+    Responsibility,
     WorkflowStep,
     MemberView,
     RepoView,
@@ -312,8 +313,8 @@ walker:protect SaveRole {
 }
 
 walker:protect DeleteRole {
-    """Deletes by name: the Role node (its HasRole edges go with it) and any
-    flow line step owner naming it."""
+    """Deletes by name: the Role node (its HasRole edges go with it), its AI
+    responsibilities, and any flow line step owner naming it."""
     has name: str = "",
         reports: list[dict[str, any]] = [];
 
@@ -333,6 +334,9 @@ walker:protect DeleteRole {
         said = self.name.strip();
         for r in [here-->[?:Role]] {
             if r.name == said {
+                for x in [r-->[?:Responsibility]] {
+                    del x;
+                }
                 del r;
             }
         }

@@ -181,6 +181,7 @@ default = "server"
 # evidence, and a server def:pub here would shadow the effects table.
 "lib.workspace" = "client"
 models = "server"
+"services.agents.agents" = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"
 "services.filters.filters" = "server"

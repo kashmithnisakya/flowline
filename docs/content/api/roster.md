@@ -81,7 +81,7 @@ cleared); `color` is written only when non-empty.
 **Reports** `{"ok": true, "deleted": "<name>"}`, also when no role had that
 name.
 **Side effects** deletes the role (members lose it through the removed edge)
-and clears `owner` on every step that named it.
+and its AI responsibilities, and clears `owner` on every step that named it.
 
 ## Repos
 
