@@ -187,6 +187,7 @@ nav:
       - Flow lines: api/flow-lines.md
       - Insights: api/insights.md
       - Assistant: api/assistant.md
+      - AI responsibilities: api/agents.md
       - GitHub: api/github.md
       - Webhooks: api/webhooks.md
       - Types: api/types.md

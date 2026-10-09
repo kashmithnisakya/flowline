@@ -101,7 +101,10 @@ people it tracks are roster members.
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `roadmap` (`RoadmapSnapshot`, one project's dated tasks), `filters` (the
+  `roadmap` (`RoadmapSnapshot`, one project's dated tasks), `agents` (a
+  role's AI responsibilities, the workspace's AI switch on the `AgentRuns`
+  box, off by default, and a task's runs; `ListResponsibilities` is a
+  declared reader, `ListRuns` never cached), `filters` (the
   saved-filter writers),
   `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
   roles, saved filter sets, flow line meta and GitHub

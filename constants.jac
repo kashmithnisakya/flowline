@@ -250,7 +250,14 @@ glob STATUSES: list[str] = [
              "modes": ["comment", "request_changes"]
          }
      ],
-     AGENT_RUN_STATUSES: list[str] = ["queued", "running", "done", "failed", "skipped"],
+     AGENT_RUN_STATUSES: list[str] = [
+         "queued",
+         "running",
+         "done",
+         "failed",
+         "skipped",
+         "cancelled"
+     ],
      # Caps on what one workspace's AI may do: runs per day, what one review
      # reads (files, changed lines, input tokens, file calls in flight), the
      # comments it posts and the length of a team's instructions.

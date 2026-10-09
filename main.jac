@@ -95,6 +95,15 @@ import from services.roadmap.roadmap { RoadmapSnapshot }
 import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
 import from services.insights.insights { Digest, OverviewSnapshot }
 import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
+import from services.agents.agents {
+    ListResponsibilities,
+    SetAiEnabled,
+    SaveResponsibility,
+    DeleteResponsibility,
+    ListRuns,
+    RetryRun,
+    CancelRun
+}
 
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;

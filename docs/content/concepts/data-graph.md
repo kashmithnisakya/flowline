@@ -20,7 +20,7 @@ flowchart LR
     root --> steps["WorkflowSteps<br/><small>name, template_key</small>"] --> step["WorkflowStep"]
     root --> logs["Logs"] --> day["LogDay"] --> entry["LogEntry"]
     root --> filtersets["FilterSets<br/><small>board, board_set</small>"] --> filterset["FilterSet"]
-    root --> runs["AgentRuns"] --> run["AgentRun"]
+    root --> runs["AgentRuns<br/><small>enabled</small>"] --> run["AgentRun"]
     root --> repo["Repo"]
     root --> conn["GithubConnection"]
 
@@ -45,7 +45,7 @@ flowchart LR
 | `root ++> Members ++> Member` | The roster. Members are archived (`active = false`), never deleted. |
 | `root ++> Roles ++> Role` | Org-level roles; a member holds one through a `HasRole` edge. |
 | `Role ++> Responsibility` | An AI responsibility the role carries (an `AI_RESPONSIBILITIES` key, such as code review), run when a task enters one of the role's steps. |
-| `root ++> AgentRuns ++> AgentRun` | One run of a responsibility on a task: its status and result, what the task sheet shows. |
+| `root ++> AgentRuns ++> AgentRun` | One run of a responsibility on a task: its status and result, what the task sheet shows. The box also carries the workspace's AI switch, off until someone turns it on. |
 | `root ++> WorkflowSteps ++> WorkflowStep` | The flow line. The box also carries the flow line's display name and the template that seeded it. |
 | `root ++> Logs ++> LogDay ++> LogEntry` | The activity log task events write, one `LogDay` per date. |
 | `root ++> FilterSets ++> FilterSet` | Named sets of filters. The box also carries the board's own filters, so the board opens on them in any browser. |
