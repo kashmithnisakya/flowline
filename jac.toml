@@ -1,9 +1,26 @@
 [project]
 name = "flowline"
-# A dotted module name, the only spelling jac 0.37.12+ loads.
-entry-point = "main"
-kind = "web-app"
 jac-version = "==0.37.23"
+default-app = "flowline"
+
+# The web app. An [apps] table moves kind and entry-point here from [project].
+[apps.flowline]
+kind = "web-app"
+entry-point = "main"
+
+# The PR review service: its own Deployment on `jac scale deploy`, colocated in
+# the web app's process under a plain `jac run`.
+[apps.pr_review]
+kind = "service"
+entry-point = "review.service"
+
+[apps.pr_review.scale]
+rpc_timeout = 300.0
+cpu_request = "250m"
+cpu_limit = "1000m"
+memory_request = "1Gi"
+memory_limit = "2Gi"
+hpa = { enabled = true, min = 1, max = 2 }
 
 [jac-shadcn]
 style = "nova"
@@ -182,6 +199,8 @@ default = "server"
 "lib.workspace" = "client"
 models = "server"
 "services.agents.agents" = "server"
+"services.agents.spike" = "server"
+"review.service" = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"
 "services.filters.filters" = "server"

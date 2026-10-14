@@ -71,7 +71,8 @@ def main() -> int:
     if WOULD_BUILD not in text:
         failures.append(f"transcript never says '{WOULD_BUILD}'")
 
-    fleet = re.search(r'"app": "flowline", "client": (true|false)', text)
+    # The YAML folds the long fleet value, so a line break can sit anywhere.
+    fleet = re.search(r'"app":\s+"flowline",\s+"client":\s+(true|false)', text)
     if fleet is None:
         failures.append("no JAC_SV_FLEET member named flowline in the manifests")
     elif fleet.group(1) != "true":
