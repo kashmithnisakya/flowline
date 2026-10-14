@@ -2,6 +2,7 @@
 pod. The main app hands it a run through the outbox (an un-awaited spawn); it
 runs as the service identity, never inside a workspace's graph, and leaves
 its result in the shared docs store for the workspace's own session to apply.
+Calls from the web app carry JAC_BRIDGE_TOKEN, read when the pod starts.
 """
 
 import json;
