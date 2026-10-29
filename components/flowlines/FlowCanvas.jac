@@ -127,6 +127,7 @@ def:pub FlowCanvas(
     panX: float = 0.0,
     panY: float = 0.0,
     editing: bool = False,
+    showCounts: bool = True,
     dragId: str = "",
     # Lane view bands from lanes.jac. Non-empty flips lane mode: elbow wires,
     # a fixed label column, and `live` holds the computed lane positions.
@@ -190,7 +191,10 @@ def:pub FlowCanvas(
     for s in steps {
         wantPill = 37.0 + textWidth(s.name, NAME_FONT, 7.6);
         countText = str(s.task_count) + (" done" if s.kind == "done" else " open");
-        wantRow = wantPill + 8.0 + textWidth(countText, COUNT_FONT, 7.3) + 12.0;
+        wantRow = wantPill;
+        if showCounts {
+            wantRow = wantRow + 8.0 + textWidth(countText, COUNT_FONT, 7.3) + 12.0;
+        }
         owner = s.owner.strip() if s.owner else "";
         wantOwner = textWidth("Anyone" if owner == "anyone" else owner, META_FONT, 6.6);
         needLow[s.id] = wantPill + 22.0;
@@ -622,6 +626,7 @@ def:pub FlowCanvas(
                         titles={nodeTitles(s, stepTitles)}
                         showTitles={detail == "high" and s.id in stepTitles}
                         showOwner={not laneMode}
+                        showCounts={showCounts}
                         selected={selectedId == s.id or connectFrom == s.id}
                         portsOn={selectedId == s.id}
                         target={connecting and s.id != connectFrom}

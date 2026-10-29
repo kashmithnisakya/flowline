@@ -11,6 +11,7 @@ def:pub StepListRow(
     step: StepView,
     outs: list[dict[str, str]],
     selected: bool = False,
+    showCounts: bool = True,
     onOpen: Callable[[str], None] = None
 ) -> JsxElement {
     c = colorKey(step.color);
@@ -34,7 +35,14 @@ def:pub StepListRow(
                             size="sm"
                         />
                     </span>
-                    <CountChip count={step.task_count} kind={step.kind} color={c}/>
+                    {if showCounts {
+                        <CountChip
+                            key="count"
+                            count={step.task_count}
+                            kind={step.kind}
+                            color={c}
+                        />
+                    }}
                 </span>
                 {if owner {
                     <span key="owner" className="text-xs text-muted-foreground">

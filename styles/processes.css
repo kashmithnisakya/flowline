@@ -1,0 +1,54 @@
+/* Storyboard geometry only. Tokens and shared components own the styling. */
+.process-workspace {
+    height: max(28rem, calc(100dvh - 14.5rem));
+}
+.process-diagrams {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+.process-diagrams.is-comparing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.process-diagrams.is-comparing > :first-child {
+    border-right: 1px solid var(--border);
+}
+.process-step-list {
+    flex: 1 1 0%;
+}
+.process-floating-panel {
+    max-height: calc(100% - 1.5rem);
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+    .process-workspace {
+        height: max(28rem, calc(100dvh - 18rem));
+    }
+}
+@media (max-width: 639px) {
+    .process-workspace {
+        height: max(28rem, calc(100dvh - 19rem));
+    }
+    .process-diagrams.is-comparing {
+        grid-template-columns: minmax(0, 1fr);
+        overflow-y: auto;
+    }
+    .process-diagrams.is-comparing > .process-diagram-panel {
+        min-height: 22rem;
+    }
+    .process-diagrams.is-comparing > :first-child {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .process-workspace:has(.process-step-list) {
+        height: auto;
+    }
+    .process-diagrams:has(.process-step-list) {
+        overflow: visible;
+    }
+    .process-diagrams:has(.process-step-list) > .process-diagram-panel {
+        min-height: 0;
+    }
+    .process-step-list {
+        flex: none;
+        overflow: visible;
+    }
+}

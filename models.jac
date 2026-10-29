@@ -63,6 +63,7 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, FilterSets)
         or isinstance(owner, Role)
         or isinstance(owner, AgentRuns)
+        or isinstance(owner, ProcessDefinitions)
     );
 }
 
@@ -92,6 +93,59 @@ def owned(holder: any, target: any) -> bool {
 }
 
 # ---------------------------------------------------------------- archetypes
+
+# Reviewable process definitions are separate from the operational task flow.
+# No executor consumes these steps: capability labels describe intended work.
+node ProcessDefinitions {}
+
+node ProcessDefinition {
+    has template_key: str,
+        title: str,
+        family: str,
+        variant: str,
+        summary: str,
+        revision: int = 1,
+        steps: list[dict[str, str]] = [],
+        transitions: list[dict[str, str]] = [],
+        policies: list[dict[str, str]] = [],
+        configuration: list[dict[str, str]] = [],
+        review_notes: dict[str, str] = {},
+        updated_at: str = "";
+}
+
+obj ProcessView {
+    has id: str,
+        template_key: str,
+        title: str,
+        family: str,
+        variant: str,
+        summary: str,
+        revision: int,
+        steps: list[dict[str, str]],
+        transitions: list[dict[str, str]],
+        policies: list[dict[str, str]],
+        configuration: list[dict[str, str]],
+        review_notes: dict[str, str],
+        updated_at: str;
+}
+
+def process_view(p: ProcessDefinition) -> ProcessView {
+    return ProcessView(
+        id=jid(p),
+        template_key=p.template_key,
+        title=p.title,
+        family=p.family,
+        variant=p.variant,
+        summary=p.summary,
+        revision=p.revision,
+        steps=p.steps,
+        transitions=p.transitions,
+        policies=p.policies,
+        configuration=p.configuration,
+        review_notes=p.review_notes,
+        updated_at=p.updated_at
+    );
+}
 
 node Project {
     has name: str,

@@ -49,7 +49,8 @@ def:pub ZoomControls(
     className: str = "",
     # The first-load frame: the readout is a block, since the fit zoom is
     # not known until the flow line is.
-    pending: bool = False
+    pending: bool = False,
+    fitTitle: str = "Fit the whole flow line (F)"
 ) -> JsxElement {
     pct = str(int(zoom * 100.0 + 0.5)) + "%";
     return
@@ -114,7 +115,7 @@ def:pub ZoomControls(
             </button>
             <button
                 type="button"
-                title="Fit the whole flow line (F)"
+                title={fitTitle}
                 className="ml-0.5 inline-flex h-full items-center gap-1.5 rounded-md bg-card px-3 text-[12.5px] font-semibold text-foreground shadow-xs transition-colors hover:bg-accent"
                 onClick={lambda { if onFit { onFit(); }}}
             >

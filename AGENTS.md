@@ -16,6 +16,14 @@ authoritative spec for writing correct, idiomatic Jac:
 
 Start with `jac guide jac-core-cheatsheet` and `jac guide jac-types`.
 
+## UI and UX changes
+
+Read [Flowline's style and UX guide](docs/content/contributing/style-and-ux-guide.md)
+before changing an in-app screen. Inspect the nearest native screen and shared
+components first, reuse the existing tokens and interaction patterns, and
+follow the guide's visual review checklist. Functional tests alone do not
+establish that a feature fits Flowline's design.
+
 ## Validate your work
 
 - `jac check <file>` -- type-check and lint. Compiler diagnostics link to the

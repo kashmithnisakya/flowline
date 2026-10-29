@@ -24,6 +24,13 @@ glob:pub NAV_PAGES: list[dict[str, str]] = [
              "keywords": "workflow steps process transitions design"
          },
          {
+             "key": "processes",
+             "label": "Processes",
+             "to": "/processes",
+             "group": "daily",
+             "keywords": "current proposed migration BAU storyboards review"
+         },
+         {
              "key": "board",
              "label": "Board",
              "to": "/board",
@@ -162,7 +169,7 @@ def:pub PageIcon(name: str, size: int = 16, className: str = "") -> JsxElement {
                 <path key="roadmap" d="M2.5 4h6M5.5 8h8M3.5 12h5" strokeWidth={2}/>
             } elif name == "overview" {
                 <path key="overview" d="M2.5 13.5h11M3.5 10.5l3-3 2.5 2 4-5"/>
-            } elif name == "flowline" {
+            } elif name == "flowline" or name == "processes" {
                 <g key="flowline" transform="scale(0.6667)" strokeWidth={2.2}>
                     <circle cx={5} cy={17} r={3}/>
                     <path d="M8 17h3.5a3 3 0 0 0 3-3v-4a3 3 0 0 1 1.5-2.6"/>

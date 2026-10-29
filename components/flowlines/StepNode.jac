@@ -25,6 +25,7 @@ def:pub StepNode(
     titles: list[str],
     showTitles: bool = False,
     showOwner: bool = True,
+    showCounts: bool = True,
     selected: bool = False,
     portsOn: bool = False,
     target: bool = False,
@@ -42,6 +43,7 @@ def:pub StepNode(
         <button
             type="button"
             data-step={step.id}
+            aria-pressed={selected}
             title={step.name + (" · " + step.blurb if step.blurb else "")}
             className={"group absolute flex flex-col overflow-hidden rounded-2xl bg-card px-2.5 py-1.5 text-left transition-[box-shadow,opacity] duration-150 "
                 + (("z-20 " + RING[c]) if selected else "z-10 ring-1 ring-border")
@@ -65,7 +67,7 @@ def:pub StepNode(
                 <span className="flex min-w-0 flex-1">
                     <StepBadge name={step.name} color={c} kind={step.kind} size="sm"/>
                 </span>
-                {if detail != "low" {
+                {if detail != "low" and showCounts {
                     <CountChip
                         key="count"
                         count={step.task_count}

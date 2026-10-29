@@ -4,6 +4,7 @@ module registers every server endpoint (a walker missing from these imports
 """
 
 import ".styles.global.css";
+import ".styles.processes.css";
 
 import from models {
     Project,
@@ -95,6 +96,11 @@ import from services.board.board { BoardSnapshot }
 import from services.workspace.workspace { GetWorkspace }
 import from services.roadmap.roadmap { RoadmapSnapshot }
 import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
+import from services.processes.processes {
+    ListProcesses,
+    InstallProcessExamples,
+    SaveProcessNote
+}
 import from services.insights.insights { Digest, OverviewSnapshot }
 import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
 import from services.agents.agents {
