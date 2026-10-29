@@ -1,6 +1,7 @@
 """flowline - shared vocabulary lists."""
 
-glob STATUSES: list[str] = [
+glob FLOW_COORD_LIMIT: float = 20000.0,
+     STATUSES: list[str] = [
          "Backlog",
          "In Progress",
          "Review",

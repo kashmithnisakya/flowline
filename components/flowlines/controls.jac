@@ -52,6 +52,9 @@ def:pub ZoomControls(
     pending: bool = False
 ) -> JsxElement {
     pct = str(int(zoom * 100.0 + 0.5)) + "%";
+    if zoom < 0.1 {
+        pct = str(float(int(zoom * 1000.0 + 0.5)) / 10.0) + "%";
+    }
     return
         <div
             role="group"

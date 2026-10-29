@@ -240,13 +240,32 @@ assignees are replaced by that person and the log line names them
 zero or several holders, the assignees are left alone. Reordering a task
 within its own step is never a handoff.
 
+## Editing on the canvas
+
+In **Edit**, drag the middle of a step to move it, or drag from its border onto
+another step to connect them. Steps can cross the canvas origin in either
+direction. Each coordinate stays between -20,000 and 20,000; dragging beyond a
+boundary stops there instead of sending the step back to the origin.
+
+Drag empty space to pan freely in **Flow**, even when every step fits on
+screen. **Lanes** arranges steps by owner role and keeps its bands bounded.
+Ctrl or Cmd plus the wheel, or a two-finger pinch, zooms around the pointer.
+The zoom range is 0.1% to 200%; **Fit** (or F) brings the drawing back into view.
+
+A click or a canceled drag does not save a position. A second finger switches
+the current gesture to a pinch and abandons only its unfinished drag. Earlier
+drops stay visible while their saves finish. A failed position write shows an
+error, and a successful refresh restores the server's stored position.
+Queued drops keep their order when navigating between app pages; reopening
+the flow includes positions whose saves are still pending.
+
 ## Editing rules
 
 | Action | What happens |
 | --- | --- |
 | Rename a step | Nothing else changes; behaviour follows the kind. |
 | Change a step's kind | Every task whose `step_id` is that step gets the new mapped `status` (no log line, no `updated_at` bump). |
-| Move a step on the canvas | `MoveStep` stores `x` and `y`; a coordinate outside 0..20000 is reset to 0. |
+| Move a step on the canvas | `MoveStep` stores signed `x` and `y`, each clamped to -20,000..20,000. Non-finite values become 0. |
 | Delete a step | Refused for the only `start` or only `done` step. Otherwise tasks on it keep their `status` and fall back per the rules above, and every transition into it is removed. |
 | Delete the flow line | Every step and transition goes, tasks keep their `status`, and `template_key` resets so the picker appears again. Roles stay. |
 | Rename or delete a role | A rename rewrites every step `owner` that used the old name; a delete clears it. Members follow through their `HasRole` edge. |

@@ -5,6 +5,36 @@ cluster. Its CLI bundles the repo, uploads it, and follows the rollout until the
 URL answers.
 { .fl-lede }
 
+## Jac Builder previews
+
+[Jac Builder](https://github.com/jaseci-labs/jacBuilder) is the repository behind
+JacHammer. Import the **whole Flowline
+repository**, keeping `jac.toml` at the app root and its exact
+`[project] jac-version = "=={{ jac_version }}"` pin. The canvas uses the app's
+models, shared constants, components and server walkers; copying only the
+canvas files does not produce a standalone app.
+
+Builder's Kubernetes preview selects the project's pinned runtime separately
+from Builder's own runtime. Do not remove or change the pin just to match the
+IDE. Its development preview runs one worker; the two workers configured in
+Flowline's `jac.toml` remain the production setting. A Builder local-preview
+provider that cannot honor this pin needs a Kubernetes preview instead; to
+test locally, run the pinned binary directly with
+`jac run --dev --workers 1 main.jac`.
+
+Set the project environment as described [below](#4-set-environment-variables).
+Keep the `[apps.flowline]` and `[apps.pr_review]` declarations and the placement
+pins: a production deploy includes the web client, API and review service.
+The canvas changes use the existing step `x` and `y` fields and walker request
+shapes, so they need no data migration or new package dependency.
+Deploy the client and API from the same revision: older APIs reset negative
+positions to zero.
+
+Before deploying, run the [Flow canvas regression gate](../contributing/verification.md#flow-canvas-regressions)
+against the preview. For a deployment manifest check, use the dry-run gate
+described in [Verification and CI](../contributing/verification.md#what-ci-runs);
+it stages the cluster and secret placeholders in a temporary configuration.
+
 ## 1. Install the CLI
 
 ```bash

@@ -11,7 +11,6 @@ import from ...services.flowlines.flowlines {
     GetFlowLine,
     ApplyTemplate,
     SaveStep,
-    MoveStep,
     DeleteStep,
     DeleteFlowLine,
     LinkTransition,
@@ -22,6 +21,15 @@ import from ...services.flowlines.flowlines {
     ListStepTasks
 }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
+import from ...lib.flowMoves {
+    flowMoveVersion,
+    advanceFlowMove,
+    pendingFlowMoves,
+    flowMovesBusy,
+    queueFlowMove,
+    flushFlowMoves,
+    acknowledgeFlowMoves
+}
 import from ...lib.filters { defaultProject }
 import from ...lib.project { currentProject, pickProject }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
@@ -46,6 +54,7 @@ import from ...components.flowlines.geometry {
     nodeRects,
     stepXY,
     clampZoom,
+    clampCoord,
     nextStop,
     detailOf,
     NODE_W,
@@ -160,8 +169,8 @@ def:pub FlowLinePage -> JsxPage {
         # Add step opens a naming panel first: the step only exists once the
         # user has called it something, never as a placeholder card.
         creatingStep: bool = False,
-        # A dragged step's live position, canvas px, for this drag only.
-        live: dict[str, list[float]] = {},
+        # Canvas positions awaiting a save refresh, plus the active drag draft.
+        live: dict[str, list[float]] = pendingFlowMoves(),
         dragId: str = "",
         # Clicking a step outside edit mode opens its work.
         peekId: str = "",
@@ -202,8 +211,14 @@ def:pub FlowLinePage -> JsxPage {
         panRef: Ref[any] = Ref(),
         fittedRef: Ref[any] = Ref(),
         dragRef: Ref[any] = Ref(),
+        # Writes are shared across mounts; these refs only guard this view.
+        moveSavingRef: Ref[any] = Ref(),
+        moveMountedRef: Ref[any] = Ref(),
+        moveRefreshRef: Ref[any] = Ref(),
         wireRef: Ref[any] = Ref(),
         gestureRef: Ref[any] = Ref(),
+        activePointerRef: Ref[any] = Ref(),
+        # Only pressed touch contacts participate in a pinch.
         pointersRef: Ref[any] = Ref(),
         spaceRef: Ref[any] = Ref(),
         swallowRef: Ref[any] = Ref(),
@@ -237,6 +252,20 @@ def:pub FlowLinePage -> JsxPage {
             fitZoom();
         },
         [len(steps), editing, lineView, boxW, boxH, narrow, phoneView, loading]
+    );
+
+    # A previous flow page may still be saving when this one mounts.
+    useEffect(
+        lambda {
+            moveMountedRef.current = True;
+            onSaved: any = lambda { saveMoves(); };
+            window.addEventListener("flowline:moves-saved", onSaved);
+            return lambda {
+                moveMountedRef.current = False;
+                window.removeEventListener("flowline:moves-saved", onSaved);
+            };
+        },
+        []
     );
 
     # A resize refits through measureBox. Late web fonts widen the measured
@@ -321,7 +350,7 @@ def:pub FlowLinePage -> JsxPage {
 
     async def boot -> None;
     async def loadShared -> None;
-    async def reload(pid: str) -> None;
+    async def reload(pid: str, moveVersion: int = -1) -> bool;
     async def retryLoad -> None;
     async def adoptProject(v: str) -> None;
     async def peekStep(stepId: str) -> None;
@@ -383,9 +412,16 @@ def:pub FlowLinePage -> JsxPage {
     def surfaceXY(e: any) -> list[float];
     def beginDrag(e: any) -> None;
     def moveDrag(e: any) -> None;
+    def discardDrag -> None;
     async def endDrag(e: any) -> None;
+    async def cancelDrag(e: any) -> None;
+    async def finishPointer(e: any, canceled: bool) -> None;
+    async def saveMoves -> None;
 
     peekRef.current = peekId;
+    if moveMountedRef.current is None {
+        moveMountedRef.current = True;
+    }
     stepsRef.current = steps;
     liveRef.current = live;
     if zoomRef.current is None {
@@ -906,7 +942,7 @@ def:pub FlowLinePage -> JsxPage {
                                             onPointerDown={beginDrag}
                                             onPointerMove={moveDrag}
                                             onPointerUp={endDrag}
-                                            onPointerCancel={endDrag}
+                                            onPointerCancel={cancelDrag}
                                         >
                                             <FlowCanvas
                                                 steps={steps}

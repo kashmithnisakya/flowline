@@ -29,9 +29,12 @@ with a new task ready to type.
 
 On the flow line page, Edit lets you drag a step to move it, drag from its edge
 onto another step to connect them, and click a transition to label or delete
-it. Drag the empty canvas to pan, zoom with ctrl or cmd and the wheel (or a
-pinch), and press F to fit. Flow shows the steps where you drew them; Lanes
-lays them out by owner role.
+it. Steps can move across the origin in every direction. Drag the empty
+canvas to pan freely in Flow, zoom with ctrl or cmd and the wheel (or a
+pinch), and press F to fit. Zoom goes from 0.1% to 200%. Flow shows the steps
+where you drew them; Lanes lays them out by owner role. See the
+[canvas editing guide](docs/content/concepts/flow-lines.md#editing-on-the-canvas)
+for coordinate bounds and how interrupted gestures behave.
 
 Every step carries a *kind* behind the name you chose: start, active, handoff,
 blocked or done. The name is yours, the kind is what the app understands, which
@@ -77,13 +80,18 @@ is why renaming a step never changes how anything behaves.
 
 ## Install Jac
 
-Jac ships as a single native binary. No Python, pip or Node required up front:
+Jac ships as a single native binary. No Python, pip or Node required up front.
+From the repository root, install the release pinned in `jac.toml`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash
+flowline_jac_version="$(sed -nE 's/^jac-version *= *"(==)?([0-9][0-9.]*)".*/\2/p' jac.toml)"
+curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh \
+  | bash -s -- --version "$flowline_jac_version"
 ```
 
-Run `jac` afterwards to confirm it is on your PATH.
+Run `jac --version` afterwards to confirm the pinned release is on your PATH.
+For a Jac Builder import, keep the project pin and the complete repository;
+see [Jac Builder previews](docs/content/deploy/jachammer.md#jac-builder-previews).
 
 ## Run the app
 

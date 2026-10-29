@@ -62,6 +62,13 @@ and `dev`.
        create a task from the board and see the card survive a reload, then
        land on GitHub's install redirect against the stub and check the page
        completes it with exactly one `CompleteGithubInstall` request.
+    9. **Flow canvas gate** (`tests/smoke/flow_canvas_gate.py`, Playwright):
+       create a custom flow, drag through all four quadrants, and verify the
+       saved positions after reload. Its `flow_motion_cases.py` regressions
+       cover overlapping steps, clicks, delayed and failed saves, canceled
+       drags and wires, coordinate boundaries, negative-position labels,
+       panning, zoom, lane switches, navigation with queued drops, recovery
+       after failed or invalidated reads, and phone and mixed mouse/touch input.
 
 === "docs: build"
 
@@ -69,6 +76,37 @@ and `dev`.
     requests that touch `docs/`, the Jac sources the reference reads, or
     `jac.toml`, and deploys it to GitHub Pages from `dev`. See
     [Writing these docs](docs.md).
+
+## Flow canvas regressions
+
+After changing canvas geometry, gestures or position persistence, start the
+app and run the existing browser gate from the repository root:
+
+```bash
+jac run --no-dev --port 8000 main.jac
+# In another terminal, with Playwright and Chromium installed:
+python3 tests/smoke/flow_canvas_gate.py http://localhost:8000
+```
+
+The gate creates its own test account and checks both rendered positions and
+fresh API reads. It does not require a GitHub connection or a model key.
+Desktop coverage uses 1440 × 1000; phone emulation uses 390 × 844 with Chromium
+touch events. These checks do not replace testing on physical touch devices.
+Screenshots are written under `.jac/`; the top-level
+`browser_gate_failure.png` captures a failed run.
+
+Position writes live in `lib/flowMoves.jac` so app navigation cannot start a
+second writer. A flow page owns its active drag preview; a current server
+read confirms pending positions only after all writes settle and no drag is
+active. The gate holds responses while navigating and switching projects to
+exercise those boundaries.
+
+For the Jac Builder preview path, run the same gate against the hot-reload
+server, with one worker as required by Jac's development mode:
+
+```bash
+jac run --dev --workers 1 --port 8000 --api-port 8001 main.jac
+```
 
 ## Browser QA by hand
 

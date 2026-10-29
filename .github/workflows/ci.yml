@@ -211,6 +211,9 @@ jobs:
       - name: Browser gate (sign up, setup, flow line, New task, card, GitHub install once)
         run: python3 tests/smoke/browser_gate.py http://localhost:8000 http://127.0.0.1:8099
 
+      - name: Flow canvas gate (custom flow, dragging across axes, saved positions)
+        run: python3 tests/smoke/flow_canvas_gate.py http://localhost:8000
+
       - name: Failure screenshot
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4

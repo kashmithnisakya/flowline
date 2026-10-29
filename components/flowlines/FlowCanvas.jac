@@ -332,8 +332,9 @@ def:pub FlowCanvas(
             else 0.0;
         l["lit"] = bool(selectedId)
             and (l["from"] == selectedId or l["to"] == selectedId);
-        l["cx"] = -9999.0;
-        l["cy"] = -9999.0;
+        l["cx"] = 0.0;
+        l["cy"] = 0.0;
+        l["placed"] = False;
     }
     placeChips(links, obstacles);
     if layoutRef {
@@ -367,7 +368,7 @@ def:pub FlowCanvas(
         ex1 = nx1;
         ey1 = ny1;
         for l in links {
-            if l["text"] and float(l["cx"]) > -9000.0 {
+            if l["text"] and l["placed"] {
                 half = float(l["cw"]) / 2.0;
                 if float(l["cx"]) - half < ex0 {
                     ex0 = float(l["cx"]) - half;
@@ -549,7 +550,7 @@ def:pub FlowCanvas(
                 </svg>
                 {for l in links {
                     <div key={"chip-" + l["key"]}>
-                        {if l["text"] and float(l["cx"]) > -9000.0 {
+                        {if l["text"] and l["placed"] {
                             <span
                                 key="lab"
                                 data-chip="label"

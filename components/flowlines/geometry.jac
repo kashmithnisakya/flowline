@@ -4,14 +4,34 @@ canvas px; everything drawn is in SCREEN px (position times zoom), so text and
 strokes keep their size at every zoom and only the layout scales."""
 
 import from ...models { StepView }
+import from ...constants { FLOW_COORD_LIMIT }
 
 glob NODE_W: float = 176.0,
      # The footprint a step claims in canvas px. What is drawn inside it is
      # sized in screen px by the zoom's detail level, see nodeRects.
      NODE_H: float = 96.0,
-     ZOOM_MIN: float = 0.3,
+     ZOOM_MIN: float = 0.001,
      ZOOM_MAX: float = 2.0,
-     ZOOM_STOPS: list[float] = [0.3, 0.4, 0.5, 0.6, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
+     ZOOM_STOPS: list[float] = [
+         0.001,
+         0.002,
+         0.005,
+         0.01,
+         0.02,
+         0.05,
+         0.1,
+         0.2,
+         0.3,
+         0.4,
+         0.5,
+         0.6,
+         0.75,
+         1.0,
+         1.25,
+         1.5,
+         1.75,
+         2.0
+     ],
      # Below LOW a node shows its name; up to HIGH also count and kind;
      # above HIGH the first task titles as well.
      DETAIL_LOW: float = 0.6,
@@ -52,7 +72,7 @@ def detailOf(z: float) -> str {
 def nextStop(z: float, dirn: int) -> float {
     if dirn > 0 {
         for v in ZOOM_STOPS {
-            if v > z + 0.01 {
+            if v > z * 1.01 {
                 return v;
             }
         }
@@ -60,7 +80,7 @@ def nextStop(z: float, dirn: int) -> float {
     }
     below = ZOOM_MIN;
     for v in ZOOM_STOPS {
-        if v < z - 0.01 {
+        if v < z / 1.01 {
             below = v;
         }
     }
@@ -74,6 +94,17 @@ def clampZoom(v: float) -> float {
     }
     if v > ZOOM_MAX {
         return ZOOM_MAX;
+    }
+    return v;
+}
+
+
+def clampCoord(v: float) -> float {
+    if v < -FLOW_COORD_LIMIT {
+        return -FLOW_COORD_LIMIT;
+    }
+    if v > FLOW_COORD_LIMIT {
+        return FLOW_COORD_LIMIT;
     }
     return v;
 }
@@ -169,9 +200,14 @@ def nodeRects(
 
 
 # Which drawn node is under a pan-origin screen point, and whether the point
-# is on its border strip (the wire port). Last in `steps` order wins.
+# is on its border strip (the wire port). The selected node is drawn above
+# the rest; otherwise the last node in `steps` order is on top.
 def hitRect(
-    steps: list[StepView], rects: dict[str, list[float]], sx: float, sy: float
+    steps: list[StepView],
+    rects: dict[str, list[float]],
+    sx: float,
+    sy: float,
+    frontId: str = ""
 ) -> dict[str, any] {
     found = "";
     onEdge = False;
@@ -188,6 +224,9 @@ def hitRect(
                 or r[0] + r[2] - sx < PORT_ZONE
                 or r[1] + r[3] - sy < PORT_ZONE
             );
+            if s.id == frontId {
+                break;
+            }
         }
     }
     if not found {
@@ -400,7 +439,8 @@ def cubicSamples(p: list[float]) -> list[list[float]] {
 # Put each label chip beside its own wire, clear of nodes, chips and wires.
 # Anchors are [x, y, |nx|, |ny|, pref] (the wire's normal there); a chip steps
 # up (+) or down, right (+) or left, far enough to clear that slope. The
-# cheapest candidate wins; on the wire itself is the last resort. Sets cx/cy.
+# cheapest candidate wins; on the wire itself is the last resort. Sets cx/cy
+# and marks the chip placed, independently of the sign of its coordinates.
 def placeChips(links: list[dict[str, any]], nodes: list[list[float]]) {
     placed: list[list[float]] = [];
     # A two-way pair has the least room (its partner wire runs alongside),
@@ -536,6 +576,7 @@ def placeChips(links: list[dict[str, any]], nodes: list[list[float]]) {
         }
         l["cx"] = best[0];
         l["cy"] = best[1];
+        l["placed"] = True;
         placed.append(
             [
                 best[0] - cw / 2.0 - 2.0,
