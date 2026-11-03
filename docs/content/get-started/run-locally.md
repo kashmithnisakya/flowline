@@ -100,7 +100,7 @@ Setup resumes at the first unfinished step, and once a flow line exists
 | --- | --- |
 | `/` | The public landing page |
 | `/login` | Sign in; `?mode=signup` opens the sign-up tab |
-| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace` | The app (signed in) |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/ai`, `/workspace` | The app (signed in) |
 | `/setup` | The setup wizard |
 | `/workspace?tab=github` | The GitHub connection (`/github`, the App's callback, renders the same section) |
 | `/workspace?tab=preferences` | The theme |

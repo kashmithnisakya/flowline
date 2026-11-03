@@ -41,11 +41,13 @@ runs on all of them. Each one carries:
 | Model | The model name, or empty for the server's `LLM_MODEL` (default `gpt-4o-mini`). |
 | Enabled | Off keeps the settings and queues nothing. |
 
-The workspace's **AI switch** (Workspace, Organization) is off by default.
-While it is off, nothing is queued and nothing leaves the workspace.
+The workspace's **AI responsibilities switch** (the AI page, `/ai`) is off by
+default, and turning it on asks first. While it is off, nothing is queued and no
+pull request leaves the workspace. Ask is separate: see
+[What is sent](#what-is-sent-to-the-model).
 
 On the flow line, a step whose owner has responsibilities that run there
-carries an **AI** mark, and the step's inspector names them.
+carries the AI mark, a dashed ring, and the step's sheet names them.
 
 ## When a run is queued
 
@@ -93,10 +95,12 @@ it is still on the step the run was queued for.
 | `cancelled` | Stopped from the task sheet. Nothing is posted for it. |
 
 A GitHub 5xx, a rate limit or an unreachable review service is retried with
-backoff, up to three attempts. The task sheet's **AI reviews** section lists
-the task's runs with their findings and a link to the review, plus **Retry**
-for a failed, skipped or cancelled run and **Cancel** for an open one. While
-a run is open, the board row shows "AI review queued" or "AI reviewing".
+backoff, up to three attempts. The task sheet shows the task's newest run, with
+the earlier ones a click away: what it found and a link to the review, plus
+**Retry** for a failed, skipped or cancelled run and **Cancel** for an open one.
+The AI page lists every run in the workspace the same way. The board row's AI
+column says **Queued** or **Reviewing** while a run is open, then what the last
+review came to.
 
 ## Budgets
 
@@ -121,8 +125,12 @@ Only while the AI switch is on, and only for a task a responsibility runs on:
 - the task's title and the first line of its notes
 - the team's instructions for that responsibility
 
-They go to the model provider the server is set up with. Nothing else in
-the workspace is sent, and no pull request content is written to the logs.
+They go to the model provider the server is set up with, and no pull request
+content is written to the logs.
+
+Ask does not depend on the switch. Each time you use it, it sends a summary of
+the workspace to the same provider: its counts, blocked, overdue, aging and in-review
+tasks, people, projects and recent log lines.
 
 ## Where it runs
 

@@ -185,6 +185,14 @@ def runner_suite():
     check("  and the task's log says so", any("AI code review · 0 comments, 0 blocking" in x for x in task_log(a)),
           task_log(a))
     check("  and the row's AI chip clears", ai_state(a) == "", ai_state(a))
+    a_row = walker("GetTask", {"task_id": a})
+    check("  and the row keeps what the review came to", a_row.get("ai_outcome") == "reviewed", a_row)
+    activity = walker("ListAgentRuns", {"page_size": 100})
+    a_line = next((r for r in activity.get("rows", []) if r.get("task_id") == a), {})
+    check("  and the AI page lists it with its task", a_line.get("status") == "done" and bool(a_line.get("task_title"))
+          and bool(a_line.get("project_name")), activity)
+    check("  and the AI page counts today's runs", activity.get("runs_today", 0) >= 1
+          and activity.get("daily_limit", 0) > 0, activity)
     calls = [c[1] for c in wg.stub_calls(INST)]
     check("  reading the PR with the installation's token", f"/repos/{REPO}/pulls/7" in calls, calls)
     move(a, bid)
@@ -237,6 +245,11 @@ def runner_suite():
     check("engine: findings land on added lines, lock, removed and binary files skipped",
           row.get("status") == "done" and row.get("comments") == 2 and row.get("blocking") == 1
           and row.get("verdict") == "request_changes", row)
+    rc_view = walker("GetTask", {"task_id": row.get("task_id")})
+    check("  and the row says how many are blocking", rc_view.get("ai_outcome") == "changes"
+          and rc_view.get("ai_blocking") == 1, rc_view)
+    attention = walker("ListAgentRuns", {"attention": True, "page_size": 100}).get("rows", [])
+    check("  and it is on the AI page's needs a look", row.get("id") in [r.get("id") for r in attention], attention)
     check("  and the task's log counts them", any("2 comments, 1 blocking" in x for x in task_log(f)), task_log(f))
     files = [c[1] for c in wg.stub_calls(INST) if c[1].endswith("/pulls/12/files")]
     check("  reading the PR's files once", len(files) == 1, files)
