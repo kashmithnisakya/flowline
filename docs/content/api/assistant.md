@@ -26,6 +26,14 @@ and passes it to one byLLM function. Source:
     `LLM_MODEL` and the account's credit) and reports nothing. Ask shows
     "The assistant is not available right now. Try again in a moment."
 
+::: walker AskOrPropose
+
+What Ask's one input calls. It decides whether the message is a question or a
+board change, then answers or proposes. Like `ProposeAction` it writes nothing.
+
+**Reports** one [`AssistantReply`](types.md#assistantreply): `kind` is `answer`
+with `text`, or `change` with `proposal`. A blank `message` reports nothing.
+
 ::: walker AskAssistant
 
 **Reports** one string: the answer, usually two or three sentences. A blank

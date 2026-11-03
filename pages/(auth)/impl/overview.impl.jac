@@ -141,11 +141,12 @@ impl OverviewPage.loadHistory -> None {
             history = got;
             historyFailed = False;
         }
-        # "tasks added" is this week across every project: the last entry
-        # of an unfiltered history, kept across filters (no second walker).
+        # "Added this week" and Done per week are across every project: the
+        # latest unfiltered history, kept across filters (no second walker).
         if got and projectId == "" and len(got.added) > 0 {
             weekAdded = got.added[len(got.added) - 1];
             addedFailed = False;
+            doneWeeks = got;
         }
     } except Exception as e {
         historyFailed = True;

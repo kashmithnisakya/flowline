@@ -1,10 +1,10 @@
-"""The Overview's soft panel: a rounded card on a faint ring, a title row
-(`aside` sits at its right) and the body. `EmptyLine` is a panel's one-line
-empty state with a link to where the missing thing is added."""
+"""The Overview's panel: a solid surface, a title row (`aside` sits at its
+right) over a hairline, then the body, flush for a list of rows. `EmptyLine` is
+a panel's one-line empty state with a link to where the missing thing is added."""
 
 import from "@jac/runtime" { Link }
 
-glob PANEL: str = "min-w-0 rounded-[20px] bg-card text-card-foreground shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_7%,transparent),0_1px_3px_color-mix(in_oklab,var(--foreground)_5%,transparent)]";
+glob:pub PANEL_LINK: str = "meta underline decoration-border-strong underline-offset-[3px] hover:text-text-primary";
 
 def:pub Panel(
     id: str,
@@ -12,31 +12,29 @@ def:pub Panel(
     aside: any = None,
     busy: bool = False,
     className: str = "",
+    flush: bool = False,
     children: any = None
 ) -> JsxElement {
     return
         <section
-            className={PANEL + " p-4 sm:p-5 " + className}
+            className={"surface min-w-0 rounded-xl " + className}
             aria-labelledby={id}
             aria-busy={busy}
         >
-            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-                <h2 id={id} className="section-title mr-auto">{title}</h2>
+            <div
+                className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border-subtle px-4 py-2"
+            >
+                <h2 id={id} className="section-title mr-auto text-sm">{title}</h2>
                 {aside}
             </div>
-            {children}
+            <div className={"" if flush else "p-4"}>{children}</div>
         </section>;
 }
 
 def:pub EmptyLine(text: str, action: str, to: str) -> JsxElement {
     return
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] text-text-secondary">
             {text + " "}
-            <Link
-                to={to}
-                className="text-primary underline underline-offset-[3px] hover:decoration-2"
-            >
-                {action}
-            </Link>
+            <Link to={to} className={PANEL_LINK}>{action}</Link>
         </p>;
 }

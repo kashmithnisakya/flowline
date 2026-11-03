@@ -1,21 +1,7 @@
 """Day arithmetic for the roadmap window. Days are read as UTC so DST never
 shifts one, and positions are percentages of the window."""
 
-glob DAY_MS: int = 86400000,
-     MONTHS: list[str] = [
-         "Jan",
-         "Feb",
-         "Mar",
-         "Apr",
-         "May",
-         "Jun",
-         "Jul",
-         "Aug",
-         "Sep",
-         "Oct",
-         "Nov",
-         "Dec"
-     ];
+glob DAY_MS: int = 86400000;
 
 def:pub dayNumber(iso: str) -> int {
     return int(new(Date, iso + "T00:00:00Z").getTime() / DAY_MS + 0.5);
@@ -48,33 +34,4 @@ def:pub spanStyle(first: str, last: str, origin: int, total: int) -> dict[str, s
     b = total if b > total else b;
     width = b - a if b > a else 1;
     return {"left": pct(a, total), "width": "max(24px, " + pct(width, total) + ")"};
-}
-
-# Month cells on the real first of each month; a sliver under a week keeps
-# no label.
-def:pub monthCells(origin: int, total: int) -> list[dict[str, str]] {
-    cells: list[dict[str, str]] = [];
-    day = origin;
-    while day < origin + total {
-        iso = isoOfDay(day);
-        year = int(iso[:4]);
-        month = int(iso[5:7]);
-        nextFirst = (
-            str(year + 1) + "-01-01"
-                if month == 12
-                else iso[:5] + ("0" if month < 9 else "") + str(month + 1) + "-01"
-        );
-        end = dayNumber(nextFirst);
-        end = origin + total if end > origin + total else end;
-        cells.append(
-            {
-                "key": iso[:7],
-                "label": MONTHS[month - 1] + " " + str(year) if end - day >= 7 else "",
-                "left": pct(day - origin, total),
-                "width": pct(end - day, total)
-            }
-        );
-        day = end;
-    }
-    return cells;
 }

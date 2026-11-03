@@ -1,23 +1,22 @@
 """Ask: the assistant panel, mounted once in the root layout so the transcript
 survives closing it. `docked` (1280px and up) is a right column that pushes the
-page, otherwise a sheet. A turn is a plain dict (`role`, `kind`): an obj would
-create a models <-> walkers import cycle."""
+page, otherwise a sheet. One composer takes both questions and changes; a change
+comes back dashed. A turn is a plain dict (`role`, `kind`): an obj would create a
+models <-> walkers import cycle."""
 
 import from "@jac/runtime" { navigate, useLocation }
 import from ...lib.voice { hasVoice, startVoice, stopVoice }
-import from ...services.assistant.assistant {
-    AskAssistant,
-    WriteStandup,
-    ProposeAction
-}
+import from ...services.assistant.assistant { AskAssistant, AskOrPropose, WriteStandup }
 import from ...services.tasks.tasks { ListTasks, ListTaskTitles, CreateTask, MoveTask }
 import from ...services.roster.roster { ListMembers }
 import from ...services.projects.projects { ListProjects }
 import from ..ui.button { Button }
 import from ..ui.sheet { Sheet, SheetContent, SheetTitle }
 import from ..common.Markdown { Markdown }
-import from ..common.glyphs { Spinner, WarnIcon }
-import from ..common.CommandPalette { PageIcon }
+import from ..common.glyphs { WarnIcon }
+import from ..common.AiMark { AiMark }
+import from ...lib.proposal { showProposal, clearProposal }
+import from ...lib.dates { prettyDay }
 import from "sonner" { toast }
 import from "react" { useEffect }
 
@@ -124,7 +123,6 @@ def:pub AssistantDock(
 ) -> JsxElement {
     has turns: list[dict[str, any]] = [],
         draft: str = "",
-        mode: str = "ask",
         busy: bool = False,
         listening: bool = False,
         logRef: Ref[any] = Ref(),
@@ -184,8 +182,9 @@ def:pub AssistantDock(
             onAsk = lambda (e: any) {
                 question = str(e.detail.question or "") if e.detail else "";
                 if question {
-                    mode = "ask";
                     quick("ask", question);
+                } elif e.detail and e.detail.standup {
+                    quick("note", "today");
                 }
                 window.setTimeout(lambda { focusComposer(); }, 30);
             };
@@ -252,7 +251,6 @@ def:pub AssistantDock(
         navigate("/board?task=" + id);
     }
 
-    asking = mode == "ask";
     canListen = hasVoice();
 
     # The index travels with the row so the JSX never needs tuple unpacking.
@@ -261,17 +259,6 @@ def:pub AssistantDock(
     for t in turns {
         rows.append({** t, "at": at});
         at = at + 1;
-    }
-
-    # On a phone the header and composer controls grow to touch size.
-    def modeClass(active: bool) -> str {
-        base = "rounded-sm transition-colors "
-            + ("h-9 px-3 text-[13px] " if narrow else "h-6 px-2 text-xs ");
-        if active {
-            return base + "border bg-card font-semibold text-foreground";
-        }
-        return base
-            + "border border-transparent font-medium text-muted-foreground hover:text-foreground";
     }
 
     if docked and not open {
@@ -290,7 +277,7 @@ def:pub AssistantDock(
     }
 
     head = <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-3.5">
-        <PageIcon name="ask" className="text-muted-foreground"/>
+        <AiMark running={busy}/>
         {title}
         <div className="ml-auto flex items-center gap-0.5">
             {if len(turns) > 0 {
@@ -300,7 +287,10 @@ def:pub AssistantDock(
                     size="sm"
                     className={"text-muted-foreground "
                         + ("h-10 px-3" if narrow else "")}
-                    onClick={lambda { turns = []; }}
+                    onClick={lambda {
+                        turns = [];
+                        clearProposal();
+                    }}
                 >
                     Clear
                 </Button>
@@ -410,7 +400,10 @@ def:pub AssistantDock(
                         state={r["state"]}
                         busy={busy}
                         onApply={lambda { applyProposal(r["at"]); }}
-                        onDismiss={lambda { setTurnState(r["at"], "dismissed"); }}
+                        onDismiss={lambda {
+                            setTurnState(r["at"], "dismissed");
+                            clearProposal();
+                        }}
                     />
                 } elif r["kind"] == "error" {
                     <p
@@ -430,7 +423,7 @@ def:pub AssistantDock(
         }}
         {if busy {
             <p key="busy" className="flex items-center gap-2 text-muted-foreground">
-                <Spinner/>
+                <AiMark running={True}/>
                 Reading your workspace
             </p>
         }}
@@ -457,40 +450,12 @@ def:pub AssistantDock(
                 }}
             </div>
         }}
-        <div className="flex items-center gap-2">
-            <div
-                className="inline-flex rounded-md bg-muted p-0.5"
-                role="group"
-                aria-label="Mode"
-            >
-                <button
-                    type="button"
-                    aria-pressed={asking}
-                    className={modeClass(asking)}
-                    onClick={lambda { mode = "ask"; }}
-                >
-                    Ask
-                </button>
-                <button
-                    type="button"
-                    aria-pressed={not asking}
-                    className={modeClass(not asking)}
-                    onClick={lambda { mode = "do"; }}
-                >
-                    Propose a change
-                </button>
-            </div>
-        </div>
         <div className="flex items-center gap-1.5">
             <input
                 ref={inputRef}
                 value={draft}
-                placeholder={"Ask a question"
-                    if asking
-                    else "Describe the task to add or move"}
-                aria-label={"Ask a question"
-                    if asking
-                    else "Describe the task to add or move"}
+                placeholder="Ask, or describe a change"
+                aria-label="Ask, or describe a change"
                 readOnly={busy}
                 onChange={lambda (e: any) { draft = e.target.value; }}
                 onKeyDown={lambda (e: any) { if e.key == "Enter" { send(); }}}
@@ -540,9 +505,7 @@ def:pub AssistantDock(
             </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-            {"Answers come from your workspace only."
-                if asking
-                else "Nothing changes until you press Apply."}
+            Answers come from your workspace only. Nothing changes until you press Apply.
         </p>
     </div>;
 
@@ -659,14 +622,22 @@ def ProposalCard(
         facts.append({"k": "Category", "v": proposal.category});
     }
     if proposal.due_date {
-        facts.append({"k": "Due", "v": proposal.due_date});
+        facts.append({"k": "Due", "v": prettyDay(proposal.due_date)});
     }
 
     return
-        <div className="rounded-md border bg-background p-3">
+        <div
+            data-proposal-card={state or "pending"}
+            className={"rounded-xl border bg-card p-3"
+                if state == "applied" or not usable
+                else ("ai-card" if not state else "rounded-xl border p-3 opacity-70")}
+        >
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                    {"Proposed move" if moving else "Proposed task"}
+                <AiMark/>
+                <span className="font-semibold text-foreground">
+                    {("Task added" if not moving else "Task moved")
+                        if state == "applied"
+                        else ("Proposed move" if moving else "Proposed task")}
                 </span>
                 {if proposal.confidence and proposal.confidence != "high" {
                     <span key="conf">

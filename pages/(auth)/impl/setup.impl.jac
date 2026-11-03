@@ -169,6 +169,32 @@ impl SetupPage.skipPeople -> None {
     step = 3;
 }
 
+impl SetupPage.personField(field: str, value: str) -> None {
+    if field == "first" {
+        mFirst = value;
+        firstError = "";
+    } elif field == "last" {
+        mLast = value;
+    } else {
+        mRole = value;
+    }
+}
+
+impl SetupPage.goBack -> None {
+    # Everything a step saved stays saved; its fields keep what was typed.
+    firstError = "";
+    saveError = "";
+    step = step - 1;
+}
+
+impl SetupPage.drawOwn -> None {
+    # start=blank asks the flow line page for its empty designer rather than
+    # the template picker; nothing is written here.
+    if not busy {
+        navigate("/flowlines?start=blank");
+    }
+}
+
 impl SetupPage.pickTemplate(key: str) -> None {
     choice = key;
     saveError = "";
@@ -210,12 +236,6 @@ impl SetupPage.submitFinish(e: FormEvent) -> None {
 
 impl SetupPage.finish -> None {
     if busy {
-        return;
-    }
-    if choice == SCRATCH {
-        # start=blank asks the flow line page for its empty designer rather
-        # than the template picker; nothing is written here.
-        navigate("/flowlines?start=blank");
         return;
     }
     saveError = "";

@@ -116,12 +116,11 @@ def:pub Shell -> JsxLayout {
                     account={account}
                     themeChoice={themeChoice}
                     onSearch={openPalette}
-                    onAsk={toggleAsk}
                     onTheme={pickTheme}
                     onSignOut={logout}
                 />
                 <main
-                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-6 lg:pb-10"
+                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-3.5 lg:pb-10"
                 >
                     <Outlet/>
                 </main>
@@ -132,7 +131,7 @@ def:pub Shell -> JsxLayout {
                 docked={wide}
                 narrow={narrow}
             />
-            <TabBar path={path}/>
+            <TabBar path={path} askOpen={askOpen} onAsk={toggleAsk}/>
             <CommandPalette
                 open={paletteOpen}
                 onOpenChange={lambda (o: bool) { paletteOpen = o; }}

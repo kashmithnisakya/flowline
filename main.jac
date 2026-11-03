@@ -96,13 +96,19 @@ import from services.workspace.workspace { GetWorkspace }
 import from services.roadmap.roadmap { RoadmapSnapshot }
 import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
 import from services.insights.insights { Digest, OverviewSnapshot }
-import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
+import from services.assistant.assistant {
+    AskAssistant,
+    AskOrPropose,
+    WriteStandup,
+    ProposeAction
+}
 import from services.agents.agents {
     ListResponsibilities,
     SetAiEnabled,
     SaveResponsibility,
     DeleteResponsibility,
     ListRuns,
+    ListAgentRuns,
     RetryRun,
     CancelRun,
     CheckReviewService

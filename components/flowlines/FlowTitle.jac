@@ -1,9 +1,6 @@
-"""The flow line page's heading: the project it is for (a picker, like the
-board's), the flow line's name (an input while renaming) and one line of
-what it holds."""
+"""The flow line's name and one line of what it holds, at the right of the
+project header (an input while renaming). The project's own name is the title."""
 
-import from ...models { Project }
-import from ..common.ProjectLine { ProjectLine }
 import from ..ui.input { Input }
 import from ..ui.skeleton { Skeleton }
 
@@ -12,8 +9,6 @@ def plural(n: int, noun: str) -> str {
 }
 
 def:pub FlowTitle(
-    projects: list[Project],
-    projectId: str,
     lineName: str,
     steps: int = 0,
     transitions: int = 0,
@@ -26,19 +21,21 @@ def:pub FlowTitle(
 ) -> JsxElement {
     summary = (
         plural(steps, "step")
-        + " · "
-        + plural(transitions, "transition")
-        + " · "
+        + ", "
+        + plural(transitions, "arrow")
+        + ", "
         + plural(roles, "role")
     );
+    if pending {
+        return <Skeleton className="h-3 w-52"/>;
+    }
     return
-        <div className="flex min-w-0 flex-col gap-1">
-            <ProjectLine projects={projects} project={projectId}/>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs">
             {if renaming {
                 <Input
                     key="rename"
                     aria-label="Flow line name"
-                    className="h-9 w-72 max-w-full text-lg font-semibold"
+                    className="h-7 w-56 max-w-full text-[13px]"
                     value={nameDraft}
                     autoFocus={True}
                     onChange={lambda (e: ChangeEvent) { if onDraft {
@@ -51,12 +48,10 @@ def:pub FlowTitle(
                     }}}
                 />
             } else {
-                <h1 key="name" className="page-title min-w-0 truncate">{lineName}</h1>
+                <span key="name" className="truncate font-medium text-text-secondary">
+                    {lineName}
+                </span>
             } }
-            {if pending {
-                <Skeleton key="ph" className="my-1 h-3 w-52"/>
-            } else {
-                <p key="sum" className="text-[13px] text-muted-foreground">{summary}</p>
-            } }
-        </div>;
+            <span className="meta whitespace-nowrap">{summary}</span>
+        </span>;
 }

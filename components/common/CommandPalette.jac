@@ -17,32 +17,39 @@ import from .StepName { StepName }
 
 glob:pub NAV_PAGES: list[dict[str, str]] = [
          {
-             "key": "flowline",
-             "label": "Flow line",
-             "to": "/flowlines",
-             "group": "daily",
-             "keywords": "workflow steps process transitions design"
+             "key": "overview",
+             "label": "Overview",
+             "to": "/overview",
+             "group": "home",
+             "keywords": "insights charts progress blocked overdue report"
+         },
+         {
+             "key": "ai",
+             "label": "AI",
+             "to": "/ai",
+             "group": "home",
+             "keywords": "code review responsibilities runs agents model"
          },
          {
              "key": "board",
              "label": "Board",
              "to": "/board",
-             "group": "daily",
+             "group": "project",
              "keywords": "tasks steps cards list"
+         },
+         {
+             "key": "flowline",
+             "label": "Flow line",
+             "to": "/flowlines",
+             "group": "project",
+             "keywords": "workflow steps process transitions design"
          },
          {
              "key": "roadmap",
              "label": "Roadmap",
              "to": "/roadmap",
-             "group": "daily",
+             "group": "project",
              "keywords": "timeline schedule plan dates"
-         },
-         {
-             "key": "overview",
-             "label": "Overview",
-             "to": "/overview",
-             "group": "daily",
-             "keywords": "insights charts progress blocked overdue report"
          },
          {
              "key": "workspace",
@@ -189,6 +196,11 @@ def:pub PageIcon(name: str, size: int = 16, className: str = "") -> JsxElement {
                     <circle cx={7} cy={5} r={1.75}/>
                     <circle cx={10} cy={11} r={1.75}/>
                 </g>
+            } elif name == "ai" {
+                <g key="ai">
+                    <circle cx={8} cy={8} r={6} strokeDasharray="2.2 2.2"/>
+                    <circle cx={8} cy={8} r={2} fill="currentColor" stroke="none"/>
+                </g>
             } elif name == "new-task" {
                 <path key="new-task" d="M8 3v10M3 8h10"/>
             } elif name == "ask" {
@@ -217,7 +229,7 @@ def:pub PageIcon(name: str, size: int = 16, className: str = "") -> JsxElement {
                     <rect x={3} y={2.5} width={10} height={11} rx={1.5}/>
                     <path d="M5.75 6h4.5M5.75 9h2.75"/>
                 </g>
-            }              }
+            }               }
         </svg>;
 }
 

@@ -34,28 +34,26 @@ def:pub RoadmapSkeleton(fallback: int) -> JsxElement {
     return
         <div aria-hidden="true">
             {for (gi, n) in enumerate(cachedGroups(fallback)) {
-                <div key={"pg" + str(gi)} className="pt-3">
+                <div key={"pg" + str(gi)}>
                     <div
-                        className="relative flex h-9 items-center rounded-lg bg-muted px-2"
+                        className="relative flex h-9 items-center border-b border-border-subtle bg-bg-surface px-3"
                     >
-                        <Skeleton className="h-6 w-28 rounded-md"/>
+                        <Skeleton className="h-3.5 w-24"/>
                     </div>
                     {for i in range(n) {
                         <div
                             key={"ph" + str(i)}
-                            className="flex h-11 w-full items-center"
+                            className="flex h-[34px] w-full items-center border-b border-border-subtle"
                         >
-                            <LabelCell
-                                className="flex h-full flex-col justify-center gap-1"
-                            >
+                            <LabelCell className="flex h-full items-center gap-2">
+                                <Skeleton className="size-3.5 shrink-0 rounded-full"/>
                                 <Skeleton
                                     className={"h-3.5 " + PH_WIDTHS[(gi + i) % 4]}
                                 />
-                                <Skeleton className="h-3 w-24"/>
                             </LabelCell>
                             <span className="relative h-full flex-1">
                                 <Skeleton
-                                    className="absolute top-1/2 h-4 -translate-y-1/2 rounded-md"
+                                    className="absolute top-[6px] h-5 rounded-[5px]"
                                     style={{
                                         "left": PH_LEFT[(gi * 3 + i) % 8],
                                         "width": PH_BAR[(gi * 3 + i) % 8]

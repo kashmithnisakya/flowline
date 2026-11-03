@@ -1,5 +1,5 @@
-"""A settings row: label and one line of help on the left, the control on the
-right; stacked on a phone. Rows sit inside one `.surface` with hairlines.
+"""A settings row: label and one line of help on the left, the control at the
+right; it wraps on a phone. Rows sit together under one panel with hairlines.
 """
 
 def:pub SettingRow(
@@ -7,9 +7,9 @@ def:pub SettingRow(
 ) -> JsxElement {
     return
         <div
-            className="grid gap-x-8 gap-y-3 px-4 py-4 not-first:border-t md:grid-cols-[260px_minmax(0,1fr)] md:items-center"
+            className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 not-first:border-t"
         >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 basis-[220px]">
                 <label htmlFor={htmlFor or None} className="text-sm font-medium">
                     {label}
                 </label>

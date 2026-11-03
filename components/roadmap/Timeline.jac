@@ -1,12 +1,11 @@
-"""The roadmap grid: month and week rows, then one group per step in the
-board's column order. Positions are percentages of the window, so the grid
-scrolls sideways when it is narrow; a phone opens with today in view."""
+"""The roadmap grid: the week row, then one group per step in the board's
+column order. Positions are percentages of the window, so the grid scrolls
+sideways when it is narrow; a phone opens with today in view."""
 
 import from "react" { useEffect }
 import from ...lib.session { ROADMAP_SHAPE_KEY }
-import from .span { dayNumber, isoOfDay, pct }
-import from .LabelCell { LABEL_OFFSET }
-import from .RoadmapAxis { RoadmapAxis }
+import from .span { dayNumber, isoOfDay }
+import from .RoadmapAxis { RoadmapAxis, WeekLines }
 import from .RoadmapGroup { RoadmapGroup }
 import from .RoadmapSkeleton { RoadmapSkeleton }
 
@@ -67,22 +66,14 @@ def:pub RoadmapTimeline(
     );
 
     return
-        <div ref={scroller} className="overflow-x-auto overscroll-x-contain pb-2">
+        <div
+            ref={scroller}
+            className="surface overflow-x-auto overscroll-x-contain rounded-xl"
+        >
             <div className="relative min-w-[820px] sm:min-w-[960px]">
                 <RoadmapAxis fromDate={fromDate} weeks={weeks} today={today}/>
                 <div className="relative">
-                    <div
-                        className={"pointer-events-none absolute inset-y-0 right-0 flex "
-                            + LABEL_OFFSET}
-                        aria-hidden="true"
-                    >
-                        {for w in range(weeks) {
-                            <div
-                                key={isoOfDay(origin + 7 * w)}
-                                className="flex-1 border-l border-border/60"
-                            />
-                        }}
-                    </div>
+                    <WeekLines origin={origin} weeks={weeks}/>
                     {if placeholder > 0 {
                         <RoadmapSkeleton key="ph" fallback={placeholder}/>
                     }}

@@ -56,7 +56,8 @@ obj BoardData {
         # the saved set they came from, and whether they were ever saved.
         board_filters: dict[str, str],
         board_set: str,
-        board_saved: bool;
+        board_saved: bool,
+        ai_open: int = 0;
 }
 
 
@@ -123,6 +124,7 @@ walker:protect BoardSnapshot {
         board_filters: dict[str, str] = {};
         board_set = "";
         board_saved = False;
+        ai_open = 0;
         # One definition of the lists and their order, shared with
         # GetWorkspace, which the other pages read on their own.
         if self.with_workspace {
@@ -138,6 +140,7 @@ walker:protect BoardSnapshot {
             template_key = ws.template_key;
             github = ws.github;
             filter_sets = ws.filter_sets;
+            ai_open = ws.ai_open;
             # A read never makes the box; writers take the first one.
             for box in [here-->[?:FilterSets]][:1] {
                 board_filters = dict(box.board);
@@ -164,7 +167,8 @@ walker:protect BoardSnapshot {
             filter_sets=filter_sets,
             board_filters=board_filters,
             board_set=board_set,
-            board_saved=board_saved
+            board_saved=board_saved,
+            ai_open=ai_open
         );
     }
 }

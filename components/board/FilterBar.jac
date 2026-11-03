@@ -1,154 +1,13 @@
-"""The board toolbar: a title filter, Assignee and Priority, the rest under
-More, and on the right the Done window and the task count. An active
-filter reads as an outlined "Label: value" with a clear button. Below md it
-folds into the title filter plus a Filters button that opens a sheet."""
+"""The board toolbar: one Filter menu (active filters read as chips after it),
+the slot for saved sets, then the title filter, Display and the count on the
+right. Below md it folds into the title filter plus a Filters button."""
 
 import from ...models { MemberView }
-import from ..ui.checkbox { Checkbox }
 import from ..ui.button { Button }
-import from ..ui.dropdown_menu {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuItem,
-    DropdownMenuCheckboxItem,
-    DropdownMenuRadioItem,
-    DropdownMenuSub,
-    DropdownMenuSubTrigger,
-    DropdownMenuSubContent
-}
-import from ..ui.select {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem
-}
-import from ..ui.sheet { Sheet, SheetContent, SheetHeader, SheetTitle }
-import from ..ui.skeleton { Skeleton }
-import from .columnWidths { resetWidths }
-
-glob CHEVRON_D: str = "m4.5 6.5 3.5 3.5 3.5-3.5";
-
-def Chevron -> JsxElement {
-    return
-        <svg
-            width={14}
-            height={14}
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className="shrink-0 opacity-80"
-        >
-            <path
-                d={CHEVRON_D}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>;
-}
-
-# One option list, shared by the desktop menus and the phone sheet's selects.
-def optionLabel(options: list[list[str]], value: str) -> str {
-    for o in options {
-        if o[0] == value {
-            return o[1];
-        }
-    }
-    return value;
-}
-
-# A ghost trigger that turns into "Label: value ×" once a value is picked.
-def FilterMenu(
-    label: str,
-    value: str,
-    allValue: str,
-    options: list[list[str]],
-    onChange: Callable[[str], None]
-) -> JsxElement {
-    active = value != allValue;
-    shown = optionLabel(options, value) if value else label;
-    return
-        <DropdownMenu>
-            {if active {
-                <span
-                    key="on"
-                    className="toolbar-filter gap-0! pr-0.5!"
-                    data-active="true"
-                >
-                    <DropdownMenuTrigger
-                        className="inline-flex h-full max-w-56 items-center gap-1 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring"
-                    >
-                        <span className="truncate">{label + ": " + shown}</span>
-                    </DropdownMenuTrigger>
-                    <button
-                        type="button"
-                        aria-label={"Clear the " + label.lower() + " filter"}
-                        className="ml-0.5 inline-flex size-6 items-center justify-center rounded-sm text-subtle hover:bg-accent hover:text-foreground"
-                        onClick={lambda { onChange(allValue); }}
-                    >
-                        <svg
-                            width={14}
-                            height={14}
-                            viewBox="0 0 16 16"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="m4 4 8 8M12 4l-8 8"
-                                stroke="currentColor"
-                                strokeWidth={1.6}
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                    </button>
-                </span>
-            } else {
-                <DropdownMenuTrigger
-                    key="off"
-                    className="toolbar-filter"
-                    data-active="false"
-                >
-                    {label}
-                    <Chevron/>
-                </DropdownMenuTrigger>
-            } }
-            <DropdownMenuContent
-                align="start"
-                collisionPadding={16}
-                className="max-h-80 w-56"
-            >
-                <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-                    {for o in options {
-                        <DropdownMenuRadioItem key={o[0]} value={o[0]}>
-                            <span className="truncate">{o[1]}</span>
-                        </DropdownMenuRadioItem>
-                    }}
-                </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-        </DropdownMenu>;
-}
-
-def SheetSelect(
-    label: str, value: str, options: list[list[str]], onChange: Callable[[str], None]
-) -> JsxElement {
-    return
-        <label className="grid gap-1.5">
-            <span className="text-[13px] font-semibold">{label}</span>
-            <Select value={value} onValueChange={onChange}>
-                <SelectTrigger className="h-9 w-full" aria-label={label}>
-                    <SelectValue/>
-                </SelectTrigger>
-                <SelectContent>
-                    {for o in options {
-                        <SelectItem key={o[0]} value={o[0]}>{o[1]}</SelectItem>
-                    }}
-                </SelectContent>
-            </Select>
-        </label>;
-}
+import from .BoardSearch { BoardSearch }
+import from .DisplayMenu { DisplayMenu }
+import from .FilterMenu { FilterMenu, optionLabel }
+import from .FilterSheet { FilterSheet }
 
 def:pub FilterBar(
     members: list[MemberView],
@@ -171,353 +30,130 @@ def:pub FilterBar(
     onQuery: Callable[[str], None] = None,
     onClear: Callable[[], None] = None,
     shownCount: int = 0,
+    hiddenCount: int = 0,
     doneDays: int = 7,
     hideEmpty: bool = False,
     onHideEmpty: Callable[[], None] = None,
     onExpandAll: Callable[[], None] = None,
     onCollapseAll: Callable[[], None] = None,
-    # The first load: the count is not known yet, so its slot holds a block.
-    busy: bool = False
+    # The saved sets menu, which the board owns.
+    sets: any = None
 ) -> JsxElement {
     has sheetOpen: bool = False;
 
-    shownMembers = [
-        m
-        for m in members
-        if not project or project in m.project_ids
-    ];
-    assigneeOptions: list[list[str]] = [["All", "Everyone"]];
-    for m in shownMembers {
-        assigneeOptions.append([m.id, m.name]);
+    people: list[list[str]] = [["All", "Everyone"]];
+    for m in members {
+        if not project or project in m.project_ids {
+            people.append([m.id, m.name]);
+        }
     }
-    priorityOptions: list[list[str]] = [
-        ["All", "Any priority"],
-        ["High", "High"],
-        ["Medium", "Medium"],
-        ["Low", "Low"]
-    ];
-    categoryOptions: list[list[str]] = [["All", "All categories"]];
+    cats: list[list[str]] = [["All", "All categories"]];
     for c in categories {
-        categoryOptions.append([c, c]);
+        cats.append([c, c]);
     }
-    tagOptions: list[list[str]] = [["All", "All tags"]];
+    tagRows: list[list[str]] = [["All", "All tags"]];
     for tg in tags {
-        tagOptions.append([tg, tg]);
+        tagRows.append([tg, tg]);
     }
-    estimateOptions: list[list[str]] = [
-        ["All", "Any estimate"],
-        ["yes", "Estimated"],
-        ["no", "Unestimated"]
+    facets: list[dict[str, any]] = [
+        {
+            "label": "People",
+            "value": assignee,
+            "options": people,
+            "onChange": onAssignee
+        },
+        {
+            "label": "Priority",
+            "value": priority,
+            "options": [
+                ["All", "Any priority"],
+                ["High", "High"],
+                ["Medium", "Medium"],
+                ["Low", "Low"]
+            ],
+            "onChange": onPriority
+        },
+        {
+            "label": "Category",
+            "value": category,
+            "options": cats,
+            "onChange": onCategory
+        },
+        {"label": "Tag", "value": tag, "options": tagRows, "onChange": onTag},
+        {
+            "label": "Estimate",
+            "value": estimate,
+            "options": [
+                ["All", "Any estimate"],
+                ["yes", "Estimated"],
+                ["no", "Unestimated"]
+            ],
+            "onChange": onEstimate
+        }
     ];
-
-    def setTag(v: str) {
-        if onTag {
-            onTag(v);
-        }
-    }
-    def setEstimate(v: str) {
-        if onEstimate {
-            onEstimate(v);
-        }
-    }
-    def setPriority(v: str) {
-        if onPriority {
-            onPriority(v);
-        }
-    }
-    def setQuery(v: str) {
-        if onQuery {
-            onQuery(v);
-        }
-    }
-    def clearAll {
-        if onClear {
-            onClear();
-        }
-    }
-
-    picked = 0;
-    for on in [
-        assignee != "All",
-        priority != "All",
-        category != "All",
-        tag != "All",
-        estimate != "All"
-    ] {
-        if on {
-            picked = picked + 1;
-        }
-    }
+    active = [
+        f
+        for f in facets
+        if f["value"] != "All"
+    ];
+    picked = len(active);
     anything = picked > 0 or bool(query.strip());
-    showTags = len(tags) > 0 or tag != "All";
     countLabel = str(shownCount) + (" task" if shownCount == 1 else " tasks");
+    if hiddenCount > 0 and anything {
+        countLabel = countLabel + ", " + str(hiddenCount) + " hidden";
+    }
     doneLabel = "Done from last " + str(doneDays) + " days";
 
-    def SearchBox(extra: str) -> JsxElement {
-        return
-            <label
-                className={"flex h-[30px] items-center gap-1.5 rounded-md border border-input bg-card px-2 text-[13px] focus-within:outline-2 focus-within:outline-ring "
-                    + extra}
-            >
-                <svg
-                    width={14}
-                    height={14}
-                    viewBox="0 0 16 16"
-                    aria-hidden="true"
-                    className="shrink-0 text-subtle"
-                >
-                    <circle
-                        cx={7}
-                        cy={7}
-                        r={4.5}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.6}
-                    />
-                    <path
-                        d="m10.5 10.5 3 3"
-                        stroke="currentColor"
-                        strokeWidth={1.6}
-                        strokeLinecap="round"
-                    />
-                </svg>
-                <input
-                    data-board-search="true"
-                    className="h-full min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-subtle focus-visible:outline-none"
-                    placeholder="Filter by title"
-                    aria-label="Filter by title or issue number"
-                    value={query}
-                    onChange={lambda (e: ChangeEvent) { setQuery(e.target.value); }}
-                    onKeyDown={lambda (e: KeyboardEvent) { if e.key == "Escape"
-                        and query {
-                        e.preventDefault();
-                        setQuery("");
-                    }}}
-                />
-                {if query {
-                    <button
-                        key="clear"
-                        type="button"
-                        aria-label="Clear the title filter"
-                        className="inline-flex size-5 items-center justify-center rounded-sm text-subtle hover:text-foreground"
-                        onClick={lambda (e: MouseEvent) {
-                            e.preventDefault();
-                            setQuery("");
-                        }}
-                    >
-                        <svg
-                            width={12}
-                            height={12}
-                            viewBox="0 0 16 16"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="m4 4 8 8M12 4l-8 8"
-                                stroke="currentColor"
-                                strokeWidth={1.8}
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                    </button>
-                } else {
-                    <span key="kbd" className="kbd max-md:hidden" aria-hidden="true">
-                        /
-                    </span>
-                } }
-            </label>;
-    }
-
     return
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
             <div className="hidden flex-wrap items-center gap-2 md:flex">
-                {SearchBox("w-[210px]")}
                 <FilterMenu
-                    label="Assignee"
-                    value={assignee}
-                    allValue="All"
-                    options={assigneeOptions}
-                    onChange={onAssignee}
+                    facets={facets}
+                    picked={picked}
+                    anything={anything}
+                    onClear={onClear}
                 />
-                <FilterMenu
-                    label="Priority"
-                    value={priority}
-                    allValue="All"
-                    options={priorityOptions}
-                    onChange={setPriority}
-                />
-                {if category != "All" {
-                    <FilterMenu
-                        key="category"
-                        label="Category"
-                        value={category}
-                        allValue="All"
-                        options={categoryOptions}
-                        onChange={onCategory}
-                    />
-                }}
-                {if tag != "All" {
-                    <FilterMenu
-                        key="tag"
-                        label="Tag"
-                        value={tag}
-                        allValue="All"
-                        options={tagOptions}
-                        onChange={setTag}
-                    />
-                }}
-                {if estimate != "All" {
-                    <FilterMenu
-                        key="estimate"
-                        label="Estimate"
-                        value={estimate}
-                        allValue="All"
-                        options={estimateOptions}
-                        onChange={setEstimate}
-                    />
-                }}
-                <DropdownMenu>
-                    <DropdownMenuTrigger className="toolbar-filter">
-                        More
-                        <Chevron/>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        align="start"
-                        collisionPadding={16}
-                        className="w-48"
-                    >
-                        <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Category</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent
-                                className="max-h-80 w-52 overflow-y-auto"
-                            >
-                                <DropdownMenuRadioGroup
-                                    value={category}
-                                    onValueChange={onCategory}
-                                >
-                                    {for o in categoryOptions {
-                                        <DropdownMenuRadioItem key={o[0]} value={o[0]}>
-                                            {o[1]}
-                                        </DropdownMenuRadioItem>
-                                    }}
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                        {if showTags {
-                            <DropdownMenuSub key="tags">
-                                <DropdownMenuSubTrigger>Tag</DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    className="max-h-80 w-52 overflow-y-auto"
-                                >
-                                    <DropdownMenuRadioGroup
-                                        value={tag}
-                                        onValueChange={setTag}
-                                    >
-                                        {for o in tagOptions {
-                                            <DropdownMenuRadioItem
-                                                key={o[0]}
-                                                value={o[0]}
-                                            >
-                                                {o[1]}
-                                            </DropdownMenuRadioItem>
-                                        }}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                        }}
-                        <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Estimate</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="w-44">
-                                <DropdownMenuRadioGroup
-                                    value={estimate}
-                                    onValueChange={setEstimate}
-                                >
-                                    {for o in estimateOptions {
-                                        <DropdownMenuRadioItem key={o[0]} value={o[0]}>
-                                            {o[1]}
-                                        </DropdownMenuRadioItem>
-                                    }}
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                {if anything {
+                {sets}
+                {for f in active {
                     <button
-                        key="clearall"
+                        key={f["label"]}
                         type="button"
-                        className="toolbar-filter border-transparent!"
-                        onClick={lambda { clearAll(); }}
+                        className="toolbar-filter gap-1!"
+                        data-active="true"
+                        aria-label={"Clear the " + f["label"].lower() + " filter"}
+                        onClick={lambda { f["onChange"]("All"); }}
                     >
-                        Clear
+                        <span className="max-w-44 truncate">
+                            {f["label"] + ": " + optionLabel(f["options"], f["value"])}
+                        </span>
+                        <span aria-hidden="true" className="text-subtle">×</span>
                     </button>
                 }}
-                <div
-                    className="ml-auto flex items-center gap-2 text-[12px] text-text-tertiary"
-                >
-                    <DropdownMenu>
-                        <DropdownMenuTrigger
-                            className="toolbar-filter"
-                            data-active="false"
-                        >
-                            Display
-                            <Chevron/>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="end"
-                            collisionPadding={16}
-                            className="w-56"
-                        >
-                            <DropdownMenuCheckboxItem
-                                checked={not hideDone}
-                                onCheckedChange={lambda { onHideDone(); }}
-                            >
-                                {doneLabel}
-                            </DropdownMenuCheckboxItem>
-                            {if onHideEmpty {
-                                <DropdownMenuCheckboxItem
-                                    key="empty"
-                                    checked={hideEmpty}
-                                    onCheckedChange={lambda { onHideEmpty(); }}
-                                >
-                                    Hide empty groups
-                                </DropdownMenuCheckboxItem>
-                            }}
-                            {if onExpandAll {
-                                <DropdownMenuItem
-                                    key="expand"
-                                    onClick={lambda { onExpandAll(); }}
-                                >
-                                    Expand all groups
-                                </DropdownMenuItem>
-                            }}
-                            {if onCollapseAll {
-                                <DropdownMenuItem
-                                    key="collapse"
-                                    onClick={lambda { onCollapseAll(); }}
-                                >
-                                    Collapse all groups
-                                </DropdownMenuItem>
-                            }}
-                            <DropdownMenuItem onClick={lambda { resetWidths(); }}>
-                                Reset column widths
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    {if busy {
-                        <Skeleton key="count" className="h-3 w-14"/>
-                    } else {
-                        <span key="count" className="num text-xs whitespace-nowrap">
-                            {countLabel}
-                        </span>
-                    } }
+                <div className="ml-auto flex items-center gap-2">
+                    <BoardSearch query={query} onQuery={onQuery} className="w-[210px]"/>
+                    <DisplayMenu
+                        hideDone={hideDone}
+                        hideEmpty={hideEmpty}
+                        doneLabel={doneLabel}
+                        onHideDone={onHideDone}
+                        onHideEmpty={onHideEmpty}
+                        onExpandAll={onExpandAll}
+                        onCollapseAll={onCollapseAll}
+                    />
+                    <span className="num text-xs whitespace-nowrap text-text-tertiary">
+                        {countLabel}
+                    </span>
                 </div>
             </div>
             <div className="flex items-center gap-2 md:hidden">
-                {SearchBox("h-9 min-w-0 flex-1")}
+                <BoardSearch
+                    query={query}
+                    onQuery={onQuery}
+                    className="h-11 min-w-0 flex-1"
+                />
                 <Button
                     variant="outline"
-                    className={"h-9 shrink-0 gap-1.5 "
-                        + ("border-input! font-semibold" if picked > 0 else "")}
+                    className="h-11 shrink-0 gap-1.5"
                     onClick={lambda { sheetOpen = True; }}
                 >
                     Filters
@@ -528,82 +164,16 @@ def:pub FilterBar(
                     }}
                 </Button>
             </div>
-            <Sheet open={sheetOpen} onOpenChange={lambda (o: bool) { sheetOpen = o; }}>
-                <SheetContent
-                    side="bottom"
-                    className="max-h-[85dvh] gap-0 overflow-y-auto rounded-t-xl p-0"
-                >
-                    <SheetHeader className="border-b px-4 py-3">
-                        <SheetTitle className="text-base font-semibold">
-                            Filters
-                        </SheetTitle>
-                    </SheetHeader>
-                    <div className="grid gap-3 px-4 py-4">
-                        <SheetSelect
-                            label="Assignee"
-                            value={assignee}
-                            options={assigneeOptions}
-                            onChange={onAssignee}
-                        />
-                        <SheetSelect
-                            label="Priority"
-                            value={priority}
-                            options={priorityOptions}
-                            onChange={setPriority}
-                        />
-                        <SheetSelect
-                            label="Category"
-                            value={category}
-                            options={categoryOptions}
-                            onChange={onCategory}
-                        />
-                        {if showTags {
-                            <SheetSelect
-                                key="tag"
-                                label="Tag"
-                                value={tag}
-                                options={tagOptions}
-                                onChange={setTag}
-                            />
-                        }}
-                        <SheetSelect
-                            label="Estimate"
-                            value={estimate}
-                            options={estimateOptions}
-                            onChange={setEstimate}
-                        />
-                        <label className="flex items-center gap-2 pt-1 text-[13px]">
-                            <Checkbox
-                                checked={not hideDone}
-                                onCheckedChange={lambda { onHideDone(); }}
-                            />
-                            {doneLabel}
-                        </label>
-                    </div>
-                    <div
-                        className="flex items-center gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-                    >
-                        <span className="num text-xs text-muted-foreground">
-                            {countLabel}
-                        </span>
-                        {if anything {
-                            <Button
-                                key="clear"
-                                variant="ghost"
-                                className="ml-auto"
-                                onClick={lambda { clearAll(); }}
-                            >
-                                Clear filters
-                            </Button>
-                        }}
-                        <Button
-                            className={"" if anything else "ml-auto"}
-                            onClick={lambda { sheetOpen = False; }}
-                        >
-                            Show tasks
-                        </Button>
-                    </div>
-                </SheetContent>
-            </Sheet>
+            <FilterSheet
+                open={sheetOpen}
+                facets={facets}
+                hideDone={hideDone}
+                doneLabel={doneLabel}
+                countLabel={countLabel}
+                anything={anything}
+                onOpenChange={lambda (o: bool) { sheetOpen = o; }}
+                onHideDone={onHideDone}
+                onClear={onClear}
+            />
         </div>;
 }

@@ -31,6 +31,13 @@ obj ProposedAction {
         confidence: str;
 }
 
+# What the one composer gets back: an answer, or a change to confirm.
+obj AssistantReply {
+    has kind: str,
+        text: str = "",
+        proposal: ProposedAction | None = None;
+}
+
 # ---------------------------------------------------------------- LLM surface
 
 def answer_question(question: str, workspace: Snapshot) -> str by llm();
@@ -38,6 +45,8 @@ def answer_question(question: str, workspace: Snapshot) -> str by llm();
 def write_standup(workspace: Snapshot, period: str) -> StandupNote by llm();
 
 def propose_action(instruction: str, workspace: Snapshot) -> ProposedAction by llm();
+
+def wants_change(message: str) -> bool by llm();
 
 # `sem` is the prompt the model actually sees, so every LLM-visible thing gets one.
 
@@ -69,6 +78,12 @@ is only a proposal, a human confirms it before anything is written.""";
 
 sem propose_action.instruction = "What the user asked for, in their own words.";
 sem propose_action.workspace = "The current workspace, for resolving names of people and projects.";
+
+sem wants_change = """Decide what the user wants. True when they are asking to change the board:
+add a task, or move one to another step. False when they are asking a question about the
+workspace, even a question about what should change.""";
+
+sem wants_change.message = "What the user typed, in their own words.";
 
 sem ProposedAction = "A single proposed board change, awaiting human confirmation.";
 sem ProposedAction.kind = "Either 'create_task' or 'move_task'. Use 'none' if the request is not a board change.";
@@ -103,6 +118,52 @@ def _llm_failed(what: str, e: Exception) {
     );
 }
 
+
+# Never let a hallucinated column or priority reach the board.
+def checked_proposal(proposal: ProposedAction) -> ProposedAction {
+    if proposal.status and proposal.status not in STATUSES {
+        proposal.status = "";
+    }
+    if proposal.priority and proposal.priority not in PRIORITIES {
+        proposal.priority = "";
+    }
+    return proposal;
+}
+
+
+walker:protect AskOrPropose {
+    """The composer's one entry point: decides whether the message is a question
+    or a board change, then answers or proposes. Like ProposeAction it only
+    suggests: the client applies a proposal through the ordinary walkers."""
+    has message: str = "",
+        from_date: str = "",
+        to_date: str = "",
+        reports: list[AssistantReply] = [];
+
+    can route with Root entry {
+        said = self.message.strip();
+        if not said {
+            disengage;
+        }
+        (start, end) = _range(self.from_date, self.to_date);
+        snapshot = build_snapshot(here, start, end);
+        try {
+            proposal: ProposedAction | None = None;
+            if wants_change(said) {
+                proposal = checked_proposal(propose_action(said, snapshot));
+            }
+            if proposal is not None and proposal.kind in ["create_task", "move_task"] {
+                report AssistantReply(kind="change", proposal=proposal);
+            } else {
+                report AssistantReply(
+                    kind="answer", text=answer_question(said, snapshot)
+                );
+            }
+        } except Exception as e {
+            _llm_failed("message", e);
+        }
+    }
+}
 
 walker:protect AskAssistant {
     has question: str = "",
@@ -163,13 +224,6 @@ walker:protect ProposeAction {
             _llm_failed("proposal", e);
             disengage;
         }
-        # Never let a hallucinated column or priority reach the board.
-        if proposal.status and proposal.status not in STATUSES {
-            proposal.status = "";
-        }
-        if proposal.priority and proposal.priority not in PRIORITIES {
-            proposal.priority = "";
-        }
-        report proposal;
+        report checked_proposal(proposal);
     }
 }

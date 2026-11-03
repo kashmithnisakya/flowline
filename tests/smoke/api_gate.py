@@ -31,7 +31,7 @@ CACHED_READERS = [
 # a sync from another tab must show on the next call, not 60 s later.
 LIVE_READERS = [
     "BoardSnapshot", "ListTasks", "OverviewSnapshot", "ListLogEntries",
-    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks", "ListRuns",
+    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks", "ListRuns", "ListAgentRuns",
 ]
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
@@ -750,6 +750,13 @@ def ai_suite(task_id, tag):
     off = report("SetAiEnabled", {"enabled": False})
     check("ai: SetAiEnabled turns it off", off.get("enabled") is False and settings().get("enabled") is False, str(off))
     check("ai: a task with no runs lists none", report("ListRuns", {"task_id": task_id}) == [], "")
+    activity = report("ListAgentRuns")
+    check("ai: a workspace with no runs has an empty activity page and the daily limit",
+          activity.get("rows") == [] and activity.get("has_more") is False and activity.get("daily_limit", 0) > 0,
+          str(activity))
+    check("ai: a task row starts with no AI outcome",
+          report("GetTask", {"task_id": task_id}).get("ai_outcome") == "", "")
+    check("ai: GetWorkspace counts no open runs", report("GetWorkspace").get("ai_open") == 0, "")
     for name in ("RetryRun", "CancelRun"):
         for what, rid in (("a malformed id", "not-a-jid"), ("a task id", task_id), ("a responsibility id", resp_id)):
             got = report(name, {"run_id": rid})
@@ -768,6 +775,7 @@ def ai_suite(task_id, tag):
             check(f"ai: another account cannot {name} {sorted(body)}", got.get("error") == "not_found", str(got))
         report("SetAiEnabled", {"enabled": True})
         check("ai: another account cannot list a task's runs", report("ListRuns", {"task_id": task_id}) == [], "")
+        check("ai: another account's activity page is its own", report("ListAgentRuns").get("rows") == [], "")
     TOKEN = home
     mine = settings()
     check("ai: the responsibility and the switch are untouched", mine.get("enabled") is False

@@ -18,6 +18,8 @@ import from models {
     AiSettings,
     ResponsibilityView,
     AgentRunView,
+    AgentRunLine,
+    AgentRunPage,
     responsibility_view,
     agent_run_view,
     agent_runs_box,
@@ -25,15 +27,21 @@ import from models {
     resolve,
     owned,
     on_attached,
-    settle_ai
+    settle_ai,
+    note_ai_outcome,
+    projects_of
 }
 import from constants { AI_RESPONSIBILITIES, AGENT_LIMITS }
-import from services.util { now_iso }
+import from services.util { now_iso, page_bounds, shift_day, today_iso }
 import from review.service { review_ping }
 import from services.agents.runs { note_queued }
 import from jaclang.server.bridge { BridgeError }
 
 glob MODEL_NAME_MAX: int = 100,
+     # How far back "needs a look" reaches on the AI page.
+     ATTENTION_DAYS: int = 14,
+     RUNS_PAGE: int = 30,
+     RUNS_PAGE_MAX: int = 300,
      log: logging.Logger = logging.getLogger("flowline.agents");
 
 def refusal(error: str, message: str) -> dict[str, any] {
@@ -261,6 +269,64 @@ walker:protect ListRuns {
     }
 }
 
+# The runs that want a person's eye: failed, or sent back, lately.
+def attention_runs(box: AgentRuns) -> list[AgentRun] {
+    since = shift_day(today_iso(), -ATTENTION_DAYS);
+    out = list([box-->[?:AgentRun, status=="failed", queued_at>=since]]);
+    out.extend([box-->[?:AgentRun, verdict=="request_changes", queued_at>=since]]);
+    out.sort(key=lambda (r: AgentRun) { jid(r); }, reverse=True);
+    out.sort(key=lambda (r: AgentRun) { r.queued_at; }, reverse=True);
+    return out;
+}
+
+
+walker:protect ListAgentRuns {
+    """The workspace's runs, newest first, a page at a time, for the AI page.
+    `attention` narrows it to what failed or asked for changes in the last two
+    weeks. A deleted task keeps its runs, with an empty title."""
+    has attention: bool = False,
+        page: int = 1,
+        page_size: int = RUNS_PAGE,
+        reports: list[AgentRunPage] = [];
+
+    can start with Root entry {
+        visit [here-->[?:AgentRuns]] else {
+            report AgentRunPage(rows=[], daily_limit=AGENT_LIMITS["daily_runs"]);
+        }
+    }
+
+    can gather with AgentRuns entry {
+        (_, size, start, stop) = page_bounds(
+            self.page, self.page_size, RUNS_PAGE, RUNS_PAGE_MAX
+        );
+        found: list[AgentRun] = attention_runs(here)[start:stop + 1]
+            if self.attention
+            else [here-->[?:AgentRun, -queued_at]][start:stop + 1];
+        names: dict[str, str] = {};
+        for p in projects_of(root) {
+            names[jid(p)] = p.name;
+        }
+        rows: list[AgentRunLine] = [];
+        for r in found[:size] {
+            t = resolve(r.task_id);
+            known = isinstance(t, Task);
+            rows.append(
+                AgentRunLine(
+                    **vars(agent_run_view(r)),
+                    task_title=t.title if known else "",
+                    project_name=names.get(t.project_id, "") if known else ""
+                )
+            );
+        }
+        report AgentRunPage(
+            rows=rows,
+            has_more=len(found) > size,
+            runs_today=int(here.day_counts.get(now_iso()[:10], 0)),
+            daily_limit=AGENT_LIMITS["daily_runs"]
+        );
+    }
+}
+
 walker find_run {
     """Lookup base: resolve the jid once, verify the workspace owns it, then
     visit. Resolution is NOT authorization."""
@@ -281,6 +347,7 @@ walker find_run {
 def settle_run_task(holder: Root, run: AgentRun, stamp: str) {
     t = resolve(run.task_id);
     if isinstance(t, Task) and owned(holder, t) {
+        note_ai_outcome(t, run);
         settle_ai(holder, t, {jid(run): run.status}, stamp);
     }
 }

@@ -47,9 +47,9 @@ def:pub YAxis(values: list[int], plotH: str) -> JsxElement {
 def:pub Gridlines -> JsxElement {
     return
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-            <div className="absolute inset-x-0 top-0 border-t border-dashed"/>
-            <div className="absolute inset-x-0 top-1/2 border-t border-dashed"/>
-            <div className="absolute inset-x-0 bottom-0 border-t"/>
+            <div className="absolute inset-x-0 top-0 border-t border-border-subtle"/>
+            <div className="absolute inset-x-0 top-1/2 border-t border-border-subtle"/>
+            <div className="absolute inset-x-0 bottom-0 border-t border-border-strong"/>
         </div>;
 }
 

@@ -1,6 +1,6 @@
-"""The sidebar's projects with their open counts, the scoped one marked.
-Drawn from the workspace cache the page fills (never a read of its own); a
-pick scopes every page, moving to the board from a page without a project."""
+"""The sidebar's projects with their open counts, the scoped one marked while a
+project page is open. Drawn from the workspace cache the page fills (never a
+read of its own); a pick scopes every page, moving to the board from elsewhere."""
 
 import from "@jac/runtime" { navigate }
 import from "react" { useEffect }
@@ -9,9 +9,10 @@ import from ...lib.workspace { cachedProjects }
 import from ...lib.project { currentProject, pickProject }
 import from ...lib.filters { defaultProject }
 import from ..common.ProjectDot { projectDot }
+import from ..common.CommandPalette { PageIcon }
+import from .SidebarLink { ITEM, ITEM_ON, ITEM_OFF }
 
-glob SCOPED: list[str] = ["/board", "/flowlines", "/roadmap"],
-     TILES: list[str] = ["sky", "indigo", "amber", "rose", "emerald", "slate"];
+glob SCOPED: list[str] = ["/board", "/flowlines", "/roadmap"];
 
 def:pub SidebarProjects(path: str) -> JsxElement {
     has projects: list[Project] = cachedProjects(),
@@ -39,6 +40,7 @@ def:pub SidebarProjects(path: str) -> JsxElement {
     ];
     ids = [jid(p) for p in live];
     current = picked if picked in ids else defaultProject(live);
+    scoped = path in SCOPED;
     rows: list[dict[str, str]] = [];
     for p in live {
         rows.append(
@@ -53,43 +55,45 @@ def:pub SidebarProjects(path: str) -> JsxElement {
 
     def choose(id: str) {
         pickProject(id);
-        if path not in SCOPED {
+        if not scoped {
             navigate("/board");
         }
     }
 
     return
         <div className="flex flex-col gap-0.5">
-            <div className="px-3 pb-1.5 text-xs font-medium text-muted-foreground">
+            <div
+                className="flex h-6 items-center justify-between pr-1 pl-2 text-xs text-text-tertiary"
+            >
                 Projects
+                <button
+                    type="button"
+                    aria-label="New project"
+                    title="New project"
+                    onClick={lambda { navigate("/workspace?tab=projects"); }}
+                    className="inline-flex size-6 items-center justify-center rounded-md hover:bg-bg-hover hover:text-text-primary"
+                >
+                    <PageIcon name="new-task" size={14}/>
+                </button>
             </div>
             {for r in rows {
                 <button
                     key={r["id"]}
                     type="button"
-                    aria-pressed={r["id"] == current}
+                    aria-pressed={scoped and r["id"] == current}
                     onClick={lambda { choose(r["id"]); }}
-                    className={"flex h-9 items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors "
-                        + (
-                            "bg-sidebar-accent font-medium text-foreground"
-                                if r["id"] == current
-                                else "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                        )}
+                    className={ITEM
+                        + (ITEM_ON if scoped and r["id"] == current else ITEM_OFF)}
                 >
                     <span
                         aria-hidden="true"
                         className={"size-2.5 shrink-0 rounded-[3px] " + r["tile"]}
                     />
                     <span className="min-w-0 flex-1 truncate">{r["name"]}</span>
-                    <span className="num text-xs text-subtle">{r["open"]}</span>
+                    <span className="num text-[12px] text-text-tertiary">
+                        {r["open"]}
+                    </span>
                 </button>
             }}
-            <button
-                type="button"
-                onClick={lambda { navigate("/workspace?tab=projects"); }}
-                className="mt-1 flex h-9 items-center gap-3 rounded-lg border border-sidebar-border px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-            >
-                + New project
-            </button>
         </div>;
 }
