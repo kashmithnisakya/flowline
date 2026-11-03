@@ -15,7 +15,8 @@ from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
-READY_TIMEOUT = 420
+# A clean boot on a CI runner has taken about 7 minutes since jac 0.38.
+READY_TIMEOUT = 600
 TOKEN = ""
 FAILS: list[str] = []
 
