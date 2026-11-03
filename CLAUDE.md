@@ -113,7 +113,10 @@ people it tracks are roster members.
   `ai:<root>` lease, claims due runs in the workspace's pushed context and
   commits, awaits `review_pr` on the review service outside any context, then
   applies each answer in a fresh context only if the run is still on the
-  attempt that asked (a run whose `lease_until` lapsed is reclaimed); the
+  attempt that asked (a run whose `lease_until` lapsed is reclaimed, which
+  since 0.38 only follows a dead pod, and no gate covers it: the scheduler
+  holds a scheduled function across the service, so one tick runs at a time
+  and a slow review also holds up every other workspace's); the
   installation token rides in the call because the review service may not
   read the graph; `FLOWLINE_FAKE_LLM`, `FLOWLINE_AI_INTERVAL_SECONDS`,
   `_BACKOFF_SECONDS` and `_LEASE_SECONDS` are the gates' knobs;

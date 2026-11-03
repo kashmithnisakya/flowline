@@ -5,7 +5,7 @@ github_stub.py: a move onto a role's step queues the role's responsibilities
 switched-off responsibility each skip with a log line, another workspace sees
 none of it, and the scheduled runner reviews a queued run (FLOWLINE_FAKE_LLM),
 retries a 5xx, fails a 403, skips a closed PR and a commit already reviewed,
-and takes a run back whose claim lapsed. Reuses webhook_gate's helpers.
+and retries a GitHub call that times out. Reuses webhook_gate's helpers.
 Usage: agents_gate.py [base_url] [stub_url]"""
 import base64
 import json
@@ -344,11 +344,14 @@ def runner_suite():
     check("re-review: the same commit again is skipped", len(repeat) == before + 2
           and repeat[0].get("status") == "skipped" and "already reviewed" in repeat[0].get("error", ""), repeat[:2])
 
-    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/11", "times": 1, "delay": 20})
-    e = landed("Claim lapsed", 11)
-    lapsed = settle(e, 1, 150)
-    check("runner: a run whose claim lapsed is taken back and finished once",
-          lapsed and lapsed[0].get("status") == "done" and lapsed[0].get("attempts") == 2, lapsed)
+    # Since 0.38 the scheduler holds a function across the service, so no tick can
+    # take back a claim while its review is alive, only once its pod dies, and no
+    # gate kills a pod. The delay outlasts gh()'s 20 s timeout, so this is its retry.
+    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/11", "times": 1, "delay": 25})
+    e = landed("GitHub too slow", 11)
+    slow = settle(e, 1, 150)
+    check("runner: a GitHub call that times out is tried again and finished once",
+          slow and slow[0].get("status") == "done" and slow[0].get("attempts") == 2, slow)
 
 
 
