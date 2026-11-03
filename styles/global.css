@@ -68,6 +68,11 @@
 
     --danger: #B3261E;
 
+    /* AI, and only AI. A dashed teal edge means AI drew it or is working on
+       it; once a person applies the work it becomes an ordinary solid surface. */
+    --ai: #0A6A6A;
+    --ai-wash: #E9F4F3;
+
     /* Status, on 14px icons only: never a fill, a pill or a row tint. */
     --status-todo: #6A6A63;
     --status-doing: #3568C4;
@@ -141,6 +146,9 @@
 
     --danger: #F0595E;
 
+    --ai: #5FD0C8;
+    --ai-wash: rgb(95 208 200 / 0.10);
+
     --status-todo: #8A8A84;
     --status-doing: #5B8DEF;
     --status-review: #9D7CE8;
@@ -168,10 +176,11 @@
     --float-2: var(--shadow-float);
 }
 
-/* The board row grid: glyph, title, five data columns, move button.
+/* The board row grid: glyph, title, four data columns, move button.
    ColumnHeads overrides it with this browser's widths. */
 :root {
-    --row-cols: 28px minmax(0, 1fr) 104px 76px 112px 104px 84px 40px;
+    --row-cols: 28px minmax(0, 1fr) 88px 84px 84px 132px 40px;
+    --row-cols-tight: 28px minmax(0, 1fr) 88px 84px 132px 40px;
 }
 
 /* ---- shadcn aliases. The registry reads these names; they point at the
@@ -244,6 +253,8 @@
     --color-text-disabled: var(--text-disabled);
     --color-on-accent: var(--on-accent);
     --color-danger: var(--danger);
+    --color-ai: var(--ai);
+    --color-ai-wash: var(--ai-wash);
     --color-status-todo: var(--status-todo);
     --color-status-doing: var(--status-doing);
     --color-status-review: var(--status-review);
@@ -433,131 +444,391 @@
     .step-swatch {
         @apply inline-block size-2.5 shrink-0 rounded-xs;
     }
-    /* Landing container: fluid to 1760px, gutters 16 to 80px by breakpoint.
-       The site nav, every landing section, the footer and the sign-in
-       header share it. */
+    /* The AI mark: a dashed ring around a dot. It turns while AI is working. */
+    .ai-mark {
+        position: relative;
+        display: inline-block;
+        flex: none;
+        width: 16px;
+        height: 16px;
+        border: 1.5px dashed var(--ai);
+        border-radius: 9999px;
+    }
+    .ai-mark::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border-radius: 9999px;
+        background: var(--ai);
+    }
+    .ai-mark-run {
+        animation: ai-turn 5s linear infinite;
+    }
+    .ai-mark-lg {
+        width: 28px;
+        height: 28px;
+        border-width: 2px;
+    }
+    .ai-mark-lg::after {
+        inset: 6px;
+    }
+    /* What AI drew or is still working on. Solid again once it is settled. */
+    .ai-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        border: 1px dashed var(--ai);
+        border-radius: var(--radius-xl);
+        background: var(--ai-wash);
+    }
+    .ai-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        height: 22px;
+        padding-inline: 0.375rem;
+        border: 1px dashed var(--ai);
+        border-radius: var(--radius-md);
+        background: var(--ai-wash);
+        color: var(--ai);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .ai-chip-settled {
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-secondary);
+    }
+    /* The line bar: a project's steps joined by one line, under its header. */
+    .line-bar {
+        display: flex;
+        align-items: center;
+        overflow-x: auto;
+    }
+    .line-step {
+        display: flex;
+        flex: 1 1 0;
+        align-items: center;
+        min-width: max-content;
+    }
+    .line-step::after {
+        content: "";
+        flex: 1;
+        height: 2px;
+        min-width: 24px;
+        margin-inline: 6px;
+        border-radius: 1px;
+        background: var(--border-strong);
+    }
+    .line-step:last-child {
+        flex: 0 0 auto;
+    }
+    .line-step:last-child::after {
+        display: none;
+    }
+    /* The sign-in and callback pages' header container. */
     .landing-wrap {
         @apply mx-auto w-full max-w-[1760px] px-4 sm:px-6 lg:px-10 xl:px-14 2xl:px-20;
     }
-    /* ---- Landing atmosphere. The hero sits on light rather than the flat
-       ground: a warm rust glow and a cooler step-sky counterweight, fading
-       out before the first section. Both are held at 10%: the ground is
-       nearly white, so a stronger wash pushes `subtle` text and the rust
-       eyebrow under AA. At 10% the tightest pair still clears it. */
-    .hero-atmosphere {
-        position: absolute;
-        inset-inline: 0;
-        top: 0;
-        z-index: -10;
-        height: min(46rem, 88vh);
-        pointer-events: none;
-        background:
-            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 58%),
-            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 10%, transparent), transparent 60%);
+    /* ---- The public landing page: one 1200px column, Geist headlines, and
+       its spine, one line through the numbered sections. A section draws its
+       own stretch, so the line stays one line across the full-bleed AI band. */
+    .lp-wrap {
+        @apply mx-auto w-full max-w-[1200px] px-4 sm:px-8;
     }
-    /* A faint grid under the glows, fading out before it reaches an edge, so
-       the hero has texture rather than flat colour. Decorative and masked,
-       so it never competes with the text sitting on it. */
-    .hero-atmosphere::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background-image:
-            linear-gradient(to right, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px),
-            linear-gradient(to bottom, color-mix(in oklab, var(--border) 70%, transparent) 1px, transparent 1px);
-        background-size: 56px 56px;
-        -webkit-mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
-        mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 78%);
+    .lp-h1,
+    .lp-h2 {
+        font-weight: 700;
+        letter-spacing: -0.035em;
+        line-height: 1.04;
+        text-wrap: balance;
     }
-    .dark .hero-atmosphere {
-        background:
-            radial-gradient(58rem 30rem at 14% -16%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 58%),
-            radial-gradient(54rem 30rem at 86% -10%, color-mix(in oklab, var(--step-sky) 18%, transparent), transparent 60%),
-            linear-gradient(to bottom, color-mix(in oklab, var(--card) 38%, transparent), transparent 55%);
+    .lp-h1 {
+        font-size: clamp(40px, 5.2vw, 76px);
     }
-    /* A glass capsule: the hero eyebrow and the nav's link group. The 62%
-       card fill carries the text contrast by itself, so the blur is
-       decoration and a browser without backdrop-filter loses nothing. */
-    .glass-pill {
-        border-radius: 9999px;
-        border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-        background: color-mix(in oklab, var(--card) 62%, transparent);
-        -webkit-backdrop-filter: blur(14px) saturate(150%);
-        backdrop-filter: blur(14px) saturate(150%);
+    .lp-h2 {
+        font-size: clamp(30px, 3.4vw, 46px);
+        letter-spacing: -0.03em;
     }
-    /* The hero's product preview reads as a floating screenshot, so it is the
-       one resting surface allowed a shadow. */
-    .hero-frame {
-        border-radius: 18px;
-        box-shadow: var(--float-2);
+    .lp-lead {
+        max-width: 60ch;
+        font-size: clamp(16px, 1.35vw, 19px);
+        line-height: 1.5;
+        color: var(--text-secondary);
     }
-    /* A section's small label, above its heading: mono and rust, sentence
-       case like every other label in the app. */
-    .section-eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-family: var(--font-mono);
-        font-size: 12.5px;
-        color: var(--primary);
+    .lp-body {
+        max-width: 52ch;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--text-secondary);
     }
-    .section-eyebrow::before {
-        content: "";
-        width: 0.375rem;
-        height: 0.375rem;
-        border-radius: 9999px;
-        background: currentColor;
+    .lp-eyebrow {
+        font-size: 13px;
+        color: var(--text-tertiary);
     }
-    /* A bento tile. The capability grid is tiles of uneven width rather than
-       a ruled list, so the flagship capabilities read as bigger. Resting
-       state is a hairline; the shadow only appears under the pointer. */
-    .bento-tile {
+    .lp-facts {
         display: flex;
-        flex-direction: column;
-        gap: 0.625rem;
+        flex-wrap: wrap;
+        gap: 6px 20px;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .lp-link {
+        color: var(--text-primary);
+        text-decoration: underline;
+        text-decoration-color: var(--border-strong);
+        text-underline-offset: 3px;
+    }
+    a.lp-link:hover {
+        text-decoration-color: currentColor;
+    }
+    .lp-panel {
+        --kind-knockout: var(--bg-elevated);
         border: 1px solid var(--border);
-        border-radius: 14px;
-        background: var(--card);
-        padding: 1.25rem;
-        transition:
-            border-color 160ms ease,
-            box-shadow 160ms ease;
+        border-radius: 8px;
+        background: var(--bg-elevated);
     }
-    .bento-tile:hover {
-        border-color: color-mix(in oklab, var(--primary) 38%, var(--border));
-        box-shadow: var(--float-1);
+    .lp-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 44px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-subtle);
     }
-    /* The rust chip a tile's icon sits in. */
-    .tile-icon {
-        display: inline-flex;
+    .lp-row:last-child {
+        border-bottom: 0;
+    }
+    /* The spine. A node sits on the line; the first section starts the line
+       at its node and the last ends it there, on a filled node. */
+    .lp-step {
+        --node-top: 84px;
+        position: relative;
+        padding: 80px 0 80px 56px;
+    }
+    .lp-step::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 11px;
+        border-left: 2px solid var(--accent);
+    }
+    .lp-node {
+        position: absolute;
+        top: var(--node-top);
+        left: 0;
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--accent);
+        border-radius: 9999px;
+        background: var(--background);
+    }
+    .lp-step-first::before {
+        top: calc(var(--node-top) + 12px);
+    }
+    .lp-step-ai::before {
+        border-left: 2px dashed var(--ai);
+    }
+    .lp-step-ai .lp-node {
+        border: 2px dashed var(--ai);
+        background: var(--bg-sidebar);
+    }
+    .lp-step-end {
+        padding-bottom: 96px;
+    }
+    .lp-step-end::before {
+        bottom: auto;
+        height: var(--node-top);
+    }
+    .lp-step-end .lp-node {
+        background: var(--accent);
+    }
+    .lp-step-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+        gap: 40px 64px;
+        align-items: center;
+    }
+    /* Step 1's small flow line: four nodes, joined, with Review's way back to
+       Doing drawn from the middle of one to the middle of the other. */
+    .lp-draw {
+        --mini-gap: 12px;
+    }
+    .lp-mini {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--mini-gap);
+    }
+    .lp-mini-node {
+        position: relative;
+        display: flex;
         align-items: center;
         justify-content: center;
-        width: 2.25rem;
-        height: 2.25rem;
-        border-radius: 10px;
-        border: 1px solid color-mix(in oklab, var(--primary) 22%, transparent);
-        background: color-mix(in oklab, var(--primary) 10%, var(--card));
-        color: var(--primary);
+        gap: 6px;
+        height: 44px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 550;
     }
-    /* The closing call to action: one lit panel, so the page opens and closes
-       on the same note. Glows sit on the card, not the ground, and stay at
-       10% for the same contrast reason as the atmosphere. */
-    .cta-band {
+    .lp-mini-node::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 100%;
+        width: var(--mini-gap);
+        height: 2px;
+        margin-top: -1px;
+        background: var(--border-strong);
+    }
+    .lp-mini-node:last-child::after {
+        display: none;
+    }
+    .lp-mini-loop {
+        width: calc(25% + var(--mini-gap) / 4 + 2px);
+        height: 26px;
+        margin-left: calc(37.5% - var(--mini-gap) / 8 - 1px);
+        border: 2px solid var(--border-strong);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+    }
+    /* Step 2's travel: a dot per move on a thin line, a dashed ring for AI. */
+    .lp-travel li {
         position: relative;
+        display: flex;
+        gap: 10px;
+        padding: 0 0 12px 18px;
+        font-size: 13px;
+    }
+    .lp-travel li::before {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 4px;
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--text-tertiary);
+    }
+    .lp-travel li::after {
+        content: "";
+        position: absolute;
+        top: 14px;
+        bottom: -5px;
+        left: 7px;
+        width: 1.5px;
+        background: var(--border);
+    }
+    .lp-travel li:last-child::after {
+        display: none;
+    }
+    .lp-travel li.lp-travel-ai::before {
+        top: 4px;
+        left: 2px;
+        width: 11px;
+        height: 11px;
+        border: 1.5px dashed var(--ai);
+        background: transparent;
+    }
+    /* The product picture. Its text scale steps with the viewport while its
+       layout stays fluid: `zoom` scales lengths but a percentage still fills
+       the frame, so the board never clips sideways or leaves a gap. */
+    .lp-shot {
+        position: relative;
+        aspect-ratio: 1136 / 640;
         overflow: hidden;
         border: 1px solid var(--border);
-        border-radius: 24px;
-        background:
-            radial-gradient(42rem 22rem at 18% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 62%),
-            radial-gradient(38rem 20rem at 84% 110%, color-mix(in oklab, var(--step-sky) 10%, transparent), transparent 64%),
-            var(--card);
-        box-shadow: var(--float-1);
+        border-radius: 12px;
+        background: var(--bg-canvas);
+        box-shadow: 0 24px 60px rgb(20 20 19 / 0.12);
+    }
+    .dark .lp-shot {
+        box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+    }
+    .lp-shot-in {
+        --kind-knockout: var(--bg-canvas);
+        position: absolute;
+        inset: 0;
+        font-size: 13.5px;
+        line-height: 1.45;
+        pointer-events: none;
+    }
+    .lp-shot-row {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 64px 68px 88px 132px;
+        column-gap: 12px;
+        align-items: center;
+        padding-inline: 24px;
+    }
+    @media (max-width: 1199.98px) {
+        .lp-shot-in {
+            zoom: 0.85;
+        }
+    }
+    @media (max-width: 999.98px) {
+        .lp-shot-in {
+            zoom: 0.7;
+        }
+    }
+    @media (max-width: 759.98px) {
+        .lp-shot-in {
+            zoom: 0.58;
+        }
+    }
+    @media (max-width: 639.98px) {
+        .lp-step {
+            --node-top: 60px;
+            padding: 56px 0 56px 36px;
+        }
+        .lp-step-end {
+            padding-bottom: 72px;
+        }
+        .lp-draw {
+            --mini-gap: 8px;
+        }
+        .lp-mini-node {
+            flex-direction: column;
+            gap: 2px;
+            height: 56px;
+            font-size: 12px;
+        }
+        .lp-shot {
+            aspect-ratio: 1 / 1;
+        }
+        .lp-shot-in {
+            zoom: 0.62;
+        }
+        .lp-shot-row {
+            grid-template-columns: 20px minmax(0, 1fr) auto;
+            padding-inline: 16px;
+        }
     }
 }
 
 /* ---- Classes that must beat the registry primitives' own utilities sit
    outside any layer (unlayered rules outrank @layer utilities). A call site
    still overrides one with an important utility such as `px-4!`. */
+
+/* The board's rows answer the room they have, not the window: with Ask docked or
+   in a small window the GitHub column goes first, so a title stays readable. */
+.board-rows {
+    container-type: inline-size;
+}
+@media (min-width: 1024px) {
+    @container (max-width: 859px) {
+        .board-rows > * {
+            --row-cols: var(--row-cols-tight);
+        }
+        .board-rows [data-task-row] [data-col="2"],
+        .board-rows [data-proposal] [data-col="2"],
+        .board-rows [data-head="3"],
+        .board-rows [data-proposal-note] {
+            display: none;
+        }
+    }
+}
 
 /* Ghost filter trigger (a SelectTrigger or button); data-active="true"
    turns it into an outlined control in foreground weight 600. */
@@ -576,7 +847,7 @@
     width: auto;
 }
 .toolbar-filter:hover {
-    background-color: var(--accent);
+    background-color: var(--bg-hover);
     color: var(--foreground);
 }
 .toolbar-filter[data-active="true"] {
@@ -617,7 +888,7 @@
     border-bottom: 0;
 }
 .data-table tbody tr:hover {
-    background-color: var(--accent);
+    background-color: var(--bg-hover);
 }
 .data-table thead tr:hover {
     background-color: transparent;
@@ -716,7 +987,7 @@
 }
 [data-slot="button"][data-variant="outline"]:not(:disabled):hover,
 [data-slot="button"][data-variant="outline"][aria-expanded="true"] {
-    background-color: var(--accent);
+    background-color: var(--bg-hover);
 }
 /* Focus is a 2px outline, not the registry's 3px halo plus a recoloured
    border (which read as a validation error). */
@@ -775,133 +1046,17 @@
     to { transform: translateX(100%); }
 }
 
-/* Landing entrance: content rises once, on load, in a short stagger. The
-   backwards fill keeps each element in its start state through its delay, so
-   nothing flashes in before its turn. */
-@keyframes rise {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-.rise {
-    animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-.rise-1 { animation-delay: 60ms; }
-.rise-2 { animation-delay: 140ms; }
-.rise-3 { animation-delay: 220ms; }
-.rise-4 { animation-delay: 300ms; }
-.rise-5 { animation-delay: 400ms; }
-
-/* ---- Hero motion: one task's trip along the flow line on a 12s loop, with
-   its travel writing itself underneath. The figure is decorative (the
-   playable board sits below it), so under reduced motion every animation
-   collapses to its final frame, which is a complete picture: the task on
-   Done and its travel fully written.
-
-   The task rides a four column track with no gap, so its wrapper is exactly
-   one column wide and translateX(100%) is exactly one step. The step pills
-   share one keyframe and are phased apart by negative delays, so each lights
-   only while the task is with it. */
-@keyframes hm-travel {
-    0%, 16% { transform: translateX(0); }
-    25%, 41% { transform: translateX(100%); }
-    50%, 66% { transform: translateX(200%); }
-    75%, 100% { transform: translateX(300%); }
-}
-
-@keyframes hm-lit {
-    0%, 22% {
-        border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-        background: color-mix(in oklab, var(--primary) 12%, var(--card));
-        color: var(--foreground);
-    }
-    30%, 100% {
-        border-color: var(--border);
-        background: var(--card);
-        color: var(--muted-foreground);
-    }
-}
-
-/* One keyframe per line, each holding its line hidden until the task reaches
-   the step that writes it: Build at 25% of the loop, Review at 50%, Done at
-   75%. Phasing these with delays instead would not work, since a shared
-   keyframe's hidden window is far shorter than the wait. */
-@keyframes hm-line-1 {
-    0%, 24% { opacity: 0; transform: translateY(5px); }
-    29%, 100% { opacity: 1; transform: none; }
-}
-@keyframes hm-line-2 {
-    0%, 49% { opacity: 0; transform: translateY(5px); }
-    54%, 100% { opacity: 1; transform: none; }
-}
-@keyframes hm-line-3 {
-    0%, 74% { opacity: 0; transform: translateY(5px); }
-    79%, 100% { opacity: 1; transform: none; }
-}
-
-.hm-track {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.hm-card {
-    grid-column: 1;
-    animation: hm-travel 12s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-}
-.hm-step {
-    animation: hm-lit 12s linear infinite;
-}
-.hm-step:nth-child(2) { animation-delay: -9s; }
-.hm-step:nth-child(3) { animation-delay: -6s; }
-.hm-step:nth-child(4) { animation-delay: -3s; }
-.hm-line:nth-child(1) { animation: hm-line-1 12s linear infinite; }
-.hm-line:nth-child(2) { animation: hm-line-2 12s linear infinite; }
-.hm-line:nth-child(3) { animation: hm-line-3 12s linear infinite; }
-
-/* ---- Scroll reveal. Only the hero animated, on load, which left every
-   section below it dead on the page. Each marked block now rises as it
-   enters the viewport, driven by the scroll position rather than a timer,
-   so nothing runs off screen and there is no observer to wire up.
-
-   Gated twice on purpose: `@supports` so a browser without scroll-driven
-   animation simply renders the content (never hidden, just unanimated), and
-   `no-preference` so the reduced-motion block never has to undo it. */
-@supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-        .reveal {
-            animation: rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 55%;
-        }
-    }
-}
-
-/* The hero glows drift, very slowly, so the atmosphere is alive without
-   anything appearing to move. Translate and opacity only: growing a
-   full-width layer would overflow the page sideways. */
-@keyframes drift {
-    50% {
-        opacity: 0.86;
-        transform: translate3d(0, -1.5%, 0);
-    }
-}
-.hero-atmosphere {
-    animation: drift 24s ease-in-out infinite;
-    will-change: transform;
+@keyframes ai-turn {
+    to { transform: rotate(360deg); }
 }
 
 /* Motion is for state changes only, and none of it survives reduced motion
-   (a spinner still turns: it is the only sign that work is in flight). */
+   (a spinner and the AI ring still turn: each is the only sign of work in flight). */
 @media (prefers-reduced-motion: reduce) {
     html {
         scroll-behavior: auto;
     }
-    *:not(.animate-spin),
+    *:not(.animate-spin, .ai-mark-run),
     *::before,
     *::after {
         animation-duration: 0.01ms !important;

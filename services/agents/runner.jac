@@ -26,7 +26,8 @@ import from models {
     owned,
     agent_run_key,
     runs_of_task,
-    settle_ai
+    settle_ai,
+    note_ai_outcome
 }
 import from constants { AGENT_LIMITS }
 import from services.github.util { installation_token, lease_owner }
@@ -151,6 +152,9 @@ def finish(holder: Root, run: AgentRun, status: str, why: str, stamp: str) {
     run.lease_until = "";
     run.finished_at = stamp;
     t = resolve(run.task_id);
+    if isinstance(t, Task) and owned(holder, t) {
+        note_ai_outcome(t, run);
+    }
     if status == "failed" and isinstance(t, Task) and owned(holder, t) {
         record_task_event(
             holder,
@@ -382,6 +386,7 @@ def apply(holder: Root, results: list[dict[str, any]]) {
             );
             t = resolve(run.task_id);
             if isinstance(t, Task) and owned(holder, t) {
+                note_ai_outcome(t, run);
                 record_task_event(
                     holder,
                     t,

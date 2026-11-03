@@ -43,12 +43,12 @@ is why renaming a step never changes how anything behaves.
 ## What it does
 
 - **A flow line per organization** and a board built from it: your steps, your
-  order, your colours, with a route strip of every step above the lanes (one
-  lane at a time behind step tabs on a phone)
+  order, your colours, with every step joined on one line above the work
 - **The board writes the log**: creating a task and every move land in the
   log automatically, with timestamps, issue/PR links and who was involved
-- **A task sheet** beside the board: where the card sits on the route, a Move
-  menu, its properties, notes, checklist and its history from the log.
+- **A task sheet** beside the board: where the task sits on the route, a Move
+  menu, the properties in use, its AI review, notes, checklist and its history
+  from the log.
   On the keyboard, M on a card opens the move menu (number keys pick a step),
   J and K step the open sheet through the cards, N starts a new task and /
   filters
@@ -74,7 +74,11 @@ is why renaming a step never changes how anything behaves.
 - **Ask**, an assistant that reads the whole workspace and writes the standup
   note for you, answers questions about your own board, and turns "add a task
   for Nadia on the docs site" into a suggestion you confirm before anything is
-  written. It docks as a column on wide screens
+  written. A proposed task is drawn dashed on the board until you apply it. It
+  docks as a column on wide screens
+- **AI responsibilities**, off until you turn them on: give a role code review
+  and it runs when a task with a linked pull request lands on that role's step.
+  The AI page lists every run, what each responsibility may do and what is sent
 - **Light and dark**, chosen under Workspace, Preferences (or the account menu)
   or followed from your device
 

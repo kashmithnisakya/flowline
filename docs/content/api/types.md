@@ -64,6 +64,10 @@ responsibility can be is `AI_RESPONSIBILITIES` in `constants.jac`, and
 
 ::: obj AgentRunView h3
 
+::: obj AgentRunLine h3
+
+::: obj AgentRunPage h3
+
 ::: glob AI_RESPONSIBILITIES
 
 ::: glob AGENT_LIMITS
@@ -101,6 +105,8 @@ responsibility can be is `AI_RESPONSIBILITIES` in `constants.jac`, and
 ::: obj StandupNote h3
 
 ::: obj ProposedAction h3
+
+::: obj AssistantReply h3
 
 ## GitHub
 

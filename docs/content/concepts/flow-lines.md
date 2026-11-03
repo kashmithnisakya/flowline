@@ -94,8 +94,10 @@ renamed but never re-keyed.
 
 ### Simple (`simple`)
 
-The recommended start: four steps, and Review can send work back to Doing. It
-seeds no roles and no step owners.
+The recommended start: four steps, and Review can send work back to Doing. A
+review that requests changes takes that arrow on its own (the `changes_requested`
+trigger), whether a person left it on the linked PR or an AI responsibility did.
+It seeds no roles and no step owners.
 
 ```mermaid
 flowchart LR

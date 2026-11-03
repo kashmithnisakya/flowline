@@ -9,6 +9,7 @@ impl RoadmapPage.loadShared -> None {
     members = ws["members"];
     steps = ws["steps"];
     roleRows = ws["roles"];
+    shared = True;
     known = False;
     for p in projects {
         if p.active and jid(p) == fProject {

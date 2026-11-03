@@ -1,5 +1,5 @@
-"""The phone header below md: the mark, the current page's name, search,
-Ask and the account menu."""
+"""The phone header below lg: the mark, the current page's name, search and the
+account menu. Ask sits in the tab bar."""
 
 import from "@jac/runtime" { Link }
 import from ..common.CommandPalette { PageIcon }
@@ -14,7 +14,6 @@ def:pub PhoneHeader(
     account: str,
     themeChoice: str,
     onSearch: Callable[[], None],
-    onAsk: Callable[[], None],
     onTheme: Callable[[str], None],
     onSignOut: Callable[[], None]
 ) -> JsxElement {
@@ -35,15 +34,6 @@ def:pub PhoneHeader(
                 onClick={onSearch}
             >
                 <PageIcon name="search" size={18}/>
-            </button>
-            <button
-                type="button"
-                data-ask-trigger="true"
-                aria-label="Ask about this workspace"
-                className={BUTTON}
-                onClick={onAsk}
-            >
-                <PageIcon name="ask" size={18}/>
             </button>
             <AccountMenu
                 orgName={orgName}

@@ -32,7 +32,7 @@ current assignee comma-joined as `member_name`. Its `activity` reads:
 
 | Event | `activity` |
 | --- | --- |
-| `CreateTask` | `Added to Backlog` (the mapped status) |
+| `CreateTask` | `Added to Doing` (the step's name, or the status with no flow line) |
 | `MoveTask` onto another step | `Moved to Implement`, plus `· Priya Raman` for a handoff and `· closed org/repo #12` or `· reopened org/repo #12` when the move crossed Done on an `auto_close` repo |
 | `UpdateTask` that changes status | `Moved to Done` |
 | A merged PR or closed issue on an `auto_done` repo | `Moved to Done · PR merged` or `Moved to Done · issue closed` |

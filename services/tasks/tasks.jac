@@ -1029,7 +1029,12 @@ walker:protect CreateTask {
         fresh.assignee_ids = link_assignees(holder, fresh, self.assignee_ids);
         count_task(here, fresh, 1);
         note_category(holder, fresh.category);
-        record_task_event(holder, fresh, "Added to " + col, stamp);
+        record_task_event(
+            holder,
+            fresh,
+            "Added to " + (chosen.name if isinstance(chosen, WorkflowStep) else col),
+            stamp
+        );
         report fresh.to_view();
         disengage;
     }

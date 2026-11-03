@@ -1,5 +1,5 @@
-"""One labelled row of toggle buttons in the transition editor (what the
-arrow carries, what moves work across)."""
+"""One labelled row of chips in the arrow editor (what the arrow carries, what
+moves work across on its own)."""
 
 def:pub EdgePicks(
     label: str,
@@ -8,19 +8,19 @@ def:pub EdgePicks(
     onPick: Callable[[str], None] = None
 ) -> JsxElement {
     return
-        <div className="mt-2 flex flex-col gap-1" role="group" aria-label={label}>
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-col gap-1.5" role="group" aria-label={label}>
+            <span className="text-[13px] font-medium">{label}</span>
+            <div className="flex flex-wrap items-center gap-1.5">
                 {for pick in picks {
                     <button
                         key={pick["text"]}
                         type="button"
                         aria-pressed={value == pick["key"]}
-                        className={"rounded-sm border px-1.5 py-0.5 text-xs transition-colors "
+                        className={"h-[26px] rounded-md border bg-card px-2 text-[12.5px] whitespace-nowrap transition-colors "
                             + (
-                                "border-input bg-muted font-semibold text-foreground"
+                                "border-foreground font-medium"
                                     if value == pick["key"]
-                                    else "border-transparent text-muted-foreground hover:text-foreground"
+                                    else "border-border hover:bg-bg-hover"
                             )}
                         onClick={lambda { if onPick { onPick(pick["key"]); }}}
                     >

@@ -101,7 +101,9 @@ people it tracks are roster members.
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `roadmap` (`RoadmapSnapshot`, one project's dated tasks), `agents` (a
+  `roadmap` (`RoadmapSnapshot`, one project's dated tasks; `assistant`'s
+  `AskOrPropose` is Ask's one input: `wants_change` decides question or change,
+  then it answers or proposes, and it writes nothing), `agents` (a
   role's AI responsibilities, the workspace's AI switch on the `AgentRuns`
   box, off by default, and a task's runs; `ListResponsibilities` is a
   declared reader, `ListRuns` never cached; `runs.jac` queues a role's
@@ -118,7 +120,12 @@ people it tracks are roster members.
   `FLOWLINE_AGENTS_PAUSED=1` stops it claiming; `Task.ai_state`
   (queued or running, the row's AI chip) is kept by `settle_ai` at every
   write point that moves a run (queue, claim, apply, `RetryRun`,
-  `CancelRun`), so a new one must call it too; `metrics.jac` counts runs
+  `CancelRun`), so a new one must call it too; `note_ai_outcome` keeps what the
+  last settled review came to on the task (`ai_outcome`, `ai_comments`,
+  `ai_blocking`, the row's chip after a run) wherever a run settles;
+  `ListAgentRuns` pages the workspace's runs for the AI page, and
+  `WorkspaceView.ai_open` is how many are open, for the sidebar;
+  `metrics.jac` counts runs
   with plain `prometheus_client` counters, which `/metrics` serves only when
   it merges several workers' files, the deployed case),
   `filters` (the
@@ -538,33 +545,42 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/ai`, `/workspace`, `/setup` | `pages/(auth)/…` | auto-guarded |
 | `/github` | `pages/(auth)/github.jac` | the GitHub App's callback and setup URL: renders the Workspace page on its GitHub section |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
   would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
   collides with the root layout. The chrome lives in `components/chrome/`:
-  a left sidebar at lg (1024px) and up (the workspace name, search, the pages in
-  `NAV_PAGES` from `CommandPalette.jac` in the order Flow line, Board,
-  Roadmap, Overview, the Projects list, then Ask, Workspace and the account
-  card with the theme and Sign out), and below lg a header over a five-tab
-  bar (those pages plus Workspace). `components/assistant/AssistantDock`
+  a left sidebar at lg (1024px) and up (the workspace name, search, Overview,
+  AI, the Projects list, then Ask, Workspace and the account card with the theme
+  and Sign out), and below lg a header over a four-tab bar (Overview, Board, Ask,
+  More). **A project's views are tabs, not sidebar pages:** Board, Flow line and
+  Roadmap share `components/common/ProjectHead` (the project's name, which is the
+  picker, and the tabs, each a route), with `LineBar`, the steps joined by one
+  line, as its children on the board and the roadmap. `NAV_PAGES` in
+  `CommandPalette.jac` still lists every page, for the palette and the phone's
+  title. `components/assistant/AssistantDock`
   (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
   `/setup` gets only the setup bar (mark and Sign out).
-- **`/workspace` is every setting**: Organization, People, Projects, Roles,
-  GitHub and Preferences (the theme) as `?tab=` sections from
-  `components/workspace/`.
-  Organization also holds the AI switch (`AiSwitch`, `SetAiEnabled`) and the
-  notice of what turning it on sends; the page reads it with
-  `ListResponsibilities` beside the workspace (only this page shows it).
-  The Roles tab lists a managed role's AI responsibilities under its row
-  (`components/workspace/roles/`: a line each with its own switch, add
-  buttons from `AI_RESPONSIBILITIES`, and the editor dialog); a free-text
-  role has no `Role` node, so it gets none until it is added as a role.
+- **`/workspace` is every setting, on one scrolling page**: Organization, People,
+  Projects, Roles, GitHub and Preferences (the theme) as panels from
+  `components/workspace/` beside a rail of anchors; `?tab=<section>` scrolls to
+  one. `GithubSlot` mounts the GitHub section as it nears the viewport, or at once
+  when the address asks for it.
+  **`/ai` is everything AI** (`pages/(auth)/ai.jac`, `components/ai/`): the switch
+  (`AiSwitch`, `SetAiEnabled`; turning it on asks first through `ConsentDialog`,
+  and `WhatIsSent` says what leaves the server, including that Ask does not
+  depend on this switch), the workspace's runs (`ListAgentRuns`, polled while
+  one is open), each role's responsibilities (`components/workspace/roles/`: a
+  line each with its own switch, add buttons from `AI_RESPONSIBILITIES`, and the
+  editor dialog) and the review service's status. The Roles section only shows a
+  chip per responsibility, linking there, which is why the workspace page still
+  reads `ListResponsibilities`; a free-text role has no `Role` node, so it gets
+  none until it is added as a role.
   The page loads one `GetWorkspace` and hands the Projects and Roles
   sections their lists as props (open counts are the projects' own
-  tallies), so a tab switch is a render, not a request; a section's write
+  tallies), so a jump between sections is a scroll, not a request; a section's write
   calls `forgetWorkspace()` and awaits the page's `loadAll` (`onChanged`)
   rather than refetching a list of its own. `/github` opens this page on the
   GitHub section (`initialTab` reads the path), where `GithubSection`
@@ -622,7 +638,7 @@ File-based routing with route groups:
   (the project picker above a scoped page's title), `CommandPalette.jac`
   (⌘K), `ErrorNote`, `LoadFailed`, `glyphs`, `Markdown`.
 - **The visual system lives in `styles/global.css`.** One token layer
-  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`,
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`, `--ai`,
   `--status-*`, `--project-*`, `--avatar-*`, both themes) with the shadcn
   names aliased onto it, so `components/ui/` follows unedited. Geist for UI,
   Geist Mono only for data (`brand/` still draws the og image in Archivo and
@@ -634,6 +650,14 @@ File-based routing with route groups:
   the two that dress registry primitives sit outside `@layer` so they beat
   the primitives' utilities. Nothing renders below 12px, labels are
   sentence case, and only floating layers cast a shadow.
+- **Dashed teal means AI, and nothing else does.** `--ai` shows only on the AI
+  mark (`components/common/AiMark`, a dashed ring that turns while a run works),
+  `.ai-chip` and `.ai-card`. Dashed means AI drew it or is working on it and a
+  person has not settled it: a proposal, a run in flight, a review that wants an
+  answer. Applied or settled work is an ordinary solid surface (`ai-chip-settled`,
+  or `Task added` on a proposal). A pending `create_task` or `move_task` proposal
+  is also drawn dashed on the board (`lib/proposal`, `ProposalRow`) until Apply or
+  Dismiss clears it.
 - **A step's colour is information, not decoration.** It shows only on
   the 14px status icon (whose shape carries the kind): no washes, solid
   pills or tinted bands. `--step-<key>` in `styles/global.css` for both
@@ -641,8 +665,13 @@ File-based routing with route groups:
   (`bg-step-sky`). A new colour key needs a token in both palettes, and its
   key is what persists (`rose` renders orchid, clear of the andon red).
 - **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
-  sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
-  so far" from `ListLogEntries` with `task_id`); only the board passes `beside`
+  sheet for an existing task (route breadcrumb, Move menu, properties, the AI
+  review, notes, checklist, and "Travel so far" from `ListLogEntries` with
+  `task_id`). It shows Step, People, Due and Priority and any field with a value;
+  an empty one is a chip that reveals its row (`OPTIONAL_FIELDS`), and the foot
+  with Save appears only once a field differs from how the sheet opened. A new
+  task is `NewTaskDialog`, a short centred dialog the board alone opens; only the
+  board passes `beside`
   so it stays non-modal next to the step groups. Clicking a step in the flow line
   page's view mode floats `StepTasksPanel` over the diagram (a bottom sheet on
   phones), and a row opens the sheet on the same form dict and the same
@@ -686,8 +715,8 @@ File-based routing with route groups:
   `["board"]`, a set's keys come from `FILTER_TABLES` in `constants.jac`,
   and the server drops any other key.
 - **The board is the flow line's steps, stacked.** `components/board/`:
-  `FlowStrip` (every step as a pill with its count; a pill scrolls its
-  group into view), `StepGroup` (a `StepHeader` bar, then its rows; a drop
+  `FilterBar` (one Filter menu, active filters as chips, then search and
+  Display), `StepGroup` (a `StepHeader` bar, then its rows; a drop
   on the group moves the task there, and Done folds by default and pages
   its older history through `OlderDone`), `TaskLine` (a row: `RowShell`
   for click, Enter, M and drag-beside, `TaskTitle`, then `TaskCells` from
@@ -695,9 +724,12 @@ File-based routing with route groups:
   below lg, and `RowMove`, the step menu, mounted only while open).
   Tailwind only sees class names written out whole in source, so a
   responsive variant is its own literal (`ROW_COLUMNS`), never built by
-  string replacement. The grid's widths are the `--row-cols` variable
+  string replacement. The rows answer the room they have, not the window: under
+  860px of board (Ask docked at 1280 to 1500, or a small window) `.board-rows`
+  drops the GitHub column through `--row-cols-tight`. The grid's widths are the `--row-cols` variable
   (default in `styles/global.css`); `ColumnHeads` lets the user resize the
-  five data columns (a double-click fits one to the cells tagged
+  four data columns (People, Due, GitHub, AI; a High flag and the checklist
+  count sit beside the title) (a double-click fits one to the cells tagged
   `data-col`, the Display menu resets) and keeps them in this browser
   (`columnWidths.jac`).
 - **Board deep links**: `/board?task=<id>` opens a task, `/board?new=1` the
@@ -810,6 +842,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   module state, and awaits that same promise from every mount. Keep those
   patterns: a `has` flag or a `Ref` is per instance, and a remount is still
   one route change away.
+- **A new page opens at its top.** The layout resets the scroll on a path
+  change, in a layout effect so it runs before a page's own effects and a
+  section's deep link still lands; Back and Forward keep what the browser restores
+  (a capture-phase `popstate` listener says which it was: `@jac/runtime` does not
+  export the router's navigation type).
 - **The page is blank until the bundle runs, then paints its frame at
   once.** The HTML shell is an empty `#root` plus the bundle: there is no
   boot script, `jac.toml` carries plain metadata only. (An inline

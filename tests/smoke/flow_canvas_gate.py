@@ -40,8 +40,7 @@ def run(page) -> None:
     page.get_by_placeholder("Website redesign").fill("Custom flow")
     page.get_by_placeholder("Website redesign").press("Enter")
     page.get_by_role("button", name="Skip for now", exact=True).click()
-    page.get_by_role("radio", name="Draw my own").click()
-    page.get_by_role("button", name="Open the designer", exact=True).click()
+    page.get_by_role("button", name="Draw my own", exact=True).click()
     expect(page.locator('[data-canvas="flow"]')).to_be_visible()
     page.get_by_role("button", name="Add step", exact=True).click()
     page.get_by_role("textbox", name="Step name", exact=True).fill("Start")
@@ -84,7 +83,7 @@ def run(page) -> None:
             assert math.isclose(stored["x"], x, abs_tol=0.1), stored
             assert math.isclose(stored["y"], y, abs_tol=0.1), stored
             node.click()
-            expect(page.get_by_role("textbox", name="Step name", exact=True)).to_have_value("Start")
+            expect(page.get_by_role("textbox", name="Name", exact=True)).to_have_value("Start")
 
     step("custom flow: creating and moving a step retain signed coordinates")
     probe = report(page, "SaveStep", {"name": "Coordinate probe", "x": -20000.0, "y": 20000.0})

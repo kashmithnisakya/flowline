@@ -1,7 +1,7 @@
-"""flowline - Flow line page (/flowlines): the template picker, then one framed
-diagram with a single toolbar, View or Edit, Flow or Lanes. Drag pans, ctrl or
-cmd + wheel and pinch zoom, F fits. Phones open on an ordered step list.
-Validation is advisory and never blocks saving. Keep notes out of JSX."""
+"""flowline - Flow line page (/flowlines): the project's header, the template
+picker, then one framed diagram with a single toolbar, View or Edit, Flow or
+Lanes. Drag pans, ctrl or cmd + wheel and pinch zoom, F fits. Phones open on an
+ordered step list. Validation is advisory and never blocks saving."""
 
 import from ...models { Project, StepView, TaskRow, TaskView, MemberView, RoleView }
 import from ...constants { KIND_STATUS }
@@ -20,7 +20,7 @@ import from ...services.flowlines.flowlines {
     RenameFlowLine,
     ListStepTasks
 }
-import from ...lib.workspace { loadWorkspace, forgetWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace, cachedProjects }
 import from ...lib.flowMoves {
     flowMoveVersion,
     advanceFlowMove,
@@ -32,6 +32,7 @@ import from ...lib.flowMoves {
 }
 import from ...lib.filters { defaultProject }
 import from ...lib.project { currentProject, pickProject }
+import from ...components.common.ProjectHead { ProjectHead }
 import from ...components.flowlines.FlowCanvas { FlowCanvas }
 import from ...components.flowlines.lanes {
     laneLayout,
@@ -48,6 +49,11 @@ import from ...components.flowlines.StepTasksPanel { StepTasksPanel }
 import from ...components.flowlines.StepList { StepList }
 import from ...components.flowlines.FlowTitle { FlowTitle }
 import from ...components.flowlines.FlowToolbar { FlowToolbar }
+import from ...components.flowlines.FlowKey { FlowKey }
+import from ...components.flowlines.FlowSkeleton { FlowSkeleton }
+import from ...components.flowlines.NewStepForm { NewStepForm }
+import from ...components.flowlines.EditGuide { EditGuide }
+import from ...components.flowlines.WipeDialog { WipeDialog }
 import from ...components.board.TaskDialog { TaskDialog }
 import from ...components.flowlines.geometry {
     hitRect,
@@ -60,39 +66,13 @@ import from ...components.flowlines.geometry {
     NODE_W,
     NODE_H
 }
-import from ...components.flowlines.kinds {
-    KIND_LABEL,
-    KIND_TONE,
-    DOT_FILL,
-    colorKey,
-    moveRefusal
-}
-import from ...components.common.KindGlyph { KindGlyph }
+import from ...components.flowlines.kinds { DOT_FILL, colorKey, moveRefusal }
 import from ...components.ui.button { Button }
-import from ...components.ui.input { Input }
-import from ...components.ui.skeleton { Skeleton }
 import from ...components.common.Reveal { Reveal }
 import from ...components.common.LoadFailed { LoadFailed }
-import from ...components.ui.dialog {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter
-}
 import from ...components.ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
-import from ...components.ui.popover { Popover, PopoverTrigger, PopoverContent }
-import from ...components.ui.dropdown_menu {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator
-}
 import from "sonner" { toast }
 import from "react" { useEffect, useLayoutEffect }
-import from ...components.common.glyphs { Spinner, WarnIcon }
 import from ...lib.utils { fmtEstimate, parseEstimate }
 
 glob BLANK_STEP: dict[str, str] = {
@@ -122,15 +102,15 @@ glob BLANK_STEP: dict[str, str] = {
      # Step kinds whose task dialog offers the reviewer fields, as on the board.
      HANDOFF_KINDS: list[str] = ["handoff", "blocked"],
      KIND_ORDER: list[str] = ["start", "active", "handoff", "blocked", "done"],
-     # The step panel floats over the canvas at this width (22rem).
-     PANEL_W: float = 352.0,
+     # The step sheet sits over the canvas's right side at this width (27.5rem).
+     PANEL_W: float = 440.0,
      # How far past a frame edge a pan may carry the drawing's edge, in px.
      PAN_MARGIN: float = 24.0;
 
 
 def:pub FlowLinePage -> JsxPage {
     has steps: list[StepView] = [],
-        projects: list[Project] = [],
+        projects: list[Project] = cachedProjects(),
         # The org's roles and roster, for the Lane view's labels and the
         # task dialog's people.
         roleRows: list[RoleView] = [],
@@ -141,7 +121,7 @@ def:pub FlowLinePage -> JsxPage {
         lineView: str = "flow",
         # The project on screen, one always: lib/project's pick, shared with
         # the sidebar and the other pages. "" until the default is known.
-        projectId: str = "",
+        projectId: str = currentProject(),
         loading: bool = True,
         # The first read produced nothing: the page says so itself, with a
         # retry, rather than offering the template picker over a real line.
@@ -165,6 +145,8 @@ def:pub FlowLinePage -> JsxPage {
         # Deleting the whole flow line confirms in a dialog that spells out
         # what goes and what stays.
         confirmWipe: bool = False,
+        # The same dialog, asked by Templates: this line goes before a new one.
+        wipeForTemplate: bool = False,
         wiping: bool = False,
         # Add step opens a naming panel first: the step only exists once the
         # user has called it something, never as a placeholder card.
@@ -389,6 +371,9 @@ def:pub FlowLinePage -> JsxPage {
     async def commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> None;
     async def commitRule(key: str, on: bool) -> None;
     def selectStep(stepId: str) -> None;
+    def editStep(stepId: str) -> None;
+    def openTemplates -> None;
+    def askWipe -> None;
     def armConnect -> None;
     def clearCanvas -> None;
     def setField(key: str, value: str) -> None;
@@ -505,7 +490,9 @@ def:pub FlowLinePage -> JsxPage {
     colKeys: list[str] = [];
     colLabels: list[str] = [];
     handoffKeys: list[str] = [];
-    for st in stepOrder {
+    placeOf: dict[str, str] = {};
+    for (stepAt, st) in enumerate(stepOrder) {
+        placeOf[st.id] = "step " + str(stepAt + 1) + " of " + str(len(stepOrder));
         colKeys.append(st.id);
         colLabels.append(st.name);
         if st.kind in HANDOFF_KINDS {
@@ -570,7 +557,7 @@ def:pub FlowLinePage -> JsxPage {
     }
 
     stepNoun = "step" if len(steps) == 1 else "steps";
-    linkNoun = "transition" if linkCount == 1 else "transitions";
+    linkNoun = "arrow" if linkCount == 1 else "arrows";
     wipeSummary = (
         str(len(steps))
         + " "
@@ -665,260 +652,87 @@ def:pub FlowLinePage -> JsxPage {
 
     showFailed = not loading and failed and len(steps) == 0;
     showPicker = not loading and not failed and len(steps) == 0 and not scratch;
-    # The diagram fills the window below the toolbar and key; edit mode's
-    # bar takes one more row.
+    # The diagram fills the window below the head, toolbar and key.
     canvasH = "max(20rem, calc(100dvh - 17rem))"
         if narrow
-        else (
-            "max(24rem, calc(100dvh - 18.5rem))"
-                if editing
-                else "max(24rem, calc(100dvh - 15.5rem))"
-        );
+        else "max(24rem, calc(100dvh - 12.75rem))";
 
-    # The heading and the control pills over the diagram; `pending` is the
-    # first-load frame's inert copy.
-    def headRow(pending: bool) -> JsxElement {
+    def toolbarRow(pending: bool) -> JsxElement {
         return
-            <div
-                className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-3"
-            >
-                <FlowTitle
-                    projects={activeProjects}
-                    projectId={projectId}
-                    lineName={lineName}
-                    steps={len(steps)}
-                    transitions={linkCount}
-                    roles={len(ownerNames)}
-                    renaming={renaming and not pending}
-                    nameDraft={nameDraft}
-                    pending={pending}
-                    onDraft={lambda (v: str) { nameDraft = v; }}
-                    onRename={saveRename}
-                />
-                <FlowToolbar
-                    editing={editing and not pending}
-                    narrow={narrow}
-                    showList={showList}
-                    phoneView={phoneView}
-                    lineView={lineView}
-                    zoom={zoom}
-                    pending={pending}
-                    onMode={switchMode}
-                    onPhoneView={lambda (v: str) { phoneView = v; }}
-                    onView={switchView}
-                    onZoom={zoomStep}
-                    onActual={zoomActual}
-                    onFit={lambda {
-                        fittedRef.current = False;
-                        fitZoom();
-                    }}
-                />
-            </div>;
+            <FlowToolbar
+                editing={editing and not pending}
+                narrow={narrow}
+                showList={showList}
+                phoneView={phoneView}
+                lineView={lineView}
+                zoom={zoom}
+                pending={pending}
+                busy={saving or creatingStep}
+                onMode={switchMode}
+                onPhoneView={lambda (v: str) { phoneView = v; }}
+                onView={switchView}
+                onZoom={zoomStep}
+                onActual={zoomActual}
+                onFit={lambda {
+                    fittedRef.current = False;
+                    fitZoom();
+                }}
+                onTemplates={openTemplates}
+                onAdd={addStep}
+                onRename={startRename}
+                onWipe={askWipe}
+            />;
     }
 
     def loadFrame -> JsxElement {
         return
-            <div className="flex min-w-0 flex-col gap-4" aria-busy="true">
-                {headRow(True)}
-                <div
-                    className="surface flex min-w-0 flex-col overflow-hidden rounded-2xl"
-                >
-                    <div className="relative min-w-0" style={{"height": canvasH}}>
-                        <div
-                            className="absolute inset-0 flex items-center justify-center px-6"
-                        >
-                            {for i in range(3) {
-                                <div key={"n" + str(i)} className="flex items-center">
-                                    {if i > 0 {
-                                        <span
-                                            key="w"
-                                            aria-hidden="true"
-                                            className="h-0.5 w-8 shrink-0 bg-wire sm:w-16"
-                                        />
-                                    }}
-                                    <div
-                                        className="flex h-[56px] w-[140px] shrink-0 flex-col justify-center gap-2 rounded-2xl bg-card px-2.5 shadow-xs ring-1 ring-border"
-                                    >
-                                        <Skeleton className="h-6 w-20 rounded-md"/>
-                                        <Skeleton className="h-2.5 w-24"/>
-                                    </div>
-                                </div>
-                            }}
-                        </div>
-                    </div>
-                    {if not showList {
-                        <div
-                            key="legend"
-                            aria-label="Key"
-                            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
-                        >
-                            {for i in range(4) {
-                                <span
-                                    key={"k" + str(i)}
-                                    className="inline-flex h-[18px] items-center gap-1.5"
-                                >
-                                    <Skeleton className="size-3.5 rounded-full"/>
-                                    <Skeleton className="h-3 w-12"/>
-                                </span>
-                            }}
-                            <span className="inline-flex h-[18px] items-center gap-1.5">
-                                <svg
-                                    width={22}
-                                    height={8}
-                                    aria-hidden="true"
-                                    className="text-wire"
-                                >
-                                    <path
-                                        d="M1 4 H21"
-                                        stroke="currentColor"
-                                        strokeWidth={1.6}
-                                        strokeLinecap="round"
-                                    />
-                                </svg>
-                                Moves forward
-                            </span>
-                            <span className="ml-auto inline-flex h-6 items-center">
-                                <Skeleton className="h-3 w-44"/>
-                            </span>
-                        </div>
-                    }}
-                </div>
+            <div className="flex min-w-0 flex-col gap-3" aria-busy="true">
+                {toolbarRow(True)}
+                <FlowSkeleton canvasH={canvasH} showKey={not showList}/>
             </div>;
     }
 
     return
-        <div className="flex w-full min-w-0 flex-col gap-4">
+        <div className="flex w-full min-w-0 flex-col gap-3">
+            <ProjectHead
+                projects={activeProjects}
+                project={projectId}
+                view="flowline"
+                actions={None
+                    if showFailed or showPicker
+                    else <FlowTitle
+                        lineName={lineName}
+                        steps={len(steps)}
+                        transitions={linkCount}
+                        roles={len(ownerNames)}
+                        renaming={renaming}
+                        nameDraft={nameDraft}
+                        pending={loading}
+                        onDraft={lambda (v: str) { nameDraft = v; }}
+                        onRename={saveRename}
+                    />}
+            />
             <Reveal ready={not loading} frame={loadFrame()} className="min-w-0">
                 {if showFailed {
-                    <div key="failed" className="flex flex-col gap-6">
-                        <h1 className="page-title">Flow line</h1>
-                        <LoadFailed
-                            title="Could not load the flow line"
-                            onRetry={retryLoad}
-                            retrying={retrying}
-                        />
-                    </div>
+                    <LoadFailed
+                        key="failed"
+                        title="Could not load the flow line"
+                        onRetry={retryLoad}
+                        retrying={retrying}
+                    />
                 } elif showPicker {
-                    <div key="picker" className="flex flex-col gap-6">
-                        <h1 className="page-title">Flow line</h1>
-                        <TemplatePicker
-                            applying={applying}
-                            onPick={pickTemplate}
-                            onScratch={startScratch}
-                        />
-                    </div>
+                    <TemplatePicker
+                        key="picker"
+                        applying={applying}
+                        onPick={pickTemplate}
+                        onScratch={startScratch}
+                    />
                 } else {
-                    <div key="line" className="flex min-w-0 flex-col gap-4">
-                        {headRow(False)}
+                    <div key="line" className="flex min-w-0 flex-col gap-3">
+                        {toolbarRow(False)}
                         <div
-                            className="surface flex min-w-0 flex-col overflow-hidden rounded-2xl"
+                            className="surface flex min-w-0 flex-col overflow-hidden rounded-xl"
                         >
-                            {if editing {
-                                <div
-                                    key="editbar"
-                                    role="region"
-                                    aria-label="Editing"
-                                    className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2"
-                                >
-                                    <span
-                                        className="inline-flex items-center gap-2 text-[13px]"
-                                    >
-                                        <span
-                                            className="size-2 shrink-0 rounded-full bg-primary"
-                                            aria-hidden="true"
-                                        />
-                                        <span className="font-semibold">Editing</span>
-                                        <span className="text-muted-foreground">
-                                            Changes save as you go.
-                                        </span>
-                                    </span>
-                                    <span
-                                        className="hidden min-w-0 items-center gap-x-1.5 text-xs text-subtle xl:flex"
-                                    >
-                                        Drag a step to move it · Drag from its edge to connect · Click a transition to label it
-                                    </span>
-                                    <div className="ml-auto flex items-center gap-2">
-                                        <Button
-                                            key="add"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={addStep}
-                                            disabled={saving or creatingStep}
-                                        >
-                                            <svg
-                                                width={14}
-                                                height={14}
-                                                viewBox="0 0 16 16"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={1.7}
-                                                strokeLinecap="round"
-                                                aria-hidden="true"
-                                            >
-                                                <path d="M8 3v10M3 8h10"/>
-                                            </svg>
-                                            Add step
-                                        </Button>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger
-                                                asChild={False}
-                                                aria-label="More flow line actions"
-                                                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                                            >
-                                                <svg
-                                                    width={16}
-                                                    height={16}
-                                                    viewBox="0 0 16 16"
-                                                    aria-hidden="true"
-                                                >
-                                                    <circle
-                                                        cx={3.5}
-                                                        cy={8}
-                                                        r={1.3}
-                                                        fill="currentColor"
-                                                    />
-                                                    <circle
-                                                        cx={8}
-                                                        cy={8}
-                                                        r={1.3}
-                                                        fill="currentColor"
-                                                    />
-                                                    <circle
-                                                        cx={12.5}
-                                                        cy={8}
-                                                        r={1.3}
-                                                        fill="currentColor"
-                                                    />
-                                                </svg>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent
-                                                align="end"
-                                                className="w-48"
-                                            >
-                                                <DropdownMenuItem
-                                                    onSelect={startRename}
-                                                >
-                                                    Rename flow line
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator/>
-                                                <DropdownMenuItem
-                                                    variant="destructive"
-                                                    onSelect={lambda { confirmWipe = True; }}
-                                                >
-                                                    Delete flow line
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                        <Button
-                                            key="doneediting"
-                                            size="sm"
-                                            onClick={finishEditing}
-                                        >
-                                            Done editing
-                                        </Button>
-                                    </div>
-                                </div>
-                            }}
                             {if showList {
                                 <div key="list" className="bg-card">
                                     <StepList
@@ -1003,7 +817,7 @@ def:pub FlowLinePage -> JsxPage {
                                                                 + "."}
                                                         </span>
                                                         <span
-                                                            className="text-muted-foreground"
+                                                            className="text-text-secondary"
                                                         >
                                                             {" Click the step work moves to. Going back is fine."}
                                                         </span>
@@ -1023,11 +837,14 @@ def:pub FlowLinePage -> JsxPage {
                                             and len(peeked) > 0 {
                                             <div
                                                 key="peekdock"
-                                                className="absolute top-3 right-3 z-40 flex max-h-[calc(100%-1.5rem)] w-[22rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl shadow-xl ring-1 ring-border"
+                                                className="absolute inset-y-0 right-0 z-40 flex w-[27.5rem] max-w-full flex-col overflow-hidden border-l shadow-lg"
                                             >
                                                 <StepTasksPanel
-                                                    className="max-h-full"
+                                                    className="h-full"
                                                     step={peeked[0]}
+                                                    place={placeOf[peeked[0].id]
+                                                        if peeked[0].id in placeOf
+                                                        else ""}
                                                     tasks={peekTasks}
                                                     loading={peekLoading}
                                                     total={peekTotal}
@@ -1036,6 +853,9 @@ def:pub FlowLinePage -> JsxPage {
                                                     onMore={morePeek}
                                                     scope={peekScope}
                                                     onOpenTask={openTask}
+                                                    onEdit={lambda { editStep(
+                                                        peeked[0].id
+                                                    ); }}
                                                     onClose={closePeek}
                                                 />
                                             </div>
@@ -1044,7 +864,7 @@ def:pub FlowLinePage -> JsxPage {
                                     {if editing {
                                         <div
                                             key="inspector"
-                                            className="flex min-w-0 flex-col gap-4 overflow-y-auto border-t bg-card p-4 sm:w-[21rem] sm:shrink-0 sm:border-t-0 sm:border-l"
+                                            className="flex min-h-0 min-w-0 flex-col border-t bg-card sm:w-96 sm:shrink-0 sm:border-t-0 sm:border-l"
                                             style={{
                                                 "maxHeight": "none"
                                                     if narrow
@@ -1052,53 +872,23 @@ def:pub FlowLinePage -> JsxPage {
                                             }}
                                         >
                                             {if creatingStep {
-                                                <div
+                                                <NewStepForm
                                                     key="create"
-                                                    className="flex flex-col gap-3"
-                                                >
-                                                    <h2 className="section-title">
-                                                        New step
-                                                    </h2>
-                                                    <Input
-                                                        aria-label="Step name"
-                                                        value={form["name"] or ""}
-                                                        placeholder="What should this step be called?"
-                                                        autoFocus={True}
-                                                        onChange={lambda (e: any) { setField(
-                                                            "name", e.target.value
-                                                        ); }}
-                                                        onKeyDown={lambda (e: any) { if e.key
-                                                            == "Enter" {
-                                                            commitName();
-                                                        }}}
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            size="sm"
-                                                            disabled={saving
-                                                                or not (
-                                                                    form["name"] or ""
-                                                                ).strip()}
-                                                            onClick={commitName}
-                                                        >
-                                                            Add to canvas
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={lambda { creatingStep = False; }}
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                    <p className="text-xs text-subtle">
-                                                        Kind, colour and owner can be set once it is on the canvas.
-                                                    </p>
-                                                </div>
+                                                    name={form["name"] or ""}
+                                                    saving={saving}
+                                                    onName={lambda (v: str) { setField(
+                                                        "name", v
+                                                    ); }}
+                                                    onCommit={commitName}
+                                                    onCancel={lambda { creatingStep = False; }}
+                                                />
                                             } elif len(picked) > 0 {
                                                 <StepInspector
                                                     key={picked[0].id}
                                                     step={picked[0]}
+                                                    place={placeOf[picked[0].id]
+                                                        if picked[0].id in placeOf
+                                                        else ""}
                                                     steps={steps}
                                                     form={form}
                                                     roleOptions={ownerOptions}
@@ -1112,266 +902,23 @@ def:pub FlowLinePage -> JsxPage {
                                                     onDelete={deleteStep}
                                                     onUnlink={deleteEdge}
                                                     onRule={commitRule}
+                                                    onClose={clearCanvas}
                                                 />
                                             } else {
-                                                <div
-                                                    key="howto"
-                                                    className="flex flex-col gap-4"
-                                                >
-                                                    <div
-                                                        className="flex flex-col gap-2.5"
-                                                    >
-                                                        <h2 className="section-title">
-                                                            How to edit
-                                                        </h2>
-                                                        <ol
-                                                            className="flex flex-col gap-2 text-[13px]"
-                                                        >
-                                                            <li
-                                                                className="flex gap-2.5"
-                                                            >
-                                                                <span
-                                                                    className="num w-4 shrink-0 text-subtle"
-                                                                >
-                                                                    1
-                                                                </span>
-                                                                <span>
-                                                                    Drag a step to move it. Drag empty canvas to pan.
-                                                                </span>
-                                                            </li>
-                                                            <li
-                                                                className="flex gap-2.5"
-                                                            >
-                                                                <span
-                                                                    className="num w-4 shrink-0 text-subtle"
-                                                                >
-                                                                    2
-                                                                </span>
-                                                                <span>
-                                                                    Drag from a step's edge (the dots) to another step to connect them.
-                                                                </span>
-                                                            </li>
-                                                            <li
-                                                                className="flex gap-2.5"
-                                                            >
-                                                                <span
-                                                                    className="num w-4 shrink-0 text-subtle"
-                                                                >
-                                                                    3
-                                                                </span>
-                                                                <span>
-                                                                    Click a transition to label it, or a step to rename it, change its kind or remove it.
-                                                                </span>
-                                                            </li>
-                                                        </ol>
-                                                    </div>
-                                                    <div
-                                                        className="flex flex-col gap-2 border-t pt-3"
-                                                    >
-                                                        <h2 className="section-title">
-                                                            Checks
-                                                        </h2>
-                                                        {if len(issues) == 0 {
-                                                            <p
-                                                                key="ok"
-                                                                className="text-[13px] text-muted-foreground"
-                                                            >
-                                                                Every step can be reached from a start step and can reach a done step.
-                                                            </p>
-                                                        } else {
-                                                            <ul
-                                                                key="issues"
-                                                                className="flex flex-col gap-1.5"
-                                                            >
-                                                                {for msg in issues {
-                                                                    <li
-                                                                        key={msg}
-                                                                        className="flex items-start gap-2 text-[13px] text-warning"
-                                                                    >
-                                                                        <WarnIcon
-                                                                            size={14}
-                                                                            className="mt-0.5 shrink-0"
-                                                                        />
-                                                                        <span>
-                                                                            {msg}
-                                                                        </span>
-                                                                    </li>
-                                                                }}
-                                                            </ul>
-                                                        } }
-                                                        <p
-                                                            className="text-xs text-subtle"
-                                                        >
-                                                            Checks are advice. Saving is never blocked.
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                                <EditGuide key="howto" issues={issues}/>
                                             }  }
                                         </div>
                                     }}
                                 </div>
                             } }
                             {if not showList {
-                                <div
+                                <FlowKey
                                     key="legend"
-                                    aria-label="Key"
-                                    className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t bg-card px-4 py-2 text-[12.5px] text-muted-foreground"
-                                >
-                                    {for k in usedKinds {
-                                        <span
-                                            key={k}
-                                            className="inline-flex items-center gap-1.5"
-                                        >
-                                            <KindGlyph
-                                                kind={k}
-                                                size={14}
-                                                className={KIND_TONE[k]
-                                                    if k in KIND_TONE
-                                                    else "text-subtle"}
-                                            />
-                                            {KIND_LABEL[k]}
-                                        </span>
-                                    }}
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <svg
-                                            width={22}
-                                            height={8}
-                                            aria-hidden="true"
-                                            className="text-wire"
-                                        >
-                                            <path
-                                                d="M1 4 H21"
-                                                stroke="currentColor"
-                                                strokeWidth={1.6}
-                                                strokeLinecap="round"
-                                            />
-                                        </svg>
-                                        Moves forward
-                                    </span>
-                                    {if hasBack or editing {
-                                        <span
-                                            key="back"
-                                            className="inline-flex items-center gap-1.5"
-                                        >
-                                            <svg
-                                                width={22}
-                                                height={8}
-                                                aria-hidden="true"
-                                                className="text-wire"
-                                            >
-                                                <path
-                                                    d="M1 4 H21"
-                                                    stroke="currentColor"
-                                                    strokeWidth={1.6}
-                                                    strokeDasharray="5 4"
-                                                />
-                                            </svg>
-                                            Sends back, on purpose
-                                        </span>
-                                    }}
-                                    {if len(issues) > 0 and not editing {
-                                        <span
-                                            key="issues"
-                                            className="inline-flex min-w-0 items-center gap-1.5 text-warning"
-                                            title={" ".join(issues)}
-                                        >
-                                            <WarnIcon size={14} className="shrink-0"/>
-                                            <span className="truncate">
-                                                {issues[0]
-                                                    + (
-                                                        " (+"
-                                                            + str(len(issues) - 1)
-                                                            + " more)"
-                                                            if len(issues) > 1
-                                                            else ""
-                                                    )}
-                                            </span>
-                                        </span>
-                                    }}
-                                    <Popover>
-                                        <PopoverTrigger
-                                            className="ml-auto inline-flex h-6 items-center gap-1.5 rounded-sm px-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                                        >
-                                            Roles
-                                            <span className="num text-xs">
-                                                {str(len(roleList))}
-                                            </span>
-                                        </PopoverTrigger>
-                                        <PopoverContent
-                                            align="end"
-                                            collisionPadding={16}
-                                            className="w-72 gap-2.5 p-3"
-                                        >
-                                            <div
-                                                className="flex items-baseline justify-between gap-2"
-                                            >
-                                                <h2 className="text-sm font-semibold">
-                                                    Roles
-                                                </h2>
-                                                <a
-                                                    href="/workspace?tab=roles"
-                                                    className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                                                >
-                                                    Manage roles
-                                                </a>
-                                            </div>
-                                            {if len(roleList) == 0 {
-                                                <p
-                                                    key="none"
-                                                    className="text-[13px] text-muted-foreground"
-                                                >
-                                                    No roles yet. A role says who holds a step.
-                                                </p>
-                                            } else {
-                                                <ul
-                                                    key="roles"
-                                                    className="flex flex-col gap-2"
-                                                >
-                                                    {for rl in roleList {
-                                                        <li
-                                                            key={rl["id"]}
-                                                            className="flex min-w-0 flex-col"
-                                                        >
-                                                            <span
-                                                                className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium"
-                                                            >
-                                                                <span
-                                                                    className={"step-swatch "
-                                                                        + rl["dot"]}
-                                                                    aria-hidden="true"
-                                                                />
-                                                                <span
-                                                                    className="truncate"
-                                                                >
-                                                                    {rl["name"]}
-                                                                </span>
-                                                            </span>
-                                                            <span
-                                                                className={"pl-4 text-xs "
-                                                                    + (
-                                                                        "text-warning"
-                                                                            if rl[
-                                                                                "none"
-                                                                            ]
-                                                                            else "text-muted-foreground"
-                                                                    )}
-                                                            >
-                                                                {rl["holders"]}
-                                                            </span>
-                                                        </li>
-                                                    }}
-                                                </ul>
-                                            } }
-                                        </PopoverContent>
-                                    </Popover>
-                                    <span
-                                        className="hidden items-center gap-1 text-xs text-subtle md:inline-flex"
-                                    >
-                                        Drag to pan ·
-                                        <span className="kbd">F</span>
-                                        fits
-                                    </span>
-                                </div>
+                                    usedKinds={usedKinds}
+                                    showBack={hasBack or editing}
+                                    issues={[] if editing else issues}
+                                    roles={roleList}
+                                />
                             }}
                         </div>
                     </div>
@@ -1393,6 +940,9 @@ def:pub FlowLinePage -> JsxPage {
                             key="sheetpanel"
                             className="max-h-[85dvh]"
                             step={peeked[0]}
+                            place={placeOf[peeked[0].id]
+                                if peeked[0].id in placeOf
+                                else ""}
                             tasks={peekTasks}
                             loading={peekLoading}
                             total={peekTotal}
@@ -1402,46 +952,20 @@ def:pub FlowLinePage -> JsxPage {
                             onMore={morePeek}
                             scope={peekScope}
                             onOpenTask={openTask}
+                            onEdit={lambda { editStep(peeked[0].id); }}
                             onClose={closePeek}
                         />
                     }}
                 </SheetContent>
             </Sheet>
-            <Dialog
+            <WipeDialog
                 open={confirmWipe}
-                onOpenChange={lambda (o: bool) { if not o and not wiping {
-                    confirmWipe = False;
-                }}}
-            >
-                <DialogContent className="bg-card sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Delete this flow line?</DialogTitle>
-                        <DialogDescription>{wipeSummary}</DialogDescription>
-                    </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
-                        Tasks keep their status and land by kind on whatever you design next. Roles and the flow line name stay. You start again from the template picker.
-                    </p>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            disabled={wiping}
-                            onClick={lambda { confirmWipe = False; }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            disabled={wiping}
-                            onClick={deleteFlowLine}
-                        >
-                            {if wiping {
-                                <Spinner key="sp"/>
-                            }}
-                            {"Deleting" if wiping else "Delete flow line"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                summary={wipeSummary}
+                wiping={wiping}
+                forTemplate={wipeForTemplate}
+                onCancel={lambda { confirmWipe = False; }}
+                onConfirm={deleteFlowLine}
+            />
             <TaskDialog
                 open={taskOpen}
                 editing={True}

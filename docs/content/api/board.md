@@ -76,7 +76,7 @@ own read, so a page never waits for one roster list after another.
 | URL | Opens |
 | --- | --- |
 | `/board?task=<task id>` | That task in the task sheet (fetched with [`GetTask`](tasks.md#gettask) when it is not in the working set) |
-| `/board?new=1` | The task sheet for a new task (setup lands here after applying a template) |
+| `/board?new=1` | The new-task dialog (setup lands here after applying a template) |
 
 An already mounted board listens for the `flowline:open-task` and
 `flowline:new-task` browser events instead; the command palette uses both.

@@ -89,7 +89,9 @@ glob FLOW_COORD_LIMIT: float = 20000.0,
                  }
              ],
              "links": [[0, 1], [1, 2], [2, 3], [2, 1]],
-             "link_labels": ["", "", "", "Changes requested"]
+             "link_labels": ["", "", "", "Changes requested"],
+             # A review wanting changes takes this arrow, a person's or AI's.
+             "link_triggers": ["", "", "", "changes_requested"]
          },
          {
              "key": "jaseci",

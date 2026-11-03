@@ -7,7 +7,9 @@ solid pill, which made every group read as a coloured band. Colour now
 appears only on the 14px status icon.
 """
 
+import from "@jac/runtime" { Link }
 import from ..common.StepBadge { StepIcon }
+import from ..common.AiMark { AiMark }
 
 def:pub StepHeader(
     label: str,
@@ -17,7 +19,9 @@ def:pub StepHeader(
     overdue: int,
     open: bool,
     onToggle: Callable[[], None],
-    onAdd: Callable[[], None] | None = None
+    onAdd: Callable[[], None] | None = None,
+    owner: str = "",
+    ai: list[str] = []
 ) -> JsxElement {
     return
         <div
@@ -50,6 +54,25 @@ def:pub StepHeader(
                 <span className="truncate text-[13px] font-medium">{label}</span>
                 <span className="num text-[13px] text-text-tertiary">{str(count)}</span>
             </button>
+            {if owner {
+                <span
+                    key="owner"
+                    className="hidden truncate text-[12px] text-text-tertiary sm:inline"
+                >
+                    {"Anyone" if owner == "anyone" else owner}
+                </span>
+            }}
+            {if len(ai) > 0 {
+                <Link
+                    key="ai"
+                    to="/ai"
+                    className="ai-chip"
+                    title="AI runs on this step"
+                >
+                    <AiMark/>
+                    {", ".join(ai)}
+                </Link>
+            }}
             {if overdue > 0 {
                 <span key="late" className="text-[12px] font-medium text-danger">
                     {str(overdue) + " overdue"}

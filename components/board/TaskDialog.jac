@@ -1,7 +1,7 @@
 """The task sheet: a right-side Radix dialog (full screen below sm) with the
-route breadcrumb, title, properties, notes, checklist and travel so far. The
-page owns the form dict and UpdateTask overwrites every field, so every
-property here goes out on Save. Modal unless the page opts into `beside`."""
+route, title, the properties in use, the AI review, notes, checklist and travel
+so far. The page owns the form dict and UpdateTask overwrites every field, so
+every property goes out on Save. Modal unless the page opts into `beside`."""
 
 import from "react" { useEffect }
 import from ...models {
@@ -14,19 +14,25 @@ import from ...models {
     TaskView
 }
 import from ...services.tasks.tasks { GetTask }
-import from ..common.Markdown { Markdown }
 import from ..common.StepName { StepName }
 import from ..common.Avatar { AvatarStack }
+import from ..common.PriorityIcon { PriorityIcon }
 import from .Checklist { ChecklistEditor }
-import from .MoveMenu { MoveMenu, routeFrom }
+import from .MoveMenu { routeFrom }
 import from .TravelLog { TravelLog }
 import from .AgentRuns { AgentRuns }
+import from .sheet.PropRow { PropRow, GHOST_SELECT, GHOST_INPUT, GHOST_DATE }
+import from .sheet.SheetHead { SheetHead }
+import from .sheet.PeoplePicker { PeoplePicker }
+import from .sheet.LinkRow { LinkRow }
+import from .sheet.AddFields { AddFields }
+import from .sheet.IssueMaker { IssueMaker }
+import from .sheet.SheetNotes { SheetNotes }
+import from .sheet.SheetFamily { SheetFamily }
+import from .sheet.SheetFooter { SheetFooter }
 import from ..common.DatePicker { DatePicker }
-import from ..ui.button { Button }
 import from ..ui.sheet { Sheet, SheetContent, SheetTitle, SheetDescription }
 import from ..ui.input { Input }
-import from ..ui.textarea { Textarea }
-import from ..ui.skeleton { Skeleton }
 import from ..ui.select {
     Select,
     SelectTrigger,
@@ -34,16 +40,6 @@ import from ..ui.select {
     SelectContent,
     SelectItem
 }
-import from ..ui.dropdown_menu {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuCheckboxItem
-}
-import from ..common.glyphs { Spinner }
-import from ...lib.dates { prettyDay }
 
 glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
      # A legacy status column's colour, by the kind its status maps to.
@@ -55,108 +51,35 @@ glob PRIORITIES: list[str] = ["High", "Medium", "Low"],
          "Done": "emerald",
          "Blocked": "rose"
      },
-     # Property values read as text until hovered: ghost triggers and fields.
-     GHOST_SELECT: str = "h-8 w-full min-w-0 justify-between border-transparent bg-transparent px-2 font-normal shadow-none hover:bg-accent data-[state=open]:bg-accent [&>svg:last-child]:opacity-0 hover:[&>svg:last-child]:opacity-100 data-[state=open]:[&>svg:last-child]:opacity-100",
-     GHOST_INPUT: str = "h-8 border-transparent bg-transparent px-2 hover:bg-bg-hover md:text-[13px] text-[13px] [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100",
      # Targets whose letter keys belong to a select or menu, not the sheet.
      WIDGET_ROLES: str = "[role=combobox], [role=listbox], [role=menu], [role=option], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [data-slot=select-trigger]",
-     GHOST_DATE: str = "h-8! w-full justify-start border-transparent! bg-transparent! px-2! text-[13px]! font-normal! hover:bg-bg-hover!";
-
-# One label/value row of the property list.
-def PropRow(label: str, children: any = None, top: bool = False) -> JsxElement {
-    return
-        <div
-            className={"grid min-h-8 grid-cols-[6rem_minmax(0,1fr)] gap-x-2 "
-                + ("items-start" if top else "items-center")}
-        >
-            <dt
-                className={"text-[13px] text-text-tertiary "
-                    + ("pt-1.5" if top else "")}
-            >
-                {label}
-            </dt>
-            <dd className="m-0 min-w-0">{children}</dd>
-        </div>;
-}
-
-def OpenLink(url: str) -> JsxElement {
-    return
-        <a
-            href={url}
-            target="_blank"
-            rel="noopener"
-            title="Open in a new tab"
-            aria-label="Open the link in a new tab"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-            <svg
-                width={14}
-                height={14}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-            >
-                <path d="M15 3h6v6"/>
-                <path d="M10 14 21 3"/>
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-            </svg>
-        </a>;
-}
-
-def Arrow -> JsxElement {
-    return
-        <svg
-            width={14}
-            height={14}
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className="shrink-0 text-wire"
-        >
-            <path
-                d="M3 8h9.5M9 4.5 12.5 8 9 11.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>;
-}
-
-def Flag -> JsxElement {
-    return
-        <svg
-            width={12}
-            height={12}
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className="shrink-0"
-        >
-            <path
-                d="M4 14V2.5M4 3h8l-1.8 3L12 9H4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
-        </svg>;
-}
-
-# A family row's column label: the child's step (or legacy status) mapped
-# through the board's own key/label lists, so it says what the column says.
-def familyStepLabel(kid: TaskRow, keys: list[str], labels: list[str]) -> str {
-    for (i, k) in enumerate(keys) {
-        if (k == kid.step_id or k == kid.status) and i < len(labels) {
-            return labels[i];
-        }
-    }
-    return kid.status;
-}
+     # Fields compared with the opened copy to tell whether Save is worth showing.
+     # `status` is not among them when the page moves at once (onMove).
+     DIRTY_KEYS: list[str] = [
+         "title",
+         "category",
+         "estimate",
+         "tags",
+         "project",
+         "priority",
+         "due_date",
+         "start_date",
+         "notes",
+         "issue",
+         "pr",
+         "reviewer",
+         "review_due"
+     ],
+     # A hidden field's chip: [field, label]. A row shows once it has a value.
+     OPTIONAL_FIELDS: list[list[str]] = [
+         ["start_date", "Start date"],
+         ["estimate", "Estimate"],
+         ["category", "Category"],
+         ["tags", "Tags"],
+         ["pr", "Pull request"],
+         ["issue", "Issue"],
+         ["project", "Change project"]
+     ];
 
 def:pub TaskDialog(
     open: bool,
@@ -240,7 +163,13 @@ def:pub TaskDialog(
         checklist: list[dict[str, any]] = [],
         detailsFor: str = "",
         failedFor: str = "",
-        loadRef: Ref[any] = Ref();
+        loadRef: Ref[any] = Ref(),
+        # Optional rows revealed by their chip while this task is open, and the
+        # form as it opened (notes arrive with GetTask), for the Save footer.
+        revealed: list[str] = [],
+        baseRef: Ref[any] = Ref(),
+        baseNotesRef: Ref[any] = Ref(),
+        basePeopleRef: Ref[any] = Ref();
 
     # The open task's notes and checklist, one GetTask.
     async def loadDetails(tid: str) {
@@ -260,6 +189,7 @@ def:pub TaskDialog(
             return;
         }
         checklist = view.checklist;
+        baseNotesRef.current = view.notes;
         if onLoaded {
             onLoaded(view);
         }
@@ -382,6 +312,10 @@ def:pub TaskDialog(
         detailsFor = "";
         failedFor = "";
         loadRef.current = "";
+        revealed = [];
+        baseRef.current = {** form};
+        baseNotesRef.current = form["notes"];
+        basePeopleRef.current = ",".join(assignees);
         if open {
             w: any = window;
             placeSheet();
@@ -410,14 +344,9 @@ def:pub TaskDialog(
         for m in members
         if hasProject and selectedProject in m.project_ids
     ];
-    outsiders = [
-        m
-        for m in members
-        if m not in inProject
-    ];
     outsideSelected = False;
-    for m in outsiders {
-        if m.id in assignees and hasProject {
+    for m in members {
+        if m.id in assignees and hasProject and m not in inProject {
             outsideSelected = True;
         }
     }
@@ -442,9 +371,7 @@ def:pub TaskDialog(
             }
         }
     }
-    canCreateIssue = (
-        editing and ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0
-    );
+    canCreateIssue = ghConnected and ghIssueNumber == 0 and len(projectRepos) > 0;
     # An existing task's notes and checklist come from GetTask; until they
     # are in, Save stays off, or it would write empty notes over the real ones.
     detailsShown = not (editing and taskId) or detailsFor == taskId;
@@ -530,14 +457,44 @@ def:pub TaskDialog(
                 );
         }
     }
-    # CreateTask takes no reviewer or pull request, so those rows wait for
-    # an existing task rather than drop what is typed into them.
-    showReviewer = editing
-        and (
-            hereKey in handoffKeys
-            or form["reviewer"] != "none"
-            or bool(form["review_due"])
-        );
+    showReviewer = (
+        hereKey in handoffKeys or form["reviewer"] != "none" or bool(form["review_due"])
+    );
+    datesCrossed = bool(
+        form["start_date"]
+            and form["due_date"]
+            and form["start_date"] > form["due_date"]
+    );
+
+    # A row shows when its field holds a value or its chip was pressed.
+    def showsField(key: str) -> bool {
+        return key in revealed
+            or (key != "project" and bool(str(form[key] or "").strip()));
+    }
+
+    # Worth a footer: a field differs from how the sheet opened. The notes
+    # compare against what GetTask loaded, and a sheet whose page moves at once
+    # has no pending step.
+    def isDirty -> bool {
+        base: any = baseRef.current;
+        if not base {
+            return False;
+        }
+        for k in DIRTY_KEYS {
+            was = baseNotesRef.current if k == "notes" else base[k];
+            if str(form[k] or "") != str(was or "") {
+                return True;
+            }
+        }
+        if not onMove and form["status"] != base["status"] {
+            return True;
+        }
+        return ",".join(assignees) != str(basePeopleRef.current or "");
+    }
+
+    def reveal(key: str) {
+        revealed = revealed + [key];
+    }
 
     def pickStep(key: str) {
         if onMove {
@@ -588,7 +545,9 @@ def:pub TaskDialog(
     def returnFocus(e: Event) {
         card: any = None;
         if taskId {
-            card = document.querySelector('[data-task-card="' + taskId + '"]');
+            card = document.querySelector(
+                '[data-task-row="' + taskId + '"], [data-task-card="' + taskId + '"]'
+            );
         }
         if card {
             e.preventDefault();
@@ -652,89 +611,33 @@ def:pub TaskDialog(
                 e.preventDefault(); }}
                 onKeyDown={onSheetKey}
             >
-                <div
-                    className="flex min-h-12 shrink-0 items-center gap-2 border-b px-4 py-2"
-                >
-                    <div
-                        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-[12.5px] whitespace-nowrap text-muted-foreground"
-                    >
-                        {if not editing and hereLabel {
-                            <span key="lands">Lands in</span>
-                        }}
-                        {if editing and prevIdx >= 0 {
-                            <span key="prev" className="min-w-0 truncate">
-                                {columnLabels[prevIdx]}
-                            </span>
-                        }}
-                        {if editing and prevIdx >= 0 {
-                            <Arrow key="prevarrow"/>
-                        }}
-                        {if hereLabel {
-                            <StepName
-                                key="here"
-                                name={hereLabel}
-                                color={hereColor}
-                                className="max-w-40 shrink-0 font-semibold text-foreground"
-                            />
-                        }}
-                        {if editing and nextIdx >= 0 {
-                            <Arrow key="nextarrow"/>
-                        }}
-                        {if editing and nextIdx >= 0 {
-                            <span key="next" className="min-w-0 truncate">
-                                {columnLabels[nextIdx]}
-                            </span>
-                        }}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                        {if editing and len(columnKeys) > 0 {
-                            <MoveMenu
-                                key="move"
-                                open={moveOpen}
-                                onOpenChange={lambda (o: bool) { moveOpen = o; }}
-                                current={hereKey}
-                                keys={columnKeys}
-                                labels={columnLabels}
-                                colors={colors}
-                                steps={steps}
-                                onPick={pickStep}
-                                showLabel={True}
-                                align="end"
-                                triggerClass="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card px-2 text-[12.5px] font-semibold text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
-                            />
-                        }}
-                        <button
-                            type="button"
-                            aria-label="Close"
-                            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                            onClick={lambda { onOpenChange(False); }}
-                        >
-                            <svg
-                                width={16}
-                                height={16}
-                                viewBox="0 0 16 16"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    d="m4 4 8 8M12 4l-8 8"
-                                    stroke="currentColor"
-                                    strokeWidth={1.6}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                <SheetHead
+                    prevLabel={columnLabels[prevIdx] if prevIdx >= 0 else ""}
+                    hereLabel={hereLabel}
+                    hereColor={hereColor}
+                    nextLabel={columnLabels[nextIdx] if nextIdx >= 0 else ""}
+                    moveOpen={moveOpen}
+                    onMoveOpen={lambda (o: bool) { moveOpen = o; }}
+                    hereKey={hereKey}
+                    columnKeys={columnKeys}
+                    columnLabels={columnLabels}
+                    colors={colors}
+                    steps={steps}
+                    onPick={pickStep}
+                    deleting={saving and pendingAction == "delete"}
+                    saving={saving}
+                    onDelete={lambda {
+                        pendingAction = "delete";
+                        onDelete();
+                    }}
+                    onClose={lambda { onOpenChange(False); }}
+                />
                 <div className="min-h-0 flex-1 overflow-y-auto">
                     <div
-                        className="grid grid-cols-[minmax(0,1fr)] gap-5 px-4 pt-3 pb-6"
+                        className="grid grid-cols-[minmax(0,1fr)] gap-5 px-5 pt-4 pb-6"
                     >
                         <div className="grid gap-0.5">
-                            <SheetTitle
-                                className="px-0 text-xs font-normal text-subtle"
-                            >
-                                {"Edit task" if editing else "New task"}
-                            </SheetTitle>
+                            <SheetTitle className="sr-only">Edit task</SheetTitle>
                             <SheetDescription className="sr-only">
                                 {"The task's properties, notes and history."}
                             </SheetDescription>
@@ -756,69 +659,49 @@ def:pub TaskDialog(
                                 }}}
                             />
                         </div>
-                        <dl className="grid grid-cols-[minmax(0,1fr)] gap-y-px">
-                            <PropRow label="Step" top={bool(editing and whereLine)}>
-                                <Select
-                                    value={hereKey}
-                                    onValueChange={lambda (v: str) { onField(
-                                        "status", v
-                                    ); }}
-                                >
-                                    <SelectTrigger
-                                        className={GHOST_SELECT}
-                                        aria-label="Step"
+                        <div className="grid gap-2.5">
+                            <dl className="grid grid-cols-[minmax(0,1fr)] gap-y-px">
+                                <PropRow label="Step" top={bool(whereLine)}>
+                                    <Select
+                                        value={hereKey}
+                                        onValueChange={lambda (v: str) { onField(
+                                            "status", v
+                                        ); }}
                                     >
-                                        <SelectValue placeholder="Pick a step"/>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {for (si, s) in enumerate(columnKeys) {
-                                            <SelectItem key={s} value={s}>
-                                                <StepName
-                                                    name={columnLabels[si]}
-                                                    color={colors[si]}
-                                                />
-                                            </SelectItem>
-                                        }}
-                                    </SelectContent>
-                                </Select>
-                                {if editing and whereLine {
-                                    <p
-                                        key="where"
-                                        className="px-2 pb-1 text-xs text-muted-foreground"
-                                        title={whereLine}
-                                    >
-                                        {whereLine}
-                                    </p>
-                                }}
-                            </PropRow>
-                            <PropRow label="Project">
-                                <Select
-                                    value={form["project"]}
-                                    onValueChange={lambda (v: str) { onField(
-                                        "project", v
-                                    ); }}
-                                >
-                                    <SelectTrigger
-                                        className={GHOST_SELECT
-                                            + ("" if hasProject else " text-subtle")}
-                                        aria-label="Project"
-                                    >
-                                        <SelectValue placeholder="Pick a project"/>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {for p in projects {
-                                            <SelectItem key={jid(p)} value={jid(p)}>
-                                                {p.name}
-                                            </SelectItem>
-                                        }}
-                                    </SelectContent>
-                                </Select>
-                            </PropRow>
-                            <PropRow label="Assignees" top={outsideSelected}>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger
-                                        className="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[var(--focus-ring)] data-[state=open]:bg-bg-selected"
-                                        aria-label="Assignees"
+                                        <SelectTrigger
+                                            className={GHOST_SELECT}
+                                            aria-label="Step"
+                                        >
+                                            <SelectValue placeholder="Pick a step"/>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {for (si, s) in enumerate(columnKeys) {
+                                                <SelectItem key={s} value={s}>
+                                                    <StepName
+                                                        name={columnLabels[si]}
+                                                        color={colors[si]}
+                                                    />
+                                                </SelectItem>
+                                            }}
+                                        </SelectContent>
+                                    </Select>
+                                    {if whereLine {
+                                        <p
+                                            key="where"
+                                            className="px-2 pb-1 text-xs text-muted-foreground"
+                                            title={whereLine}
+                                        >
+                                            {whereLine}
+                                        </p>
+                                    }}
+                                </PropRow>
+                                <PropRow label="People" top={outsideSelected}>
+                                    <PeoplePicker
+                                        members={members}
+                                        project={selectedProject if hasProject else ""}
+                                        assignees={assignees}
+                                        onToggle={onToggleAssignee}
+                                        triggerClass="flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-[var(--focus-ring)] data-[state=open]:bg-bg-selected"
                                     >
                                         {if len(pickedNames) > 0 {
                                             <AvatarStack
@@ -837,470 +720,307 @@ def:pub TaskDialog(
                                         >
                                             {", ".join(pickedNames)
                                                 if len(pickedNames) > 0
-                                                else "Pick assignees"}
+                                                else "Pick people"}
                                         </span>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-64" align="start">
-                                        {if len(inProject) > 0 {
-                                            <DropdownMenuLabel key="inl">
-                                                On this project
-                                            </DropdownMenuLabel>
-                                        }}
-                                        {for m in inProject {
-                                            <DropdownMenuCheckboxItem
-                                                key={m.id}
-                                                checked={m.id in assignees}
-                                                onCheckedChange={lambda { if onToggleAssignee {
-                                                    onToggleAssignee(m.id);
-                                                }}}
-                                                onSelect={lambda (e: any) { e.preventDefault(); }}
+                                    </PeoplePicker>
+                                    {if outsideSelected {
+                                        <p
+                                            key="hint"
+                                            className="px-2 pb-1 text-xs text-muted-foreground"
+                                        >
+                                            Some picks are not on this project yet. Saving adds them to it.
+                                        </p>
+                                    }}
+                                </PropRow>
+                                {if showReviewer {
+                                    <PropRow key="reviewer" label="Reviewer">
+                                        <Select
+                                            value={form["reviewer"]}
+                                            onValueChange={lambda (v: str) { onField(
+                                                "reviewer", v
+                                            ); }}
+                                        >
+                                            <SelectTrigger
+                                                className={GHOST_SELECT
+                                                    + (
+                                                        " text-subtle"
+                                                            if form["reviewer"]
+                                                                == "none"
+                                                            else ""
+                                                    )}
+                                                aria-label="Reviewer"
                                             >
-                                                {m.name}
-                                            </DropdownMenuCheckboxItem>
-                                        }}
-                                        {if len(inProject) > 0 and len(outsiders) > 0 {
-                                            <DropdownMenuSeparator key="sep"/>
-                                        }}
-                                        {if len(outsiders) > 0 {
-                                            <DropdownMenuLabel key="ol">
-                                                {"Other people"
-                                                    if hasProject
-                                                    else "People"}
-                                            </DropdownMenuLabel>
-                                        }}
-                                        {for m in outsiders {
-                                            <DropdownMenuCheckboxItem
-                                                key={m.id}
-                                                checked={m.id in assignees}
-                                                onCheckedChange={lambda { if onToggleAssignee {
-                                                    onToggleAssignee(m.id);
-                                                }}}
-                                                onSelect={lambda (e: any) { e.preventDefault(); }}
-                                            >
-                                                {m.name}
-                                            </DropdownMenuCheckboxItem>
-                                        }}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                                {if outsideSelected {
-                                    <p
-                                        key="hint"
-                                        className="px-2 pb-1 text-xs text-muted-foreground"
-                                    >
-                                        Some picks are not on this project yet. Saving adds them to it.
-                                    </p>
+                                                <SelectValue placeholder="No reviewer"/>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">
+                                                    No reviewer
+                                                </SelectItem>
+                                                {for m in members {
+                                                    <SelectItem key={m.id} value={m.id}>
+                                                        {m.name}
+                                                    </SelectItem>
+                                                }}
+                                            </SelectContent>
+                                        </Select>
+                                    </PropRow>
                                 }}
-                            </PropRow>
-                            {if showReviewer {
-                                <PropRow key="reviewer" label="Reviewer">
+                                {if showReviewer {
+                                    <PropRow key="reviewby" label="Review by">
+                                        <DatePicker
+                                            value={form["review_due"]}
+                                            clearable={True}
+                                            className={GHOST_DATE
+                                                + (
+                                                    " text-subtle!"
+                                                        if not form["review_due"]
+                                                        else ""
+                                                )}
+                                            onChange={lambda (d: str) { onField(
+                                                "review_due", d
+                                            ); }}
+                                        />
+                                    </PropRow>
+                                }}
+                                <PropRow label="Due" top={datesCrossed}>
+                                    <DatePicker
+                                        value={form["due_date"]}
+                                        clearable={True}
+                                        className={GHOST_DATE
+                                            + (
+                                                " text-subtle!"
+                                                    if not form["due_date"]
+                                                    else ""
+                                            )}
+                                        onChange={lambda (d: str) { onField(
+                                            "due_date", d
+                                        ); }}
+                                    />
+                                    {if datesCrossed {
+                                        <p
+                                            key="order"
+                                            className="px-2 pb-1 text-xs text-destructive"
+                                        >
+                                            Due before it starts.
+                                        </p>
+                                    }}
+                                </PropRow>
+                                <PropRow label="Priority">
                                     <Select
-                                        value={form["reviewer"]}
+                                        value={form["priority"]}
                                         onValueChange={lambda (v: str) { onField(
-                                            "reviewer", v
+                                            "priority", v
                                         ); }}
                                     >
                                         <SelectTrigger
-                                            className={GHOST_SELECT
-                                                + (
-                                                    " text-subtle"
-                                                        if form["reviewer"] == "none"
-                                                        else ""
-                                                )}
-                                            aria-label="Reviewer"
+                                            className={GHOST_SELECT}
+                                            aria-label="Priority"
                                         >
-                                            <SelectValue placeholder="No reviewer"/>
+                                            <SelectValue placeholder="Priority"/>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">
-                                                No reviewer
-                                            </SelectItem>
-                                            {for m in members {
-                                                <SelectItem key={m.id} value={m.id}>
-                                                    {m.name}
+                                            {for p in PRIORITIES {
+                                                <SelectItem key={p} value={p}>
+                                                    <span
+                                                        className="inline-flex items-center gap-1.5"
+                                                    >
+                                                        {if p == "High" {
+                                                            <PriorityIcon
+                                                                key="flag"
+                                                                priority="High"
+                                                            />
+                                                        }}
+                                                        {p}
+                                                    </span>
                                                 </SelectItem>
                                             }}
                                         </SelectContent>
                                     </Select>
                                 </PropRow>
-                            }}
-                            {if showReviewer {
-                                <PropRow key="reviewby" label="Review by">
-                                    <DatePicker
-                                        value={form["review_due"]}
-                                        clearable={True}
-                                        className={GHOST_DATE
-                                            + (
-                                                " text-subtle!"
-                                                    if not form["review_due"]
-                                                    else ""
-                                            )}
-                                        onChange={lambda (d: str) { onField(
-                                            "review_due", d
-                                        ); }}
-                                    />
-                                </PropRow>
-                            }}
-                            <PropRow label="Start date">
-                                <DatePicker
-                                    value={form["start_date"]}
-                                    clearable={True}
-                                    className={GHOST_DATE
-                                        + (
-                                            " text-subtle!"
-                                                if not form["start_date"]
-                                                else ""
-                                        )}
-                                    onChange={lambda (d: str) { onField(
-                                        "start_date", d
-                                    ); }}
-                                />
-                            </PropRow>
-                            <PropRow
-                                label="Due"
-                                top={bool(
-                                    form["start_date"]
-                                        and form["due_date"]
-                                        and form["start_date"] > form["due_date"]
-                                )}
-                            >
-                                <DatePicker
-                                    value={form["due_date"]}
-                                    clearable={True}
-                                    className={GHOST_DATE
-                                        + (
-                                            " text-subtle!"
-                                                if not form["due_date"]
-                                                else ""
-                                        )}
-                                    onChange={lambda (d: str) { onField(
-                                        "due_date", d
-                                    ); }}
-                                />
-                                {if form["start_date"]
-                                    and form["due_date"]
-                                    and form["start_date"] > form["due_date"] {
-                                    <p
-                                        key="order"
-                                        className="px-2 pb-1 text-xs text-destructive"
-                                    >
-                                        Due before it starts.
-                                    </p>
-                                }}
-                            </PropRow>
-                            <PropRow label="Priority">
-                                <Select
-                                    value={form["priority"]}
-                                    onValueChange={lambda (v: str) { onField(
-                                        "priority", v
-                                    ); }}
-                                >
-                                    <SelectTrigger
-                                        className={GHOST_SELECT}
-                                        aria-label="Priority"
-                                    >
-                                        <SelectValue placeholder="Priority"/>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {for p in PRIORITIES {
-                                            <SelectItem key={p} value={p}>
-                                                <span
-                                                    className="inline-flex items-center gap-1.5"
-                                                >
-                                                    {if p == "High" {
-                                                        <Flag key="flag"/>
-                                                    }}
-                                                    {p}
-                                                </span>
-                                            </SelectItem>
-                                        }}
-                                    </SelectContent>
-                                </Select>
-                            </PropRow>
-                            <PropRow label="Estimate">
-                                <Input
-                                    id="task-estimate"
-                                    type="number"
-                                    min="0"
-                                    step="0.5"
-                                    aria-label="Estimate"
-                                    className={GHOST_INPUT + " num"}
-                                    placeholder="Points or hours"
-                                    value={form["estimate"]}
-                                    onChange={lambda (e: any) { onField(
-                                        "estimate", e.target.value
-                                    ); }}
-                                />
-                            </PropRow>
-                            <PropRow label="Category">
-                                <Input
-                                    id="task-category"
-                                    list="flowline-categories"
-                                    aria-label="Category"
-                                    className={GHOST_INPUT}
-                                    placeholder="Type or pick"
-                                    value={form["category"]}
-                                    onChange={lambda (e: any) { onField(
-                                        "category", e.target.value
-                                    ); }}
-                                />
-                                <datalist id="flowline-categories">
-                                    {for c in categories {
-                                        <option key={c} value={c}/>
-                                    }}
-                                </datalist>
-                            </PropRow>
-                            <PropRow label="Tags">
-                                <Input
-                                    id="task-tags"
-                                    aria-label="Tags"
-                                    className={GHOST_INPUT}
-                                    placeholder="Comma-separated, e.g. bug, payments"
-                                    value={form["tags"]}
-                                    onChange={lambda (e: any) { onField(
-                                        "tags", e.target.value
-                                    ); }}
-                                />
-                            </PropRow>
-                            {if editing {
-                                <PropRow key="pr" label="Pull request">
-                                    <div className="flex items-center">
-                                        <Input
-                                            aria-label="Pull request link"
-                                            className={GHOST_INPUT
-                                                + " min-w-0 flex-1 num text-xs md:text-xs"}
-                                            placeholder="Paste a pull request link"
-                                            value={form["pr"]}
-                                            onChange={lambda (e: ChangeEvent) { onField(
-                                                "pr", e.target.value
+                                {if showsField("start_date") {
+                                    <PropRow key="start" label="Start date">
+                                        <DatePicker
+                                            value={form["start_date"]}
+                                            clearable={True}
+                                            className={GHOST_DATE
+                                                + (
+                                                    " text-subtle!"
+                                                        if not form["start_date"]
+                                                        else ""
+                                                )}
+                                            onChange={lambda (d: str) { onField(
+                                                "start_date", d
                                             ); }}
                                         />
-                                        {if prState {
-                                            <span
-                                                key="state"
-                                                className="shrink-0 px-1 text-xs text-muted-foreground"
-                                                title={"Pull request " + prState}
-                                            >
-                                                {prState}
-                                            </span>
-                                        }}
-                                        {if form["pr"].strip() {
-                                            <OpenLink
-                                                key="open"
-                                                url={form["pr"].strip()}
-                                            />
-                                        }}
-                                    </div>
-                                </PropRow>
-                            }}
-                            <PropRow label="Issue">
-                                <div className="flex items-center">
-                                    <Input
-                                        aria-label="GitHub issue link"
-                                        className={GHOST_INPUT
-                                            + " min-w-0 flex-1 num text-xs md:text-xs"}
+                                    </PropRow>
+                                }}
+                                {if showsField("estimate") {
+                                    <PropRow key="estimate" label="Estimate">
+                                        <Input
+                                            id="task-estimate"
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            aria-label="Estimate"
+                                            className={GHOST_INPUT + " num"}
+                                            placeholder="Points or hours"
+                                            value={form["estimate"]}
+                                            onChange={lambda (e: any) { onField(
+                                                "estimate", e.target.value
+                                            ); }}
+                                        />
+                                    </PropRow>
+                                }}
+                                {if showsField("category") {
+                                    <PropRow key="category" label="Category">
+                                        <Input
+                                            id="task-category"
+                                            list="flowline-categories"
+                                            aria-label="Category"
+                                            className={GHOST_INPUT}
+                                            placeholder="Type or pick"
+                                            value={form["category"]}
+                                            onChange={lambda (e: any) { onField(
+                                                "category", e.target.value
+                                            ); }}
+                                        />
+                                        <datalist id="flowline-categories">
+                                            {for c in categories {
+                                                <option key={c} value={c}/>
+                                            }}
+                                        </datalist>
+                                    </PropRow>
+                                }}
+                                {if showsField("tags") {
+                                    <PropRow key="tags" label="Tags">
+                                        <Input
+                                            id="task-tags"
+                                            aria-label="Tags"
+                                            className={GHOST_INPUT}
+                                            placeholder="Comma-separated, e.g. bug, payments"
+                                            value={form["tags"]}
+                                            onChange={lambda (e: any) { onField(
+                                                "tags", e.target.value
+                                            ); }}
+                                        />
+                                    </PropRow>
+                                }}
+                                {if showsField("pr") {
+                                    <LinkRow
+                                        key="pr"
+                                        label="Pull request"
+                                        aria="Pull request link"
+                                        placeholder="Paste a pull request link"
+                                        value={form["pr"]}
+                                        state={prState}
+                                        onChange={lambda (v: str) { onField("pr", v); }}
+                                    />
+                                }}
+                                {if showsField("issue") {
+                                    <LinkRow
+                                        key="issue"
+                                        label="Issue"
+                                        aria="GitHub issue link"
                                         placeholder="Paste a GitHub issue link"
                                         value={form["issue"]}
-                                        onChange={lambda (e: ChangeEvent) { onField(
-                                            "issue", e.target.value
+                                        onChange={lambda (v: str) { onField(
+                                            "issue", v
                                         ); }}
                                     />
-                                    {if form["issue"].strip() {
-                                        <OpenLink
-                                            key="open"
-                                            url={form["issue"].strip()}
-                                        />
-                                    }}
-                                </div>
-                            </PropRow>
-                            {if canCreateIssue {
-                                <PropRow key="ghissue" label="">
-                                    <div className="grid gap-1.5 px-2 pb-1">
-                                        {if len(projectRepos) > 1 {
-                                            <Select
-                                                key="repopick"
-                                                value={repoChoice}
-                                                onValueChange={lambda (v: str) { repoChoice = v; }}
-                                            >
-                                                <SelectTrigger className="h-8 w-full">
-                                                    <SelectValue
-                                                        placeholder="Pick a repo"
-                                                    />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {for r in projectRepos {
-                                                        <SelectItem
-                                                            key={r.id}
-                                                            value={r.id}
-                                                        >
-                                                            {r.full_name}
-                                                        </SelectItem>
-                                                    }}
-                                                </SelectContent>
-                                            </Select>
-                                        }}
-                                        <div
-                                            className="flex flex-wrap items-center gap-2"
-                                        >
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={saving or not chosenRepo}
-                                                onClick={lambda { if onCreateIssue
-                                                    and chosenRepo {
-                                                    pendingAction = "issue";
-                                                    onCreateIssue(chosenRepo);
-                                                }}}
-                                            >
-                                                {if saving
-                                                    and pendingAction == "issue" {
-                                                    <Spinner key="sp"/>
-                                                }}
-                                                {"Opening issue…"
-                                                    if saving
-                                                        and pendingAction == "issue"
-                                                    else "Create GitHub issue"}
-                                            </Button>
-                                            <span
-                                                className="text-xs text-muted-foreground"
-                                            >
-                                                From the title and notes, then linked.
-                                            </span>
-                                        </div>
-                                    </div>
-                                </PropRow>
-                            }}
-                        </dl>
-                        <section className="grid gap-1.5" aria-label="Notes">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-[13px] font-semibold">Notes</h3>
-                                {if hasNotes and detailsShown {
-                                    <Button
-                                        key="toggle"
-                                        variant="ghost"
-                                        size="xs"
-                                        onClick={lambda { notesEditing = not notesEditing; }}
-                                    >
-                                        {"Preview" if notesEditing else "Edit"}
-                                    </Button>
                                 }}
-                            </div>
-                            {if not detailsShown {
-                                if detailsFailed {
-                                    <div
-                                        key="failed"
-                                        className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 px-2.5 py-2 text-[13px] text-destructive"
-                                    >
-                                        <span>
-                                            Notes and checklist could not be loaded.
-                                        </span>
-                                        <Button
-                                            variant="ghost"
-                                            size="xs"
-                                            onClick={lambda {
-                                                failedFor = "";
-                                                loadDetails(taskId);
-                                            }}
+                                {if canCreateIssue and showsField("issue") {
+                                    <IssueMaker
+                                        key="ghissue"
+                                        repos={projectRepos}
+                                        choice={repoChoice}
+                                        chosen={chosenRepo}
+                                        busy={saving and pendingAction == "issue"}
+                                        disabled={saving}
+                                        onChoice={lambda (v: str) { repoChoice = v; }}
+                                        onCreate={lambda { if onCreateIssue
+                                            and chosenRepo {
+                                            pendingAction = "issue";
+                                            onCreateIssue(chosenRepo);
+                                        }}}
+                                    />
+                                }}
+                                {if showsField("project") {
+                                    <PropRow key="project" label="Project">
+                                        <Select
+                                            value={form["project"]}
+                                            onValueChange={lambda (v: str) { onField(
+                                                "project", v
+                                            ); }}
                                         >
-                                            Try again
-                                        </Button>
-                                    </div>
-                                } else {
-                                    <div
-                                        key="loading"
-                                        className="grid gap-2 py-1"
-                                        aria-busy="true"
-                                    >
-                                        <Skeleton className="h-3.5 w-4/5"/>
-                                        <Skeleton className="h-3.5 w-3/5"/>
-                                        <Skeleton className="mt-3 h-3.5 w-2/5"/>
-                                    </div>
-                                }
-                            } elif notesEditing or not hasNotes {
-                                <Textarea
-                                    key="write"
-                                    className="min-h-20 rounded-md text-[13px] md:text-[13px]"
-                                    placeholder="Add notes, acceptance criteria or links. Markdown works."
-                                    value={form["notes"]}
-                                    onChange={lambda (e: ChangeEvent) {
-                                        notesEditing = True;
-                                        onField("notes", e.target.value);
-                                    }}
-                                />
-                            } else {
-                                <div
-                                    key="preview"
-                                    className="min-h-12 cursor-text rounded-md border px-2.5 py-2 text-[13px]"
-                                    onClick={lambda { notesEditing = True; }}
-                                >
-                                    <Markdown text={form["notes"]}/>
-                                </div>
-                            }  }
-                        </section>
-                        {if editing and familyTotal > 0 {
-                            <section
-                                key="family"
-                                className="grid gap-1.5"
-                                aria-label="Sub-issues"
-                            >
-                                <div
-                                    className="flex items-baseline justify-between gap-3"
-                                >
-                                    <h3 className="text-[13px] font-semibold">
-                                        Sub-issues
-                                    </h3>
-                                    <span className="num text-xs text-muted-foreground">
-                                        {str(familyDone)
-                                            + " of "
-                                            + str(familyTotal)
-                                            + " done"}
-                                    </span>
-                                </div>
-                                <div className="border-t">
-                                    {for kid in family {
-                                        <button
-                                            key={kid.id}
-                                            type="button"
-                                            className="flex w-full items-center gap-2 border-b px-1 py-1.5 text-left text-[13px] hover:bg-accent"
-                                            title={"Open " + kid.title}
-                                            onClick={lambda { if onOpenTask {
-                                                onOpenTask(kid.id);
-                                            }}}
-                                        >
-                                            <span
-                                                className="num flex-none text-xs text-subtle"
-                                            >
-                                                {"#" + str(kid.gh_issue_number)}
-                                            </span>
-                                            <span className="min-w-0 flex-1 truncate">
-                                                {kid.title}
-                                            </span>
-                                            <span
-                                                className={"flex-none text-xs "
+                                            <SelectTrigger
+                                                className={GHOST_SELECT
                                                     + (
-                                                        "text-success"
-                                                            if kid.status == "Done"
-                                                            else "text-muted-foreground"
+                                                        ""
+                                                            if hasProject
+                                                            else " text-subtle"
                                                     )}
+                                                aria-label="Project"
                                             >
-                                                {familyStepLabel(
-                                                    kid, columnKeys, columnLabels
-                                                )}
-                                            </span>
-                                        </button>
-                                    }}
-                                    {if len(family) < familyTotal {
-                                        <p
-                                            key="ghost"
-                                            className="px-1 py-1.5 text-xs text-muted-foreground"
-                                        >
-                                            {str(familyTotal - len(family))
-                                                + " more on GitHub, not on the board"}
-                                        </p>
-                                    }}
-                                </div>
-                            </section>
+                                                <SelectValue
+                                                    placeholder="Pick a project"
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {for p in projects {
+                                                    <SelectItem
+                                                        key={jid(p)}
+                                                        value={jid(p)}
+                                                    >
+                                                        {p.name}
+                                                    </SelectItem>
+                                                }}
+                                            </SelectContent>
+                                        </Select>
+                                    </PropRow>
+                                }}
+                            </dl>
+                            <AddFields
+                                labels={[
+                                    f
+                                    for f in OPTIONAL_FIELDS
+                                    if not showsField(f[0])
+                                ]}
+                                onReveal={reveal}
+                            />
+                        </div>
+                        {if taskId {
+                            <AgentRuns
+                                key={"runs-" + taskId}
+                                taskId={taskId}
+                                refreshKey={historyKey}
+                                onSettled={lambda { refreshRow(taskId); }}
+                            />
                         }}
-                        {if editing and parentTaskId {
+                        <SheetNotes
+                            notes={form["notes"]}
+                            hasNotes={hasNotes}
+                            editing={notesEditing}
+                            shown={detailsShown}
+                            failed={detailsFailed}
+                            onEdit={lambda (v: bool) { notesEditing = v; }}
+                            onChange={lambda (v: str) { onField("notes", v); }}
+                            onRetry={lambda {
+                                failedFor = "";
+                                loadDetails(taskId);
+                            }}
+                        />
+                        {if familyTotal > 0 {
+                            <SheetFamily
+                                key="family"
+                                family={family}
+                                total={familyTotal}
+                                done={familyDone}
+                                keys={columnKeys}
+                                labels={columnLabels}
+                                onOpen={onOpenTask}
+                            />
+                        }}
+                        {if parentTaskId {
                             <button
                                 key="parentlink"
                                 type="button"
@@ -1318,7 +1038,7 @@ def:pub TaskDialog(
                                 </span>
                             </button>
                         }}
-                        {if editing and taskId and detailsShown {
+                        {if taskId and detailsShown {
                             <ChecklistEditor
                                 key={"checklist-" + taskId}
                                 taskId={taskId}
@@ -1326,15 +1046,7 @@ def:pub TaskDialog(
                                 onChange={absorbChecklist}
                             />
                         }}
-                        {if editing and taskId {
-                            <AgentRuns
-                                key={"runs-" + taskId}
-                                taskId={taskId}
-                                refreshKey={historyKey}
-                                onSettled={lambda { refreshRow(taskId); }}
-                            />
-                        }}
-                        {if editing and taskId {
+                        {if taskId {
                             <TravelLog
                                 key={"travel-" + taskId}
                                 taskId={taskId}
@@ -1344,95 +1056,23 @@ def:pub TaskDialog(
                         }}
                     </div>
                 </div>
-                {if switchLabel {
-                    <div
-                        key="switch"
-                        role="group"
-                        aria-label="Unsaved changes"
-                        className="grid shrink-0 gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-                    >
-                        <p id="task-switch-note" className="text-[13px]">
-                            <span className="font-semibold">Unsaved changes.</span>
-                            {" Save or discard them to open " + switchLabel + "."}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                variant="ghost"
-                                className="-ml-2"
-                                data-switch-stay="true"
-                                onClick={lambda { if onStay { onStay(); }}}
-                            >
-                                Keep editing
-                            </Button>
-                            <div className="ml-auto flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    disabled={saving}
-                                    onClick={lambda { if onSwitch { onSwitch(False); }}}
-                                >
-                                    Discard
-                                </Button>
-                                <Button
-                                    data-switch-save="true"
-                                    aria-describedby="task-switch-note"
-                                    disabled={not canSave}
-                                    onClick={lambda { if onSwitch and canSave {
-                                        pendingAction = "save";
-                                        onSwitch(True);
-                                    }}}
-                                >
-                                    {if saving and pendingAction == "save" {
-                                        <Spinner key="sp"/>
-                                    }}
-                                    {"Saving…"
-                                        if saving and pendingAction == "save"
-                                        else "Save and open"}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                } else {
-                    <div
-                        key="footer"
-                        className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-                    >
-                        {if editing {
-                            <Button
-                                key="del"
-                                variant="ghost"
-                                className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                onClick={lambda {
-                                    pendingAction = "delete";
-                                    onDelete();
-                                }}
-                                disabled={saving}
-                            >
-                                {if saving and pendingAction == "delete" {
-                                    <Spinner key="sp"/>
-                                }}
-                                {"Deleting…"
-                                    if saving and pendingAction == "delete"
-                                    else "Delete"}
-                            </Button>
+                {if switchLabel or isDirty() {
+                    <SheetFooter
+                        key="foot"
+                        switchLabel={switchLabel}
+                        canSave={canSave}
+                        saving={saving and pendingAction == "save"}
+                        onSwitch={lambda (keep: bool) {
+                            pendingAction = "save" if keep else "";
+                            if onSwitch {
+                                onSwitch(keep);
+                            }
                         }}
-                        <div className="ml-auto flex gap-2">
-                            <Button
-                                variant="outline"
-                                onClick={lambda { onOpenChange(False); }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button onClick={lambda { save(); }} disabled={not canSave}>
-                                {if saving and pendingAction == "save" {
-                                    <Spinner key="sp"/>
-                                }}
-                                {"Saving…"
-                                    if saving and pendingAction == "save"
-                                    else "Save"}
-                            </Button>
-                        </div>
-                    </div>
-                } }
+                        onStay={onStay}
+                        onDiscard={lambda { onOpenChange(False); }}
+                        onSave={save}
+                    />
+                }}
             </SheetContent>
         </Sheet>;
 }

@@ -3,6 +3,17 @@ GetFlowLine rather than patching local state: the walker is the only place the
 prev/next truth lives. The flow canvas pans freely; the lane view keeps its
 label gutter and bands bounded. Position saves preserve newer drag drafts."""
 
+# A step as the inspector's form.
+def formOf(s: StepView) -> dict[str, str] {
+    return {
+        "name": s.name,
+        "kind": s.kind,
+        "color": s.color,
+        "owner": s.owner,
+        "blurb": s.blurb
+    };
+}
+
 impl FlowLinePage.boot -> None {
     startPid = currentProject();
     projectId = startPid;
@@ -209,7 +220,7 @@ impl FlowLinePage.closePeek -> None {
 }
 
 impl FlowLinePage.revealStep(stepId: str) -> None {
-    # The panel floats over the right of the canvas; slide the diagram just
+    # The sheet covers the right of the canvas; slide the diagram just
     # enough that the step it describes stays in view beside it.
     view: any = viewportRef.current;
     if not view or narrow {
@@ -582,13 +593,7 @@ impl FlowLinePage.commitName -> None {
             creatingStep = False;
             if made {
                 selectedId = made.id;
-                form = {
-                    "name": made.name,
-                    "kind": made.kind,
-                    "color": made.color,
-                    "owner": made.owner,
-                    "blurb": made.blurb
-                };
+                form = formOf(made);
             }
         } except Exception as e {
             toast.error("Failed to add the step");
@@ -777,12 +782,12 @@ impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> 
             edgeForm = {};
             await reload(projectId);
             toast.success(
-                "Transition cleared"
+                "Arrow cleared"
                     if not payload["label"]
                         and not payload["carries"]
                         and not payload["trigger"]
                         and not payload["github_label"]
-                    else "Transition saved"
+                    else "Arrow saved"
             );
         } elif payload and payload["message"] {
             toast.error(payload["message"]);
@@ -848,14 +853,31 @@ impl FlowLinePage.selectStep(stepId: str) -> None {
         if s.id == stepId
     ];
     if len(chosenStep) > 0 {
-        form = {
-            "name": chosenStep[0].name,
-            "kind": chosenStep[0].kind,
-            "color": chosenStep[0].color,
-            "owner": chosenStep[0].owner,
-            "blurb": chosenStep[0].blurb
-        };
+        form = formOf(chosenStep[0]);
     }
+}
+
+# The step sheet's Edit button: the same step, in the inspector.
+impl FlowLinePage.editStep(stepId: str) -> None {
+    switchMode("edit");
+    selectStep(stepId);
+}
+
+# A template only lands on an empty line (ApplyTemplate refuses otherwise), so
+# a line with steps confirms its deletion first; the picker follows from there.
+impl FlowLinePage.openTemplates -> None {
+    if len(steps) == 0 {
+        scratch = False;
+        finishEditing();
+        return;
+    }
+    wipeForTemplate = True;
+    confirmWipe = True;
+}
+
+impl FlowLinePage.askWipe -> None {
+    wipeForTemplate = False;
+    confirmWipe = True;
 }
 
 impl FlowLinePage.armConnect -> None {
@@ -1540,13 +1562,7 @@ impl FlowLinePage.beginDrag(e: any) -> None {
                 selectedEdge = "";
                 confirmDelete = False;
                 creatingStep = False;
-                form = {
-                    "name": step.name,
-                    "kind": step.kind,
-                    "color": step.color,
-                    "owner": step.owner,
-                    "blurb": step.blurb
-                };
+                form = formOf(step);
                 return;
             }
             world = pointerXY(e);

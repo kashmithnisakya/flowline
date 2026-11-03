@@ -90,7 +90,7 @@ class FlowMotionChecks:
         before = center(self.node(row).bounding_box())
         old_x, old_y = self.positions()[row["id"]]
         self.report("MoveStep", {"step_id": row["id"], "x": x, "y": y})
-        field = self.page.get_by_role("textbox", name="Step name", exact=True)
+        field = self.page.get_by_role("textbox", name="Name", exact=True)
         field.fill(title)
         with self.page.expect_response(lambda r: r.url.endswith("/walker/GetFlowLine")) as refreshed:
             field.press("Enter")
@@ -112,7 +112,7 @@ class FlowMotionChecks:
             try:
                 self.held_drag(row, dx, dy)
                 self.page.mouse.up()
-                expect(self.page.get_by_role("textbox", name="Step name", exact=True)).to_have_value("Click")
+                expect(self.page.get_by_role("textbox", name="Name", exact=True)).to_have_value("Click")
                 self.refresh_position(row, 150, 0, "Fresh")
                 assert not writes, ("A click must not save a position", writes)
             finally:
@@ -155,7 +155,7 @@ class FlowMotionChecks:
         step("motion: overlapping steps drag the visible front step")
         front, back = self.fresh([("Front step", 0, 0), ("Back step", 240, 0)])
         self.node(front).click()
-        expect(self.page.get_by_role("textbox", name="Step name", exact=True)).to_have_value("Front step")
+        expect(self.page.get_by_role("textbox", name="Name", exact=True)).to_have_value("Front step")
         self.drop(front, 240, 0)
         box = self.node(front).bounding_box()
         top = self.page.evaluate(
@@ -205,7 +205,7 @@ class FlowMotionChecks:
                 self.page.get_by_role("link", name="Board", exact=True).click()
                 expect(self.page).to_have_url(re.compile(r"/board(?:\?.*)?$"))
                 self.page.get_by_role("link", name="Flow line", exact=True).click()
-                self.page.get_by_role("button", name="Edit flow line", exact=True).click()
+                self.page.get_by_role("group", name="Mode", exact=True).get_by_role("button", name="Edit", exact=True).click()
                 # The remounted canvas includes the pending drop at X=160.
                 self.held_drag(row, 40, 0)
                 self.page.mouse.up()
@@ -300,7 +300,7 @@ class FlowMotionChecks:
 
         self.page.route("**/walker/GetFlowLine", hold_first)
         try:
-            field = self.page.get_by_role("textbox", name="Step name", exact=True)
+            field = self.page.get_by_role("textbox", name="Name", exact=True)
             field.fill("Fresh metadata")
             field.press("Enter")
             self.wait_for(lambda: bool(held), "The metadata refresh did not start")
@@ -350,7 +350,7 @@ class FlowMotionChecks:
             self.wait_for(lambda: bool(held_writes), "The first save did not start")
             self.held_drag(row, 80, 0)
             self.page.mouse.up()
-            field = self.page.get_by_role("textbox", name="Step name", exact=True)
+            field = self.page.get_by_role("textbox", name="Name", exact=True)
             field.fill("Queued metadata")
             field.press("Enter")
             self.wait_for(lambda: bool(held_reads), "The metadata read did not start during the pending save")
@@ -586,7 +586,7 @@ class FlowMotionChecks:
         step("motion: switching to lanes preserves saved flow positions")
         rows = self.fresh([("First lane step", -100, 0), ("Second lane step", 400, 200)])
         before = self.positions()
-        self.page.get_by_role("button", name="Done editing", exact=True).click()
+        self.page.get_by_role("group", name="Mode", exact=True).get_by_role("button", name="View", exact=True).click()
         self.page.get_by_role("button", name="Lanes", exact=True).click()
         for row in rows:
             expect(self.node(row)).to_be_in_viewport()

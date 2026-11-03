@@ -163,6 +163,10 @@ def nodeRects(
         shown = len(nodeTitles(s, stepTitles)) if detail == "high" else 0;
         more = detail == "high" and s.task_count > shown and s.id in stepTitles;
         h = nodeHeight(detail, shown, more);
+        # A flow card adds its owner's row; a lane's card has the lane to say it.
+        if detail != "low" {
+            h = h + META_LH;
+        }
         cx = ox + (pos[0] + NODE_W / 2.0) * z;
         cy = (pos[1] + footH / 2.0) * z;
         centres.append([cx, cy, h]);

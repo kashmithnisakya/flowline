@@ -31,7 +31,7 @@ CACHED_READERS = [
 # a sync from another tab must show on the next call, not 60 s later.
 LIVE_READERS = [
     "BoardSnapshot", "ListTasks", "OverviewSnapshot", "ListLogEntries",
-    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks", "ListRuns",
+    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks", "ListRuns", "ListAgentRuns",
 ]
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
@@ -274,6 +274,10 @@ def assert_parity(label, project_ids, member_ids, expected_links):
         for s in lines[pid]:
             got_counts[s["id"]] = got_counts.get(s["id"], 0) + s["task_count"]
     check(f"{label}: GetFlowLine step counts, summed over the projects", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    for pid in project_ids:
+        want = {s["id"]: s["task_count"] for s in lines[pid]}
+        road = report("RoadmapSnapshot", {"project_id": pid}).get("counts")
+        check(f"{label}: RoadmapSnapshot's line counts equal the flow line's", road == want, f"{road} vs {want}")
     default_line = report("GetFlowLine", {"with_counts": True}) or []
     check(f"{label}: GetFlowLine with no project counts the earliest-created one",
           [(s["id"], s["task_count"]) for s in default_line] == [(s["id"], s["task_count"]) for s in steps], (default_line, steps))
@@ -313,6 +317,9 @@ def parity_suite(project_id, member_id, tag):
     for s in steps:
         by_kind.setdefault(s["kind"], s["id"])
     check("parity: the Simple template is applied", len(steps) == 4, str(steps)[:200])
+    review = next((s for s in steps if s["name"] == "Review"), {})
+    check("parity: the Simple template's way back fires on changes requested",
+          "changes_requested" in review.get("next_triggers", []), review)
     p2 = report("SaveProject", {"name": "CI Parity", "description": ""})
     p2_id = str(find_key(p2, "id", "_jac_id") or "")
     m2 = report("SaveMember", {"first_name": "Omar", "last_name": "Diaz"})
@@ -361,6 +368,18 @@ def parity_suite(project_id, member_id, tag):
           moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
     links[row["id"]] = (p2_id, [m2_id])
     assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
+    log_wording_check(project_id, steps, tag)
+
+
+def log_wording_check(project_id, steps, tag):
+    # A new task's first line names the step the org calls it, as a move's does,
+    # not the status behind it ("In Progress").
+    doing = next(s for s in steps if s["name"] == "Doing")
+    task = report("CreateTask", {"title": f"Log wording {tag}", "project_id": project_id, "step_id": doing["id"]})
+    today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
+    rows = report("ListLogEntries", {"task_id": task.get("id", ""), "from_date": (today - timedelta(days=1)).isoformat(),
+                                     "to_date": (today + timedelta(days=1)).isoformat()}).get("rows", [])
+    check("log: a new task is added to its step by name", [r.get("activity") for r in rows] == ["Added to Doing"], rows)
 
 
 def log_pages(body):
@@ -750,6 +769,13 @@ def ai_suite(task_id, tag):
     off = report("SetAiEnabled", {"enabled": False})
     check("ai: SetAiEnabled turns it off", off.get("enabled") is False and settings().get("enabled") is False, str(off))
     check("ai: a task with no runs lists none", report("ListRuns", {"task_id": task_id}) == [], "")
+    activity = report("ListAgentRuns")
+    check("ai: a workspace with no runs has an empty activity page and the daily limit",
+          activity.get("rows") == [] and activity.get("has_more") is False and activity.get("daily_limit", 0) > 0,
+          str(activity))
+    check("ai: a task row starts with no AI outcome",
+          report("GetTask", {"task_id": task_id}).get("ai_outcome") == "", "")
+    check("ai: GetWorkspace counts no open runs", report("GetWorkspace").get("ai_open") == 0, "")
     for name in ("RetryRun", "CancelRun"):
         for what, rid in (("a malformed id", "not-a-jid"), ("a task id", task_id), ("a responsibility id", resp_id)):
             got = report(name, {"run_id": rid})
@@ -768,6 +794,7 @@ def ai_suite(task_id, tag):
             check(f"ai: another account cannot {name} {sorted(body)}", got.get("error") == "not_found", str(got))
         report("SetAiEnabled", {"enabled": True})
         check("ai: another account cannot list a task's runs", report("ListRuns", {"task_id": task_id}) == [], "")
+        check("ai: another account's activity page is its own", report("ListAgentRuns").get("rows") == [], "")
     TOKEN = home
     mine = settings()
     check("ai: the responsibility and the switch are untouched", mine.get("enabled") is False

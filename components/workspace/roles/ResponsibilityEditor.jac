@@ -14,6 +14,7 @@ import from ...ui.dialog {
     DialogFooter
 }
 import from ...common.glyphs { Spinner }
+import from ...common.AiMark { AiMark }
 import from .ResponsibilityFields { ResponsibilityFields }
 
 def:pub ResponsibilityEditor(
@@ -32,9 +33,12 @@ def:pub ResponsibilityEditor(
 ) -> JsxElement {
     return
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="bg-card sm:max-w-lg">
+            <DialogContent className="bg-popover sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        <AiMark/>
+                        {title}
+                    </DialogTitle>
                     <DialogDescription>
                         Runs when a task lands on one of this role's steps with a linked pull request.
                     </DialogDescription>

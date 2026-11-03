@@ -60,7 +60,11 @@ def:pub MoveDialog(
                 className="sm:max-w-md"
                 onCloseAutoFocus={lambda (e: Event) {
                     card: any = document.querySelector(
-                        '[data-task-card="' + focusId + '"]'
+                        '[data-task-row="'
+                            + focusId
+                            + '"], [data-task-card="'
+                            + focusId
+                            + '"]'
                     );
                     if focusId and card {
                         e.preventDefault();

@@ -1,6 +1,6 @@
-"""flowline - Overview: what needs someone now, then how the week is going.
-A workspace with nothing to count gets a first-run checklist instead of the
-figures and charts; the impl annex documents each read."""
+"""flowline - Overview: four figures, what needs someone now beside done per week
+and people, then a quieter History. A workspace with nothing to count gets a
+first-run checklist instead; the impl annex documents each read."""
 
 import from "@jac/runtime" { useState }
 import from "react" { useEffect }
@@ -13,13 +13,30 @@ import from ...models {
     LogTotals,
     WeeklyHistory
 }
-import from ...constants { FLOW_LINE_TEMPLATES, STATUS_KIND, KIND_COLORS }
+import from ...constants { FLOW_LINE_TEMPLATES }
 import from ...services.insights.insights { OverviewSnapshot }
 import from ...services.tasks.tasks { TaskHistory, ListTasks }
 import from ...components.dashboard.NeedsYou { NeedsYou }
+import from ...components.dashboard.needsRows {
+    DAY_LABELS,
+    relDay,
+    plural,
+    countAll,
+    splitNames,
+    stepChip,
+    workRow,
+    dueRow,
+    withBlocked,
+    withReview,
+    group
+}
+import from ...components.dashboard.OverviewFigures { OverviewFigures }
+import from ...components.dashboard.StandupButton { StandupButton }
 import from ...components.dashboard.ThisWeek { ThisWeek }
+import from ...components.dashboard.ThroughputChart { ThroughputChart }
 import from ...components.dashboard.ProjectBars { ProjectBars }
 import from ...components.dashboard.PeopleTable { PeopleTable }
+import from ...components.dashboard.PeopleUpdates { PeopleUpdates }
 import from ...components.dashboard.OverTime { OverTime }
 import from ...components.dashboard.HistoryFilters { HistoryFilters }
 import from ...components.dashboard.FirstRun { FirstRun }
@@ -30,8 +47,7 @@ import from ...lib.dates { todayIso, daysUntil, prettyDay }
 import from ...lib.session { fetchOrgName, cachedOrgName, OVERVIEW_SHAPE_KEY }
 import from ...lib.workspace { loadWorkspace }
 
-glob DAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-     DAY_NAMES: list[str] = [
+glob DAY_NAMES: list[str] = [
          "Monday",
          "Tuesday",
          "Wednesday",
@@ -109,167 +125,14 @@ def mondayOf(iso: str) -> str {
     return shiftDay(iso, -offset);
 }
 
-# "2026-09-21" -> "September 21", for the week line under the title.
-def longDay(iso: str) -> str {
-    d = new(Date, iso + "T00:00:00");
-    return d.toLocaleDateString("en-US", {"month": "long", "day": "numeric"});
-}
-
-# A due date as the worklist reads it: "today", "tomorrow", a weekday later
-# this week, a date after that, or how many days it is late.
-def relDay(iso: str, today: str) -> str {
-    diff = daysUntil(iso, today);
-    if diff < 0 {
-        late = 0 - diff;
-        return str(late) + (" day" if late == 1 else " days");
-    }
-    if diff == 0 {
-        return "today";
-    }
-    if diff == 1 {
-        return "tomorrow";
-    }
-    d = new(Date, iso[:10] + "T00:00:00");
-    t = new(Date, today[:10] + "T00:00:00");
-    dayIdx = int((d.getDay() + 6) % 7);
-    if diff < 7 and dayIdx > int((t.getDay() + 6) % 7) {
-        return DAY_LABELS[dayIdx];
-    }
-    return prettyDay(iso);
-}
-
-# When a blocked task stopped: "since today", "since yesterday", else a date.
-def sinceDay(iso: str, today: str) -> str {
-    if len(iso) < 10 {
-        return "";
-    }
-    ago = daysUntil(today, iso);
-    if ago <= 0 {
-        return "since today";
-    }
-    return "since yesterday" if ago == 1 else "since " + prettyDay(iso);
-}
-
-# A blocked reason's first line as plain text: move notes arrive as markdown
-# with a "**2026-09-15:**" stamp in front.
-def plainLine(text: str) -> str {
-    line = text.strip().split("\n")[0].replace("**", "").strip();
-    if len(line) > 11 and line[4] == "-" and line[7] == "-" and line[10] == ":" {
-        line = line[11:].strip();
-    }
-    return line;
-}
-
-def plural(n: int, one: str, many: str) -> str {
-    return str(n) + " " + (one if n == 1 else many);
-}
-
-def countAll(xs: list[int]) -> int {
-    n = 0;
-    for x in xs {
-        n = n + x;
-    }
-    return n;
-}
-
-def splitNames(joined: str) -> list[str] {
+# The last `n` of a week series, oldest first.
+def lastOf(xs: list[any], n: int) -> list[any] {
+    start = len(xs) - n;
     return [
-        n.strip()
-        for n in joined.split(",")
-        if n.strip()
+        x
+        for (i, x) in enumerate(xs)
+        if i >= start
     ];
-}
-
-# The pill a row shows: the task's own step, else the first step of its
-# status's kind by the legacy status (a task need not have a step).
-def stepChip(steps: list[StepView], stepId: str, status: str) -> dict[str, str] {
-    for s in steps {
-        if stepId and s.id == stepId {
-            return {"name": s.name, "color": s.color, "kind": s.kind};
-        }
-    }
-    kind = STATUS_KIND[status] if status in STATUS_KIND else "active";
-    return {"name": status or "Open", "color": KIND_COLORS[kind], "kind": kind};
-}
-
-# One worklist row; the note, flags and step are filled in by the caller.
-def workRow(
-    id: str, title: str, meta: str, names: list[str], time: str, late: bool, status: str
-) -> dict[str, any] {
-    return {
-        "id": id,
-        "title": title,
-        "meta": meta,
-        "note": "",
-        "noteWarn": False,
-        "names": names,
-        "time": time,
-        "late": late,
-        "status": status,
-        "step": {}
-    };
-}
-
-def dueRow(t: TaskRow, today: str) -> dict[str, any] {
-    return workRow(
-        t.id,
-        t.title,
-        t.project_name,
-        t.assignee_names,
-        relDay(t.due_date, today),
-        t.due_date < today,
-        t.status
-    );
-}
-
-# Fills in a blocked row: its reason from the snapshot's blocked list
-# (`info`), then a red due date when late, else the day it stopped.
-def withBlocked(
-    row: dict[str, any], due: str, today: str, info: dict[str, any], since: str
-) -> dict[str, any] {
-    late = len(due) >= 10 and due < today;
-    row["late"] = late;
-    row["time"] = relDay(due, today) if late else sinceDay(since, today);
-    row["note"] = plainLine(info["reason"]) if "reason" in info else "";
-    return row;
-}
-
-# A review queue entry's context (reviewer note, PR, avatars) on a row, so a
-# review that turns late keeps it in Overdue. `held` is the task, if read.
-def withReview(row: dict[str, any], r: dict[str, any], held: any) -> dict[str, any] {
-    reviewer = r["reviewer"];
-    pr = "PR linked" if r["pr_link"] else "";
-    if held and held.pr_number > 0 {
-        pr = "PR #" + str(held.pr_number);
-    }
-    if reviewer {
-        row["names"] = [reviewer];
-    }
-    row["meta"] = " · ".join(
-        [
-            part
-            for part in [row["meta"], pr]
-            if part
-        ]
-    );
-    row["note"] = (reviewer.split(" ")[0] + " reviewing")
-        if reviewer
-        else "no reviewer";
-    row["noteWarn"] = not reviewer;
-    return row;
-}
-
-def group(
-    key: str, label: str, tone: str, rows: list[dict[str, any]], more: int, what: str
-) -> dict[str, any] {
-    return {
-        "key": key,
-        "label": label,
-        "tone": tone,
-        "rows": rows,
-        "more": more,
-        "moreLabel": what
-    };
 }
 
 def:pub OverviewPage -> JsxPage {
@@ -314,7 +177,10 @@ def:pub OverviewPage -> JsxPage {
         historyProject: str = "all",
         historyWeeks: str = "12",
         historyLoading: bool = True,
-        historyFailed: bool = False;
+        historyFailed: bool = False,
+        # The last unfiltered history, for Done per week: the History filters
+        # do not move that chart.
+        doneWeeks: WeeklyHistory | None = None;
 
     async can with entry {
         loadAll();
@@ -606,16 +472,25 @@ def:pub OverviewPage -> JsxPage {
         }
     }
 
-    # ---- This week: four figures and tasks that entered Done per day.
+    # ---- The four figures, then tasks that entered Done per day (History).
+    overdueCount = counts.overdue if counts else 0;
     figures = [
-        {"label": "moved to Done", "value": str(doneSpark[3])},
+        {"label": "Done this week", "value": str(doneSpark[3]), "alarm": False},
         {
-            "label": "tasks added",
-            "value": str(weekAdded) if weekAdded >= 0 else ("-" if addedFailed else "…")
+            "label": "Added this week",
+            "value": str(weekAdded)
+                if weekAdded >= 0
+                else ("-" if addedFailed else "…"),
+            "alarm": False
         },
-        {"label": "open tasks", "value": str(openCount)},
-        {"label": "blocked now", "value": str(counts.blocked if counts else 0)}
+        {"label": "Open", "value": str(openCount), "alarm": False},
+        {"label": "Overdue", "value": str(overdueCount), "alarm": overdueCount > 0}
     ];
+    doneLabels: list[str] = [
+        prettyDay(w) for w in lastOf(doneWeeks.weeks if doneWeeks else [], 8)
+    ];
+    doneCounts: list[int] = lastOf(doneWeeks.finished if doneWeeks else [], 8);
+    addedCounts: list[int] = lastOf(doneWeeks.added if doneWeeks else [], 8);
     anyDone = countAll(weekDone) + countAll(doneSpark) > 0;
     dayRows: list[dict[str, any]] = [];
     for i in range(7) {
@@ -673,6 +548,17 @@ def:pub OverviewPage -> JsxPage {
     for md in (logs.members if logs else []) {
         personDays[md.name] = md.by_day;
     }
+    # Overdue per person, off the due list: late work leads that list, so a
+    # page that ends still late means some were cut ("3+").
+    personLate: dict[str, int] = {};
+    for t in dueRows {
+        if t.status != "Done" and len(t.due_date) >= 10 and t.due_date < today {
+            for aid in t.assignee_ids {
+                personLate[aid] = (personLate[aid] if aid in personLate else 0) + 1;
+            }
+        }
+    }
+    lateCut = dueHasMore and len(lastDue) >= 10 and lastDue < today;
     peopleRows = [
         {
             "id": m.id,
@@ -680,6 +566,17 @@ def:pub OverviewPage -> JsxPage {
             "color": m.color,
             "open": personOpen[m.id] if m.id in personOpen else 0,
             "done": personDone[m.id] if m.id in personDone else 0,
+            "late": (
+                "-"
+                    if dueFailed
+                    else (
+                        str(personLate[m.id] if m.id in personLate else 0)
+                        + ("+" if lateCut else "")
+                    )
+            )
+                if dueLoaded
+                else "",
+            "lateAlarm": m.id in personLate,
             "byDay": personDays[m.name]
                 if m.name in personDays and len(personDays[m.name]) == 7
                 else [0, 0, 0, 0, 0, 0, 0]
@@ -813,72 +710,87 @@ def:pub OverviewPage -> JsxPage {
     historyProjects = [[jid(p), p.name] for p in activeProjects];
     shape = cachedShape();
     # Layout follows the width the page is given, not the viewport: from
-    # 60rem the worklist sits beside the week; People and the charts span.
-    zones = "grid gap-5 @min-[60rem]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[60rem]:items-start";
-    side = "flex min-w-0 flex-col gap-5";
-    wide = "min-w-0 @min-[60rem]:col-span-2";
+    # 60rem the worklist sits beside done per week and people.
+    zones = "grid gap-4 @min-[60rem]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @min-[60rem]:items-start";
+    side = "flex min-w-0 flex-col gap-4";
 
-    def overTime -> JsxElement {
+    # History's panels: `pending` is the first-load frame, shaped like last time.
+    def overTime(pending: bool) -> JsxElement {
         return
-            <div className={wide}>
-                <OverTime
-                    history={history}
-                    filters={<HistoryFilters
-                        projects={historyProjects}
-                        project={historyProject}
-                        weeks={historyWeeks}
-                        onProject={lambda (v: str) { historyProject = v; }}
-                        onWeeks={lambda (v: str) { historyWeeks = v; }}
-                    />}
-                    loading={historyLoading}
-                    failed={historyFailed}
-                    onRetry={loadHistory}
+            <OverTime
+                history={history}
+                filters={<HistoryFilters
+                    projects={historyProjects}
+                    project={historyProject}
+                    weeks={historyWeeks}
+                    onProject={lambda (v: str) { historyProject = v; }}
+                    onWeeks={lambda (v: str) { historyWeeks = v; }}
+                />}
+                loading={historyLoading}
+                failed={historyFailed}
+                onRetry={loadHistory}
+            >
+                <ProjectBars
+                    rows={[] if pending else projRows}
+                    placeholder={pending}
+                    placeholderRows={shape["projects"]}
                 />
-            </div>;
+                <ThisWeek
+                    days={[] if pending else dayRows}
+                    chartState={("loading" if shape["chart"] else "none")
+                        if pending
+                        else chartState}
+                    chartNote={"" if pending else chartNote}
+                    placeholder={pending}
+                />
+                <PeopleUpdates
+                    rows={[] if pending else peopleRows}
+                    dayNames={DAY_LABELS}
+                    todayIndex={todayIdx}
+                    placeholder={pending}
+                    placeholderRows={shape["people"]}
+                />
+            </OverTime>;
     }
 
     def loadFrame -> JsxElement {
         return
-            <div key="sk" className={zones} aria-busy="true">
-                <NeedsYou
-                    groups={[]}
-                    placeholder={True}
-                    placeholderRows={shape["groups"]}
-                />
-                <div className={side}>
-                    <ThisWeek
-                        figures={[]}
-                        days={[]}
+            <div key="sk" className="flex flex-col gap-4" aria-busy="true">
+                <OverviewFigures figures={[]} placeholder={True}/>
+                <div className={zones}>
+                    <NeedsYou
+                        groups={[]}
                         placeholder={True}
-                        chartState={"loading" if shape["chart"] else "none"}
+                        placeholderRows={shape["groups"]}
                     />
-                    <ProjectBars
-                        rows={[]}
-                        placeholder={True}
-                        placeholderRows={shape["projects"]}
-                    />
+                    <div className={side}>
+                        <ThroughputChart
+                            labels={[]}
+                            finished={[]}
+                            added={[]}
+                            pending={True}
+                        />
+                        <PeopleTable
+                            rows={[]}
+                            placeholder={True}
+                            placeholderRows={shape["people"]}
+                        />
+                    </div>
                 </div>
-                <div className={wide}>
-                    <PeopleTable
-                        rows={[]}
-                        dayNames={DAY_LABELS}
-                        todayIndex={todayIdx}
-                        placeholder={True}
-                        placeholderRows={shape["people"]}
-                    />
-                </div>
-                {overTime()}
+                {overTime(True)}
             </div>;
     }
 
     return
-        <div className="@container space-y-6">
-            <header>
-                <p className="text-sm text-muted-foreground">
-                    {orgName or "Your workspace"}
-                </p>
+        <div className="@container flex flex-col gap-4">
+            <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h1 className="page-title">Overview</h1>
-                <p className="page-subtitle">{"Week of " + longDay(monday)}</p>
+                <span className="meta">
+                    {"Every project, week of " + prettyDay(monday)}
+                </span>
+                {if not early {
+                    <StandupButton key="standup" className="ml-auto"/>
+                }}
             </header>
             <Reveal ready={not loading} frame={loadFrame()}>
                 {if failed {
@@ -913,42 +825,40 @@ def:pub OverviewPage -> JsxPage {
                                 }}
                             </div>
                         } }
-                        <ThisWeek key="note" figures={[]} days={[]} note={earlyNote}/>
+                        <ThisWeek key="note" days={[]} note={earlyNote}/>
                     </div>
                 } else {
-                    <div key="body" className={zones}>
-                        <NeedsYou
-                            groups={groups}
-                            pending={not dueLoaded}
-                            failNote={"Could not check what is due this week."
-                                if dueFailed
-                                else ""}
-                            onRetry={loadDue}
-                        />
-                        <div className={side}>
-                            {if sideChecklist {
-                                <FirstRun
-                                    key="list"
-                                    title={checklistTitle}
-                                    items={checklist}
+                    <div key="body" className="flex flex-col gap-4">
+                        <OverviewFigures figures={figures}/>
+                        <div className={zones}>
+                            <NeedsYou
+                                groups={groups}
+                                pending={not dueLoaded}
+                                failNote={"Could not check what is due this week."
+                                    if dueFailed
+                                    else ""}
+                                onRetry={loadDue}
+                            />
+                            <div className={side}>
+                                {if sideChecklist {
+                                    <FirstRun
+                                        key="list"
+                                        title={checklistTitle}
+                                        items={checklist}
+                                    />
+                                }}
+                                <ThroughputChart
+                                    labels={doneLabels}
+                                    finished={doneCounts}
+                                    added={addedCounts}
+                                    pending={not doneWeeks and historyLoading}
+                                    failed={not doneWeeks and historyFailed}
+                                    onRetry={loadHistory}
                                 />
-                            }}
-                            <ThisWeek
-                                figures={figures}
-                                days={dayRows}
-                                chartState={chartState}
-                                chartNote={chartNote}
-                            />
-                            <ProjectBars rows={projRows}/>
+                                <PeopleTable rows={peopleRows}/>
+                            </div>
                         </div>
-                        <div className={wide}>
-                            <PeopleTable
-                                rows={peopleRows}
-                                dayNames={DAY_LABELS}
-                                todayIndex={todayIdx}
-                            />
-                        </div>
-                        {overTime()}
+                        {overTime(False)}
                     </div>
                 }  }
             </Reveal>

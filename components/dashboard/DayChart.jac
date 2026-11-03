@@ -1,81 +1,94 @@
-"""This week's moves to Done, one column per day. `days` rows are dicts:
-name, label, value, future (outlined, never drawn as zero) and today (the
-label turns primary and reads "Today")."""
+"""This week's moves to Done, one thin bar per day on one baseline. Only the
+week's peak and today carry a number; hover or focus gives any day's tip. `days`
+rows are dicts: name, label, value, future (outlined, never drawn as zero), today."""
 
-import from .ChartAxes { niceTop, YAxis, Gridlines }
+import from .ChartTip { ChartTip }
+
+glob DONE_COLOR: str = "var(--series-done)";
 
 def:pub DayChart(days: list[dict[str, any]]) -> JsxElement {
-    past = [
-        d
-        for d in days
-        if not d["future"]
-    ];
-    values = [d["value"] for d in past];
-    top = niceTop(values);
-    spoken = ", ".join([d["name"] + " " + str(d["value"]) for d in past]);
+    has hover: int = -1;
+
+    n = len(days);
+    peak = 0;
+    for d in days {
+        if not d["future"] and d["value"] > peak {
+            peak = d["value"];
+        }
+    }
+    top = peak if peak > 0 else 1;
     return
-        <div role="img" aria-label={"Tasks moved to Done: " + spoken + " so far"}>
-            <div className="flex gap-2 pt-6">
-                <YAxis values={values} plotH="h-24"/>
-                <div className="relative h-24 flex-1">
-                    <Gridlines/>
+        <div>
+            <div
+                className="relative flex h-28 border-b border-border-strong pt-5"
+                onMouseLeave={lambda { hover = -1; }}
+            >
+                {for (i, d) in enumerate(days) {
                     <div
-                        className="absolute inset-0 flex gap-2 px-1"
-                        aria-hidden="true"
+                        key={d["name"]}
+                        tabIndex={-1 if d["future"] else 0}
+                        className={"flex h-full flex-1 flex-col items-center justify-end rounded-t-sm focus-visible:-outline-offset-2 "
+                            + ("bg-bg-hover" if i == hover else "")}
+                        aria-label={d["name"]
+                            + (
+                                ": still ahead"
+                                    if d["future"]
+                                    else ": " + str(d["value"]) + " moved to Done"
+                            )}
+                        onMouseEnter={lambda { hover = -1 if d["future"] else i; }}
+                        onFocus={lambda { hover = i; }}
+                        onBlur={lambda { hover = -1; }}
                     >
-                        {for d in days {
+                        {if d["future"] {
                             <div
-                                key={d["name"]}
-                                className="relative flex h-full flex-1 items-end justify-center"
-                            >
-                                {if d["future"] {
-                                    <div
-                                        key="ahead"
-                                        className="h-3.5 w-full max-w-9 rounded-[4px] border border-dashed border-input"
-                                    />
-                                } else {
-                                    <div
-                                        key="bar"
-                                        className={"w-full max-w-9 rounded-t-[4px] "
-                                            + (
-                                                "bg-series-done"
-                                                    if d["value"] > 0
-                                                    else ""
-                                            )}
-                                        style={{
-                                            "height": str(d["value"] * 100.0 / top)
-                                                + "%"
-                                        }}
-                                    />
-                                } }
-                                {if not d["future"] {
+                                key="ahead"
+                                className="h-3.5 w-[18px] shrink-0 rounded-t-[4px] border border-dashed border-input"
+                            />
+                        } else {
+                            <div key="bar" className="contents">
+                                {if d["today"] or (peak > 0 and d["value"] == peak) {
                                     <span
                                         key="val"
-                                        className={"absolute mb-0.5 num text-xs "
-                                            + ("" if d["value"] > 0 else "text-subtle")}
-                                        style={{
-                                            "bottom": str(d["value"] * 100.0 / top)
-                                                + "%"
-                                        }}
+                                        className="num mb-1 shrink-0 text-xs text-text-secondary"
                                     >
                                         {str(d["value"])}
                                     </span>
                                 }}
+                                <div
+                                    className="w-[18px] shrink-0 rounded-t-[4px]"
+                                    style={{
+                                        "height": str(d["value"] * 100.0 / top) + "%",
+                                        "background": DONE_COLOR
+                                    }}
+                                />
                             </div>
-                        }}
+                        } }
                     </div>
-                </div>
+                }}
+                {if hover >= 0 and hover < n {
+                    <ChartTip
+                        key="tip"
+                        week={days[hover]["name"]}
+                        prefix=""
+                        i={hover}
+                        n={n}
+                        rows={[
+                            {
+                                "color": DONE_COLOR,
+                                "bar": True,
+                                "value": days[hover]["value"],
+                                "label": "moved to Done"
+                            }
+                        ]}
+                    />
+                }}
             </div>
-            <div className="mt-1.5 ml-9 flex gap-2 px-1 text-xs" aria-hidden="true">
+            <div className="mt-1.5 flex text-xs text-text-tertiary" aria-hidden="true">
                 {for d in days {
                     <span
                         key={d["name"]}
                         className={"flex-1 text-center whitespace-nowrap "
-                            + (
-                                "font-semibold text-primary"
-                                    if d["today"]
-                                    else "num text-subtle"
-                            )}
+                            + ("font-medium text-text-primary" if d["today"] else "")}
                     >
                         {"Today" if d["today"] else d["label"]}
                     </span>

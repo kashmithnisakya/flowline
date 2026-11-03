@@ -88,6 +88,16 @@ Past runs of the responsibility stay, as history. Deleting a role
 first. A task has a few runs, so the list is not paged. An unknown or foreign
 task reads empty. Never cached.
 
+::: walker ListAgentRuns h3
+
+What the AI page shows. `page` and `page_size` page the workspace's runs, newest
+first, each with the title and project of the task it ran on (a deleted task
+leaves its run, with an empty title). `attention` narrows it to what failed or
+requested changes in the last two weeks.
+
+**Reports** one [`AgentRunPage`](types.md#agentrunpage), which also carries
+today's run count and the daily limit. Never cached.
+
 ::: walker RetryRun h3
 
 Queues a `failed`, `skipped` or `cancelled` run again, clearing its error.

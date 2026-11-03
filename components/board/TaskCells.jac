@@ -1,24 +1,20 @@
-"""A board row's data cells from lg up, in GROUP_COLUMNS order: people,
-priority, checklist, due date and the linked GitHub number."""
+"""A board row's data cells from lg up: people, due date, the GitHub number and
+the AI chip, on the same grid as the column heads."""
 
 import from ...models { TaskRow }
 import from ..common.Avatar { AvatarStack }
-import from ..common.PriorityIcon { PriorityIcon }
-import from ..common.ProgressRing { ProgressRing }
 import from .GitHubChip { ghNumber, ghHref }
 import from .taskFacts { dueWords, isLate }
+import from .AiChip { AiChip }
 
-# The row grid: glyph, title, the five cells, the move button. The widths
-# are --row-cols (styles/global.css), which ColumnHeads resizes.
+# The row grid: glyph, title, the four cells, the move button. The widths are
+# --row-cols (styles/global.css), which ColumnHeads resizes.
 glob:pub GROUP_COLUMNS: str = "grid-cols-(--row-cols)",
      # The same grid from lg up, written out whole so Tailwind generates it.
      ROW_COLUMNS: str = "lg:grid-cols-(--row-cols)";
 
-def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
-    total = task.checklist_total;
-    done = task.checklist_done;
+def:pub TaskCells(task: TaskRow, today: str) -> JsxElement {
     num = ghNumber(task);
-    late = isLate(task, today);
     due = dueWords(task.due_date, task.status, today);
     return
         <>
@@ -31,31 +27,10 @@ def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
             </span>
             <span
                 data-col="1"
-                className="flex items-center"
-                title={task.priority + " priority"}
-            >
-                <PriorityIcon priority={task.priority}/>
-            </span>
-            <span data-col="2" className="flex items-center gap-2">
-                {if total > 0 {
-                    <span
-                        key="ring"
-                        className="flex items-center gap-1.5"
-                        title={str(done) + " of " + str(total) + " done"}
-                    >
-                        <ProgressRing done={done} total={total}/>
-                        <span className="num text-[12px] text-text-tertiary">
-                            {str(done) + "/" + str(total)}
-                        </span>
-                    </span>
-                }}
-            </span>
-            <span
-                data-col="3"
                 className={"num truncate text-[12px] "
                     + (
                         "font-medium text-danger"
-                            if late
+                            if isLate(task, today)
                             else (
                                 "font-medium text-text-primary"
                                     if due == "Today"
@@ -65,7 +40,7 @@ def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
             >
                 {due}
             </span>
-            <span data-col="4" className="min-w-0 truncate">
+            <span data-col="2" className="min-w-0 truncate">
                 {if num > 0 {
                     <a
                         key="gh"
@@ -90,6 +65,9 @@ def:pub TaskCells(task: TaskRow, today: str, color: str) -> JsxElement {
                             + str(num)}
                     </a>
                 }}
+            </span>
+            <span data-col="3" className="flex min-w-0 items-center">
+                <AiChip task={task}/>
             </span>
         </>;
 }
