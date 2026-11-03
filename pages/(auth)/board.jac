@@ -889,72 +889,76 @@ def:pub BoardPage -> JsxPage {
                                 onClear={clearFilters}
                             />
                         }}
-                        {if not (anyFilter and shownCount == 0) {
-                            <ColumnHeads key="heads"/>
-                        }}
-                        <div className="flex flex-col gap-2">
-                            {for (ci, key) in enumerate(colKeys) {
-                                <>
-                                    {if (not hideEmpty)
-                                        or groupCounts[ci] > 0
-                                        or key == doneKey {
-                                        <StepGroup
-                                            key={key}
-                                            columnKey={key}
-                                            label={colLabels[ci]}
-                                            kind={columnKind(key)}
-                                            color={colColors[ci]}
-                                            tasks={groupRows[ci]}
-                                            owner={colOwners[ci]}
-                                            ai={colAi[ci]}
-                                            proposal={<ProposalRow
-                                                title={proposal.title}
-                                                assignee={proposal.assignee}
-                                                due={proposal.due_date}
-                                                moving={proposal.kind == "move_task"}
-                                                onOpenAsk={askAgain}
-                                            />
-                                                if key == proposalKey and proposal
-                                                else None}
-                                            open={isOpen(key)}
-                                            overdue={groupOverdue[ci]}
-                                            today={today}
-                                            selectedId={selectedId}
-                                            doneKey={doneKey}
-                                            route={route}
-                                            onToggle={lambda { toggleGroup(key); }}
-                                            onOpen={openEdit}
-                                            onMove={arrowMove}
-                                            onDropTask={moveTo}
-                                            onDropBeside={moveBeside}
-                                            onAdd={openCreate
-                                                if key != doneKey
-                                                else None}
-                                            empty={"Done tasks are hidden"
-                                                if hideDone and key == doneKey
-                                                else "No tasks here"}
-                                            footer={<OlderDone
-                                                total={olderTotal
-                                                    if not hideDone
-                                                    else 0}
-                                                showing={showAllDone and not hideDone}
-                                                shown={len(olderShown)}
-                                                more={olderMore}
-                                                loading={loadingOlder}
-                                                onToggle={toggleOlder}
-                                                onMore={lambda { loadOlder(
-                                                    olderPage + 1,
-                                                    fProject,
-                                                    fAssignee,
-                                                    fCategory
-                                                ); }}
-                                            />
-                                                if key == doneKey
-                                                else None}
-                                        />
-                                    }}
-                                </>
+                        <div className="board-rows flex min-w-0 flex-col gap-3">
+                            {if not (anyFilter and shownCount == 0) {
+                                <ColumnHeads key="heads"/>
                             }}
+                            <div className="flex flex-col gap-2">
+                                {for (ci, key) in enumerate(colKeys) {
+                                    <>
+                                        {if (not hideEmpty)
+                                            or groupCounts[ci] > 0
+                                            or key == doneKey {
+                                            <StepGroup
+                                                key={key}
+                                                columnKey={key}
+                                                label={colLabels[ci]}
+                                                kind={columnKind(key)}
+                                                color={colColors[ci]}
+                                                tasks={groupRows[ci]}
+                                                owner={colOwners[ci]}
+                                                ai={colAi[ci]}
+                                                proposal={<ProposalRow
+                                                    title={proposal.title}
+                                                    assignee={proposal.assignee}
+                                                    due={proposal.due_date}
+                                                    moving={proposal.kind
+                                                        == "move_task"}
+                                                    onOpenAsk={askAgain}
+                                                />
+                                                    if key == proposalKey and proposal
+                                                    else None}
+                                                open={isOpen(key)}
+                                                overdue={groupOverdue[ci]}
+                                                today={today}
+                                                selectedId={selectedId}
+                                                doneKey={doneKey}
+                                                route={route}
+                                                onToggle={lambda { toggleGroup(key); }}
+                                                onOpen={openEdit}
+                                                onMove={arrowMove}
+                                                onDropTask={moveTo}
+                                                onDropBeside={moveBeside}
+                                                onAdd={openCreate
+                                                    if key != doneKey
+                                                    else None}
+                                                empty={"Done tasks are hidden"
+                                                    if hideDone and key == doneKey
+                                                    else "No tasks here"}
+                                                footer={<OlderDone
+                                                    total={olderTotal
+                                                        if not hideDone
+                                                        else 0}
+                                                    showing={showAllDone
+                                                        and not hideDone}
+                                                    shown={len(olderShown)}
+                                                    more={olderMore}
+                                                    loading={loadingOlder}
+                                                    onToggle={toggleOlder}
+                                                    onMore={lambda { loadOlder(
+                                                        olderPage + 1,
+                                                        fProject,
+                                                        fAssignee,
+                                                        fCategory
+                                                    ); }}
+                                                />
+                                                    if key == doneKey
+                                                    else None}
+                                            />
+                                        }}
+                                    </>
+                                }}
+                            </div>
                         </div>
                     </div>
                 }  }

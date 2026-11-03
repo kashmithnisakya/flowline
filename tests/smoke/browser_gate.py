@@ -267,6 +267,12 @@ def ask_proposal_once(page) -> None:
     expect(card.get_by_text(title, exact=True)).to_be_visible()
     row = page.locator("[data-proposal]")
     expect(row.get_by_text(title, exact=True)).to_be_visible()
+    # The gate's window is 1280 wide, where docked Ask leaves the board the least
+    # room: the columns give way so the title still reads in full.
+    assert row.get_by_text(title, exact=True).evaluate("e => e.scrollWidth <= e.clientWidth"), "docked Ask squeezed the title"
+    heads = page.locator("[data-board-heads]")
+    expect(heads.get_by_text("Due", exact=True)).to_be_visible()
+    expect(heads.get_by_text("GitHub", exact=True)).to_be_hidden()
     assert api(page, "ListTasks", {"scope": "all", "q": title}).get("total") == 0, "a proposal saved a task"
 
     step("ask: Apply makes it a real task and the dashed row goes")
