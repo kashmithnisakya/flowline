@@ -24,7 +24,9 @@ A task's span on the timeline:
 Swapped dates are put back in order. A task appears when its span overlaps the
 window, sorted by start; `starts` and `ends` hold each row's span, index-aligned
 with `rows`. At most 400 rows are returned (`truncated` says when more matched,
-`total` how many). Open tasks with no date are counted in `unscheduled`
+`total` how many). `counts` is the line bar's, the project's working set per
+step keyed by step id, dated or not, so it matches the board. Open tasks with no
+date are counted in `unscheduled`
 instead.
 
 ```bash
@@ -40,7 +42,8 @@ curl -X POST $BASE/walker/RoadmapSnapshot -H "Authorization: Bearer $TOKEN" \
     "rows": [ { "id": "<task-id>", "title": "Write the migration plan", "start_date": "2026-09-14", "due_date": "2026-09-18" } ],
     "starts": ["2026-09-14"],
     "ends": ["2026-09-18"],
-    "unscheduled": 7, "total": 1, "truncated": false
+    "unscheduled": 7, "total": 1, "truncated": false,
+    "counts": { "<step-id>": 3 }
   }
 ]
 ```

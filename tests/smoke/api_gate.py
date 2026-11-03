@@ -274,6 +274,10 @@ def assert_parity(label, project_ids, member_ids, expected_links):
         for s in lines[pid]:
             got_counts[s["id"]] = got_counts.get(s["id"], 0) + s["task_count"]
     check(f"{label}: GetFlowLine step counts, summed over the projects", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    for pid in project_ids:
+        want = {s["id"]: s["task_count"] for s in lines[pid]}
+        road = report("RoadmapSnapshot", {"project_id": pid}).get("counts")
+        check(f"{label}: RoadmapSnapshot's line counts equal the flow line's", road == want, f"{road} vs {want}")
     default_line = report("GetFlowLine", {"with_counts": True}) or []
     check(f"{label}: GetFlowLine with no project counts the earliest-created one",
           [(s["id"], s["task_count"]) for s in default_line] == [(s["id"], s["task_count"]) for s in steps], (default_line, steps))

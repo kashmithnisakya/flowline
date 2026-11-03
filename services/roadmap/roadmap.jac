@@ -5,19 +5,26 @@ import from models {
     Project,
     Task,
     TaskRow,
+    WorkflowStep,
     hydrate_rows,
     resolve,
     owned,
     project_open,
-    done_in_window
+    project_done_since,
+    done_in_window,
+    steps_of
 }
-import from services.util { today_iso, shift_day, iso_day, ensure_tallies }
+import from services.flowlines.flowlines { landing_step }
+import from services.util { today_iso, shift_day, iso_day, ensure_tallies, done_cutoff }
 
-glob ROADMAP_MAX_ROWS: int = 400;
+glob ROADMAP_MAX_ROWS: int = 400,
+     # How long a Done task stays in the board's working set.
+     WORKING_DONE_DAYS: int = 7;
 
 obj RoadmapData {
     """The tasks whose span overlaps the window, with that span (`starts` /
-    `ends` index-aligned with `rows`), plus the open tasks with no dates."""
+    `ends` index-aligned with `rows`), plus the open tasks with no dates.
+    `counts` is the line bar's: the working set per step, dated or not."""
     has from_date: str,
         to_date: str,
         rows: list[TaskRow],
@@ -25,7 +32,33 @@ obj RoadmapData {
         ends: list[str],
         unscheduled: int,
         total: int,
-        truncated: bool;
+        truncated: bool,
+        counts: dict[str, int];
+}
+
+
+# The line bar's numbers, by the board's rule: open plus recent Done on each step
+# (each status, with no flow line), so the two pages never disagree.
+def line_counts(holder: Root, working: list[Task]) -> dict[str, int] {
+    line_steps = steps_of(holder);
+    line_steps.sort(key=lambda (s: WorkflowStep) { s.sort_order; });
+    counts: dict[str, int] = {};
+    known: list[str] = [];
+    first_of_kind: dict[str, str] = {};
+    for st in line_steps {
+        counts[jid(st)] = 0;
+        known.append(jid(st));
+        if st.kind not in first_of_kind {
+            first_of_kind[st.kind] = jid(st);
+        }
+    }
+    for t in working {
+        key = landing_step(t, known, first_of_kind) if known else t.status;
+        if key {
+            counts[key] = counts.get(key, 0) + 1;
+        }
+    }
+    return counts;
 }
 
 
@@ -59,18 +92,24 @@ walker:protect RoadmapSnapshot {
         if isinstance(p, Project) and owned(here, p) {
             visit [p];
         } else {
-            report self.plan(here, [], "");
+            report self.plan(here, [], "", {});
         }
     }
 
     can gather with Project entry {
-        report self.plan(root, project_open(here), jid(here));
+        open_rows = project_open(here);
+        recent = project_done_since(here, done_cutoff(WORKING_DONE_DAYS));
+        report self.plan(
+            root, open_rows, jid(here), line_counts(root, open_rows + recent)
+        );
         disengage;
     }
 
     # `open` is the project's open tasks; its Done candidates are read
     # workspace-wide and kept by their project link. No project, no rows.
-    def plan(holder: Root, open: list[Task], only: str) -> RoadmapData {
+    def plan(
+        holder: Root, open: list[Task], only: str, counts: dict[str, int]
+    ) -> RoadmapData {
         lo = iso_day(self.from_date);
         hi = iso_day(self.to_date);
         if not lo or not hi or lo > hi {
@@ -111,7 +150,8 @@ walker:protect RoadmapSnapshot {
             ends=[str(row[2]) for row in page],
             unscheduled=unscheduled,
             total=len(placed),
-            truncated=len(placed) > ROADMAP_MAX_ROWS
+            truncated=len(placed) > ROADMAP_MAX_ROWS,
+            counts=counts
         );
     }
 }
