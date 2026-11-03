@@ -4,21 +4,21 @@ column order. A bar opens the board's task sheet in place."""
 
 import from "sonner" { toast }
 import from "react" { useEffect }
-import from "@jac/runtime" { Link }
 import from ...models { Project, MemberView, TaskRow, TaskView, StepView, RoleView }
 import from ...constants { STATUSES, STATUS_KIND, KIND_STATUS, KIND_COLORS }
 import from ...services.roadmap.roadmap { RoadmapSnapshot }
 import from ...services.tasks.tasks { UpdateTask, DeleteTask }
 import from ...services.projects.projects { AssignToProject }
 import from ...services.roster.roster { ListMembers }
-import from ...lib.workspace { loadWorkspace, forgetWorkspace }
+import from ...lib.workspace { loadWorkspace, forgetWorkspace, cachedProjects }
 import from ...lib.project { currentProject }
 import from ...lib.filters { defaultProject }
 import from ...components.flowlines.kinds { colorKey, moveRefusal }
 import from ...components.roadmap.span { shiftIso, mondayOf }
 import from ...components.roadmap.Timeline { RoadmapTimeline }
 import from ...components.roadmap.RoadmapToolbar { RoadmapToolbar }
-import from ...components.common.ProjectLine { ProjectLine }
+import from ...components.common.ProjectHead { ProjectHead }
+import from ...components.common.LineBar { LineBar }
 import from ...components.roadmap.RoadmapEmpty { RoadmapEmpty }
 import from ...components.roadmap.RoadmapNotes { RoadmapNotes }
 import from ...components.board.TaskDialog { TaskDialog }
@@ -55,7 +55,9 @@ def:pub RoadmapPage -> JsxPage {
         data: any = None,
         loading: bool = True,
         failed: bool = False,
-        projects: list[Project] = [],
+        projects: list[Project] = cachedProjects(),
+        # The workspace read has landed, so the line bar names the real steps.
+        shared: bool = False,
         members: list[MemberView] = [],
         steps: list[StepView] = [],
         roleRows: list[RoleView] = [],
@@ -118,7 +120,7 @@ def:pub RoadmapPage -> JsxPage {
     }
     summary = str(len(rows)) + " scheduled";
     if late > 0 {
-        summary = summary + " · " + str(late) + " past due";
+        summary = summary + ", " + str(late) + " past due";
     }
     activeProjects = [
         p
@@ -169,15 +171,34 @@ def:pub RoadmapPage -> JsxPage {
     groups = stepGroups(colKeys);
     colLabels: list[str] = [];
     handoffKeys: list[str] = [];
+    colKinds: list[str] = [];
+    colColors: list[str] = [];
+    colCounts: list[int] = [];
+    colAi: list[bool] = [];
     for key in colKeys {
         label = key;
+        keyKind = columnKind(key);
+        tint = KIND_COLORS[keyKind] if keyKind in KIND_COLORS else "slate";
+        runsAi = False;
         for st in steps {
             if st.id == key {
                 label = st.name;
+                tint = colorKey(st.color);
+                runsAi = len(st.ai) > 0;
+            }
+        }
+        onScreen = 0;
+        for g in groups {
+            if g["key"] == key {
+                onScreen = len(g["items"]);
             }
         }
         colLabels.append(label);
-        if columnKind(key) in HANDOFF_KINDS {
+        colKinds.append(keyKind);
+        colColors.append(tint);
+        colCounts.append(onScreen);
+        colAi.append(runsAi);
+        if keyKind in HANDOFF_KINDS {
             handoffKeys.append(key);
         }
     }
@@ -197,38 +218,35 @@ def:pub RoadmapPage -> JsxPage {
     }
 
     return
-        <div className="flex min-w-0 flex-col gap-5">
-            <header
-                className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3"
-            >
-                <div className="flex min-w-0 flex-col gap-1">
-                    <ProjectLine projects={activeProjects} project={fProject}/>
-                    <h1 className="page-title">Roadmap</h1>
-                    <p className="page-subtitle num min-h-5">
-                        {summary if data else ""}
-                        {if data and unscheduled > 0 {
-                            <>
-                                {" · "}
-                                <Link
-                                    key="undated"
-                                    to="/board"
-                                    title="Dates are set in the task sheet on the board"
-                                    className="underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
-                                >
-                                    {str(unscheduled) + " without dates"}
-                                </Link>
-                            </>
-                        }}
-                    </p>
+        <div className="flex min-w-0 flex-col gap-3">
+            <ProjectHead projects={activeProjects} project={fProject} view="roadmap">
+                <div className="min-h-[30px]">
+                    {if shared and fProject {
+                        <LineBar
+                            key="line"
+                            name="Flow line"
+                            keys={colKeys}
+                            labels={colLabels}
+                            kinds={colKinds}
+                            colors={colColors}
+                            counts={colCounts}
+                            ai={colAi}
+                        />
+                    }}
                 </div>
-                <RoadmapToolbar
-                    rangeLabel={prettyDay(windowStart) + " – " + prettyDay(windowEnd)}
-                    onEarlier={lambda { stepWindow(-STEP_WEEKS); }}
-                    onToday={goToday}
-                    onLater={lambda { stepWindow(STEP_WEEKS); }}
-                    busy={loading and bool(data)}
-                />
-            </header>
+            </ProjectHead>
+            <RoadmapToolbar
+                rangeLabel={prettyDay(windowStart)
+                    + " to "
+                    + prettyDay(windowEnd)
+                    + ", twelve weeks"}
+                onEarlier={lambda { stepWindow(-STEP_WEEKS); }}
+                onToday={goToday}
+                onLater={lambda { stepWindow(STEP_WEEKS); }}
+                summary={summary if data else ""}
+                undated={unscheduled}
+                busy={loading and bool(data)}
+            />
             <Reveal ready={bool(data) or not loading} frame={loadFrame()}>
                 {if failed and not data {
                     <LoadFailed

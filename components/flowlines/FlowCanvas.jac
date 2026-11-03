@@ -18,16 +18,28 @@ import from .geometry {
     placeChips
 }
 import from .lanes { LANE_LABEL_W, laneRects, laneWires }
-import from .kinds { DOT_FILL, CARRY_LABEL, colorKey, triggerNote }
+import from .kinds {
+    DOT_FILL,
+    CARRY_LABEL,
+    colorKey,
+    triggerNote,
+    ownerWord,
+    nodeCount
+}
 import from .EdgeEditor { EdgeEditor }
 import from .StepNode { StepNode }
+import from .LaneLabels { LaneLabels }
 import from ..ui.button { Button }
 
-glob EDGE_EDITOR_H: float = 370.0,
+glob EDGE_EDITOR_H: float = 470.0,
+     EDGE_EDITOR_W: float = 320.0,
+     # The AI chip's drop below a card: its 22px and a 6px gap.
+     AI_CHIP_H: float = 28.0,
+     # A card around its words: padding and border (26), icon and gap (22).
+     NODE_CHROME: float = 48.0,
      CHIP_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
-     NAME_FONT: str = "600 12.5px 'Geist Variable', Arial, sans-serif",
+     NAME_FONT: str = "600 13px 'Geist Variable', Arial, sans-serif",
      META_FONT: str = "12px 'Geist Variable', Arial, sans-serif",
-     COUNT_FONT: str = "12px 'Geist Mono Variable', Menlo, monospace",
      # Below this zoom the transitions keep their lines but drop their words:
      # at a whole-line overview the chips would bury the steps.
      CHIP_MIN_ZOOM: float = 0.45;
@@ -180,22 +192,20 @@ def:pub FlowCanvas(
     }
     laneMode = len(lanes) > 0;
     detail = detailOf(zoom);
-    # What each node's text needs (StepNode's anatomy): padding (22) around
-    # the pill (padding 20, glyph and gap 17, name); above LOW detail the
-    # count chip beside it, and in flow mode room for the owner below.
+    # What each card's words need (StepNode's anatomy): the name; above LOW
+    # detail the count line too, and in flow mode the owner's.
     needLow: dict[str, float] = {};
     needMid: dict[str, float] = {};
     needLane: dict[str, float] = {};
     need: dict[str, float] = {};
     for s in steps {
-        wantPill = 37.0 + textWidth(s.name, NAME_FONT, 7.6);
-        countText = str(s.task_count) + (" done" if s.kind == "done" else " open");
-        wantRow = wantPill + 8.0 + textWidth(countText, COUNT_FONT, 7.3) + 12.0;
-        owner = s.owner.strip() if s.owner else "";
-        wantOwner = textWidth("Anyone" if owner == "anyone" else owner, META_FONT, 6.6);
-        needLow[s.id] = wantPill + 22.0;
-        needLane[s.id] = wantRow + 22.0;
-        needMid[s.id] = (wantOwner if wantOwner > wantRow else wantRow) + 22.0;
+        wantName = textWidth(s.name, NAME_FONT, 7.6);
+        wantCount = textWidth(nodeCount(s), META_FONT, 6.6);
+        wantOwner = textWidth(ownerWord(s.owner), META_FONT, 6.6);
+        wantRow = wantCount if wantCount > wantName else wantName;
+        needLow[s.id] = wantName + NODE_CHROME;
+        needLane[s.id] = wantRow + NODE_CHROME;
+        needMid[s.id] = (wantOwner if wantOwner > wantRow else wantRow) + NODE_CHROME;
         if detail == "low" {
             need[s.id] = needLow[s.id];
         } else {
@@ -224,7 +234,8 @@ def:pub FlowCanvas(
         if r[1] + r[3] + 120.0 > svgH {
             svgH = r[1] + r[3] + 120.0;
         }
-        obstacles.append([r[0] - 6.0, r[1] - 6.0, r[2] + 12.0, r[3] + 12.0]);
+        drop = AI_CHIP_H if len(s.ai) > 0 else 0.0;
+        obstacles.append([r[0] - 6.0, r[1] - 6.0, r[2] + 12.0, r[3] + 12.0 + drop]);
     }
     # The lane label column covers the left of the drawing at the fitted pan;
     # a chip placed under it would be hidden. It carries no 6px margin.
@@ -366,6 +377,12 @@ def:pub FlowCanvas(
         ey0 = ny0;
         ex1 = nx1;
         ey1 = ny1;
+        for s in steps {
+            below = rects[s.id][1] + rects[s.id][3] + AI_CHIP_H;
+            if len(s.ai) > 0 and below > ey1 {
+                ey1 = below;
+            }
+        }
         for l in links {
             if l["text"] and float(l["cx"]) > -9000.0 {
                 half = float(l["cw"]) / 2.0;
@@ -414,7 +431,7 @@ def:pub FlowCanvas(
     }
     edgeFromName = "";
     edgeToName = "";
-    edgeHad = False;
+    edgeLeft = 0.0;
     # The editor opens below the arrow, lifted as far as it must be to stay
     # inside the viewport: the canvas clips what overflows, Save included.
     edgeTop = 0.0;
@@ -428,11 +445,18 @@ def:pub FlowCanvas(
         if edgeTop < 8.0 {
             edgeTop = 8.0;
         }
+        # And kept clear of the sides: the popover is centred on this x.
+        edgeLeft = float(activeEdge["mx"]) + panX;
+        paneW = float(pane.clientWidth) if pane else 0.0;
+        halfW = EDGE_EDITOR_W / 2.0 + 8.0;
+        if paneW > 0.0 and edgeLeft + halfW > paneW {
+            edgeLeft = paneW - halfW;
+        }
+        if edgeLeft < halfW {
+            edgeLeft = paneW / 2.0 if paneW < halfW * 2.0 else halfW;
+        }
         edgeFromName = byId[activeEdge["from"]].name;
         edgeToName = byId[activeEdge["to"]].name;
-        edgeHad = bool(
-            activeEdge["label"] or activeEdge["carries"] or activeEdge["trigger"]
-        );
     }
     connecting = bool(connectFrom);
 
@@ -469,11 +493,14 @@ def:pub FlowCanvas(
             ref={viewportRef}
             data-canvas="flow"
             className={"relative h-full w-full touch-none select-none overflow-hidden bg-background"
-                + (
-                    " outline-2 -outline-offset-2 outline-primary/30"
-                        if editing
-                        else " cursor-grab active:cursor-grabbing"
-                )}
+                + ("" if editing else " cursor-grab active:cursor-grabbing")}
+            style={{}
+                if laneMode
+                else {
+                    "backgroundImage": "radial-gradient(var(--border-strong) 1px, transparent 1px)",
+                    "backgroundSize": "20px 20px",
+                    "backgroundPosition": str(panX) + "px " + str(panY) + "px"
+                }}
             onClick={lambda { if onCanvasClick { onCanvasClick(); }}}
         >
             {for lr in laneRows {
@@ -593,7 +620,7 @@ def:pub FlowCanvas(
                                 {if l["auto"] {
                                     <span
                                         key="auto"
-                                        className="text-primary"
+                                        className="text-text-tertiary"
                                         title={l["note"]}
                                     >
                                         {l["auto"]}
@@ -633,75 +660,13 @@ def:pub FlowCanvas(
                 }}
             </div>
             {if laneMode {
-                <div
+                <LaneLabels
                     key="lanelabels"
-                    className="absolute inset-y-0 z-30 border-r bg-background"
-                    style={{
-                        "left": str(labelLeft) + "px",
-                        "width": str(laneLabelW) + "px"
-                    }}
-                    onClick={lambda (e: MouseEvent) { e.stopPropagation(); }}
-                    onPointerDown={lambda (e: any) { e.stopPropagation(); }}
-                >
-                    {for lr in laneRows {
-                        <div
-                            key={lr["key"]}
-                            className={"absolute inset-x-0 flex flex-col justify-center overflow-hidden px-4"
-                                + ("" if lr["first"] else " border-t border-border")
-                                + (" bg-accent" if lr["hover"] else "")}
-                            style={{"top": lr["top"], "height": lr["h"]}}
-                            onMouseEnter={lambda { hoverLane = lr["lane"]; }}
-                            onMouseLeave={lambda { hoverLane = ""; }}
-                        >
-                            {if lr["manage"] {
-                                <a
-                                    key="name-link"
-                                    href="/workspace?tab=roles"
-                                    title="Manage roles in Workspace"
-                                    className="flex min-w-0 items-center gap-1.5 text-sm leading-5 font-semibold text-foreground no-underline underline-offset-2 hover:underline"
-                                >
-                                    <span className={"step-swatch " + lr["dot"]}/>
-                                    <span className="truncate">{lr["label"]}</span>
-                                </a>
-                            } else {
-                                <div
-                                    key="name"
-                                    className="flex min-w-0 items-center gap-1.5 text-sm leading-5 font-semibold"
-                                >
-                                    <span className={"step-swatch " + lr["dot"]}/>
-                                    <span className="truncate">{lr["label"]}</span>
-                                </div>
-                            } }
-                            {if lr["rows"] >= 2 and lr["short"] {
-                                <div
-                                    key="sub"
-                                    className={"truncate pl-4 text-xs leading-[18px] "
-                                        + (
-                                            "text-warning"
-                                                if lr["warn"]
-                                                else "text-muted-foreground"
-                                        )}
-                                    title={lr["sub"]}
-                                >
-                                    {lr["short"]}
-                                </div>
-                            }}
-                            {if lr["rows"] >= 3 and laneLabelW >= LANE_LABEL_W {
-                                <div
-                                    key="totals"
-                                    className={"num truncate pl-4 text-xs leading-[18px] "
-                                        + (
-                                            "text-muted-foreground"
-                                                if lr["hover"]
-                                                else "text-subtle"
-                                        )}
-                                >
-                                    {lr["totals"]}
-                                </div>
-                            }}
-                        </div>
-                    }}
-                </div>
+                    rows={laneRows}
+                    left={labelLeft}
+                    width={laneLabelW}
+                    onHover={lambda (lane: str) { hoverLane = lane; }}
+                />
             }}
             {if len(steps) == 0 {
                 <div
@@ -737,16 +702,13 @@ def:pub FlowCanvas(
                     fromName={edgeFromName}
                     toName={edgeToName}
                     form={edgeForm}
-                    left={float(activeEdge["mx"]) + panX}
+                    left={edgeLeft}
                     top={edgeTop}
-                    clearable={edgeHad}
                     onField={onEdgeField}
                     onSave={lambda { if onSaveEdge {
                         onSaveEdge(activeEdge["from"], activeEdge["to"], edgeForm);
                     }}}
-                    onClear={lambda { if onSaveEdge {
-                        onSaveEdge(activeEdge["from"], activeEdge["to"], {});
-                    }}}
+                    onCancel={lambda { if onSelectEdge { onSelectEdge("", {}); }}}
                     onDelete={lambda { if onDeleteEdge {
                         onDeleteEdge(activeEdge["from"], activeEdge["to"]);
                     }}}

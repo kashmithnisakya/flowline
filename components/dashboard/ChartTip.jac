@@ -17,7 +17,9 @@ def:pub SeriesKey(color: str, bar: bool = False) -> JsxElement {
 }
 
 # `rows` are dicts: color (empty for no key), bar, value, label.
-def:pub ChartTip(week: str, i: int, n: int, rows: list[dict[str, any]]) -> JsxElement {
+def:pub ChartTip(
+    week: str, i: int, n: int, rows: list[dict[str, any]], prefix: str = "Week of "
+) -> JsxElement {
     return
         <div
             className="pointer-events-none absolute top-1 z-10 min-w-32 rounded-lg border bg-popover px-2.5 py-2 text-xs whitespace-nowrap shadow-md"
@@ -28,7 +30,7 @@ def:pub ChartTip(week: str, i: int, n: int, rows: list[dict[str, any]]) -> JsxEl
                     else "translateX(calc(-100% - 14px))"
             }}
         >
-            <div className="mb-1 text-muted-foreground">{"Week of " + week}</div>
+            <div className="mb-1 text-muted-foreground">{prefix + week}</div>
             {for r in rows {
                 <div
                     key={r["label"]}
