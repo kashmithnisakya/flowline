@@ -361,6 +361,18 @@ def parity_suite(project_id, member_id, tag):
           moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
     links[row["id"]] = (p2_id, [m2_id])
     assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
+    log_wording_check(project_id, steps, tag)
+
+
+def log_wording_check(project_id, steps, tag):
+    # A new task's first line names the step the org calls it, as a move's does,
+    # not the status behind it ("In Progress").
+    doing = next(s for s in steps if s["name"] == "Doing")
+    task = report("CreateTask", {"title": f"Log wording {tag}", "project_id": project_id, "step_id": doing["id"]})
+    today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
+    rows = report("ListLogEntries", {"task_id": task.get("id", ""), "from_date": (today - timedelta(days=1)).isoformat(),
+                                     "to_date": (today + timedelta(days=1)).isoformat()}).get("rows", [])
+    check("log: a new task is added to its step by name", [r.get("activity") for r in rows] == ["Added to Doing"], rows)
 
 
 def log_pages(body):
