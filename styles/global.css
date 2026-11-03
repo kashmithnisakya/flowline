@@ -180,6 +180,7 @@
    ColumnHeads overrides it with this browser's widths. */
 :root {
     --row-cols: 28px minmax(0, 1fr) 88px 84px 84px 132px 40px;
+    --row-cols-tight: 28px minmax(0, 1fr) 88px 84px 132px 40px;
 }
 
 /* ---- shadcn aliases. The registry reads these names; they point at the
@@ -809,6 +810,25 @@
 /* ---- Classes that must beat the registry primitives' own utilities sit
    outside any layer (unlayered rules outrank @layer utilities). A call site
    still overrides one with an important utility such as `px-4!`. */
+
+/* The board's rows answer the room they have, not the window: with Ask docked or
+   in a small window the GitHub column goes first, so a title stays readable. */
+.board-rows {
+    container-type: inline-size;
+}
+@media (min-width: 1024px) {
+    @container (max-width: 859px) {
+        .board-rows > * {
+            --row-cols: var(--row-cols-tight);
+        }
+        .board-rows [data-task-row] [data-col="2"],
+        .board-rows [data-proposal] [data-col="2"],
+        .board-rows [data-head="3"],
+        .board-rows [data-proposal-note] {
+            display: none;
+        }
+    }
+}
 
 /* Ghost filter trigger (a SelectTrigger or button); data-active="true"
    turns it into an outlined control in foreground weight 600. */

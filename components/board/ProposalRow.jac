@@ -24,7 +24,10 @@ def:pub ProposalRow(
                 <span className="min-w-0 truncate text-[13.5px] font-medium">
                     {title}
                 </span>
-                <span className="shrink-0 text-[12px] text-ai">
+                <span
+                    data-proposal-note="true"
+                    className="shrink-0 text-[12px] text-ai"
+                >
                     {"Proposed move" if moving else "Proposed by Ask"}
                 </span>
             </span>
@@ -36,7 +39,7 @@ def:pub ProposalRow(
             <span className="num hidden text-[12px] text-text-secondary lg:inline">
                 {prettyDay(due) if due else ""}
             </span>
-            <span className="hidden lg:inline"/>
+            <span data-col="2" className="hidden lg:inline"/>
             <span className="hidden text-[12px] text-ai lg:inline">
                 Not applied yet
             </span>

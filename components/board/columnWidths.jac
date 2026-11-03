@@ -5,6 +5,8 @@ the row; once set, the columns sit left and the slack goes to the end."""
 
 glob:pub COLUMN_WIDTHS_KEY: str = "flowline-board-columns-v2",
      DEFAULT_WIDTHS: list[int] = [0, 88, 84, 84, 132],
+     # The column a tight row drops (see .board-rows in styles/global.css).
+     GITHUB_COLUMN: int = 3,
      MIN_WIDTH: int = 48,
      MAX_WIDTH: int = 360,
      MIN_TITLE: int = 160,
@@ -58,11 +60,16 @@ def:pub keepWidths(widths: list[int]) -> None {
 def:pub applyWidths(widths: list[int]) {
     title = widths[0];
     cols = "28px minmax(0," + ((str(title) + "px") if title > 0 else "1fr") + ")";
+    tight = cols;
     for j in range(1, len(widths)) {
         cols = cols + " " + str(widths[j]) + "px";
+        if j != GITHUB_COLUMN {
+            tight = tight + " " + str(widths[j]) + "px";
+        }
     }
     tail = " minmax(40px,1fr)" if title > 0 else " 40px";
     document.documentElement.style.setProperty("--row-cols", cols + tail);
+    document.documentElement.style.setProperty("--row-cols-tight", tight + tail);
 }
 
 def dropWidths {
