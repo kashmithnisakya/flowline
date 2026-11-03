@@ -313,6 +313,9 @@ def parity_suite(project_id, member_id, tag):
     for s in steps:
         by_kind.setdefault(s["kind"], s["id"])
     check("parity: the Simple template is applied", len(steps) == 4, str(steps)[:200])
+    review = next((s for s in steps if s["name"] == "Review"), {})
+    check("parity: the Simple template's way back fires on changes requested",
+          "changes_requested" in review.get("next_triggers", []), review)
     p2 = report("SaveProject", {"name": "CI Parity", "description": ""})
     p2_id = str(find_key(p2, "id", "_jac_id") or "")
     m2 = report("SaveMember", {"first_name": "Omar", "last_name": "Diaz"})

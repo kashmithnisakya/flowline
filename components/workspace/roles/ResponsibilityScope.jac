@@ -6,6 +6,7 @@ dialog's. No step picked means every step the role owns.
 import from ....models { StepView }
 import from ...ui.label { Label }
 import from ..icons { IconCheck }
+import from .SendBackNote { SendBackNote }
 
 glob MODES: list[list[str]] = [
          [
@@ -90,6 +91,9 @@ def:pub ResponsibilityScope(
                         </button>
                     }}
                 </div>
+                {if mode == "request_changes" {
+                    <SendBackNote key="back" picked={picked} steps={steps}/>
+                }}
             </div>
         </div>;
 }
