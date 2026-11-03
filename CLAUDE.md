@@ -288,7 +288,10 @@ people it tracks are roster members.
   (the readers cacheable, the task lists not, the mutators writing) and
   `browser_gate.py` counts the requests (board, flow line, roadmap, board
   make one `/user/me` and no `GetWorkspace`; a People-tab save then the
-  roadmap makes exactly one). The sidebar's projects list never reads the
+  roadmap makes exactly one). Since 0.38 a clean build ignores `@effects`
+  (jaseci-labs/jac#10410), so most declared readers really are uncached for
+  now: `EFFECTS_REGRESSION` in the API gate makes those warn, and is emptied
+  once the pin carries the fix. The sidebar's projects list never reads the
   workspace: `rememberWorkspace` fires `flowline:workspace` and the sidebar
   redraws from `cachedProjects()`. The trap that hid the cache
   until Sep 2026: a server `def:pub` in a module the client imports
