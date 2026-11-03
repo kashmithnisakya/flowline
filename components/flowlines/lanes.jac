@@ -646,8 +646,8 @@ def:pub laneWires(
         sideKeys[ko].append(idx + 1);
         sideKeys[ki].append(0 - (idx + 1));
     }
-    for k in list(sideKeys.keys()) {
-        uses = sideKeys[k];
+    for sideKey in list(sideKeys.keys()) {
+        uses = sideKeys[sideKey];
         keyed: list[list[float]] = [];
         for u in uses {
             idx = (u if u > 0 else 0 - u) - 1;

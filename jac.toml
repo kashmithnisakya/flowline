@@ -1,6 +1,6 @@
 [project]
 name = "flowline"
-jac-version = "==0.38.2"
+jac-version = "==0.39.0"
 default-app = "flowline"
 
 # Two apps, so a deploy runs two Deployments behind one gateway. An [apps]
