@@ -77,7 +77,7 @@ def:pub Avatar(
 ) -> JsxElement {
     return
         <span
-            className={"inline-flex shrink-0 select-none items-center justify-center rounded-md font-semibold leading-none tracking-normal "
+            className={"inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold leading-none tracking-normal "
                 + SIZES.get(size, SIZES["sm"])
                 + " "
                 + hueFor(name, color)

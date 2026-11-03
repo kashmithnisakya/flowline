@@ -66,11 +66,11 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 [client.app_meta_data]
 title = "Flowline"
-description = "Draw how your team works. The steps you name become the board's columns, and every card that moves writes a line in the daily log. Open source, MIT licensed."
+description = "Draw how your team works. The board follows. Name your steps once, and every move lands in the task's own history. Open source, MIT licensed."
 theme_color = "#ECEEEA"
 icon = "/static/brand/favicon.svg"
 og_title = "Flowline: draw how your team works"
-og_description = "Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on."
+og_description = "Name your steps once. The board stacks your work under them, every move lands in the task's own history, and GitHub and AI act only where you switch them on."
 og_type = "website"
 og_image = "${HOST:-http://localhost:8000}/static/brand/og-image.png"
 og_image_width = "1200"
@@ -185,19 +185,23 @@ default = "server"
 # localStorage, which would otherwise infer server.
 "components.common.StepBadge" = "client"
 "lib.project" = "client"
+# The Workspace page's section list, address parsing and scroll hold.
+"components.workspace.sections" = "client"
 "components.chrome.SidebarLink.isCurrent" = "client"
 "components.board.taskFacts" = "client"
+"components.dashboard.needsRows" = "client"
 "components.board.columnWidths" = "client"
 "components.board.BoardSkeleton.rememberGroups" = "client"
-# The landing demos' sample data: plain globs, no client evidence of their own.
-"components.landing.demoData" = "client"
-"components.landing.tourData" = "client"
+# The landing picture's sample data: plain data, no client evidence of its own.
+"components.landing.shotData" = "client"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
 # The whole module: rememberWorkspace/forgetWorkspace have no browser
 # evidence, and a server def:pub here would shadow the effects table.
 "lib.workspace" = "client"
+# Ask's open proposal, held in module state for the board to draw.
+"lib.proposal" = "client"
 # Theme choices and the stored preference: browser-only, no evidence of its own.
 "lib.theme" = "client"
 models = "server"

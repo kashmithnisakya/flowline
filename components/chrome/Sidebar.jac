@@ -1,18 +1,25 @@
-"""The app's left sidebar at md and up: the workspace name, search, the daily
-pages, the projects, then Ask, Workspace and the account card at its foot.
-It is sticky and full height; the page scrolls beside it."""
+"""The app's left sidebar at lg and up: the workspace name, search, Overview and
+AI, the projects, then Ask, Workspace and the account card at its foot. A
+project's own views are tabs on its pages. Sticky and full height."""
 
 import from "@jac/runtime" { Link }
-import from ..common.CommandPalette { PageIcon, NAV_PAGES }
+import from ..common.CommandPalette { PageIcon }
+import from ..common.AiMark { AiMark }
 import from .Mark { Mark }
 import from .AccountMenu { AccountMenu }
-import from .SidebarLink { SidebarLink, ITEM, ITEM_ON, ITEM_OFF }
+import from .SidebarLink { SidebarLink, ITEM, ITEM_ON }
+import from .SidebarAi { SidebarAi }
 import from .SidebarProjects { SidebarProjects }
 
 glob WORKSPACE: dict[str, str] = {
          "key": "workspace",
          "label": "Workspace",
          "to": "/workspace"
+     },
+     OVERVIEW: dict[str, str] = {
+         "key": "overview",
+         "label": "Overview",
+         "to": "/overview"
      };
 
 def:pub Sidebar(
@@ -27,16 +34,10 @@ def:pub Sidebar(
     onTheme: Callable[[str], None],
     onSignOut: Callable[[], None]
 ) -> JsxElement {
-    pages = [
-        p
-        for p in NAV_PAGES
-        if p["group"] == "daily"
-    ];
-
     return
         <aside
             aria-label="Navigation"
-            className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar px-3 pt-4 pb-3 lg:flex"
+            className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar px-3 pt-4 pb-3 lg:flex"
         >
             <Link
                 to="/board"
@@ -57,12 +58,12 @@ def:pub Sidebar(
                 <span className="kbd">{mod + "K"}</span>
             </button>
             <nav aria-label="Pages" className="flex flex-col gap-0.5">
-                {for page in pages {
-                    <SidebarLink key={page["key"]} page={page} path={path}/>
-                }}
+                <SidebarLink page={OVERVIEW} path={path}/>
+                <SidebarAi path={path}/>
             </nav>
-            <div className="mx-1 my-4 h-px bg-sidebar-border"/>
-            <SidebarProjects path={path}/>
+            <div className="mt-3">
+                <SidebarProjects path={path}/>
+            </div>
             <div className="flex-1"/>
             <button
                 type="button"
@@ -70,10 +71,12 @@ def:pub Sidebar(
                 aria-pressed={askOpen}
                 title={"Ask about this workspace (" + mod + "/)"}
                 onClick={onAsk}
-                className={ITEM + (ITEM_ON if askOpen else ITEM_OFF)}
+                className={ITEM
+                    + (ITEM_ON if askOpen else "font-medium text-ai hover:bg-bg-hover")}
             >
-                <PageIcon name="ask" size={18}/>
-                Ask Flowline
+                <AiMark/>
+                <span className="flex-1">Ask</span>
+                <span className="kbd">{mod + "/"}</span>
             </button>
             <SidebarLink page={WORKSPACE} path={path}/>
             <div className="mt-2">
