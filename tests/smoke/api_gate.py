@@ -15,7 +15,8 @@ from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
-READY_TIMEOUT = 420
+# A cold compile took 301 to 412 s on six CI runs, and over 420 s on a seventh.
+READY_TIMEOUT = 600
 TOKEN = ""
 FAILS: list[str] = []
 
