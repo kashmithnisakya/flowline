@@ -1,11 +1,12 @@
 """A board row's facts on one muted line below lg, where the cells do not
-fit: due date, a High flag, the checklist and the GitHub number, with the
-people at the end."""
+fit: due date, a High flag, the checklist and the GitHub number, with the AI
+chip and the people at the end."""
 
 import from ...models { TaskRow }
 import from ..common.Avatar { AvatarStack }
 import from .GitHubChip { ghNumber }
 import from .taskFacts { dueWords, isLate }
+import from .AiChip { AiChip }
 
 def:pub TaskMetaLine(task: TaskRow, today: str) -> JsxElement {
     parts: list[str] = [];
@@ -38,6 +39,7 @@ def:pub TaskMetaLine(task: TaskRow, today: str) -> JsxElement {
             <span className="min-w-0 flex-1 truncate text-muted-foreground">
                 {" · ".join(parts)}
             </span>
+            <AiChip task={task}/>
             {if len(task.assignee_names) > 0 {
                 <AvatarStack key="who" names={task.assignee_names}/>
             }}

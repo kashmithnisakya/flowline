@@ -1,10 +1,10 @@
-"""The board's column widths (title, then people, priority, checklist, due,
-GitHub), kept in this browser and applied as the --row-cols variable that
+"""The board's column widths (title, then people, due, GitHub, AI), kept in
+this browser and applied as the --row-cols variable that
 every row and the column heads lay out on. A title width of 0 means it fills
 the row; once set, the columns sit left and the slack goes to the end."""
 
-glob:pub COLUMN_WIDTHS_KEY: str = "flowline-board-columns",
-     DEFAULT_WIDTHS: list[int] = [0, 104, 76, 112, 104, 84],
+glob:pub COLUMN_WIDTHS_KEY: str = "flowline-board-columns-v2",
+     DEFAULT_WIDTHS: list[int] = [0, 88, 84, 84, 132],
      MIN_WIDTH: int = 48,
      MAX_WIDTH: int = 360,
      MIN_TITLE: int = 160,
@@ -29,14 +29,6 @@ def:pub loadWidths -> list[int] {
     try {
         raw = localStorage.getItem(COLUMN_WIDTHS_KEY) or "";
         kept: any = JSON.parse(raw) if raw else [];
-        # A list kept before the title was resizable has no title entry.
-        if len(kept) == len(DEFAULT_WIDTHS) - 1 {
-            padded: list[int] = [0];
-            for old in kept {
-                padded.append(int(old));
-            }
-            kept = padded;
-        }
         if len(kept) == len(DEFAULT_WIDTHS) {
             out.append(0 if int(kept[0]) <= 0 else clampWidth(0, float(kept[0])));
             for j in range(1, len(kept)) {

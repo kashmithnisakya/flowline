@@ -23,11 +23,11 @@ impl AssistantDock.send -> None {
         return;
     }
     draft = "";
-    await quick("ask" if mode == "ask" else "do", text);
+    await quick("message", text);
 }
 
-# The one entry point for every LLM call: the composer, the quick chips, and
-# the mode toggle all land here. `kind` picks the walker.
+# The one entry point for every LLM call: the composer and the quick chips land
+# here. `kind` picks the walker; "message" lets the server tell question from change.
 impl AssistantDock.quick(kind: str, value: str) -> None {
     if busy {
         return;
@@ -78,20 +78,27 @@ impl AssistantDock.quick(kind: str, value: str) -> None {
             } else {
                 reply = {"role": "assistant", "kind": "error", "text": unavailable};
             }
-        } elif kind == "do" {
-            propRun = root spawn ProposeAction(
-                instruction=value, from_date=fromDate, to_date=toDate
+        } elif kind == "message" {
+            msgRun = root spawn AskOrPropose(
+                message=value, from_date=fromDate, to_date=toDate
             );
-            proposal = propRun.reports[0] if propRun.reports else None;
-            if proposal {
+            said: any = msgRun.reports[0] if msgRun.reports else None;
+            if said and said.kind == "change" {
                 reply = {
                     "role": "assistant",
                     "kind": "proposal",
-                    "proposal": proposal,
+                    "proposal": said.proposal,
                     "state": ""
                 };
-            } else {
-                reply = {"role": "assistant", "kind": "error", "text": unavailable};
+                showProposal(said.proposal);
+            } elif said and said.text {
+                cites = await citeTasks(said.text);
+                reply = {
+                    "role": "assistant",
+                    "kind": "text",
+                    "text": said.text,
+                    "cites": cites
+                };
             }
         } else {
             askRun = root spawn AskAssistant(
@@ -222,6 +229,7 @@ impl AssistantDock.applyProposal(index: int) -> None {
             }
         }
         setTurnState(index, "applied");
+        clearProposal();
         # The board is not in this component tree, so tell it to refetch
         # instead of leaving the change invisible until its next poll.
         announceRefresh();

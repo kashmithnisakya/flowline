@@ -1,6 +1,6 @@
-"""AI reviews: one task's runs in the sheet, newest first. Polls while a run
-is queued or running, and calls `onSettled` when the last open run settles,
-so the page can refresh the row's AI chip. Renders nothing with no runs."""
+"""AI reviews: one task's newest run in the sheet, with the earlier ones a click
+away. Polls while a run is queued or running, and calls `onSettled` when the last
+open run settles, so the page can refresh the row's chip. Nothing with no runs."""
 
 import from ...models { AgentRunView }
 import from ...constants { AI_RESPONSIBILITIES }
@@ -33,7 +33,8 @@ def:pub AgentRuns(
     has runs: list[AgentRunView] = [],
         tick: int = 0,
         busy: bool = False,
-        wasOpen: bool = False;
+        wasOpen: bool = False,
+        showAll: bool = False;
 
     async can with (taskId, refreshKey, tick) entry {
         got: list[AgentRunView] = [];
@@ -79,11 +80,11 @@ def:pub AgentRuns(
         tick = tick + 1;
     }
 
+    shown = runs if showAll else runs[:1];
     return
         <section className="grid gap-2" hidden={len(runs) == 0} aria-label="AI reviews">
-            <h3 className="text-[13px] font-semibold">AI reviews</h3>
-            <ul className="border-t">
-                {for run in runs {
+            <ul className="grid gap-2">
+                {for run in shown {
                     <AgentRunRow
                         key={run.id}
                         run={run}
@@ -94,5 +95,17 @@ def:pub AgentRuns(
                     />
                 }}
             </ul>
+            {if len(runs) > 1 {
+                <button
+                    key="more"
+                    type="button"
+                    className="justify-self-start text-[12.5px] text-text-secondary underline underline-offset-2 hover:text-text-primary"
+                    onClick={lambda { showAll = not showAll; }}
+                >
+                    {"Show only the latest"
+                        if showAll
+                        else "Show " + str(len(runs) - 1) + " earlier"}
+                </button>
+            }}
         </section>;
 }

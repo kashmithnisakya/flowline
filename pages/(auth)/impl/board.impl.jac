@@ -787,6 +787,14 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
     saving = False;
 }
 
+impl BoardPage.createTask(another: bool) -> None {
+    landing = form["status"];
+    await saveTask();
+    if another and not dialogOpen {
+        showCreate(landing);
+    }
+}
+
 impl BoardPage.deleteTask -> None {
     if not editingId {
         return;

@@ -36,8 +36,9 @@ import from ...services.github.events { DrainGithubEvents }
 import from ...services.filters.filters { SetBoardFilters }
 import from ...components.board.FilterBar { FilterBar }
 import from ...components.common.FilterSets { FilterSetMenu }
-import from ...components.board.BoardHeader { BoardHeader }
-import from ...components.board.FlowStrip { FlowStrip }
+import from ...components.board.BoardActions { BoardActions }
+import from ...components.common.ProjectHead { ProjectHead }
+import from ...components.common.LineBar { LineBar }
 import from ...components.board.StepGroup { StepGroup }
 import from ...components.board.OlderDone { OlderDone }
 import from ...components.board.ColumnHeads { ColumnHeads }
@@ -45,11 +46,13 @@ import from ...components.board.FilteredEmpty { FilteredEmpty }
 import from ...components.board.BoardSkeleton { BoardSkeleton, rememberGroups }
 import from ...components.board.NoFlowLine { NoFlowLine }
 import from ...components.board.TaskDialog { TaskDialog }
+import from ...components.board.NewTaskDialog { NewTaskDialog }
+import from ...components.board.ProposalRow { ProposalRow }
 import from ...components.board.MoveDialog { MoveDialog }
-import from ...components.ui.button { Button }
 import from ...components.common.Reveal { Reveal }
 import from ...lib.project { currentProject, pickProject }
 import from ...lib.workspace { rememberWorkspace, forgetWorkspace }
+import from ...lib.proposal { currentProposal }
 import from "sonner" { toast }
 import from "react" { useEffect }
 import from ...components.common.LoadFailed { LoadFailed, StaleDataStrip }
@@ -63,7 +66,7 @@ import from ...lib.filters {
     readBoardFilters,
     keepBoardFilters
 }
-import from ...components.flowlines.kinds { DOT_FILL, colorKey, moveRefusal }
+import from ...components.flowlines.kinds { moveRefusal }
 
 glob BLANK_TASK: dict[str, str] = {
          "title": "",
@@ -232,7 +235,9 @@ def:pub BoardPage -> JsxPage {
         pendingTaskId: str = "",
         # Step groups folded shut (column keys); Done starts folded.
         closed: list[str] = [],
-        doneOpen: bool = False;
+        doneOpen: bool = False,
+        # A change Ask has proposed and nobody has answered yet, drawn dashed.
+        proposal: any = currentProposal();
 
     async can with entry {
         movesRef.current = 0;
@@ -308,6 +313,8 @@ def:pub BoardPage -> JsxPage {
             # The sidebar (or another page's picker) scopes the board.
             onProject = lambda (e: any) { setProjectFilter(str(e.detail or "")); };
             window.addEventListener("flowline:project", onProject);
+            onProposal = lambda (e: any) { proposal = currentProposal(); };
+            window.addEventListener("flowline:proposal", onProposal);
             # "/" focuses the title filter, N opens a new task (beside a sheet
             # too) and J/K step the open sheet through the cards, unless the
             # keys are being typed or a dialog or menu has them. "/" in the
@@ -356,6 +363,7 @@ def:pub BoardPage -> JsxPage {
                 # A change still inside its pause is saved on the way out.
                 persistFilters();
                 window.removeEventListener("flowline:project", onProject);
+                window.removeEventListener("flowline:proposal", onProposal);
                 window.removeEventListener("keydown", onKey);
                 window.removeEventListener("focus", onFocus);
                 window.removeEventListener("flowline:refresh", onRefresh);
@@ -429,6 +437,8 @@ def:pub BoardPage -> JsxPage {
     # keepOpen: the save answers "Save and open", so the sheet moves on to
     # what was asked for instead of closing.
     async def saveTask(keepOpen: bool = False) -> None;
+    # The new-task dialog's Create: `another` reopens it blank on the same step.
+    async def createTask(another: bool) -> None;
     async def deleteTask -> None;
     # The columns ARE the flow line, so every column question routes through
     # these rather than a status literal. Page methods, not module defs,
@@ -694,20 +704,6 @@ def:pub BoardPage -> JsxPage {
     } elif switchTo["kind"] == "new" {
         switchLabel = "a new task";
     }
-    openCount = len(
-        [
-            t
-            for t in tasks
-            if t.status != "Done"
-        ]
-    );
-    blockedCount = len(
-        [
-            t
-            for t in tasks
-            if t.status == "Blocked"
-        ]
-    );
     anyFilter = (
         fAssignee != "All"
         or fPriority != "All"
@@ -717,13 +713,44 @@ def:pub BoardPage -> JsxPage {
         or bool(boardQuery.strip())
     );
     hiddenByFilters = len(tasks) - len(visible);
-    headerCounts: list[list[str]] = [
-        [str(openCount), "open", ""],
-        [str(blockedCount), "blocked", "alarm" if blockedCount > 0 else ""],
-        [str(len(recentDone)), "done in the last 7 days", ""]
-    ];
-    if anyFilter and hiddenByFilters > 0 {
-        headerCounts.append([str(hiddenByFilters), "hidden by filters", ""]);
+    colKinds: list[str] = [columnKind(k) for k in colKeys];
+    colOwners: list[str] = [];
+    colAi: list[list[str]] = [];
+    for k in colKeys {
+        owner = "";
+        ai: list[str] = [];
+        for s in steps {
+            if s.id == k {
+                owner = s.owner;
+                ai = s.ai;
+            }
+        }
+        colOwners.append(owner);
+        colAi.append(ai);
+    }
+
+    # The step a proposal would land on, when it belongs to this project.
+    proposalKey = "";
+    projectName = "";
+    for p in activeProjects {
+        if jid(p) == fProject {
+            projectName = p.name;
+        }
+    }
+    if proposal and (not proposal.project or proposal.project == projectName) {
+        proposalKey = colKeys[0] if len(colKeys) > 0 else "";
+        for k in colKeys {
+            if proposal.status
+                and mappedStatus(k) == proposal.status
+                and proposalKey == colKeys[0] {
+                proposalKey = k;
+            }
+        }
+    }
+
+    def askAgain {
+        w: any = window;
+        w.dispatchEvent(new(w.CustomEvent, "flowline:ask", {"detail": {}}));
     }
 
     def expandAll {
@@ -758,39 +785,31 @@ def:pub BoardPage -> JsxPage {
         }
     }
 
-    allOpen = len(
-        [
-            k
-            for k in colKeys
-            if not isOpen(k)
-        ]
-    )
-        == 0;
-
-    def toggleAll {
-        doneOpen = not allOpen;
-        closed = []
-            if not allOpen
-            else [
-                k
-                for k in colKeys
-                if k != doneKey
-            ];
-    }
-
     return
-        <div className="flex min-w-0 flex-col gap-6">
-            <BoardHeader
+        <div className="flex min-w-0 flex-col gap-3">
+            <ProjectHead
                 projects={activeProjects}
                 project={fProject}
-                counts={headerCounts}
-                ghConnected={ghConnected}
-                syncing={syncing}
-                syncNote={syncNote}
-                busy={loading}
-                onSync={syncGithub}
-                onNew={lambda { openCreate(""); }}
-            />
+                view="board"
+                actions={<BoardActions
+                    ghConnected={ghConnected}
+                    syncing={syncing}
+                    syncNote={syncNote}
+                    busy={loading}
+                    onSync={syncGithub}
+                    onNew={lambda { openCreate(""); }}
+                />}
+            >
+                <LineBar
+                    name={flowName}
+                    keys={colKeys}
+                    labels={colLabels}
+                    kinds={colKinds}
+                    colors={colColors}
+                    counts={groupCounts}
+                    ai={[len(a) > 0 for a in colAi]}
+                />
+            </ProjectHead>
             {if workingTruncated and not loading {
                 <div
                     key="truncated"
@@ -819,14 +838,7 @@ def:pub BoardPage -> JsxPage {
                 } elif noFlowLine {
                     <NoFlowLine key="noflowline"/>
                 } else {
-                    <div key="board" className="flex min-w-0 flex-col gap-5">
-                        <FlowStrip
-                            name={flowName}
-                            keys={colKeys}
-                            labels={colLabels}
-                            colors={colColors}
-                            counts={groupCounts}
-                        />
+                    <div key="board" className="flex min-w-0 flex-col gap-3">
                         <div
                             data-board-toolbar="true"
                             className="flex flex-wrap items-center gap-2"
@@ -852,29 +864,23 @@ def:pub BoardPage -> JsxPage {
                                 onQuery={lambda (v: str) { boardQuery = v; }}
                                 onClear={clearFilters}
                                 shownCount={shownCount}
+                                hiddenCount={hiddenByFilters}
                                 hideEmpty={hideEmpty}
                                 onHideEmpty={lambda { hideEmpty = not hideEmpty; }}
                                 onExpandAll={expandAll}
                                 onCollapseAll={collapseAll}
+                                sets={<FilterSetMenu
+                                    sets={boardSets}
+                                    activeId={activeSet}
+                                    filters={nowFilters}
+                                    members={members}
+                                    onApply={applySet}
+                                    onAll={showAllTasks}
+                                    onSaved={absorbSet}
+                                    onDeleted={dropSet}
+                                    lastName={lastSetName}
+                                />}
                             />
-                            <FilterSetMenu
-                                sets={boardSets}
-                                activeId={activeSet}
-                                filters={nowFilters}
-                                members={members}
-                                onApply={applySet}
-                                onAll={showAllTasks}
-                                onSaved={absorbSet}
-                                onDeleted={dropSet}
-                                lastName={lastSetName}
-                            />
-                            <Button
-                                variant="ghost"
-                                className="rounded-full text-muted-foreground"
-                                onClick={toggleAll}
-                            >
-                                {"Collapse all" if allOpen else "Expand all"}
-                            </Button>
                         </div>
                         {if anyFilter and shownCount == 0 {
                             <FilteredEmpty
@@ -898,8 +904,18 @@ def:pub BoardPage -> JsxPage {
                                             label={colLabels[ci]}
                                             kind={columnKind(key)}
                                             color={colColors[ci]}
-                                            dot={DOT_FILL[colorKey(colColors[ci])]}
                                             tasks={groupRows[ci]}
+                                            owner={colOwners[ci]}
+                                            ai={colAi[ci]}
+                                            proposal={<ProposalRow
+                                                title={proposal.title}
+                                                assignee={proposal.assignee}
+                                                due={proposal.due_date}
+                                                moving={proposal.kind == "move_task"}
+                                                onOpenAsk={askAgain}
+                                            />
+                                                if key == proposalKey and proposal
+                                                else None}
                                             open={isOpen(key)}
                                             overdue={groupOverdue[ci]}
                                             today={today}
@@ -943,8 +959,24 @@ def:pub BoardPage -> JsxPage {
                     </div>
                 }  }
             </Reveal>
+            <NewTaskDialog
+                open={dialogOpen and not editingId}
+                form={form}
+                projects={activeProjects}
+                members={activeMembers}
+                saving={saving}
+                columnKeys={colKeys}
+                columnLabels={colLabels}
+                colors={colColors}
+                assignees={fAssignees}
+                categories={allCategories}
+                onField={setField}
+                onToggleAssignee={toggleAssignee}
+                onOpenChange={sheetOpenChange}
+                onCreate={createTask}
+            />
             <TaskDialog
-                open={dialogOpen}
+                open={dialogOpen and bool(editingId)}
                 editing={bool(editingId)}
                 form={form}
                 projects={activeProjects}
