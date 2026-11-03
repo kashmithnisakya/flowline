@@ -1,3 +1,3 @@
-Screenshots and GIFs shown in the description of pull request #322. Sample data only.
+Screenshots and GIFs shown in pull request descriptions (#322 and the fixes after it). Sample data only.
 
-Not code, and never merged. Deleting this branch makes the images in that description stop loading.
+Not code, and never merged. Deleting this branch makes the images in those descriptions stop loading.
