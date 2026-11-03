@@ -169,6 +169,7 @@ def run(page, tag: str) -> list[str]:
     expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
 
     read_cache_once(page)
+    page_scroll_once(page)
     ai_switch_once(page)
     ai_responsibility_once(page)
     ask_proposal_once(page)
@@ -361,6 +362,28 @@ def read_cache_once(page) -> None:
     workspace = [u for u in hits if u.endswith("/walker/GetWorkspace")]
     assert len(workspace) == 1, f"GetWorkspace was requested {len(workspace)} times after the save, expected 1"
     assert not [u for u in hits if u.endswith("/user/me")], "/user/me was requested again after the first load"
+
+
+def page_scroll_once(page) -> None:
+    # A page change opens at the top rather than keeping the last page's scroll;
+    # a link to a section on the new page still lands on that section.
+    def scrolled_overview() -> None:
+        page.goto(f"{BASE}/overview")
+        settle(page, "/overview", "Overview")
+        page.evaluate("window.scrollTo({top: 400, behavior: 'instant'})")
+        page.wait_for_function("window.scrollY > 100")
+
+    step("scroll: a new page opens at its top")
+    scrolled_overview()
+    page.get_by_role("link", name="Workspace", exact=True).filter(visible=True).first.click()
+    expect(page.get_by_role("heading", name="Workspace", exact=True).filter(visible=True).first).to_be_visible()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window.scrollY") == 0, "the new page kept the last page's scroll"
+
+    step("scroll: a link to a section still lands on it")
+    scrolled_overview()
+    page.get_by_role("button", name="New project", exact=True).filter(visible=True).first.click()
+    page.wait_for_function("window.location.search.includes('tab=projects') && window.scrollY > 100")
 
 
 def github_install_once(page) -> None:
