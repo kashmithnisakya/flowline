@@ -31,9 +31,6 @@ impl OrganizationSection.save -> None {
             w.dispatchEvent(
                 new(w.CustomEvent, "flowline:org-renamed", {"detail": {"name": org}})
             );
-            if onRenamed {
-                onRenamed(org);
-            }
             toast.success("Organization renamed");
         } else {
             toast.error("Could not save that name");
