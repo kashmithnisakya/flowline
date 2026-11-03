@@ -5,7 +5,7 @@ step and works there; the traversal from the caller's root is the isolation.
 NO cycle guard: loops are the point; only self-loops are refused.
 """
 
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     WorkflowStep,
     WorkflowSteps,

@@ -6,7 +6,7 @@ runner (#280) is what calls the review service."""
 
 import time;
 import logging;
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Role,
     Roles,

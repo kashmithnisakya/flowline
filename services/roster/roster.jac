@@ -3,7 +3,7 @@ visit the Members or Roles box (or the addressed row) and work there: the
 traversal from the caller's root is the isolation, so only a jid-addressed
 row needs the owned() check. Repos hang off the root and stay there."""
 
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Project,
     Member,

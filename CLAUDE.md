@@ -257,14 +257,21 @@ people it tracks are roster members.
   `.append`, `str`, an `obj` constructor) and a writer on `++>`, `del` or an
   attribute assignment, so a cacheable reader keeps its abilities to
   `visit` and `report` and does the work in a same-module `def` under
-  `@effects(reads=[...], writes=[])` (`import from jaclang.lib.effects
-  { effects }`): a decorated body is not scanned, its declaration is
-  merged, a decorator on the walker itself is ignored, and a helper that
-  another module imports is not recognised (`workspace_view`, imported by
-  `board.jac`, lost its decorator; `GetWorkspace` reports through its own
-  `read_workspace`), so a reader's helper is its own. Declared: `GetWorkspace`,
-  `ListMembers`, `ListProjects`, `ListRoles`,
-  `GetFlowLine`, `GetFlowLineMeta`, `ListRepos`, `GithubStatus`. Never
+  `@effects(reads=[...], writes=[])` (`import from
+  services.compat.jaclang.lib.effects { effects }`): a decorated body is not
+  scanned, its declaration is merged, a decorator on the walker itself is
+  ignored, and a helper that another module imports is not recognised
+  (`workspace_view`, imported by `board.jac`, lost its decorator;
+  `GetWorkspace` reports through its own `read_workspace`), so a reader's
+  helper is its own. **Import the stand-in, not `jaclang.lib.effects`.** Since
+  0.38 the native kernel ignores the real decorator (jaseci-labs/jac#10410), so
+  a helper with any unclassified call turns its reader `unknown`; a warm
+  `.jac/cache` can hide that, so judge it on a cold boot. The stand-in is
+  honoured because it compiles from source at a path ending in
+  `jaclang/lib/effects.jac`, so do not move it; delete it and restore the
+  import once a release carries jaseci-labs/jac#10447. Declared: `GetWorkspace`,
+  `ListMembers`, `ListProjects`, `ListRoles`, `GetFlowLine`, `GetFlowLineMeta`,
+  `ListRepos`, `GithubStatus`, `ListResponsibilities`. Never
   declare a task list (`BoardSnapshot`, `ListTasks`, `OverviewSnapshot`,
   `ListLogEntries`, `TaskCounts`, `TaskHistory`, `RoadmapSnapshot`,
   `ListStepTasks`): a colleague's move, a webhook drain applied on the
