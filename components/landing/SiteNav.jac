@@ -1,78 +1,64 @@
-"""Public site header. A session swaps the calls to action for the board link.
-Below md the anchors and Sign in move into a disclosure menu, leaving the
-mark, one compact primary action and the menu button on a phone's row.
+"""Public site header: the mark, the page's sections, then Sign in and the
+primary action. A session swaps those two for the board link. Below md the
+links move into SiteMenu, leaving the mark, one action and the menu button.
 """
 
 import from ..ui.button { Button }
+import from .SiteMenu { SiteMenu, SECTIONS, DOCS_URL }
 import from .Wordmark { Wordmark }
 
-glob REPO_URL: str = "https://github.com/kashmithnisakya/flowline",
-     NAV_LINK: str = "rounded-md px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground",
-     MENU_LINK: str = "flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground";
+glob NAV_LINK: str = "text-text-secondary transition-colors hover:text-foreground";
 
 def:pub SiteNav(loggedIn: bool) -> JsxElement {
     has menuOpen: bool = False;
 
     return
-        <header
-            className="sticky top-0 z-30 border-b border-border/50 bg-background/70 backdrop-blur-xl"
-        >
-            <nav
-                aria-label="Site"
-                className="landing-wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4"
-            >
-                <a
-                    href="/"
-                    aria-label="flowline home"
-                    className="justify-self-start rounded-sm"
-                >
+        <header>
+            <div className="lp-wrap flex items-center gap-6 py-4">
+                <a href="/" aria-label="Flowline home" className="shrink-0 rounded-sm">
                     <Wordmark/>
                 </a>
-                <div
-                    className="glass-pill hidden items-center gap-0.5 px-1.5 py-1 md:flex"
+                <nav
+                    aria-label="Page sections"
+                    className="hidden items-center gap-5 text-sm md:flex"
                 >
-                    <a href="#tour" className={NAV_LINK}>Tour</a>
-                    <a href="#github" className={NAV_LINK}>GitHub</a>
-                    <a href="#faq" className={NAV_LINK}>FAQ</a>
+                    {for s in SECTIONS {
+                        <a key={s[1]} href={s[1]} className={NAV_LINK}>{s[0]}</a>
+                    }}
                     <a
-                        href={REPO_URL}
+                        href={DOCS_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={NAV_LINK}
                     >
-                        Source
+                        Docs
                     </a>
-                </div>
-                <div className="flex items-center gap-2 justify-self-end">
+                </nav>
+                <div className="ml-auto flex items-center gap-2">
                     {if loggedIn {
-                        <Button
-                            key="app"
-                            asChild={True}
-                            size="sm"
-                            className="rounded-md"
-                        >
+                        <Button key="app" asChild={True} className="text-[13px]">
                             <a href="/board">Go to your board</a>
                         </Button>
                     } else {
-                        <div key="auth" className="flex items-center gap-2">
-                            <Button
-                                asChild={True}
-                                variant="ghost"
-                                size="sm"
-                                className="hidden rounded-md text-muted-foreground md:inline-flex"
-                            >
-                                <a href="/login">Sign in</a>
-                            </Button>
-                            <Button asChild={True} size="sm" className="rounded-md">
-                                <a href="/login?mode=signup">
-                                    <span className="sm:hidden">Create workspace</span>
-                                    <span className="hidden sm:inline">
-                                        Create your workspace
-                                    </span>
-                                </a>
-                            </Button>
-                        </div>
+                        <Button
+                            key="signin"
+                            asChild={True}
+                            variant="ghost"
+                            className="hidden text-[13px] md:inline-flex"
+                        >
+                            <a href="/login">Sign in</a>
+                        </Button>
                     } }
+                    {if not loggedIn {
+                        <Button key="signup" asChild={True} className="text-[13px]">
+                            <a href="/login?mode=signup">
+                                <span className="sm:hidden">Create workspace</span>
+                                <span className="hidden sm:inline">
+                                    Create your workspace
+                                </span>
+                            </a>
+                        </Button>
+                    }}
                     <Button
                         variant="ghost"
                         size="icon"
@@ -101,46 +87,13 @@ def:pub SiteNav(loggedIn: bool) -> JsxElement {
                         </svg>
                     </Button>
                 </div>
-            </nav>
+            </div>
             {if menuOpen {
-                <div
+                <SiteMenu
                     key="menu"
-                    id="site-menu"
-                    className="grid gap-0.5 border-t bg-background/95 px-2 py-2 backdrop-blur-xl md:hidden"
-                >
-                    <a
-                        href="#tour"
-                        className={MENU_LINK}
-                        onClick={lambda { menuOpen = False; }}
-                    >
-                        Tour
-                    </a>
-                    <a
-                        href="#github"
-                        className={MENU_LINK}
-                        onClick={lambda { menuOpen = False; }}
-                    >
-                        GitHub
-                    </a>
-                    <a
-                        href="#faq"
-                        className={MENU_LINK}
-                        onClick={lambda { menuOpen = False; }}
-                    >
-                        FAQ
-                    </a>
-                    <a
-                        href={REPO_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={MENU_LINK}
-                    >
-                        Source on GitHub
-                    </a>
-                    {if not loggedIn {
-                        <a key="signin" href="/login" className={MENU_LINK}>Sign in</a>
-                    }}
-                </div>
+                    loggedIn={loggedIn}
+                    onClose={lambda { menuOpen = False; }}
+                />
             }}
         </header>;
 }
