@@ -175,6 +175,7 @@ def:pub RoadmapPage -> JsxPage {
     colColors: list[str] = [];
     colCounts: list[int] = [];
     colAi: list[bool] = [];
+    lineCounts: dict[str, any] = data["counts"] if data else {};
     for key in colKeys {
         label = key;
         keyKind = columnKind(key);
@@ -187,16 +188,10 @@ def:pub RoadmapPage -> JsxPage {
                 runsAi = len(st.ai) > 0;
             }
         }
-        onScreen = 0;
-        for g in groups {
-            if g["key"] == key {
-                onScreen = len(g["items"]);
-            }
-        }
         colLabels.append(label);
         colKinds.append(keyKind);
         colColors.append(tint);
-        colCounts.append(onScreen);
+        colCounts.append(int(lineCounts[key]) if key in lineCounts else 0);
         colAi.append(runsAi);
         if keyKind in HANDOFF_KINDS {
             handoffKeys.append(key);
