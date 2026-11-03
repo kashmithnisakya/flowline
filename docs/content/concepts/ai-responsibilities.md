@@ -37,7 +37,7 @@ runs on all of them. Each one carries:
 | Setting | Meaning |
 | --- | --- |
 | Instructions | What the team wants checked, up to 2,000 characters, sent with every review. |
-| Mode | **Comment** posts the review and leaves the task where it is. **Request changes** posts a review with a blocking finding as `REQUEST_CHANGES` and sends the task back along its step's "changes requested" arrow. |
+| Mode | **Comment** posts the review and leaves the task where it is. **Request changes** posts a review with a blocking finding as `REQUEST_CHANGES` and sends the task back along its step's arrow with the `changes_requested` trigger. A step with no such arrow keeps the task and logs why, and the editor says so before you save. |
 | Model | The model name, or empty for the server's `LLM_MODEL` (default `gpt-4o-mini`). |
 | Enabled | Off keeps the settings and queues nothing. |
 
