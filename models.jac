@@ -233,6 +233,11 @@ node Task {
         ai_state: str = "",
         # The stamp of the request that last queued a run here (settle_ai).
         ai_queued_at: str = "",
+        # The last settled review, for the row's chip: "changes", "reviewed",
+        # "failed" or "" (kept by note_ai_outcome where a run settles).
+        ai_outcome: str = "",
+        ai_comments: int = 0,
+        ai_blocking: int = 0,
         # The container project's jid and the assignees' jids, kept in step
         # with the edges at every write point so a list row needs no hop.
         # The edges stay the truth: `owned` climbs the container edge.
@@ -349,7 +354,10 @@ node Task {
             note_lead=note_lead(self.notes),
             checklist_done=counts[0],
             checklist_total=counts[1],
-            ai_state=self.ai_state
+            ai_state=self.ai_state,
+            ai_outcome=self.ai_outcome,
+            ai_comments=self.ai_comments,
+            ai_blocking=self.ai_blocking
         );
     }
 
@@ -658,8 +666,12 @@ obj TaskRow {
         # How many checklist items are ticked, and how many there are.
         checklist_done: int = 0,
         checklist_total: int = 0,
-        # "queued" or "running" while an AI run is open on the task.
-        ai_state: str = "";
+        # "queued" or "running" while an AI run is open on the task, else
+        # what its last settled review came to (Task.ai_outcome).
+        ai_state: str = "",
+        ai_outcome: str = "",
+        ai_comments: int = 0,
+        ai_blocking: int = 0;
 }
 
 obj TaskView(TaskRow) {
@@ -843,6 +855,21 @@ obj AgentRunView {
         queued_at: str,
         started_at: str,
         finished_at: str;
+}
+
+# One line of the AI page: a run plus the task it ran on. A deleted task
+# leaves its run as history, with an empty title.
+obj AgentRunLine(AgentRunView) {
+    has task_title: str = "",
+        project_name: str = "";
+}
+
+# One page of the workspace's runs, and how much of today's budget is used.
+obj AgentRunPage {
+    has rows: list[AgentRunLine],
+        has_more: bool = False,
+        runs_today: int = 0,
+        daily_limit: int = 0;
 }
 
 # What the Roles editor reads: the switch and every role's responsibilities.
@@ -1156,6 +1183,31 @@ def settle_ai(holder: Root, t: Task, now: dict[str, str], stamp: str) {
     t.ai_state = "running"
         if "running" in seen
         else ("queued" if "queued" in seen else "");
+}
+
+
+# What a settled run leaves on its task's row. A skip or a cancel has nothing
+# to say about the code, so it clears the last result rather than keeping it.
+def note_ai_outcome(t: Task, run: AgentRun) {
+    t.ai_outcome = "";
+    if run.status == "failed" {
+        t.ai_outcome = "failed";
+    } elif run.status == "done" {
+        t.ai_outcome = "changes" if run.verdict == "request_changes" else "reviewed";
+        t.ai_comments = run.comments;
+        t.ai_blocking = run.blocking;
+    }
+}
+
+
+# How many of the workspace's runs are queued or running, for the sidebar.
+def open_run_count(holder: Root) -> int {
+    total = 0;
+    for box in [holder-->[?:AgentRuns]] {
+        total = total + len([box-->[?:AgentRun, status=="running"]]);
+        total = total + len([box-->[?:AgentRun, status=="queued"]]);
+    }
+    return total;
 }
 
 
