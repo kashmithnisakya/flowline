@@ -840,6 +840,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   module state, and awaits that same promise from every mount. Keep those
   patterns: a `has` flag or a `Ref` is per instance, and a remount is still
   one route change away.
+- **A new page opens at its top.** The layout resets the scroll on a path
+  change, in a layout effect so it runs before a page's own effects and a
+  section's deep link still lands; Back and Forward keep what the browser restores
+  (a capture-phase `popstate` listener says which it was: `@jac/runtime` does not
+  export the router's navigation type).
 - **The page is blank until the bundle runs, then paints its frame at
   once.** The HTML shell is an empty `#root` plus the bundle: there is no
   boot script, `jac.toml` carries plain metadata only. (An inline
