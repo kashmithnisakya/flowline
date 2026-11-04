@@ -5,7 +5,8 @@ github_stub.py: a move onto a role's step queues the role's responsibilities
 switched-off responsibility each skip with a log line, another workspace sees
 none of it, and the scheduled runner reviews a queued run (FLOWLINE_FAKE_LLM),
 retries a 5xx, fails a 403, skips a closed PR and a commit already reviewed,
-and takes a run back when its workers die mid-review. Reuses webhook_gate's helpers.
+retries a GitHub call that times out, and takes a run back when its workers die
+mid-review. Reuses webhook_gate's helpers.
 Usage: agents_gate.py [base_url] [stub_url]"""
 import base64
 import json
@@ -350,6 +351,15 @@ def runner_suite():
     repeat = settle(linked["id"], before + 2)
     check("re-review: the same commit again is skipped", len(repeat) == before + 2
           and repeat[0].get("status") == "skipped" and "already reviewed" in repeat[0].get("error", ""), repeat[:2])
+
+    # Since 0.38 the scheduler holds a function across the service, so no tick can
+    # take back a claim while its review is alive, only once its workers die (the
+    # suite below). The delay outlasts gh()'s 20 s timeout, so this is its retry.
+    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/11", "times": 1, "delay": 25})
+    e = landed("GitHub too slow", 11)
+    slow = settle(e, 1, 150)
+    check("runner: a GitHub call that times out is tried again and finished once",
+          slow and slow[0].get("status") == "done" and slow[0].get("attempts") == 2, slow)
     return landed
 
 
@@ -365,8 +375,9 @@ def worker_death_suite(landed):
     # The runtime never starts this task beside itself, so a live worker's claim
     # cannot be taken back. Only a dead worker's can, so this kills them. It runs
     # last: the run hold they leave behind lasts up to 30 s.
-    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/11", "times": 1, "delay": 15})
-    e = landed("Worker dies mid review", 11)
+    stub("/_stub/pulls", {"pulls": [pull(19, "sha-19")]})
+    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/19", "times": 1, "delay": 15})
+    e = landed("Worker dies mid review", 19)
     deadline = time.time() + 60
     while time.time() < deadline and (runs(e) or [{}])[0].get("status") != "running":
         time.sleep(0.5)
@@ -378,7 +389,7 @@ def worker_death_suite(landed):
         os.kill(pid, signal.SIGKILL)
     check("  and the workers come back", wg.wait_ready())
     rows = settle(e, 1, 150)
-    posted = [c for c in wg.stub_calls(INST) if c[0] == "POST" and "/pulls/11/reviews" in c[1]]
+    posted = [c for c in wg.stub_calls(INST) if c[0] == "POST" and "/pulls/19/reviews" in c[1]]
     check("runner: a run whose workers died is taken back and finished once",
           len(rows) == 1 and rows[0].get("status") == "done" and rows[0].get("attempts") == 2 and len(posted) == 1,
           ([(r.get("status"), r.get("attempts")) for r in rows], posted))
