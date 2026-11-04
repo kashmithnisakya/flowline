@@ -16,7 +16,21 @@ authoritative spec for writing correct, idiomatic Jac:
 
 Start with `jac guide jac-core-cheatsheet` and `jac guide jac-types`.
 
+## UI and UX changes
+
+Read [Flowline's style and UX guide](docs/content/contributing/style-and-ux-guide.md)
+before changing an in-app screen. Inspect the nearest native screen and shared
+components first, reuse the existing tokens and interaction patterns, and
+follow the guide's visual review checklist. Functional tests alone do not
+establish that a feature fits Flowline's design.
+
 ## Validate your work
+
+Processes currently requires the verified compiler backports pinned in
+`tools/jac_toolchain/manifest.json`. Run compiler-dependent commands through
+`python3 tools/jac.py` (for example, `python3 tools/jac.py check main.jac`).
+The wrapper verifies the base release and patch inputs and leaves the installed
+binary unchanged. Bare Jac 0.38.2 and 0.39.0 still contain the affected defects.
 
 - `jac check <file>` -- type-check and lint. Compiler diagnostics link to the
   relevant guide; follow the `-> run 'jac guide ...'` hints.

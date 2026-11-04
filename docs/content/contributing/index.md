@@ -48,6 +48,10 @@ flowline/
 
 ## Style
 
+For in-app interface work, read the [style and UX guide](style-and-ux-guide.md)
+before changing the design. It covers the shared tokens, components, screen
+structure, interaction states and visual review requirements.
+
 - No em dashes in code comments, docs or copy. Use commas, periods or
   parentheses.
 - Comments and docstrings are at most three or four lines. Say the one

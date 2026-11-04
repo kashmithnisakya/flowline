@@ -29,9 +29,12 @@ with a new task ready to type.
 
 On the flow line page, Edit lets you drag a step to move it, drag from its edge
 onto another step to connect them, and click a transition to label or delete
-it. Drag the empty canvas to pan, zoom with ctrl or cmd and the wheel (or a
-pinch), and press F to fit. Flow shows the steps where you drew them; Lanes
-lays them out by owner role.
+it. Steps can move across the origin in every direction. Drag the empty
+canvas to pan freely in Flow, zoom with ctrl or cmd and the wheel (or a
+pinch), and press F to fit. Zoom goes from 0.1% to 200%. Flow shows the steps
+where you drew them; Lanes lays them out by owner role. See the
+[canvas editing guide](docs/content/concepts/flow-lines.md#editing-on-the-canvas)
+for coordinate bounds and how interrupted gestures behave.
 
 Every step carries a *kind* behind the name you chose: start, active, handoff,
 blocked or done. The name is yours, the kind is what the app understands, which
@@ -76,27 +79,44 @@ is why renaming a step never changes how anything behaves.
 - **AI responsibilities**, off until you turn them on: give a role code review
   and it runs when a task with a linked pull request lands on that role's step.
   The AI page lists every run, what each responsibility may do and what is sent
+- **Process review**, separate from operational tasks: import a user-supplied
+  catalog, compare current/proposed definitions, inspect steps and save notes.
+  Explicit updates preserve IDs and earlier snapshots. No process definitions
+  are bundled; see the [process review guide](docs/content/contributing/process-review.md).
 - **Light and dark**, chosen under Workspace, Preferences (or the account menu)
   or followed from your device
 
 ## Install Jac
 
-Jac ships as a single native binary. No Python, pip or Node required up front:
+Jac ships as a single native binary. No Python, pip or Node required up front.
+From the repository root, install the release pinned in `jac.toml`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh | bash
+flowline_jac_version="$(sed -nE 's/^jac-version *= *"(==)?([0-9][0-9.]*)".*/\2/p' jac.toml)"
+curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh \
+  | bash -s -- --version "$flowline_jac_version"
 ```
 
-Run `jac` afterwards to confirm it is on your PATH.
+Run `jac --version` afterwards to confirm the pinned release is on your PATH.
+For a Jac Builder import, keep the project pin and the complete repository;
+see [Jac Builder previews](docs/content/deploy/jachammer.md#jac-builder-previews).
 
 ## Run the app
 
 ```bash
-jac install                 # dependencies (Python + npm) from jac.toml
-jac run --no-dev main.jac   # serve at http://localhost:8000
+python3 tools/jac.py install                 # Python + npm dependencies
+python3 tools/jac.py run --no-dev main.jac   # serve at http://localhost:8000
 ```
 
-Use `jac run -w 1 main.jac` for hot reload while developing (app on :8000, API on :8001; hot reload needs a single worker).
+Use `python3 tools/jac.py run -w 1 main.jac` for hot reload while developing
+(app on :8000, API on :8001; hot reload needs a single worker).
+
+The Processes library currently needs six upstream compiler/runtime fixes. The wrapper
+verifies the pinned source and backports in `tools/jac_toolchain/`, then runs
+them in isolation with the installed Jac 0.39.0 binary. Python 3, `patch` and
+GitHub access are needed for initial preparation. See the
+[process review guide](docs/content/contributing/process-review.md#compiler-prerequisites)
+for the compiler inputs and hosted-rollout limitation.
 
 Copy `.env.example` to `.env` and fill in what you need. Everything in it is
 optional: without `OPENAI_API_KEY` the app runs fine and only the assistant is

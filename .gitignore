@@ -26,3 +26,6 @@ docs/site/
 .venv-docs/
 __pycache__/
 plan-archive/
+
+# User-supplied process catalogs and personal working data
+.flowline-local/

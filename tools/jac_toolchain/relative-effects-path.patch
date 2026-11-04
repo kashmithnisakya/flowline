@@ -1,0 +1,5 @@
+--- a/jaclang/compiler/passes/impl/endpoint_effect_pass.impl.jac
++++ b/jaclang/compiler/passes/impl/endpoint_effect_pass.impl.jac
+@@ -381 +381 @@
+-            or not target.loc.mod_path.replace("\\", "/").endswith(
++            or not ("/" + target.loc.mod_path.replace("\\", "/")).endswith(

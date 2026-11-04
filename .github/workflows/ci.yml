@@ -48,8 +48,14 @@ jobs:
       - name: jac --version
         run: jac --version
 
+      - name: Prepare the pinned process-review compiler backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
+
       # Since 0.37.23 `jac check` fails (E1138) on an import of a dependency
       # jac.toml declares but the environment lacks, so install them first.
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
+
       - name: jac install (python + npm dependencies)
         run: jac install
 
@@ -125,6 +131,12 @@ jobs:
             | bash -s -- --version "${{ steps.pin.outputs.version }}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - name: Prepare the pinned process-review compiler backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
+
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
+
       - name: jac install (python + npm dependencies)
         run: jac install
 
@@ -191,6 +203,13 @@ jobs:
       - name: API gate (shell, bundle, register, login, walkers, concurrency)
         run: python3 tests/smoke/api_gate.py http://localhost:8000
 
+      - name: Process definition gate (neutral catalog schema)
+        run: python3 tests/smoke/process_definition_gate.py
+
+      - name: Process library API gate (catalog imports, notes and workspace isolation)
+        if: ${{ !cancelled() }}
+        run: python3 tests/smoke/process_gate.py http://localhost:8000
+
       - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
         run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
 
@@ -204,6 +223,7 @@ jobs:
         run: grep -E "supervising [2-9][0-9]* worker" serve.log
 
       - name: Install Playwright
+        if: ${{ !cancelled() }}
         run: |
           python3 -m pip install --quiet playwright
           python3 -m playwright install --with-deps chromium
@@ -211,12 +231,27 @@ jobs:
       - name: Browser gate (sign up, setup, flow line, New task, card, GitHub install once)
         run: python3 tests/smoke/browser_gate.py http://localhost:8000 http://127.0.0.1:8099
 
+      - name: Process library browser gate (selection, comparison, notes and mobile layout)
+        if: ${{ !cancelled() }}
+        run: python3 tests/smoke/process_browser_gate.py http://localhost:8000
+
+      - name: Flow canvas gate (custom flow, dragging across axes, saved positions)
+        run: python3 tests/smoke/flow_canvas_gate.py http://localhost:8000
+
       - name: Failure screenshot
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: browser-gate-failure
           path: browser_gate_failure.png
+          if-no-files-found: ignore
+
+      - name: Process library screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: process-library-screenshots
+          path: .jac/process-review/*.png
           if-no-files-found: ignore
 
       - name: Server log

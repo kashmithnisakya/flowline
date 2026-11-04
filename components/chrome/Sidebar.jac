@@ -20,6 +20,11 @@ glob WORKSPACE: dict[str, str] = {
          "key": "overview",
          "label": "Overview",
          "to": "/overview"
+     },
+     PROCESSES: dict[str, str] = {
+         "key": "processes",
+         "label": "Processes",
+         "to": "/processes"
      };
 
 def:pub Sidebar(
@@ -60,6 +65,7 @@ def:pub Sidebar(
             <nav aria-label="Pages" className="flex flex-col gap-0.5">
                 <SidebarLink page={OVERVIEW} path={path}/>
                 <SidebarAi path={path}/>
+                <SidebarLink page={PROCESSES} path={path}/>
             </nav>
             <div className="mt-3">
                 <SidebarProjects path={path}/>

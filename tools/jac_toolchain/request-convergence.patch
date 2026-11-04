@@ -1,0 +1,71 @@
+--- a/jaclang/server/impl/session.impl.jac
++++ b/jaclang/server/impl/session.impl.jac
+@@ -802 +801,0 @@
+-        self._active_units = max(0, self._active_units - 1);
+@@ -804 +803 @@
+-            if self._active_units > 0 {
++            if self._active_units > 1 {
+@@ -831,0 +831 @@
++            self._active_units = max(0, self._active_units - 1);
+@@ -899 +899,5 @@
+-    if exhausted {
++    # A request's choices depended on this transaction's reads, including
++    # absence predicates. Replaying its writes alone drops those dependencies
++    # and can commit a duplicate. Let the owning unit replay its whole body.
++    if exhausted or self._active_units > 0 {
++        self._last_conflict |= set(self._dirty) | self._deleted;
+@@ -1013,0 +1018,3 @@
++            if _is_serialization_conflict(e) {
++                self._last_conflict |= {row.id for row in rows};
++            }
+@@ -1387,17 +1394,22 @@
+-    attempt = 0;
+-    while True {
+-        try {
+-            result = body();
+-            self.commit();
+-            return result;
+-        } except Exception as e {
+-            if (
+-                self._store is not None
+-                and (isinstance(e, WriteConflict) or _is_serialization_conflict(e))
+-                and attempt < MAX_RETRIES
+-            ) {
+-                attempt += 1;
+-                logger.info(
+-                    "serialization conflict; re-running request "
+-                    f"(attempt {attempt}/{MAX_RETRIES})"
+-                );
++    self.unit_enter();
++    try {
++        attempt = 0;
++        while True {
++            try {
++                result = body();
++                self.commit();
++                return result;
++            } except Exception as e {
++                if (
++                    self._store is not None
++                    and (isinstance(e, WriteConflict) or _is_serialization_conflict(e))
++                    and attempt < MAX_RETRIES
++                ) {
++                    attempt += 1;
++                    logger.info(
++                        "serialization conflict; re-running request "
++                        f"(attempt {attempt}/{MAX_RETRIES})"
++                    );
++                    self.abort();
++                    continue;
++                }
+@@ -1405,5 +1417,5 @@
+-                continue;
+-            }
+-            self.abort();
+-            raise;
+-        }
++                raise;
++            }
++        }
++    } finally {
++        self.unit_exit();

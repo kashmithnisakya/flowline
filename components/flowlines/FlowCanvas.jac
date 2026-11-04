@@ -15,6 +15,7 @@ import from .geometry {
     link,
     cubicAt,
     cubicSamples,
+    polySamples,
     placeChips
 }
 import from .lanes { LANE_LABEL_W, laneRects, laneWires }
@@ -139,6 +140,10 @@ def:pub FlowCanvas(
     panX: float = 0.0,
     panY: float = 0.0,
     editing: bool = False,
+    showCounts: bool = True,
+    stageIds: list[str] = [],
+    stageLabel: str = "",
+    avoidNodeCrossings: bool = False,
     dragId: str = "",
     # Lane view bands from lanes.jac. Non-empty flips lane mode: elbow wires,
     # a fixed label column, and `live` holds the computed lane positions.
@@ -200,7 +205,7 @@ def:pub FlowCanvas(
     need: dict[str, float] = {};
     for s in steps {
         wantName = textWidth(s.name, NAME_FONT, 7.6);
-        wantCount = textWidth(nodeCount(s), META_FONT, 6.6);
+        wantCount = textWidth(nodeCount(s), META_FONT, 6.6) if showCounts else 0.0;
         wantOwner = textWidth(ownerWord(s.owner), META_FONT, 6.6);
         wantRow = wantCount if wantCount > wantName else wantName;
         needLow[s.id] = wantName + NODE_CHROME;
@@ -218,7 +223,20 @@ def:pub FlowCanvas(
             steps, live, laneCols, zoom, stepTitles, need, laneLabelW + 16.0
         )["rects"];
     } else {
-        rects = nodeRects(steps, live, zoom, stepTitles, 0.0, NODE_H, need);
+        rects = nodeRects(steps, live, zoom, stepTitles, 0.0, NODE_H, need, showCounts);
+    }
+    stageBounds: list[float] = [];
+    grouped = [
+        rects[sid]
+        for sid in stageIds
+        if sid in rects
+    ];
+    if grouped {
+        gx = min([r[0] for r in grouped]) - 16.0;
+        gy = min([r[1] for r in grouped]) - 40.0;
+        gr = max([r[0] + r[2] for r in grouped]) + 16.0;
+        gb = max([r[1] + r[3] for r in grouped]) + 16.0;
+        stageBounds = [gx, gy, gr - gx, gb - gy];
     }
 
     # The SVG covers the drawing; a little slack keeps arrowheads and chips
@@ -236,6 +254,9 @@ def:pub FlowCanvas(
         }
         drop = AI_CHIP_H if len(s.ai) > 0 else 0.0;
         obstacles.append([r[0] - 6.0, r[1] - 6.0, r[2] + 12.0, r[3] + 12.0 + drop]);
+    }
+    if stageBounds {
+        obstacles.append([stageBounds[0], stageBounds[1], stageBounds[2], 28.0]);
     }
     # The lane label column covers the left of the drawing at the fitted pan;
     # a chip placed under it would be hidden. It carries no 6px margin.
@@ -325,6 +346,54 @@ def:pub FlowCanvas(
         }
     }
 
+    # Storyboard rework can span a whole row. Route obstructed links through
+    # row gutters and an outside trunk rather than through another activity.
+    if avoidNodeCrossings and not laneMode and steps {
+        outside = min([r[0] for r in rects.values()]) - 28.0;
+        detours = 0;
+        for l in links {
+            blocked = False;
+            samples: list[list[float]] = l["samples"];
+            for s in steps {
+                if s.id in [l["from"], l["to"]] {
+                    continue;
+                }
+                r = rects[s.id];
+                for p in samples {
+                    if r[0] < p[0] < r[0] + r[2] and r[1] < p[1] < r[1] + r[3] {
+                        blocked = True;
+                    }
+                }
+            }
+            if blocked {
+                a = rects[l["from"]];
+                b = rects[l["to"]];
+                sx = a[0] + a[2] / 2.0;
+                sy = a[1] + a[3];
+                ex = b[0] + b[2] / 2.0;
+                ey = b[1];
+                gutter = 20.0 + float(detours % 3) * 4.0;
+                leave = sy + gutter;
+                enter = ey - gutter;
+                trunk = outside - float(detours) * 8.0;
+                l["d"] = f"M {sx} {sy} V {leave} H {trunk} V {enter} H {ex} V {ey
+                    - 9.0}";
+                l["arrow"] = f"M {ex} {ey} L {ex - 5.0} {ey - 10.0} L {ex + 5.0} {ey
+                    - 10.0} Z";
+                l["samples"] = polySamples(
+                    [sx, sy, sx, leave, trunk, leave, trunk, enter, ex, enter, ex, ey]
+                );
+                l["anchors"] = [
+                    [(sx + trunk) / 2.0, leave, 1.0, 0.0, -1.0],
+                    [(ex + trunk) / 2.0, enter, 1.0, 0.0, 1.0],
+                    [trunk, (leave + enter) / 2.0, 0.0, 1.0, -1.0]
+                ];
+                l["detour_x"] = trunk;
+                detours = detours + 1;
+            }
+        }
+    }
+
     # Chip text and width, then one placement pass over every chip.
     showChips = zoom >= CHIP_MIN_ZOOM;
     for l in links {
@@ -343,8 +412,9 @@ def:pub FlowCanvas(
             else 0.0;
         l["lit"] = bool(selectedId)
             and (l["from"] == selectedId or l["to"] == selectedId);
-        l["cx"] = -9999.0;
-        l["cy"] = -9999.0;
+        l["cx"] = 0.0;
+        l["cy"] = 0.0;
+        l["placed"] = False;
     }
     placeChips(links, obstacles);
     if layoutRef {
@@ -377,6 +447,12 @@ def:pub FlowCanvas(
         ey0 = ny0;
         ex1 = nx1;
         ey1 = ny1;
+        if stageBounds {
+            ex0 = min(ex0, stageBounds[0]);
+            ey0 = min(ey0, stageBounds[1]);
+            ex1 = max(ex1, stageBounds[0] + stageBounds[2]);
+            ey1 = max(ey1, stageBounds[1] + stageBounds[3]);
+        }
         for s in steps {
             below = rects[s.id][1] + rects[s.id][3] + AI_CHIP_H;
             if len(s.ai) > 0 and below > ey1 {
@@ -384,7 +460,10 @@ def:pub FlowCanvas(
             }
         }
         for l in links {
-            if l["text"] and float(l["cx"]) > -9000.0 {
+            if "detour_x" in l {
+                ex0 = min(ex0, float(l["detour_x"]));
+            }
+            if l["text"] and l["placed"] {
                 half = float(l["cw"]) / 2.0;
                 if float(l["cx"]) - half < ex0 {
                     ex0 = float(l["cx"]) - half;
@@ -525,6 +604,29 @@ def:pub FlowCanvas(
                     style={{"pointerEvents": "none"}}
                     aria-hidden="true"
                 >
+                    {if stageBounds {
+                        <g key="stage" data-process-stage={stageLabel}>
+                            <rect
+                                x={stageBounds[0]}
+                                y={stageBounds[1]}
+                                width={stageBounds[2]}
+                                height={stageBounds[3]}
+                                fill="none"
+                                stroke="var(--text-tertiary)"
+                                strokeWidth="1.2"
+                                rx="8"
+                            />
+                            <text
+                                x={stageBounds[0] + stageBounds[2] / 2.0}
+                                y={stageBounds[1] + 20.0}
+                                textAnchor="middle"
+                                fill="var(--text-secondary)"
+                                fontSize="12"
+                            >
+                                {stageLabel}
+                            </text>
+                        </g>
+                    }}
                     {for l in links {
                         <g
                             key={l["key"]}
@@ -576,7 +678,7 @@ def:pub FlowCanvas(
                 </svg>
                 {for l in links {
                     <div key={"chip-" + l["key"]}>
-                        {if l["text"] and float(l["cx"]) > -9000.0 {
+                        {if l["text"] and l["placed"] {
                             <span
                                 key="lab"
                                 data-chip="label"
@@ -649,6 +751,7 @@ def:pub FlowCanvas(
                         titles={nodeTitles(s, stepTitles)}
                         showTitles={detail == "high" and s.id in stepTitles}
                         showOwner={not laneMode}
+                        showCounts={showCounts}
                         selected={selectedId == s.id or connectFrom == s.id}
                         portsOn={selectedId == s.id}
                         target={connecting and s.id != connectFrom}

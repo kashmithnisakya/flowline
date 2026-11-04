@@ -12,9 +12,13 @@ def:pub ZoomControls(
     onIn: Callable[[], None] = None,
     onActual: Callable[[], None] = None,
     onFit: Callable[[], None] = None,
-    pending: bool = False
+    pending: bool = False,
+    fitTitle: str = "Fit the whole flow line (F)"
 ) -> JsxElement {
     pct = str(int(zoom * 100.0 + 0.5)) + "%";
+    if zoom < 0.1 {
+        pct = str(float(int(zoom * 1000.0 + 0.5)) / 10.0) + "%";
+    }
     return
         <div
             role="group"
@@ -76,7 +80,7 @@ def:pub ZoomControls(
             </button>
             <button
                 type="button"
-                title="Fit the whole flow line (F)"
+                title={fitTitle}
                 className="h-[30px] rounded-md px-2 text-[13px] font-medium transition-colors hover:bg-bg-hover"
                 onClick={lambda { if onFit { onFit(); }}}
             >
