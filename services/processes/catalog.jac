@@ -74,6 +74,7 @@ def normalize_process(value: any) -> dict[str, any] {
     }
     steps: list[dict[str, str]] = [];
     known: list[str] = [];
+    default_spacing = min(240.0, FLOW_COORD_LIMIT / float(max(1, len(raw_steps) - 1)));
     for (index, value_step) in enumerate(raw_steps) {
         if not isinstance(value_step, dict) {
             raise ValueError("invalid_step");
@@ -121,7 +122,10 @@ def normalize_process(value: any) -> dict[str, any] {
         }
         for field in ["x", "y"] {
             raw_coordinate = item.get(
-                field, float(index) * 240.0 if field == "x" else 0.0
+                field,
+                min(FLOW_COORD_LIMIT, float(index) * default_spacing)
+                    if field == "x"
+                    else 0.0
             );
             if isinstance(raw_coordinate, bool) {
                 raise ValueError("invalid_coordinate");

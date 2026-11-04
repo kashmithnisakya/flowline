@@ -49,6 +49,7 @@ def:pub ProcessesPage -> JsxPage {
         family: str = "",
         importError: str = "",
         fileRef: Ref[any] = Ref(),
+        importPending: Ref[bool] = Ref(False),
         variant: str = "current",
         compare: bool = False,
         view: str = "auto",
@@ -194,6 +195,9 @@ def:pub ProcessesPage -> JsxPage {
     }
 
     def chooseCatalog {
+        if importPending.current {
+            return;
+        }
         if notesNeedSaving() {
             importError = "Save or discard your review-note changes before importing definitions.";
             return;
@@ -204,6 +208,9 @@ def:pub ProcessesPage -> JsxPage {
     }
 
     async def importCatalog(e: any) {
+        if importPending.current {
+            return;
+        }
         inputEl: any = e.target;
         files: any = inputEl.files;
         if not files or len(files) == 0 {
@@ -215,6 +222,7 @@ def:pub ProcessesPage -> JsxPage {
             inputEl.value = "";
             return;
         }
+        importPending.current = True;
         busy = True;
         importError = "";
         try {
@@ -237,6 +245,7 @@ def:pub ProcessesPage -> JsxPage {
             importError = "Could not import the catalog. Choose valid JSON no larger than 1 MiB and try again.";
         }
         inputEl.value = "";
+        importPending.current = False;
         busy = False;
     }
 
@@ -368,7 +377,9 @@ def:pub ProcessesPage -> JsxPage {
         }
     }
     def updateDraft(key: str, value: str) {
-        drafts = {** drafts, key: value};
+        if not importPending.current {
+            drafts = {** drafts, key: value};
+        }
     }
     def openSection(value: str) {
         tab = value;
@@ -431,6 +442,7 @@ def:pub ProcessesPage -> JsxPage {
                 accept=".json,application/json"
                 aria-label="Choose process catalog"
                 className="sr-only"
+                disabled={busy}
                 onChange={importCatalog}
             />
             <header
@@ -707,6 +719,7 @@ def:pub ProcessesPage -> JsxPage {
                                         process={active}
                                         step={selected}
                                         note={note}
+                                        disabled={busy}
                                         onNote={lambda (v: str) { updateDraft(
                                             draftKey, v
                                         ); }}
@@ -762,6 +775,7 @@ def:pub ProcessesPage -> JsxPage {
                                     process={active}
                                     step={selected}
                                     note={note}
+                                    disabled={busy}
                                     onNote={lambda (v: str) { updateDraft(
                                         draftKey, v
                                     ); }}

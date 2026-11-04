@@ -3,6 +3,8 @@
 Never drives a user's browser profile or installs personal definitions.
 """
 from pathlib import Path
+import copy
+import json
 import re
 import sys
 from playwright.sync_api import expect, sync_playwright
@@ -109,6 +111,49 @@ def run():
         jump(page, "Second step")
         expect(page.get_by_label("Review note", exact=True)).to_have_value(note)
         print("ok   drafts survive step/version/section changes and saved notes survive reload", flush=True)
+
+        upgraded = [json.loads(FIXTURE.read_text())[1]]
+        upgraded[0]["steps"][1].update(source_url="https://example.invalid/source", related_url="https://example.invalid/related", related_label="  ")
+        for revision, width in ((2, 1440), (3, 390)):
+            upgraded[0]["revision"] = revision
+            close_details(page)
+            page.set_viewport_size({"width": width, "height": 1000})
+            jump(page, "Second step")
+            held_imports = []
+            page.route("**/walker/ImportProcessCatalog", lambda route: held_imports.append(route))
+            page.get_by_label("Choose process catalog", exact=True).set_input_files({
+                "name": "upgrade.json", "mimeType": "application/json", "buffer": json.dumps(upgraded).encode(),
+            })
+            for _ in range(250):
+                if held_imports:
+                    break
+                page.wait_for_timeout(20)
+            assert len(held_imports) == 1, "The controlled catalog import must be pending"
+            expect(page.get_by_label("Review note", exact=True)).to_be_disabled()
+            expect(page.get_by_role("button", name="Save note", exact=True)).to_be_disabled()
+            expect(page.get_by_label("Choose process catalog", exact=True)).to_be_disabled()
+            # A second change event must not start another import, even if
+            # programmatically dispatched on the disabled file input.
+            page.get_by_label("Choose process catalog", exact=True).dispatch_event("change")
+            assert len(held_imports) == 1, "A duplicate import was submitted while the first was pending"
+            page.screenshot(path=str(OUT / f"import-busy-{width}.png"))
+            held_imports[0].fulfill(response=held_imports[0].fetch())
+            page.unroute("**/walker/ImportProcessCatalog")
+            expect(page.get_by_role("complementary", name="Step details", exact=True)).to_have_count(0)
+            jump(page, "Second step")
+            expect(page.get_by_label("Review note", exact=True)).to_have_value(note)
+            expect(page.get_by_label("Review note", exact=True)).to_be_enabled()
+            for url in ("https://example.invalid/source", "https://example.invalid/related"):
+                expect(page.get_by_role("link", name=url, exact=True)).to_have_attribute("href", url)
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        page.get_by_label("Choose process catalog", exact=True).set_input_files({
+            "name": "invalid.json", "mimeType": "application/json", "buffer": b"{",
+        })
+        expect(page.get_by_role("alert")).to_contain_text("Choose valid JSON")
+        expect(page.get_by_label("Review note", exact=True)).to_be_enabled()
+        expect(page.get_by_label("Review note", exact=True)).to_have_value(note)
+        imports.clear()
+        print("ok   imports pause note editing and duplicate submission on desktop/phone; unlabeled URLs remain visible", flush=True)
 
         held_saves = []
         page.route("**/walker/SaveProcessNote", lambda route: held_saves.append(route))
@@ -268,6 +313,33 @@ def run():
         page.unroute("**/walker/ListProcesses")
         page.get_by_role("button", name="Try again", exact=True).click()
         expect(page.locator('.process-diagram-panel')).to_have_count(1)
+
+        for axis in ("x", "y"):
+            tiny = copy.deepcopy(json.loads(FIXTURE.read_text())[0])
+            tiny.update(template_key="tiny-" + axis, family="Tiny " + axis, title="Tiny " + axis, transitions=[])
+            tiny["steps"] = [
+                {"id": f"tiny-{i}", "title": f"Point {i}", "x": 0, "y": 0, axis: value,
+                 "stage": "Group boundary" if i == 2 else ""}
+                for i, value in enumerate((-20000, 0, 5e-324, 1, 20000))
+            ]
+            assert api.walker("ImportProcessCatalog", {"definitions": [tiny]}, token)["ok"]
+            page.goto(BASE + "/processes?family=Tiny%20" + axis)
+            expect(page.locator('.process-map [data-step]')).to_have_count(5)
+            for paths in ("Main path", "All paths"):
+                page.get_by_role("button", name=paths, exact=True).click()
+                for zoom_case in ("fit", "actual", "enlarged"):
+                    if zoom_case == "actual":
+                        page.get_by_title("Zoom to 100%", exact=True).click()
+                    elif zoom_case == "enlarged":
+                        page.get_by_role("button", name="Zoom in", exact=True).click()
+                    layout(page)
+                    assert page.locator('.process-map [data-step]').evaluate_all("""nodes => nodes.every(n =>
+                        ['left','top','width','height'].every(k => n.style[k] !== '' && Number.isFinite(parseFloat(n.style[k]))))"""), "Nonfinite imported coordinates reached the rendered diagram"
+            jump(page, "Point 2")
+            close_details(page)
+            page.screenshot(path=str(OUT / f"tiny-{axis}.png"))
+        print("ok   subnormal coordinate gaps render finite, nonoverlapping nodes in main/all-path views", flush=True)
+
         api.walker("ApplyTemplate", {"template_key": "simple"}, token)
         page.goto(BASE + "/flowlines")
         expect(page.locator('[data-canvas="flow"]')).to_have_count(1)

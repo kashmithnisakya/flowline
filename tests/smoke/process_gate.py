@@ -5,6 +5,7 @@ Creates disposable local test workspaces; uses only the standard library.
 """
 import copy
 import json
+import math
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import sys
@@ -125,6 +126,22 @@ def run():
         assert walker("ListProcesses", token=empty_owner) == []
         assert domain(walker("ListProcesses", token=owner)) == domain(list(saved.values()))
     print("ok   malformed catalogs fail before writes, including invalid graph IDs, coordinates and links", flush=True)
+    large_owner = account()
+    large = {**copy.deepcopy(values[0]), "template_key": "large-defaults", "family": "Large defaults",
+             "steps": [{"id": f"step-{i}", "title": f"Step {i}"} for i in range(200)], "transitions": []}
+    assert walker("ImportProcessCatalog", {"definitions": [large]}, large_owner) == {"ok": True, "added": 1, "updated": 0}
+    large_saved = domain(walker("ListProcesses", token=large_owner))
+    assert len(large_saved[0]["steps"]) == 200
+    xs = [float(step["x"]) for step in large_saved[0]["steps"]]
+    assert all(math.isfinite(x) and 0 <= x <= 20000 for x in xs)
+    assert xs == sorted(set(xs))
+    assert all(float(step["y"]) == 0 for step in large_saved[0]["steps"])
+    too_many = copy.deepcopy(large)
+    too_many["revision"] = 2
+    too_many["steps"].append({"id": "step-200", "title": "One too many"})
+    assert walker("ImportProcessCatalog", {"definitions": [too_many]}, large_owner) == {"ok": False, "error": "invalid_catalog"}
+    assert domain(walker("ListProcesses", token=large_owner)) == large_saved
+    print("ok   200 steps receive bounded default coordinates and 201 steps fail without writes", flush=True)
     renamed = copy.deepcopy(values); renamed[0]["template_key"] = "sample-renamed"
     assert walker("ImportProcessCatalog", {"definitions": renamed}, owner) == {"ok": False, "error": "catalog_conflict"}
     collision = [copy.deepcopy(values[1])]; collision[0].update(variant="current", revision=2)

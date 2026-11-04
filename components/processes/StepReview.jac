@@ -18,13 +18,17 @@ def:pub StepReview(
     onNote: Callable[[str], None],
     onSaved: Callable[[], any],
     onJump: Callable[[str], None],
-    onClose: Callable[[], None]
+    onClose: Callable[[], None],
+    disabled: bool = False
 ) -> JsxElement {
     has message: str = "",
         busy: bool = False,
         failed: bool = False;
 
     async def save {
+        if busy or disabled {
+            return;
+        }
         busy = True;
         failed = False;
         message = "";
@@ -121,12 +125,12 @@ def:pub StepReview(
                                 </dt>
                                 <dd>
                                     <a
-                                        className="underline underline-offset-4"
+                                        className="break-all underline underline-offset-4"
                                         href={step[link[0]]}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        {step[link[1]]}
+                                        {step.get(link[1], "").strip() or step[link[0]]}
                                     </a>
                                 </dd>
                             </div>
@@ -173,16 +177,19 @@ def:pub StepReview(
                         value={note}
                         rows={4}
                         maxLength={6000}
-                        disabled={busy}
+                        disabled={busy or disabled}
                         placeholder="What should we change or clarify?"
                         onChange={lambda (e: ChangeEvent) {
+                            if disabled {
+                                return;
+                            }
                             onNote(e.target.value);
                             message = "";
                             failed = False;
                         }}
                     />
                     <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <Button size="sm" disabled={busy} onClick={save}>
+                        <Button size="sm" disabled={busy or disabled} onClick={save}>
                             {if busy {
                                 <Spinner key="busy"/>
                             }}

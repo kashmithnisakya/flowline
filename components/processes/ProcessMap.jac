@@ -5,7 +5,7 @@ import from "react" { useEffect }
 import from ...models { ProcessView, StepView }
 import from ..flowlines.FlowCanvas { FlowCanvas }
 import from ..flowlines.StepListRow { StepListRow }
-import from ..flowlines.geometry { MIN_NODE_W, detailOf, nodeHeight }
+import from ..flowlines.geometry { MIN_NODE_W, NODE_W, detailOf, nodeHeight }
 
 def nodeById(steps: list[dict[str, str]], key: str) -> dict[str, str] {
     for s in steps {
@@ -14,6 +14,29 @@ def nodeById(steps: list[dict[str, str]], key: str) -> dict[str, str] {
         }
     }
     return {};
+}
+
+# Keep ordered coordinates far enough apart for screen-sized nodes without
+# dividing by an arbitrarily small imported gap or magnifying the whole map.
+def spacedCoordinates(
+    values: list[float],
+    gap: float,
+    scale: float = 1.0,
+    headingAt: float | None = None,
+    headingGap: float = 0.0
+) -> list[float] {
+    positions: list[float] = [];
+    for value in values {
+        position = value * scale;
+        if positions {
+            clearance = headingGap
+                if headingAt is not None and value == headingAt
+                else gap;
+            position = max(position, positions[-1] + clearance);
+        }
+        positions.append(position);
+    }
+    return positions;
 }
 
 def processSteps(
@@ -46,35 +69,23 @@ def processSteps(
         }
     }
     xs.sort();
-    stretch = 1.0;
-    if len(xs) > 1 {
-        gap = min([xs[i] - xs[i - 1] for i in range(1, len(xs))]);
-        # Node text stays screen-sized even when the diagram layout shrinks.
-        stretch = max(1.0, (MIN_NODE_W + 20.0) / (gap * zoom));
-    }
+    ys.sort();
+    nodeWidth = max(MIN_NODE_W, NODE_W * zoom);
+    px = spacedCoordinates(xs, (nodeWidth + 20.0) / zoom);
     # Preserve readable row and optional group-heading clearance at every zoom.
-    yScale = 1.0;
-    if mainOnly and len(ys) > 1 {
-        ys.sort();
-        rowGap = min([ys[i] - ys[i - 1] for i in range(1, len(ys))]);
-        h = nodeHeight(detailOf(zoom), 0, False);
-        yScale = max(0.7, (h + 16.0) / (rowGap * zoom));
-        stageYs = [
-            float(s["y"])
-            for s in shown
-            if s.get("stage", "")
-        ];
-        beforeStage = [
-            y
-            for y in ys
-            if stageYs and y < min(stageYs)
-        ];
-        if beforeStage {
-            yScale = max(
-                yScale, (h + 48.0) / ((min(stageYs) - max(beforeStage)) * zoom)
-            );
-        }
-    }
+    h = nodeHeight(detailOf(zoom), 0, False);
+    stageYs = [
+        float(s["y"])
+        for s in shown
+        if s.get("stage", "")
+    ];
+    py = spacedCoordinates(
+        ys,
+        (h + 16.0) / zoom,
+        0.7 if mainOnly and len(ys) > 1 else 1.0,
+        min(stageYs) if stageYs else None,
+        (h + 48.0) / zoom
+    );
     for (index, item) in enumerate(shown) {
         kind = item.get("kind", "active");
         title = item.get("short_title", "") if compact else "";
@@ -99,8 +110,8 @@ def processSteps(
                 name=title,
                 kind=kind,
                 color="slate",
-                x=float(item["x"]) * stretch,
-                y=float(item["y"]) * yScale,
+                x=px[xs.index(float(item["x"]))],
+                y=py[ys.index(float(item["y"]))],
                 sort_order=float(index),
                 owner=owner,
                 blurb="",

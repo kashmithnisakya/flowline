@@ -23,6 +23,7 @@ are imported only into the authenticated caller's workspace, never a shared
 catalog. Repeating an import retains existing records. Increase `revision`
 explicitly to update a definition; IDs, notes and earlier-definition snapshots
 are preserved. Save or discard pending review-note changes before importing.
+Note editing and additional imports pause while an import is in progress.
 Malformed or conflicting catalogs cannot partially create or update records.
 
 Agents and scripts can use the same protected `ImportProcessCatalog` walker
@@ -56,6 +57,7 @@ through multiple steps are allowed. Policy/configuration rows have `title`,
 `detail` and optional `status` fields. Source links use `source_url` and
 `source_label`, with optional `related_url` and `related_label`; URLs must use
 HTTP or HTTPS.
+Labels are optional; a source link without a label displays its URL.
 
 The neutral fixture at `tests/fixtures/process_catalog.json` demonstrates this
 schema for tests. It is never installed by the application automatically.

@@ -7,6 +7,7 @@ before the binary loads them through its compiler-source handoff.
 from __future__ import annotations
 
 import argparse
+import errno
 import gzip
 import hashlib
 import json
@@ -40,6 +41,16 @@ def verify_patched_sources(source_root: Path, patches: list[dict[str, str]]) -> 
         verify(source_root / relative, checksum)
 
 
+def verify_prepared_sources(source_root: Path, manifest: dict) -> None:
+    verify_patched_sources(source_root, manifest["patches"])
+    stubs = source_root / "jaclang/vendor/typeshed/stdlib"
+    stamp = stubs / ".typeshed-sha"
+    if not (stubs / "typing.pyi").is_file() or not stamp.is_file() or (
+        stamp.read_text().strip() != manifest["typeshed"]["commit"]
+    ):
+        raise RuntimeError(f"Pinned standard-library stubs are missing: {source_root}")
+
+
 def extract_files(archive_path: Path, destination: Path, prefix: str) -> None:
     with tarfile.open(archive_path) as archive:
         for member in archive:
@@ -65,13 +76,7 @@ def prepare() -> Path:
     for patch in manifest["patches"]:
         verify(SPEC / patch["file"], patch["sha256"])
     if target.exists():
-        verify_patched_sources(target, manifest["patches"])
-        stubs = target / "jaclang/vendor/typeshed/stdlib"
-        stamp = stubs / ".typeshed-sha"
-        if not (stubs / "typing.pyi").is_file() or not stamp.is_file() or (
-            stamp.read_text().strip() != manifest["typeshed"]["commit"]
-        ):
-            raise RuntimeError(f"Pinned standard-library stubs are missing: {target}")
+        verify_prepared_sources(target, manifest)
         return target
 
     toolchains.mkdir(parents=True, exist_ok=True)
@@ -121,9 +126,11 @@ def prepare() -> Path:
         (source / "flowline-toolchain.json").write_text(json.dumps(manifest, indent=2) + "\n")
         try:
             source.rename(target)
-        except FileExistsError:
+        except OSError as exc:
+            if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                raise
             # Another invocation may have prepared the same verified inputs.
-            verify_patched_sources(target, manifest["patches"])
+        verify_prepared_sources(target, manifest)
     return target
 
 
