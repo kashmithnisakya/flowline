@@ -477,6 +477,41 @@ def api(page, name: str, body: dict):
     )
 
 
+def ai_chip_catches_up(page, task_id: str) -> None:
+    # A review can settle between the board's read and the sheet's first read,
+    # and the board's poll shows it only up to 60 s later. This board answers
+    # from before it settled, so only the sheet can correct the row.
+    step("ai: a row still showing Queued catches up when its sheet finds the review done")
+
+    def rewind(node) -> None:
+        if isinstance(node, dict):
+            if node.get("id") == task_id:
+                node.update({"ai_state": "queued", "ai_outcome": ""})
+            for value in node.values():
+                rewind(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewind(value)
+
+    def behind(route) -> None:
+        answer = route.fetch()
+        data = answer.json()
+        rewind(data)
+        route.fulfill(response=answer, json=data)
+
+    page.route("**/walker/BoardSnapshot", behind)
+    page.goto(f"{BASE}/board")
+    settle(page, "/board", "Board")
+    row = page.locator(f"[data-task-row='{task_id}']")
+    chip = row.locator(".ai-chip").filter(visible=True)
+    expect(chip).to_have_text("Queued")
+    page.unroute("**/walker/BoardSnapshot")
+    row.get_by_text("Reviewed by AI", exact=True).click()
+    runs = page.get_by_role("region", name="AI reviews")
+    expect(runs.get_by_text("Commented", exact=True)).to_be_visible()
+    expect(chip).to_have_text("Reviewed", timeout=15_000)
+
+
 def ai_run_once(page) -> None:
     # The task sheet's AI reviews: Reviewer (given code review above) owns
     # Review, a task with a linked PR lands there, and the sheet follows the
@@ -516,6 +551,7 @@ def ai_run_once(page) -> None:
     # The settled run refetches the task, so the row's chip settles with it.
     row = page.locator(f"[data-task-row='{made['id']}']")
     expect(row.locator(".ai-chip").filter(visible=True)).to_have_text("Reviewed", timeout=15_000)
+    ai_chip_catches_up(page, made["id"])
 
     step("ai: the AI page lists the run with its task")
     page.goto(f"{BASE}/ai")

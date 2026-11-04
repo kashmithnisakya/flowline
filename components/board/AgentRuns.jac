@@ -1,6 +1,7 @@
 """AI reviews: one task's newest run in the sheet, with the earlier ones a click
 away. Polls while a run is queued or running, and calls `onSettled` when the last
-open run settles, so the page can refresh the row's chip. Nothing with no runs."""
+open run settles, so the page can refresh the row's chip. Nothing with no runs.
+The first read counts as a settle: the row may predate a run that has since ended."""
 
 import from ...models { AgentRunView }
 import from ...constants { AI_RESPONSIBILITIES }
@@ -33,7 +34,7 @@ def:pub AgentRuns(
     has runs: list[AgentRunView] = [],
         tick: int = 0,
         busy: bool = False,
-        wasOpen: bool = False,
+        wasOpen: bool = True,
         showAll: bool = False;
 
     async can with (taskId, refreshKey, tick) entry {
@@ -46,7 +47,7 @@ def:pub AgentRuns(
         }
         runs = got;
         live = anyOpen(got);
-        if wasOpen and not live and onSettled {
+        if wasOpen and not live and len(got) > 0 and onSettled {
             onSettled();
         }
         wasOpen = live;
