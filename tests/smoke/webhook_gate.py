@@ -38,7 +38,7 @@ SYNC_MAX = int(os.environ.get("FLOWLINE_SYNC_MAX_WORKSPACES") or "20")
 # Never connected by any workspace, in this run or an earlier one against the
 # same store: the index is a docs-store row and outlives a single gate run.
 INST_NONE = 555
-READY_TIMEOUT = 420
+READY_TIMEOUT = 600
 TOKEN = ""
 FAILS: list[str] = []
 

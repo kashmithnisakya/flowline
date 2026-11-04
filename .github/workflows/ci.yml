@@ -173,7 +173,7 @@ jobs:
             echo "FLOWLINE_SYNC_MAX_WORKSPACES=2"
             # The AI runner: the fixed fake review instead of a model, a tick
             # every 5 s, retries 2 s apart and a claim that lapses in 8 s, so
-            # the agents gate sees a retry and a lapsed claim in a minute.
+            # the agents gate sees its retries in a minute.
             echo "FLOWLINE_FAKE_LLM=1"
             echo "FLOWLINE_AI_INTERVAL_SECONDS=5"
             echo "FLOWLINE_AI_BACKOFF_SECONDS=2"
