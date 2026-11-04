@@ -28,13 +28,10 @@ CACHED_READERS = [
     "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
     "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus", "ListResponsibilities",
 ]
-# Since 0.38 a clean build ignores @effects (jaseci-labs/jac#10410), so these
-# lose the cache. They warn rather than fail, or the job would stop before the
-# later gates. Empty this set once the pin carries the fix (jac#10447).
-EFFECTS_REGRESSION = {
-    "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
-    "GetFlowLine", "ListRepos", "GithubStatus", "ListResponsibilities",
-}
+# Since 0.38 a clean build ignores @effects (jaseci-labs/jac#10410); the
+# stand-in in services/compat restores these declarations, so this is empty.
+# A reader named here warns rather than fails, for the next such regression.
+EFFECTS_REGRESSION: set[str] = set()
 # Task lists stay uncached on purpose: a colleague's move, a webhook drain or
 # a sync from another tab must show on the next call, not 60 s later.
 LIVE_READERS = [

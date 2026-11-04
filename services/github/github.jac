@@ -6,7 +6,7 @@ server schedule (services/github/schedule.jac) and by hand; no walker a page
 load calls reaches GitHub."""
 
 import re;
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Project,
     Member,

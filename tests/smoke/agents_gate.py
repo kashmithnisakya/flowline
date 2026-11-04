@@ -5,11 +5,14 @@ github_stub.py: a move onto a role's step queues the role's responsibilities
 switched-off responsibility each skip with a log line, another workspace sees
 none of it, and the scheduled runner reviews a queued run (FLOWLINE_FAKE_LLM),
 retries a 5xx, fails a 403, skips a closed PR and a commit already reviewed,
-and retries a GitHub call that times out. Reuses webhook_gate's helpers.
+retries a GitHub call that times out, and takes a run back when its workers die
+mid-review. Reuses webhook_gate's helpers.
 Usage: agents_gate.py [base_url] [stub_url]"""
 import base64
 import json
 import os
+import signal
+import subprocess
 import sys
 import time
 
@@ -106,7 +109,12 @@ def queue_suite():
 
     move(tid, bid)
     move(tid, rid)
-    check("a second landing while one is active queues nothing more", len(runs(tid)) == 1, runs(tid))
+    # A tick can settle the first run between the moves, and a new landing then
+    # rightly queues another. What must never happen is two open at once.
+    relanded = runs(tid)
+    check("a second landing while one is active queues nothing more",
+          len([r for r in relanded if r.get("status") not in SETTLED]) <= 1,
+          [(r.get("status"), r.get("attempts")) for r in relanded])
 
     plain = walker("CreateTask", {"title": "No PR yet", "project_id": pid, "step_id": bid})
     move(plain["id"], rid)
@@ -345,13 +353,47 @@ def runner_suite():
           and repeat[0].get("status") == "skipped" and "already reviewed" in repeat[0].get("error", ""), repeat[:2])
 
     # Since 0.38 the scheduler holds a function across the service, so no tick can
-    # take back a claim while its review is alive, only once its pod dies, and no
-    # gate kills a pod. The delay outlasts gh()'s 20 s timeout, so this is its retry.
+    # take back a claim while its review is alive, only once its workers die (the
+    # suite below). The delay outlasts gh()'s 20 s timeout, so this is its retry.
     stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/11", "times": 1, "delay": 25})
     e = landed("GitHub too slow", 11)
     slow = settle(e, 1, 150)
     check("runner: a GitHub call that times out is tried again and finished once",
           slow and slow[0].get("status") == "done" and slow[0].get("attempts") == 2, slow)
+    return landed
+
+
+def server_workers():
+    # A `jac run` whose parent is one too; the supervisor respawns it.
+    found = subprocess.run(["pgrep", "-f", "^jac run"], capture_output=True, text=True).stdout.split()
+    parent = {p: subprocess.run(["ps", "-o", "ppid=", "-p", p], capture_output=True, text=True).stdout.strip()
+              for p in found}
+    return [int(p) for p in found if parent[p] in parent]
+
+
+def worker_death_suite(landed):
+    # The runtime never starts this task beside itself, so a live worker's claim
+    # cannot be taken back. Only a dead worker's can, so this kills them. It runs
+    # last: the run hold they leave behind lasts up to 30 s.
+    stub("/_stub/pulls", {"pulls": [pull(19, "sha-19")]})
+    stub("/_stub/fault", {"method": "GET", "path": f"/repos/{REPO}/pulls/19", "times": 1, "delay": 15})
+    e = landed("Worker dies mid review", 19)
+    deadline = time.time() + 60
+    while time.time() < deadline and (runs(e) or [{}])[0].get("status") != "running":
+        time.sleep(0.5)
+    victims = server_workers()
+    if not check("runner: a review is running and the server's workers are found",
+                 (runs(e) or [{}])[0].get("status") == "running" and bool(victims), (runs(e), victims)):
+        return
+    for pid in victims:
+        os.kill(pid, signal.SIGKILL)
+    check("  and the workers come back", wg.wait_ready())
+    rows = settle(e, 1, 150)
+    posted = [c for c in wg.stub_calls(INST) if c[0] == "POST" and "/pulls/19/reviews" in c[1]]
+    check("runner: a run whose workers died is taken back and finished once",
+          len(rows) == 1 and rows[0].get("status") == "done" and rows[0].get("attempts") == 2 and len(posted) == 1,
+          ([(r.get("status"), r.get("attempts")) for r in rows], posted))
+    check("  and the row's AI chip clears", ai_state(e) == "", ai_state(e))
 
 
 
@@ -360,7 +402,8 @@ def main() -> int:
         return 2
     unconnected = queue_suite()
     queued_home = wg.TOKEN
-    runner_suite()
+    landed = runner_suite()
+    runner_home = wg.TOKEN
     wg.TOKEN = queued_home
     gone = settle(unconnected)
     check("runner: a workspace with no GitHub connection fails its run",
@@ -372,6 +415,8 @@ def main() -> int:
     check("metrics: /metrics counts AI runs by outcome",
           status == 200 and 'flowline_ai_runs_total{key="code_review",outcome="done"}' in text
           and 'outcome="failed"' in text and "flowline_ai_run_seconds_bucket" in text, (status, text[:200]))
+    wg.TOKEN = runner_home
+    worker_death_suite(landed)
     print("agents gate: " + ("PASS" if not wg.FAILS else f"FAIL ({len(wg.FAILS)})"))
     return 1 if wg.FAILS else 0
 

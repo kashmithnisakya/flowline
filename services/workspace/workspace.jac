@@ -4,7 +4,7 @@ beside its own rows, in one call. BoardSnapshot fills its workspace fields
 from the same helper, so the board and the other pages never disagree on a
 sort."""
 
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Project,
     Repo,
