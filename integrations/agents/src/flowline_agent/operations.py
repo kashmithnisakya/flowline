@@ -5,8 +5,14 @@ from __future__ import annotations
 import difflib
 import json
 from importlib.resources import files
+from typing import Literal, get_args
 
 from .client import FlowlineClient, FlowlineError
+
+TaskStatus = Literal[
+    "Backlog", "In Progress", "Review", "Changes Requested", "Done", "Blocked"
+]
+TASK_STATUSES = get_args(TaskStatus)
 
 
 def process_example() -> dict:
@@ -113,6 +119,10 @@ def task_move(
     if bool(step_id) == bool(status):
         raise FlowlineError(
             "invalid_transition", "Provide exactly one of step_id or status"
+        )
+    if status and status not in TASK_STATUSES:
+        raise FlowlineError(
+            "invalid_transition", "Status must be one of: " + ", ".join(TASK_STATUSES)
         )
     return client.walker(
         "MoveTask", {"task_id": task_id, "step_id": step_id, "status": status}

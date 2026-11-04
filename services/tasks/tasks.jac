@@ -1392,6 +1392,12 @@ walker:protect MoveTask(find_task) {
         reports: list[TaskView] = [];
 
     can move with Task entry {
+        if not self.step_id and self.status not in STATUSES {
+            view = here.to_view();
+            view.refused = "Unknown task status";
+            report view;
+            disengage;
+        }
         # `here` is the task; `root` is the caller's own root.
         holder = root;
         landing = self.status;

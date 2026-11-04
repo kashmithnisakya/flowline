@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -137,9 +137,13 @@ def create_server(client: FlowlineClient, *, allow_write: bool = False) -> FastM
 
         @server.tool(annotations=write)
         def move_task(
-            task_id: str, step_id: str = "", status: str = ""
+            task_id: str, step_id: str = "", status: ops.TaskStatus | Literal[""] = ""
         ) -> dict[str, Any]:
-            """Move a task under server entry rules; supply exactly one of step_id or status."""
+            """Supply exactly one target. Use step_id for configured flows and their entry rules.
+
+            A legacy status move clears the current step, so step-specific
+            entry rules and handoffs do not apply to that move.
+            """
             return invoke(ops.task_move, task_id, step_id, status)
 
     return server

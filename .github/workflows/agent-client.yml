@@ -10,13 +10,16 @@ permissions:
 
 jobs:
   client:
-    name: CLI and MCP protocol
+    name: CLI and MCP protocol (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - name: Install client and test tools
         run: python -m pip install ./integrations/agents pytest build
       - name: Test hosted URL handling, CLI and actual MCP stdio protocol

@@ -111,8 +111,11 @@ flowline task get TASK_ID
 flowline task move TASK_ID --step-id STEP_ID
 ```
 
-Task moves retain the server's entry rules, ownership checks and normal side
+Step moves retain the server's entry rules, ownership checks and normal side
 effects (including configured GitHub synchronization/AI responsibilities).
+Use `--step-id` for a configured flow. A legacy `--status` move clears the
+current step, so step-specific entry rules and handoffs do not apply. Statuses
+are limited to Backlog, In Progress, Review, Changes Requested, Done and Blocked.
 Unlike process saves, task creation has no idempotency key in the existing API;
 reconcile a timeout with a read before creating again. This interface does not
 expose the existing full-replacement task editor as a partial-update tool.

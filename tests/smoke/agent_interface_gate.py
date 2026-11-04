@@ -314,9 +314,31 @@ def run():
             "task", "create", "--project-id", project_id, "--title", "Headless task"
         )
         assert cli("task", "get", task["id"])["title"] == "Headless task"
+        before_move = domain(walker("GetTask", {"task_id": task["id"]}, owner))
+        for invalid_status in ("", "Misspelled status"):
+            refused = walker(
+                "MoveTask", {"task_id": task["id"], "status": invalid_status}, owner
+            )
+            assert refused.get("refused") == "Unknown task status", refused
+            assert (
+                domain(walker("GetTask", {"task_id": task["id"]}, owner)) == before_move
+            )
         cli("task", "move", task["id"], "--status", "In Progress")
+        active_step = walker("SaveStep", {"name": "Active", "kind": "active"}, owner)
+        review_step = walker("SaveStep", {"name": "Needs PR", "kind": "handoff"}, owner)
+        walker("SetStepRules", {"step_id": review_step["id"], "needs_pr": True}, owner)
+        moved = cli("task", "move", task["id"], "--step-id", active_step["id"])
+        assert moved["step_id"] == active_step["id"]
+        before_refusal = domain(walker("GetTask", {"task_id": task["id"]}, owner))
+        refused = cli(
+            "task", "move", task["id"], "--step-id", review_step["id"], expect=1
+        )
+        assert refused["error"] == "transition_refused"
+        assert (
+            domain(walker("GetTask", {"task_id": task["id"]}, owner)) == before_refusal
+        )
         print(
-            "ok   installed CLI creates/exports/diffs/updates processes and works with tasks via HTTP",
+            "ok   CLI process/task operations, invalid status refusal and step entry rules",
             flush=True,
         )
 
@@ -356,10 +378,48 @@ def run():
                     },
                 )
                 assert result.isError and "conflict" in result.content[0].text
+                result = await session.call_tool(
+                    "create_task",
+                    {
+                        "project_id": project_id,
+                        "title": "MCP task",
+                        "step_id": active_step["id"],
+                        "notes": "Preserve these notes",
+                    },
+                )
+                assert not result.isError, result
+                mcp_task = result.structuredContent
+                assert mcp_task["step_id"] == active_step["id"]
+                result = await session.call_tool(
+                    "get_task", {"task_id": mcp_task["id"]}
+                )
+                assert (
+                    not result.isError
+                    and result.structuredContent["notes"] == "Preserve these notes"
+                )
+                before_refusal = domain(result.structuredContent)
+                result = await session.call_tool(
+                    "move_task",
+                    {"task_id": mcp_task["id"], "step_id": review_step["id"]},
+                )
+                assert result.isError and "transition_refused" in result.content[0].text
+                result = await session.call_tool(
+                    "get_task", {"task_id": mcp_task["id"]}
+                )
+                assert (
+                    not result.isError
+                    and domain(result.structuredContent) == before_refusal
+                )
+                result = await session.call_tool(
+                    "move_task", {"task_id": mcp_task["id"], "status": "Blocked"}
+                )
+                assert not result.isError, result
+                assert result.structuredContent["status"] == "Blocked"
+                assert result.structuredContent["step_id"] == ""
 
         asyncio.run(mcp())
         print(
-            "ok   real MCP initialization, discovery, structured reads/writes and failed conflict result",
+            "ok   real MCP process/task operations, conflicts and entry-rule refusals",
             flush=True,
         )
     print("agent interface gate: PASS", flush=True)

@@ -74,11 +74,26 @@ def test_stdio_discovery_http_and_failed_write(allow_write, tmp_path):
             assert not result.isError
             assert result.structuredContent["title"] == "Remote workspace"
             if allow_write:
+                count = len(seen)
+                invalid_move = await session.call_tool(
+                    "move_task", {"task_id": "task-id", "status": "Misspelled status"}
+                )
+                assert invalid_move.isError
+                assert len(seen) == count, "invalid statuses must never reach the API"
                 result = await session.call_tool(
                     "save_process", {"document": {}, "request_id": "attempt-1"}
                 )
                 assert result.isError
                 assert "conflict" in result.content[0].text
+            else:
+                count = len(seen)
+                result = await session.call_tool(
+                    "save_process", {"document": {}, "request_id": "read-only-attempt"}
+                )
+                assert result.isError
+                assert len(seen) == count, (
+                    "read-only mode must refuse an explicit write call"
+                )
 
     try:
         asyncio.run(run())

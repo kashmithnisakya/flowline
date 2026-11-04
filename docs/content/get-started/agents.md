@@ -68,7 +68,9 @@ granular API-token scopes are not introduced by this integration.
 Ask the agent to get a process example, inspect existing processes, validate
 and preview a change, then save it with the current etag and a request ID.
 It can also inspect workspace/projects/operational flows, list/create tasks
-and move tasks under the normal entry rules. The UI remains available for
+and move tasks to steps under the normal entry rules. Use step IDs for a
+configured flow: legacy status moves clear the current step and do not apply
+step-specific entry rules or handoffs. The UI remains available for
 existing operational features; editing process definitions does not modify
 that operational board.
 

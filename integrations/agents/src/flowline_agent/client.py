@@ -58,7 +58,7 @@ def normalize_url(url: str) -> str:
         or parsed.password is not None
         or parsed.query
         or parsed.fragment
-        or any(c.isspace() for c in url)
+        or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url)
         or (parsed.scheme != "https" and not (parsed.scheme == "http" and loopback))
     ):
         raise FlowlineError(

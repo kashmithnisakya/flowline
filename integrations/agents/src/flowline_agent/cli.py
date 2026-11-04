@@ -109,7 +109,12 @@ def parser() -> argparse.ArgumentParser:
     move.add_argument("task_id")
     target = move.add_mutually_exclusive_group(required=True)
     target.add_argument("--step-id", default="")
-    target.add_argument("--status", default="")
+    target.add_argument(
+        "--status",
+        choices=ops.TASK_STATUSES,
+        default="",
+        help="Legacy status move; clears the current step. Use --step-id for flow entry rules",
+    )
     return root
 
 

@@ -12,6 +12,7 @@ from flowline_agent.client import (
     save_token,
     settings,
 )
+from flowline_agent.operations import task_move
 
 
 def client_for(handler):
@@ -32,6 +33,8 @@ def client_for(handler):
         "https://remote.example/#x",
         "https://remote.example/ with-space",
         "https://[invalid",
+        "https://remote.example/\x00",
+        "https://remote.example/\x7f",
     ],
 )
 def test_reject_unsafe_origins(url):
@@ -132,6 +135,17 @@ def test_refusals_are_failures(reports, code):
         client.walker("SaveProcessDefinition")
     assert caught.value.code == code
     client.close()
+
+
+def test_unknown_task_status_is_refused_without_a_write():
+    requests = []
+    client = client_for(lambda request: requests.append(request))
+    try:
+        with pytest.raises(FlowlineError, match="Status must be one of"):
+            task_move(client, "task-id", status="Misspelled status")
+        assert requests == []
+    finally:
+        client.close()
 
 
 def test_token_is_bound_to_complete_origin(monkeypatch, tmp_path):
