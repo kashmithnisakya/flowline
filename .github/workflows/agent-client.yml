@@ -1,0 +1,25 @@
+name: Agent client
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    name: CLI and MCP protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install client and test tools
+        run: python -m pip install ./integrations/agents pytest build
+      - name: Test hosted URL handling, CLI and actual MCP stdio protocol
+        run: python -m pytest integrations/agents/tests -q
+      - name: Build installable client distributions
+        run: python -m build integrations/agents

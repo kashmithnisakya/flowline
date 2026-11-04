@@ -10,6 +10,10 @@ JSX/React client) with [jac-shadcn](https://github.com/jaseci-labs/jaseci) UI.
 it, the data graph, every API walker and deploying with jachammer (sources in
 [`docs/`](docs/)).
 
+The [MCP bridge and CLI](integrations/agents/README.md) connect agents and
+terminals to a hosted Flowline API without running the app locally. Process
+authoring requires the hosted runtime fix described in that guide.
+
 ![A tour of Flowline: sign in to the board, tick a task's checklist and read how it got there, a move the next step's rule refuses, the flow line with its automatic arrows and its role lanes, the roadmap and the Overview](assets/demo/flowline-demo.gif)
 
 ## Draw your flow line, get your board

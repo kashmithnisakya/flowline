@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flowline-agent-client"
+version = "0.1.0"
+description = "Hosted Flowline API client, CLI and MCP bridge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.28,<0.29", "mcp==1.30.0"]
+
+[project.scripts]
+flowline = "flowline_agent.cli:main"
+flowline-mcp = "flowline_agent.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flowline_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

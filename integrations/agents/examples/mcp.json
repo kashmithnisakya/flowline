@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "flowline": {
+      "type": "stdio",
+      "command": "flowline-mcp",
+      "args": ["--url", "https://your-flowline.example", "--allow-write"]
+    }
+  }
+}

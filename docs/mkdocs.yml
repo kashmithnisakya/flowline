@@ -167,6 +167,7 @@ nav:
       - Configuration: get-started/configuration.md
       - Single sign-on: get-started/sso.md
       - Connect GitHub: get-started/github-app.md
+      - Agents, MCP and CLI: get-started/agents.md
   - Concepts:
       - concepts/index.md
       - Data graph: concepts/data-graph.md
@@ -191,6 +192,7 @@ nav:
       - AI responsibilities: api/agents.md
       - GitHub: api/github.md
       - Webhooks: api/webhooks.md
+      - Process authoring: api/process-authoring.md
       - Types: api/types.md
   - Deploy:
       - deploy/index.md

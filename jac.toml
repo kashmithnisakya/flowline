@@ -205,6 +205,7 @@ default = "server"
 # Theme choices and the stored preference: browser-only, no evidence of its own.
 "lib.theme" = "client"
 models = "server"
+"services.processes.authoring" = "server"
 "services.agents.agents" = "server"
 "services.agents.runs" = "server"
 "services.agents.runner" = "server"

@@ -191,6 +191,15 @@ jobs:
       - name: API gate (shell, bundle, register, login, walkers, concurrency)
         run: python3 tests/smoke/api_gate.py http://localhost:8000
 
+      - name: Install the hosted CLI and MCP bridge
+        run: python3 -m pip install ./integrations/agents
+
+      - name: Agent interface gate (authoring, concurrent writes, isolation, CLI and MCP)
+        run: python3 tests/smoke/agent_interface_gate.py http://localhost:8000
+
+      - name: Process authoring preserves review history and managed definitions
+        run: jac test tests/unit/process_authoring.jac
+
       - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
         run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
 
