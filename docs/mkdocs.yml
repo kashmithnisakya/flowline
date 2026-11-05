@@ -186,6 +186,7 @@ nav:
       - Roadmap: api/roadmap.md
       - Activity log: api/log.md
       - Flow lines: api/flow-lines.md
+      - Process storyboards: api/processes.md
       - Insights: api/insights.md
       - Assistant: api/assistant.md
       - AI responsibilities: api/agents.md
@@ -198,6 +199,8 @@ nav:
       - Production configuration: deploy/production.md
       - Operations: deploy/operations.md
   - Contributing:
+      - Review delivery processes: contributing/process-review.md
+      - Style and UX guide: contributing/style-and-ux-guide.md
       - contributing/index.md
       - Verification and CI: contributing/verification.md
       - Jac gotchas: contributing/jac-gotchas.md

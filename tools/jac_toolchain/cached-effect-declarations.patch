@@ -1,0 +1,15 @@
+--- a/jaclang/compiler/passes/impl/endpoint_effect_pass.impl.jac
++++ b/jaclang/compiler/passes/impl/endpoint_effect_pass.impl.jac
+@@ -379,3 +379,9 @@
+-        target = ability_of_symbol(self._call_target_symbol(decorator));
+-        if target is None
+-            or not ("/" + target.loc.mod_path.replace("\\", "/")).endswith(
++        symbol = self._call_target_symbol(decorator);
++        if symbol is None {
++            continue;
++        }
++
++        found = callable_key(symbol);
++        if found.key != "effects"
++            or found.owner is None
++            or not ("/" + found.owner.loc.mod_path.replace("\\", "/")).endswith(

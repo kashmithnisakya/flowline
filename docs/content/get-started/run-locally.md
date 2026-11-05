@@ -7,10 +7,15 @@ data goes, and the habits that keep a local server honest.
 ## Install dependencies
 
 ```bash
-jac install
+python3 tools/jac.py install
 ```
 
-`jac install` reads `[dependencies]` (Python packages such as `requests`,
+The wrapper applies the verified process-review compiler backports before
+running Jac. It requires the exact base binary pinned in `jac.toml`, Python 3,
+`patch` and GitHub access on first use; later runs reuse the isolated source.
+See [compiler prerequisites](../contributing/process-review.md#compiler-prerequisites).
+
+`install` reads `[dependencies]` (Python packages such as `requests`,
 `pyjwt` and `cryptography`) and `[dependencies.npm]` (React, Radix, Tailwind and
 friends) from `jac.toml`. Run it again whenever those tables change.
 
@@ -43,7 +48,7 @@ fine until you [connect a real GitHub App](github-app.md).
 === "Production mode"
 
     ```bash
-    jac run --no-dev main.jac
+    python3 tools/jac.py run --no-dev main.jac
     ```
 
     The client bundle is built once and the client and API share one origin,
@@ -56,7 +61,7 @@ fine until you [connect a real GitHub App](github-app.md).
 === "Hot reload"
 
     ```bash
-    jac run -w 1 main.jac
+    python3 tools/jac.py run -w 1 main.jac
     ```
 
     The app is served on `:8000` with hot module replacement and the API on
@@ -73,7 +78,7 @@ fine until you [connect a real GitHub App](github-app.md).
     The hot-reload dev server proxies `/walker`, `/user`, `/function`,
     `/graph`, `/admin`, `/static`, `/assets`, `/docs` and `/introspect` to the
     API, but not `/sso`. Exercise Google or GitHub sign-in with
-    `jac run --no-dev main.jac`.
+    `python3 tools/jac.py run --no-dev main.jac`.
 
 ## First run
 

@@ -1,5 +1,5 @@
 """The phone tab bar below lg: Overview, Board (with its project's other views),
-Ask and More (Workspace, and the AI page through it)."""
+Processes, Ask and More (Workspace, and the AI page through it)."""
 
 import from "@jac/runtime" { Link }
 import from ..common.CommandPalette { PageIcon }
@@ -18,10 +18,11 @@ def:pub TabBar(path: str, askOpen: bool, onAsk: Callable[[], None]) -> JsxElemen
         or isCurrent(path, "/roadmap")
     );
     more = isCurrent(path, "/workspace") or isCurrent(path, "/ai");
+    processes = isCurrent(path, "/processes");
     return
         <nav
             aria-label="Pages"
-            className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
             <Link
                 to="/overview"
@@ -38,6 +39,14 @@ def:pub TabBar(path: str, askOpen: bool, onAsk: Callable[[], None]) -> JsxElemen
             >
                 <PageIcon name="board" size={20}/>
                 Board
+            </Link>
+            <Link
+                to="/processes"
+                aria-current={"page" if processes else None}
+                className={TAB + (TAB_ON if processes else TAB_OFF)}
+            >
+                <PageIcon name="processes" size={20}/>
+                Processes
             </Link>
             <button
                 type="button"

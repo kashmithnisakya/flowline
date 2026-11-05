@@ -1,0 +1,170 @@
+[
+  {
+    "template_key": "sample-current",
+    "title": "Sample process \u00b7 Current",
+    "family": "Sample group",
+    "variant": "current",
+    "revision": 1,
+    "summary": "Synthetic data for process review tests.",
+    "steps": [
+      {
+        "id": "node-a",
+        "title": "First step",
+        "kind": "start",
+        "owner": "Owner",
+        "x": "0",
+        "y": "0"
+      },
+      {
+        "id": "node-b",
+        "title": "Second step",
+        "kind": "handoff",
+        "owner": "Reviewer",
+        "x": "260",
+        "y": "0"
+      },
+      {
+        "id": "node-c",
+        "title": "Last step",
+        "kind": "done",
+        "owner": "Owner",
+        "x": "520",
+        "y": "0"
+      },
+      {
+        "id": "node-d",
+        "title": "Alternate step",
+        "kind": "active",
+        "owner": "Owner",
+        "path": "branch",
+        "x": "260",
+        "y": "180"
+      }
+    ],
+    "transitions": [
+      {
+        "source": "node-a",
+        "target": "node-b",
+        "label": "Continue",
+        "kind": "forward"
+      },
+      {
+        "source": "node-b",
+        "target": "node-c",
+        "label": "Continue",
+        "kind": "forward"
+      },
+      {
+        "source": "node-b",
+        "target": "node-d",
+        "label": "Alternate",
+        "kind": "forward"
+      },
+      {
+        "source": "node-d",
+        "target": "node-b",
+        "label": "Return",
+        "kind": "return"
+      }
+    ],
+    "policies": [
+      {
+        "title": "Sample policy",
+        "status": "Defined",
+        "detail": "Text supplied by the catalog."
+      }
+    ],
+    "configuration": [
+      {
+        "title": "Sample setting",
+        "status": "To configure",
+        "detail": "A value supplied by the catalog."
+      }
+    ]
+  },
+  {
+    "template_key": "sample-proposed",
+    "title": "Sample process \u00b7 Proposed",
+    "family": "Sample group",
+    "variant": "proposed",
+    "revision": 1,
+    "summary": "Synthetic data for process review tests.",
+    "steps": [
+      {
+        "id": "node-a",
+        "title": "First step",
+        "kind": "start",
+        "owner": "Owner",
+        "x": "0",
+        "y": "0"
+      },
+      {
+        "id": "node-b",
+        "title": "Second step",
+        "kind": "handoff",
+        "owner": "Reviewer",
+        "x": "260",
+        "y": "0",
+        "stage": "Sample group boundary"
+      },
+      {
+        "id": "node-c",
+        "title": "Last step",
+        "kind": "done",
+        "owner": "Owner",
+        "x": "520",
+        "y": "0",
+        "stage": "Sample group boundary"
+      },
+      {
+        "id": "node-d",
+        "title": "Alternate step",
+        "kind": "active",
+        "owner": "Owner",
+        "path": "branch",
+        "x": "260",
+        "y": "180"
+      }
+    ],
+    "transitions": [
+      {
+        "source": "node-a",
+        "target": "node-b",
+        "label": "Continue",
+        "kind": "forward"
+      },
+      {
+        "source": "node-b",
+        "target": "node-c",
+        "label": "Continue",
+        "kind": "forward"
+      },
+      {
+        "source": "node-b",
+        "target": "node-d",
+        "label": "Alternate",
+        "kind": "forward"
+      },
+      {
+        "source": "node-d",
+        "target": "node-b",
+        "label": "Return",
+        "kind": "return"
+      }
+    ],
+    "policies": [
+      {
+        "title": "Sample policy",
+        "status": "Defined",
+        "detail": "Text supplied by the catalog."
+      }
+    ],
+    "configuration": [
+      {
+        "title": "Sample setting",
+        "status": "To configure",
+        "detail": "A value supplied by the catalog."
+      }
+    ]
+  }
+]

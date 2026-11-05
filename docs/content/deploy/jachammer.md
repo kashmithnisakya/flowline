@@ -5,6 +5,44 @@ cluster. Its CLI bundles the repo, uploads it, and follows the rollout until the
 URL answers.
 { .fl-lede }
 
+## Jac Builder previews
+
+The Processes library requires all six compiler/runtime fixes described in the
+[process review guide](../contributing/process-review.md#compiler-prerequisites).
+The local/CI wrapper does not patch a hosted runtime image. A stock 0.38.2 or
+0.39.0 preview cannot validate review-note drafts or low-zoom process geometry.
+The compiler fixes also preserve collection truthiness and declared-reader
+metadata when compiling package-relative paths. Hosted rollout remains blocked until its compiler image includes all
+six fixes and the deployed app passes the API, process and canvas gates.
+
+[Jac Builder](https://github.com/jaseci-labs/jacBuilder) is the repository behind
+JacHammer. Import the **whole Flowline
+repository**, keeping `jac.toml` at the app root and its exact
+`[project] jac-version = "=={{ jac_version }}"` pin. The canvas uses the app's
+models, shared constants, components and server walkers; copying only the
+canvas files does not produce a standalone app.
+
+Builder's Kubernetes preview selects the project's pinned runtime separately
+from Builder's own runtime. Do not remove or change the pin just to match the
+IDE. Its development preview runs one worker; the two workers configured in
+Flowline's `jac.toml` remain the production setting. A Builder local-preview
+provider that cannot honor this pin needs a Kubernetes preview instead; to
+test locally, run the pinned binary through the verified source wrapper with
+`python3 tools/jac.py run --dev --workers 1 main.jac`.
+
+Set the project environment as described [below](#4-set-environment-variables).
+Keep the `[apps.flowline]` and `[apps.pr_review]` declarations and the placement
+pins: a production deploy includes the web client, API and review service.
+The canvas changes use the existing step `x` and `y` fields and walker request
+shapes, so they need no data migration or new package dependency.
+Deploy the client and API from the same revision: older APIs reset negative
+positions to zero.
+
+Before deploying, run the [Flow canvas regression gate](../contributing/verification.md#flow-canvas-regressions)
+against the preview. For a deployment manifest check, use the dry-run gate
+described in [Verification and CI](../contributing/verification.md#what-ci-runs);
+it stages the cluster and secret placeholders in a temporary configuration.
+
 ## 1. Install the CLI
 
 ```bash

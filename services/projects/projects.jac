@@ -2,7 +2,7 @@
 and works there: the traversal from the caller's root is the isolation, so
 only a jid-addressed row needs the owned() check."""
 
-import from services.compat.jaclang.lib.effects { effects }
+import from jaclang.lib.effects { effects }
 import from models {
     Project,
     Projects,
