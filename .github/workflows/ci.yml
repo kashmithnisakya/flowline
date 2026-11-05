@@ -137,6 +137,9 @@ jobs:
       - name: Prepare verified compiler and runtime backports
         run: python3 tools/jac.py --github-env "$GITHUB_ENV"
 
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
+
       - name: jac install (python + npm dependencies)
         run: jac install
 
