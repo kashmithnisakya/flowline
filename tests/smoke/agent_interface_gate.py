@@ -130,6 +130,27 @@ def run():
         flush=True,
     )
 
+    competing = {**DOCUMENT, "family": "Concurrent group"}
+    with ThreadPoolExecutor(2) as pool:
+        slots = list(
+            pool.map(
+                lambda i: walker(
+                    "SaveProcessDefinition",
+                    {"document": competing, "request_id": f"same-slot-{i}"},
+                    owner,
+                ),
+                range(2),
+            )
+        )
+    assert sum(r.get("ok", False) for r in slots) == 1, slots
+    assert [r.get("error") for r in slots if not r.get("ok")] == [
+        "family_variant_conflict"
+    ], slots
+    assert walker("ListProcessDefinitions", token=owner)["total"] == 2
+    print(
+        "ok   distinct concurrent requests cannot duplicate family/variant", flush=True
+    )
+
     current = walker(
         "GetProcessDefinition", {"process_id": pid, "include_history": True}, owner
     )["process"]
@@ -265,18 +286,31 @@ def run():
             "login", "--email", email, "--password-stdin", stdin=password + "\n"
         )
         assert login == {"ok": True, "url": BASE, "authenticated": True}
+        cli_document = {**DOCUMENT, "family": "CLI group"}
         cli_created = cli(
             "process",
             "create",
             "-",
             "--request-id",
             "cli-create",
-            stdin=json.dumps(DOCUMENT),
+            stdin=json.dumps(cli_document),
         )
         cli_process = cli("process", "get", cli_created["process_id"])["process"]
-        assert cli_process["document"] == DOCUMENT
-        assert cli("process", "export", cli_created["process_id"]) == DOCUMENT
-        changed = {**DOCUMENT, "summary": "Edited through the hosted API CLI"}
+        assert cli_process["document"] == cli_document
+        assert cli("process", "export", cli_created["process_id"]) == cli_document
+        assert (
+            cli(
+                "process",
+                "create",
+                "-",
+                "--request-id",
+                "cli-duplicate",
+                stdin=json.dumps(cli_document),
+                expect=1,
+            )["error"]
+            == "family_variant_conflict"
+        )
+        changed = {**cli_document, "summary": "Edited through the hosted API CLI"}
         assert cli(
             "process", "diff", cli_created["process_id"], "-", stdin=json.dumps(changed)
         )["diff"]
@@ -356,8 +390,10 @@ def run():
                 assert "save_process" in {
                     t.name for t in (await session.list_tools()).tools
                 }
+                mcp_document = {**DOCUMENT, "family": "MCP group"}
                 result = await session.call_tool(
-                    "save_process", {"document": DOCUMENT, "request_id": "mcp-create"}
+                    "save_process",
+                    {"document": mcp_document, "request_id": "mcp-create"},
                 )
                 assert not result.isError, result
                 receipt = result.structuredContent
@@ -366,12 +402,20 @@ def run():
                 )
                 assert (
                     not result.isError
-                    and result.structuredContent["process"]["document"] == DOCUMENT
+                    and result.structuredContent["process"]["document"] == mcp_document
+                )
+                result = await session.call_tool(
+                    "save_process",
+                    {"document": mcp_document, "request_id": "mcp-duplicate"},
+                )
+                assert (
+                    result.isError
+                    and "family_variant_conflict" in result.content[0].text
                 )
                 result = await session.call_tool(
                     "save_process",
                     {
-                        "document": DOCUMENT,
+                        "document": mcp_document,
                         "process_id": receipt["process_id"],
                         "request_id": "mcp-stale",
                         "expected_etag": "stale",

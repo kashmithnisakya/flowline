@@ -34,19 +34,23 @@ example catalogue, are readable through this API.
 Returns `ok` and `errors` without saving. The document has exactly `title`,
 `family`, `variant`, `summary`, `steps`, `transitions`, `policies` and
 `configuration`. `variant` is `current` or `proposed`, a descriptive label
-rather than an approval or execution state. `family` is a lowercase identifier.
+rather than an approval or execution state. `family` is a nonempty group label
+of at most 100 characters, shared with the process library.
 
 Steps have stable, unique identifiers and string metadata: `id`, `title`,
 `owner`, `mode`, `status`, `detail`, `guard`, `inputs`, `outputs`, `tool`, `x`
-and `y`. Coordinates are finite numeric strings within ±20,000. Optional
-source/related links require HTTP(S), no credentials and a corresponding
-label. Transitions have string `source`, `target`, `label` and `kind`
+and `y`. IDs support letters, digits, dots, underscores and hyphens, start with
+a letter or digit, and have at most 80 characters. Optional `path` (`main` or
+`branch`), `short_title` and `stage` metadata survives an authored copy.
+Coordinates are finite numeric strings within ±20,000. Optional source/related
+links require HTTP(S) without credentials; labels are optional, as in the
+process library. Transitions have string `source`, `target`, `label` and `kind`
 (`forward`/`return`), with distinct, existing endpoint IDs. Return loops are
 valid. This structural validation does not prove business correctness,
 approval, reachability of a release or successful execution.
 
-Policy records have `title` and `detail`; configuration records also have
-`status`. Documents are capped at 256 KiB of canonical JSON, collections at
+Policy records have `title`, `detail` and optional `status`; configuration
+records require all three. Documents are capped at 256 KiB of canonical JSON, collections at
 500 records and metadata strings at 8,000 characters (title: 200).
 
 ::: walker SaveProcessDefinition
@@ -58,6 +62,11 @@ it. The definition ID and all review notes are preserved, including notes on
 retired steps. Updating increments `revision` and changes the etag. The etag
 also reflects notes and snapshot generation, so a review-note or example
 update invalidates an older authoring read.
+
+Each workspace has at most one definition for a given `(family, variant)`.
+Creating or moving a definition into an occupied pair returns
+`family_variant_conflict` without changing its revision or history. Choose
+an unused family/variant pair when making an independent copy.
 
 Managed example definitions must first be exported and created as a custom
 copy. Direct authoring updates return `template_requires_copy`; their revision
@@ -73,12 +82,14 @@ write, not any changes made afterward. Read the process for its current state.
 Requests run in Jac's serializable transaction with retry support. Concurrent
 creates with the same request ID produce one definition; concurrent edits
 with the same etag permit one winner and report `conflict` for stale input.
+Distinct concurrent creates for the same family/variant permit one winner.
 These cases are covered by the two-worker integration gate.
 
 Success reports `ok`, `process_id`, `etag`, `revision`, `request_id` and
 `replayed`. Failures report `ok: false` with `invalid_definition`,
 `invalid_request_id`, `unexpected_etag`, `not_found`, `conflict`,
-`request_id_reused`, `template_requires_copy` or `history_limit`. At 200 snapshots, further changes are
+`request_id_reused`, `family_variant_conflict`, `template_requires_copy` or
+`history_limit`. At 200 snapshots, further changes are
 refused; no history is silently removed. Request receipts have no automatic
 expiry in this version.
 

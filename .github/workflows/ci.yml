@@ -191,6 +191,15 @@ jobs:
       - name: API gate (shell, bundle, register, login, walkers, concurrency)
         run: python3 tests/smoke/api_gate.py http://localhost:8000
 
+      - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
+        run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
+
+      - name: Automation gate (entry rules, label, merge and review triggers, PR linking)
+        run: python3 tests/smoke/automation_gate.py http://localhost:8000 http://127.0.0.1:8099
+
+      - name: Agents gate (AI responsibilities queued on a move, the runner, the review service)
+        run: python3 tests/smoke/agents_gate.py http://localhost:8000 http://127.0.0.1:8099
+
       - name: Install the hosted CLI and MCP bridge
         run: python3 -m pip install ./integrations/agents
 
@@ -200,14 +209,9 @@ jobs:
       - name: Process authoring preserves review history and managed definitions
         run: jac test tests/unit/process_authoring.jac
 
-      - name: Webhook gate (connect, back-fill, signed deliveries, drain, isolation, no GitHub call on a page load, the scheduled pass)
-        run: python3 tests/smoke/webhook_gate.py http://localhost:8000 http://127.0.0.1:8099
-
-      - name: Automation gate (entry rules, label, merge and review triggers, PR linking)
-        run: python3 tests/smoke/automation_gate.py http://localhost:8000 http://127.0.0.1:8099
-
-      - name: Agents gate (AI responsibilities queued on a move, the runner, the review service)
-        run: python3 tests/smoke/agents_gate.py http://localhost:8000 http://127.0.0.1:8099
+      - name: Process library and authoring share metadata, history and unique variants
+        if: ${{ hashFiles('services/processes/catalog.jac') != '' }}
+        run: python3 tests/smoke/process_authoring_library_gate.py http://localhost:8000
 
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log

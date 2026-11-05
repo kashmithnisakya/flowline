@@ -123,6 +123,11 @@ def create_server(client: FlowlineClient, *, allow_write: bool = False) -> FastM
             y (all strings). Transitions have source, target, label and kind
             (forward/return). Validate before saving. Keeps notes and history;
             does not modify operational tasks or execute the described process.
+            Library metadata such as path (main/branch), short_title, stage,
+            source links and optional labels is retained. Family is a group
+            label of at most 100 characters; policy status is optional.
+            Each workspace has one definition per family/variant pair. Copies
+            need an unused pair; an occupied pair returns family_variant_conflict.
             """
             return invoke(
                 ops.process_save, document, request_id, process_id, expected_etag

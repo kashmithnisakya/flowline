@@ -89,6 +89,12 @@ The document has exactly `title`, `family`, `variant`, `summary`, `steps`,
 `transitions`, `policies` and `configuration`. Steps use stable IDs; `variant`
 is `current` or `proposed`, a descriptive label rather than approval state.
 `family` can identify any process, not only the demonstration families.
+It is a human-readable group label of at most 100 characters. Library exports
+retain their step IDs, branch paths, short titles, optional source labels and
+policy status when copied through the authoring API.
+Each family has at most one definition per variant in a workspace. Choose an
+unused family/variant pair for an independent copy; an occupied pair returns
+`family_variant_conflict` without changing the definition or history.
 The server validates size, types, unique step IDs, transition references,
 finite coordinates and HTTP(S) source links. It preserves review notes and
 earlier definition snapshots. A save increments the definition revision.

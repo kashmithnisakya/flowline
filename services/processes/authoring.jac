@@ -47,7 +47,9 @@ glob DOCUMENT_FIELDS: list[str] = [
          "x",
          "y",
          "kind",
+         "path",
          "stage",
+         "short_title",
          "source_url",
          "source_label",
          "related_url",
@@ -109,6 +111,17 @@ def definition_result(
     return out;
 }
 
+def family_variant_in_use(
+    holder: Root, family: str, variant: str, except_id: str = ""
+) -> bool {
+    for p in [holder-->[?:ProcessDefinitions]-->[?:ProcessDefinition]] {
+        if p.family == family and p.variant == variant and jid(p) != except_id {
+            return True;
+        }
+    }
+    return False;
+}
+
 def validate_definition(document: dict[str, any]) -> list[str] {
     errors: list[str] = [];
     try {
@@ -133,8 +146,8 @@ def validate_definition(document: dict[str, any]) -> list[str] {
     if not str(document["title"]).strip() or len(str(document["title"])) > 200 {
         errors.append("title must have 1–200 characters");
     }
-    if re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", str(document["family"])) is None {
-        errors.append("family must be a lowercase identifier of at most 64 characters");
+    if not str(document["family"]).strip() or len(str(document["family"])) > 100 {
+        errors.append("family must have 1–100 characters");
     }
     if document["variant"] not in ["current", "proposed"] {
         errors.append("variant must be current or proposed");
@@ -162,9 +175,10 @@ def validate_definition(document: dict[str, any]) -> list[str] {
             continue;
         }
         key = str(step.get("id", ""));
-        if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}", key) is None or key in ids {
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", key) is None
+            or key in ids {
             errors.append(
-                "step IDs must be unique identifiers of at most 64 characters"
+                "step IDs must be unique identifiers of at most 80 characters"
             );
         }
         ids.append(key);
@@ -190,6 +204,9 @@ def validate_definition(document: dict[str, any]) -> list[str] {
         }
         if "kind" in step and step["kind"] not in STEP_KINDS {
             errors.append("step kind must be start, active, handoff, blocked or done");
+        }
+        if "path" in step and step["path"] not in ["main", "branch"] {
+            errors.append("step path must be main or branch");
         }
         for field in ["x", "y"] {
             try {
@@ -218,9 +235,6 @@ def validate_definition(document: dict[str, any]) -> list[str] {
                     }
                 } except ValueError {
                     errors.append("step link is not a valid URL");
-                }
-                if not str(step.get(field.replace("url", "label"), "")).strip() {
-                    errors.append("step links require a label");
                 }
             }
         }
@@ -259,7 +273,8 @@ def validate_definition(document: dict[str, any]) -> list[str] {
             required = {"title", "detail", "status"}
                 if field == "configuration"
                 else {"title", "detail"};
-            if set(record.keys()) != required
+            if not required.issubset(set(record.keys()))
+                or not set(record.keys()).issubset(required | {"status"})
                 or not all(
                     isinstance(v, str) and len(v) <= 8000 for v in record.values()
                 ) {
@@ -386,6 +401,15 @@ walker:protect SaveProcessDefinition {
                 report {"ok": False, "error": "history_limit"};
                 disengage;
             }
+            if family_variant_in_use(
+                here,
+                self.document["family"] as str,
+                self.document["variant"] as str,
+                jid(p)
+            ) {
+                report {"ok": False, "error": "family_variant_conflict"};
+                disengage;
+            }
             snapshot = {
                 ** definition_document(p),
                 "revision": p.revision,
@@ -399,6 +423,12 @@ walker:protect SaveProcessDefinition {
         } else {
             if self.expected_etag {
                 report {"ok": False, "error": "unexpected_etag"};
+                disengage;
+            }
+            if family_variant_in_use(
+                here, self.document["family"] as str, self.document["variant"] as str
+            ) {
+                report {"ok": False, "error": "family_variant_conflict"};
                 disengage;
             }
             boxes = [here-->[?:ProcessDefinitions]];
