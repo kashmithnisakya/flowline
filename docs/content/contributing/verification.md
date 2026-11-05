@@ -40,6 +40,9 @@ Cover callbacks that only stage graph changes, callbacks that flush graph writes
 and callbacks that issue opaque SQL. Test keyed read-tier requests as well as
 writers. A successful return must agree with the committed rows; an unreplayable
 partial failure must remain final and must not repeat the body or callback.
+Webhook queue acknowledgements must wait for the graph commit. The runtime
+contracts force that commit to conflict and verify the delivery is applied
+once and acknowledged only after its row is durable.
 The local runtime contract command above checks the pinned backport directly;
 upstream test totals alone do not establish that the app uses the corrected code.
 

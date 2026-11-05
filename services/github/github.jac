@@ -6,6 +6,7 @@ server schedule (services/github/schedule.jac) and by hand; no walker a page
 load calls reaches GitHub."""
 
 import re;
+import from jaclang.runtime.runtime { JacRuntimeInterface as Jac }
 import from jaclang.lib.effects { effects }
 import from models {
     Project,
@@ -2218,6 +2219,14 @@ def apply_delivery(ctx: SyncContext, payload: dict[str, any]) -> dict[str, any] 
 }
 
 
+def acknowledge_delivery_after_commit(delivery_id: str, at: str, outcome: str) {
+    def acknowledge {
+        mark_delivered(delivery_id, at, outcome);
+    }
+    Jac.get_context().mem.on_commit(acknowledge);
+}
+
+
 # Apply what the receiver queued for this workspace, oldest first. The index
 # names one workspace per installation, and only that one drains, so two
 # accounts holding the same installation cannot race for the queue. One
@@ -2262,7 +2271,7 @@ def drain_deliveries(holder: Root, c: any, limit: int) -> dict[str, any] {
                     + "; the poll repairs the row on the next sync"
             );
         }
-        mark_delivered(str(row.get("id")), now_iso(), kind);
+        acknowledge_delivery_after_commit(str(row.get("id")), now_iso(), kind);
         counts["drained"] = counts["drained"] + 1;
     }
     log_imports(holder, ctx.filed, now_iso());

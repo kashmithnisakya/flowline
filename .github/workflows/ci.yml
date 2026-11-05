@@ -59,7 +59,7 @@ jobs:
       - name: jac install (python + npm dependencies)
         run: jac install
 
-      - name: Runtime contracts (durable work, callbacks and raw SQL)
+      - name: Persistence and runtime contracts
         run: jac test tests/unit/runtime_boundaries.jac
 
       # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
