@@ -205,6 +205,114 @@
       "after_sha256": "6bcf33a7fcf556d584e604e4bbebf7d7bd54ad6b8fd0a92a0f812c5c5431a979",
       "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10578",
       "upstream_commit": "6f760db52986179dd7ecf062db53d33ae4bc23e7"
+    },
+    {
+      "file": "durable-boundary-archwire.patch",
+      "sha256": "1a71ae7b792ab6a2d581c5222cf158a1668777bf65f277e46b011c78ee5926b2",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/archwire.jac",
+      "before_sha256": "2a0e0e7093133506e35f095452e52038f1c2e44f049256d42251832556f8b66d",
+      "after_sha256": "4005b4d4fb4c6a4693f88ecf308d9388e073805425562a9a55f235e51c9ee7b2"
+    },
+    {
+      "file": "durable-boundary-data-impl-query_planner.impl.patch",
+      "sha256": "08d74b6bf09eb46a46342fa6a062957cdd01411d6c1bc34722251c5c3e069bda",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/data/impl/query_planner.impl.jac",
+      "before_sha256": "8b890d215b8800406406dd366d5ebbcc3892e35b44093ccc9be6f86a80f118d0",
+      "after_sha256": "036939be9ab4734674e68a1360d80d7d487fead000d39b0fc173d64bb5b13f5a"
+    },
+    {
+      "file": "durable-boundary-data-impl-store.impl.patch",
+      "sha256": "38a4d6f1e5b1b775223c8cbbf7aaf0e7b8b01d1e11c5d19b331143c56636aaea",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/data/impl/store.impl.jac",
+      "before_sha256": "cc96d6d4c9b54408d2b1a7e5e4cfec6b1fcb337207f1075ad768eec4c1a6ea88",
+      "after_sha256": "581e5040319d46d6a456c0ac0e67000758ab45543678b4f3e25dfda7144b0ddd"
+    },
+    {
+      "file": "durable-boundary-data-store.patch",
+      "sha256": "d63175600ba45e9327a18edc8b7f0d6c9db02df9a1308bd79992bd31c131dae7",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/data/store.jac",
+      "before_sha256": "b497146fb8f509ceba78a1fcc262fb94c28f15e0af39b8c4360c4cbd8fd01cf4",
+      "after_sha256": "3dc16d5a9e29044b30ed41b05579fddeacdba3e242b3f51091f2b819b778e27b"
+    },
+    {
+      "file": "durable-boundary-runtime-exceptions.patch",
+      "sha256": "f548e9de1e0061454c44cf0dd487200c5b8ae5ed8cb1e6e708710472efed936a",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/runtime/exceptions.jac",
+      "before_sha256": "26ff3f24c46d50902cbcee75e40d92940a19306b0d85b004872040046586f7e5",
+      "after_sha256": "7ec82e8f0f57fc8e29aba100e134c602b740b8853642e21d2e5785081f533afa"
+    },
+    {
+      "file": "durable-boundary-runtime-impl-context.impl.patch",
+      "sha256": "205faae90f08698aba93cfe64e6a4d692c5fda531edc4ecd688ae7163e13b197",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/runtime/impl/context.impl.jac",
+      "before_sha256": "635b1fcc6322c819fb8720d3c563fa937597d9af2dc9783e05021575d27359fd",
+      "after_sha256": "362f84ed1258c3bb89be0b49011b0be6f29ce619b729adbe9ae24cfa8a1b4d24"
+    },
+    {
+      "file": "durable-boundary-runtime-impl-memory.impl.patch",
+      "sha256": "2af7f6b5c00b676da96368c816f35abc184235e2030703f3e5f0df3188f129bc",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/runtime/impl/memory.impl.jac",
+      "before_sha256": "a91f68d952f5b7ac6a8118e9b347764f98568138687cf6c815239352eeb21fc2",
+      "after_sha256": "4cca4d33384ccc74a15dc81faf9701420f7c39270dbef336ac6d4ca725ce7b9d"
+    },
+    {
+      "file": "durable-boundary-runtime-memory.patch",
+      "sha256": "abe9435508427a8fcd1dd7678309618b810966850cf116ccccd09eed45a02270",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/runtime/memory.jac",
+      "before_sha256": "d958b6bb93c6f2193b2e816a3bcf107ff09e141d25f4a2d9674fead40ab8925d",
+      "after_sha256": "1428f183f4202dc41a3c293e07fb871194b58c05b6f695bc459e0297d26febdb"
+    },
+    {
+      "file": "durable-boundary-server-impl-server.impl.patch",
+      "sha256": "7885745c43ca5b7974d85390ac1ad4524196af2610a98ad74b3003c1ea0614c3",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/server/impl/server.impl.jac",
+      "before_sha256": "1a72902bc6250c910a18ada716e6982dfc19016cbe9af8091bde3e981545ca8b",
+      "after_sha256": "9c6c9690949d76fcdd77864c66a9f3b218ec282f45d305394f9a324d46f41c90"
+    },
+    {
+      "file": "durable-boundary-server-impl-session.impl.patch",
+      "sha256": "7c194208858d31809db3f7668f060e8bae14decd518a608c12ead8d240b1e1c9",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/server/impl/session.impl.jac",
+      "before_sha256": "3b7ab1f2da681a03eee43611f6e4fbaf3113668a01526d700630444188a65d58",
+      "after_sha256": "83a5b61302a00baceb099778e59e097b4733f20108b8cb7913934c1b41671d18"
+    },
+    {
+      "file": "durable-boundary-server-impl-sv_client.impl.patch",
+      "sha256": "e4734e84ed1517b9ea8571b8df54f56869e08c98fb7ec65f3c42b05f7053f381",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/server/impl/sv_client.impl.jac",
+      "before_sha256": "f2f83179206bf5556eb369c7c9d9d8ec647c8fa1bb501dc41e7e90a1a5bba8d8",
+      "after_sha256": "ad0a72f349e4cc7eeb6191b33e23b87b736daba884a1c2633a818079c0151890"
+    },
+    {
+      "file": "durable-boundary-server-session.patch",
+      "sha256": "cbbe73b522d50bff648ceebc373321246af711c05a40c16780e39c82bd9af055",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "5985c78d3f36da5aa6d1f390f137536e3fd70623",
+      "source": "jaclang/server/session.jac",
+      "before_sha256": "c42a581e79769347f4ddb52d7548b28c1c596ac2a7078a62db295bb86f40ad8c",
+      "after_sha256": "107e0408256e6c0f9e31f97dd49b14d681091b9f9d3af0a2130d69771f43b806"
     }
   ]
 }

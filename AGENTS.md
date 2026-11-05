@@ -26,11 +26,24 @@ establish that a feature fits Flowline's design.
 
 ## Validate your work
 
-Processes currently requires the verified compiler backports pinned in
+Before opening or updating a PR, reproduce a bug with a test of the intended
+behavior that fails before the fix and passes afterward. For persistence and
+retry changes, verify committed database rows and body/callback execution counts
+under injected failures, including nested and independent sessions. Run the
+runtime contracts with `python3 tools/jac.py test tests/unit/runtime_boundaries.jac`.
+
+Record the exact tested commit and compiler inputs. Test related PRs together
+when they share a data contract. A clean Git merge is only a conflict check;
+merge readiness also requires resolved correctness findings, required final-head
+CI and any supported hosted-runtime/deployment prerequisites. Missing or
+approval-required checks are pending. See the verification guide for the full
+pre-submission checks.
+
+This project requires the verified compiler/runtime backports pinned in
 `tools/jac_toolchain/manifest.json`. Run compiler-dependent commands through
 `python3 tools/jac.py` (for example, `python3 tools/jac.py check main.jac`).
-The wrapper verifies the base release and patch inputs and leaves the installed
-binary unchanged. Bare Jac 0.38.2 and 0.39.0 still contain the affected defects.
+The wrapper verifies its source and patch inputs and leaves the installed binary
+unchanged. A hosted runtime must independently include the required fixes.
 
 - `jac check <file>` -- type-check and lint. Compiler diagnostics link to the
   relevant guide; follow the `-> run 'jac guide ...'` hints.
