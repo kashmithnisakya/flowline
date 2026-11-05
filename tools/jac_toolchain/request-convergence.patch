@@ -1,24 +1,52 @@
 --- a/jaclang/server/impl/session.impl.jac
 +++ b/jaclang/server/impl/session.impl.jac
-@@ -802 +801,0 @@
+@@ -354,0 +355 @@
++    self._committed_units = set();
+@@ -611,0 +613 @@
++        self._committed_units.discard(self._active_units);
+@@ -764,2 +766,19 @@
+-        if self._store is not None and self._store.in_txn() {
+-            self._ensure_txn();
++        try {
++            if self._store is not None and self._store.in_txn() {
++                self._ensure_txn();
++            }
++        } except BaseException {
++            self._active_units -= 1;
++            (_key, was_ro) = self._unit_stack.pop();
++            if was_ro {
++                self._ro_units -= 1;
++            }
++            raise;
++        }
++    }
++}
++
++impl Session.unit_committed -> None {
++    with self._lock {
++        if self._active_units > 0 {
++            self._committed_units.add(self._active_units);
+@@ -802 +820,0 @@
 -        self._active_units = max(0, self._active_units - 1);
-@@ -804 +803 @@
+@@ -804 +822 @@
 -            if self._active_units > 0 {
 +            if self._active_units > 1 {
-@@ -831,0 +831 @@
+@@ -831,0 +850,2 @@
++            self._committed_units.discard(self._active_units);
 +            self._active_units = max(0, self._active_units - 1);
-@@ -899 +899,5 @@
+@@ -912 +932,6 @@
 -    if exhausted {
-+    # A request's choices depended on this transaction's reads, including
-+    # absence predicates. Replaying its writes alone drops those dependencies
-+    # and can commit a duplicate. Let the owning unit replay its whole body.
-+    if exhausted or self._active_units > 0 {
++
++    if exhausted
++        or (
++            self._active_units > 0 and self._active_units not in self._committed_units
++        ) {
 +        self._last_conflict |= set(self._dirty) | self._deleted;
-@@ -1013,0 +1018,3 @@
+@@ -1026,0 +1052,3 @@
 +            if _is_serialization_conflict(e) {
 +                self._last_conflict |= {row.id for row in rows};
 +            }
-@@ -1387,17 +1394,22 @@
+@@ -1400,17 +1428,23 @@
 -    attempt = 0;
 -    while True {
 -        try {
@@ -43,6 +71,7 @@
 +            try {
 +                result = body();
 +                self.commit();
++                self.unit_committed();
 +                return result;
 +            } except Exception as e {
 +                if (
@@ -58,7 +87,7 @@
 +                    self.abort();
 +                    continue;
 +                }
-@@ -1405,5 +1417,5 @@
+@@ -1418,5 +1452,5 @@
 -                continue;
 -            }
 -            self.abort();

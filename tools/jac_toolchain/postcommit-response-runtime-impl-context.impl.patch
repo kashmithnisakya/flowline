@@ -1,0 +1,7 @@
+--- a/jaclang/runtime/impl/context.impl.jac
++++ b/jaclang/runtime/impl/context.impl.jac
+@@ -139,0 +140,4 @@
++                state = self.call_state.get(None);
++                if state is not None and state.committed {
++                    self.mem.note_effect_failure(e);
++                }

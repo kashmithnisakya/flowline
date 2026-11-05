@@ -1,0 +1,12 @@
+--- a/jaclang/data/impl/store.impl.jac
++++ b/jaclang/data/impl/store.impl.jac
+@@ -362 +362 @@
+-                    raise PgWireError(
++                    lost = PgWireError(
+@@ -364 +364,3 @@
+-                    ) from e;
++                    );
++                    self.last_error = lost;
++                    raise lost from e;
+@@ -374,0 +377 @@
++            self.last_error = e;

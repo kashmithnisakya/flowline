@@ -78,13 +78,14 @@ notes remain available under **Earlier definitions & notes** after an update.
 ## Compiler prerequisites
 
 Use `python3 tools/jac.py` for compiler-dependent commands. The manifest pins
-Jac 0.39.0 source, standard-library stubs and six upstream fixes:
+Jac 0.39.0 source, standard-library stubs and seven upstream fixes:
 
 - [Jac #10441](https://github.com/jaseci-labs/jac/pull/10441): bound dictionary keys.
 - [Jac #10445](https://github.com/jaseci-labs/jac/pull/10445): numeric default sorting.
 - [Jac #10560](https://github.com/jaseci-labs/jac/pull/10560): comprehension truthiness.
 - [Jac #10559](https://github.com/jaseci-labs/jac/pull/10559): package-relative effects paths.
-- [Jac #10577](https://github.com/jaseci-labs/jac/pull/10577): whole-request replay after transaction conflicts.
+- [Jac #10565](https://github.com/jaseci-labs/jac/pull/10565): committed requests report late write failures without replaying saved work.
+- [Jac #10576](https://github.com/jaseci-labs/jac/pull/10576): whole-request replay before commit and bounded retries of post-commit writes.
 - [Jac #10578](https://github.com/jaseci-labs/jac/pull/10578): effects declarations on cached interfaces.
 
 The wrapper verifies archive, patch and resulting-source checksums and leaves

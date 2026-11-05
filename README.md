@@ -111,7 +111,7 @@ python3 tools/jac.py run --no-dev main.jac   # serve at http://localhost:8000
 Use `python3 tools/jac.py run -w 1 main.jac` for hot reload while developing
 (app on :8000, API on :8001; hot reload needs a single worker).
 
-The Processes library currently needs six upstream compiler/runtime fixes. The wrapper
+The Processes library currently needs seven upstream compiler/runtime fixes. The wrapper
 verifies the pinned source and backports in `tools/jac_toolchain/`, then runs
 them in isolation with the installed Jac 0.39.0 binary. Python 3, `patch` and
 GitHub access are needed for initial preparation. See the

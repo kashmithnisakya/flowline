@@ -45,13 +45,157 @@
       "after_sha256": "e8fdb8da989fc6e3672d37a569060ea168b50a34bc7fba0166ed1babda759106"
     },
     {
-      "file": "request-convergence.patch",
-      "sha256": "b78a9f1b1e40d2d8905114141b944027d2e40f8fd06fdb2d0823a194e8e76cf7",
+      "file": "postcommit-response-data-impl-store.impl.patch",
+      "sha256": "c29667140903ccb12c05fd763a3df7b46893a31e013308a0565ee701d95ec274",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/data/impl/store.impl.jac",
+      "before_sha256": "3e45db74ca3e64577093c382c24a767d1ebf67eba8b4b3980e39d39bb035b9ad",
+      "after_sha256": "cc96d6d4c9b54408d2b1a7e5e4cfec6b1fcb337207f1075ad768eec4c1a6ea88"
+    },
+    {
+      "file": "postcommit-response-data-store.patch",
+      "sha256": "ea397492defc10d46e59cee16a5bc6c5a5ccdcfe7857f570fc2a6f4637a7cdde",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/data/store.jac",
+      "before_sha256": "08899323016c10c251073cb9e3397dcb8431c1695d2fe956bfb7132b3490886d",
+      "after_sha256": "b497146fb8f509ceba78a1fcc262fb94c28f15e0af39b8c4360c4cbd8fd01cf4"
+    },
+    {
+      "file": "postcommit-response-runtime-context.patch",
+      "sha256": "c83478833ce83e461d60868777a8f236a41652060a699101da80ec5e6a7d3649",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/runtime/context.jac",
+      "before_sha256": "f3b8ac894a09994d85db7fd2725b3a08cd5de2fe4f579e5a9395d2dd5f12e41c",
+      "after_sha256": "5fd8744f6198a511a23c847a607f6f2d5aa324fc6caabf89306e8c7832e7dae3"
+    },
+    {
+      "file": "postcommit-response-runtime-impl-context.impl.patch",
+      "sha256": "2cb1c2149aa8b714229687aae71b9d36fb4a4fe6de2bf0d0fafb252a0a84d7ff",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/runtime/impl/context.impl.jac",
+      "before_sha256": "4b95bc33b2b5f30c29b9fe5e095260d9fbef404d3fd0d6948c02f0c42afae351",
+      "after_sha256": "635b1fcc6322c819fb8720d3c563fa937597d9af2dc9783e05021575d27359fd"
+    },
+    {
+      "file": "postcommit-response-runtime-impl-memory.impl.patch",
+      "sha256": "522d3f17f2bc61190a71fbc038cb94b227b713a46590f57d3a25e406f4ca087f",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/runtime/impl/memory.impl.jac",
+      "before_sha256": "b11b4edf8ae67c4dfb25177a9615e79043a7c3bec278ed8ada3c9c19c671f9ff",
+      "after_sha256": "a9c2a22bcc662a51945ed8114410ee266dafc18daa80cbe6a17ffe252ac3467c"
+    },
+    {
+      "file": "postcommit-response-runtime-memory.patch",
+      "sha256": "fb0e2f6c280a6a4426bab002160fbf060c88d34081d465bcc4bc86d1b0f2e02c",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/runtime/memory.jac",
+      "before_sha256": "4577f48185e411e1d3ad6663b24f25e06a91e138b3ab539295ee6f2e82a0b985",
+      "after_sha256": "234dd66494636327d19bcc314179f39984c1658a01880fbdefd3940f56873ae1"
+    },
+    {
+      "file": "postcommit-response-server-endpoints-colocated.patch",
+      "sha256": "1abc32097bdc19fdde0d73c46bdfc2bd1bc642fe90ec554be0406363cd4f9c80",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/server/endpoints/colocated.jac",
+      "before_sha256": "07f731ac589b56e510d8404378fcd4e485dace09c88c55b54a122a14e957d918",
+      "after_sha256": "73ceac4b06c4457747ae00e8f464ede41fcb953deae880b01e31f4f26fbc178e"
+    },
+    {
+      "file": "postcommit-response-server-endpoints-impl-colocated.impl.patch",
+      "sha256": "bbfe2521b880528e37e1eda2dc44892556c4fd8cddf9095f62a457fef3020a5f",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/server/endpoints/impl/colocated.impl.jac",
+      "before_sha256": "4fdceec294848b14d58ecc75756c0960928713427757c50510299f26d9eda6dd",
+      "after_sha256": "ee91c6121886ab564e6f7a673d97d8dae124398554593f471869dbd59cde4174"
+    },
+    {
+      "file": "postcommit-response-server-endpoints-impl-walkers.impl.patch",
+      "sha256": "2f3d3defd26649b21e39e9df70215b4b27cfc8e20a7ff7613786cf0564063abb",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/server/endpoints/impl/walkers.impl.jac",
+      "before_sha256": "80e0d0854711879d71437be64db680c38dcf53e7bc924a8af3312e5e1a3cef14",
+      "after_sha256": "34ab209a46d5b572c3ac761c405b61c914420078ba0655202c35f6f17c809ea8"
+    },
+    {
+      "file": "postcommit-response-server-impl-server.impl.patch",
+      "sha256": "f504136553d397a69b668e92465707d4f61a663520d3007d38852ddefff229f6",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/server/impl/server.impl.jac",
+      "before_sha256": "d128ead4eb7cb4a3df03fd5c14e23e8b6bee767281268ef296903813ca57069b",
+      "after_sha256": "8e68d3381275e311dc50ae7145f8d28c0fe7d47a3f76ee5a86cb3e09f716cc3f"
+    },
+    {
+      "file": "postcommit-response-server-impl-session.impl.patch",
+      "sha256": "01725374fb3f891d984e673922bfb51d04c4f548691c90efeb8bbadf3838a54a",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
       "source": "jaclang/server/impl/session.impl.jac",
       "before_sha256": "5735c2e7fe9c69dbceaba633da4cce23b6a3646c27910dd7a224e66bc11bde53",
-      "after_sha256": "acf1e7f7754756b4dc10b8168f8042243a0d2d40c2e47ec11c53060966a33f35",
-      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10577",
-      "upstream_commit": "9a9b23b561b1d82ad6858502b3e7f5e119947f9f"
+      "after_sha256": "6855dec2490623a3e8687dddab9f846719fb7ddb57e495e04c0d30394f13fa87"
+    },
+    {
+      "file": "postcommit-response-server-session.patch",
+      "sha256": "d2bce29332e0e195a9b8e0f7a6af52e8b8d0ee9f753e390a2acf0a705d380808",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10565",
+      "upstream_commit": "a713484f9dc887424cdc8b9942e029a22f856fdc",
+      "source": "jaclang/server/session.jac",
+      "before_sha256": "dc1b577000c414c46ab751f812853e73f9b25a58258ff33eb33eeb5f74891f88",
+      "after_sha256": "3e331f21503d7e8900fac107087c71e46185930aefdba40b51f90436362367d2"
+    },
+    {
+      "file": "request-convergence-runtime-impl-memory.impl.patch",
+      "sha256": "63e6ae5df43c0bd64ba538b515e82cb3e37dfab9da322b3c8ccec2f1b190c872",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "2d49040555bd1a99914b04bdecbeb8b710b3a199",
+      "source": "jaclang/runtime/impl/memory.impl.jac",
+      "before_sha256": "a9c2a22bcc662a51945ed8114410ee266dafc18daa80cbe6a17ffe252ac3467c",
+      "after_sha256": "a91f68d952f5b7ac6a8118e9b347764f98568138687cf6c815239352eeb21fc2"
+    },
+    {
+      "file": "request-convergence-runtime-memory.patch",
+      "sha256": "25828ee2d5b31acf74d33d4eca9d0217ffbac9fdd6e25460e3e4e85cee1e6373",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "2d49040555bd1a99914b04bdecbeb8b710b3a199",
+      "source": "jaclang/runtime/memory.jac",
+      "before_sha256": "234dd66494636327d19bcc314179f39984c1658a01880fbdefd3940f56873ae1",
+      "after_sha256": "d958b6bb93c6f2193b2e816a3bcf107ff09e141d25f4a2d9674fead40ab8925d"
+    },
+    {
+      "file": "request-convergence-server-impl-server.impl.patch",
+      "sha256": "aee49861894995d00ca04fbe8f51c084a182df45e57d15363293265ec39ade0b",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "2d49040555bd1a99914b04bdecbeb8b710b3a199",
+      "source": "jaclang/server/impl/server.impl.jac",
+      "before_sha256": "8e68d3381275e311dc50ae7145f8d28c0fe7d47a3f76ee5a86cb3e09f716cc3f",
+      "after_sha256": "1a72902bc6250c910a18ada716e6982dfc19016cbe9af8091bde3e981545ca8b"
+    },
+    {
+      "file": "request-convergence.patch",
+      "sha256": "a911d34560a41eced557fbfd80a771730c2efba1c0fe6a0d6104d1e6740abaab",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "2d49040555bd1a99914b04bdecbeb8b710b3a199",
+      "source": "jaclang/server/impl/session.impl.jac",
+      "before_sha256": "6855dec2490623a3e8687dddab9f846719fb7ddb57e495e04c0d30394f13fa87",
+      "after_sha256": "3b7ab1f2da681a03eee43611f6e4fbaf3113668a01526d700630444188a65d58"
+    },
+    {
+      "file": "request-convergence-server-session.patch",
+      "sha256": "661691f97ffafd44cdbea13acfba1ca9bb30488ae522c48b9a7ab7f825b6d45f",
+      "upstream_pr": "https://github.com/jaseci-labs/jac/pull/10576",
+      "upstream_commit": "2d49040555bd1a99914b04bdecbeb8b710b3a199",
+      "source": "jaclang/server/session.jac",
+      "before_sha256": "3e331f21503d7e8900fac107087c71e46185930aefdba40b51f90436362367d2",
+      "after_sha256": "c42a581e79769347f4ddb52d7548b28c1c596ac2a7078a62db295bb86f40ad8c"
     },
     {
       "file": "cached-effect-declarations.patch",
