@@ -1,5 +1,9 @@
 """Verify the pinned runtime's durable rows and callback counts before submission."""
 
+import importlib;
+import from unittest.mock { patch }
+import from models { GithubConnection }
+import from services.github.github { drain_deliveries, SyncContext }
 import from pathlib { Path }
 import from tempfile { TemporaryDirectory }
 import from uuid { uuid4 }
@@ -406,6 +410,66 @@ test "raw writes promote keyed read-tier units by safe request replay" {
             } finally {
                 sess.close();
             }
+        }
+    }
+}
+
+test "a webhook is acknowledged only after its graph changes commit" {
+    with TemporaryDirectory() as td {
+        old = JacRuntime.exec_ctx;
+        ctx = context(td);
+        JacRuntime.exec_ctx = ctx;
+        try {
+            sess = session(ctx);
+            home = root;
+            conn = GithubConnection(installation_id=123);
+            sess.commit();
+            pending: list[dict[str, any]] = [{"id": "delivery", "payload": {}}];
+            ids: list[any] = [];
+            acks: list[str] = [];
+            calls: list[int] = [];
+            def apply(unused: any, payload: any) -> dict[str, any] {
+                ids.append(counter(ctx, 42).ensure_id());
+                return {"outcome": "applied"};
+            }
+            def ack(id: str, at: str, outcome: str) {
+                acks.append(id);
+                pending.clear();
+            }
+            mod: any = importlib.import_module(dynamic(drain_deliveries).__module__);
+            with patch.object(mod, "root_for_installation", return_value=jid(home)), patch.object(
+                mod,
+                "pending_deliveries",
+                side_effect=lambda (i: any, n: any) { return list(pending); }
+            ), patch.object(
+                mod,
+                "sync_context",
+                return_value=SyncContext(
+                    holder=home, connection=conn, token="", stamp="", started=0.0
+                )
+            ), patch.object(mod, "apply_delivery", side_effect=apply), patch.object(
+                mod, "mark_delivered", side_effect=ack
+            ), patch.object(mod, "purge_deliveries"), patch.object(
+                mod, "log_imports"
+            ) {
+                faults = fail_commit_once(sess);
+                def body {
+                    calls.append(1);
+                    drain_deliveries(home, conn, 10);
+                }
+                sess.run_request(body);
+                assert faults == [0] and calls == [1, 1];
+                assert acks == ["delivery"] and not pending;
+                assert sum(
+                    1
+                    for id in ids
+                    if stored(ctx, id) == "42"
+                )
+                    == 1 , "the delivery was acknowledged but no application row committed";
+            }
+        } finally {
+            JacRuntime.exec_ctx = old;
+            ctx.close();
         }
     }
 }
