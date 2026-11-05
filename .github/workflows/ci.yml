@@ -48,10 +48,19 @@ jobs:
       - name: jac --version
         run: jac --version
 
+      - name: Prepare verified compiler and runtime backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
+
       # Since 0.37.23 `jac check` fails (E1138) on an import of a dependency
       # jac.toml declares but the environment lacks, so install them first.
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
+
       - name: jac install (python + npm dependencies)
         run: jac install
+
+      - name: Runtime contracts (durable work, callbacks and raw SQL)
+        run: jac test tests/unit/runtime_boundaries.jac
 
       # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
       # those files verbatim from the registry, so holding them to the
@@ -124,6 +133,9 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh \
             | bash -s -- --version "${{ steps.pin.outputs.version }}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare verified compiler and runtime backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
 
       - name: jac install (python + npm dependencies)
         run: jac install

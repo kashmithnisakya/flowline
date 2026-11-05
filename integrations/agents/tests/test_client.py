@@ -119,6 +119,36 @@ def test_redirect_never_receives_credentials():
     client.close()
 
 
+def test_postcommit_http_failure_is_final_and_not_retried():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(
+            500,
+            json={
+                "ok": False,
+                "error": {
+                    "code": "FAILED_AFTER_COMMIT",
+                    "message": "server-private-detail",
+                    "details": {"debug": "server-private-detail"},
+                },
+            },
+        )
+
+    client = client_for(handler)
+    try:
+        with pytest.raises(FlowlineError) as caught:
+            client.walker("CreateTask", {"title": "One task"})
+        assert caught.value.code == "failed_after_commit"
+        assert caught.value.details == {"final": True}
+        assert "before retrying" in str(caught.value)
+        assert "server-private-detail" not in json.dumps(caught.value.result())
+        assert len(seen) == 1
+    finally:
+        client.close()
+
+
 @pytest.mark.parametrize(
     "reports,code",
     [

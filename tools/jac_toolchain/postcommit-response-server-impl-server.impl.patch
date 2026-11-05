@@ -1,0 +1,47 @@
+--- a/jaclang/server/impl/server.impl.jac
++++ b/jaclang/server/impl/server.impl.jac
+@@ -76 +76,4 @@
+-    await Jac.acommit();
++    ctx = Jac.get_context();
++    await ctx.mem.acommit();
++    call_state.committed = True;
++    ctx.run_pending_effects();
+@@ -91,3 +94,2 @@
+-        Jac.get_context().mem.seal_scan();
+-    }
+-    ctx = Jac.get_context();
++        ctx.mem.seal_scan();
++    }
+@@ -1882 +1884,29 @@
+-                outcome = await run_attempt(call_state, ctx);
++                try {
++                    outcome = await run_attempt(call_state, ctx);
++                    await ctx.mem.acommit();
++                } except ReadOnlyRetry {
++                    raise;
++                } except Exception as e {
++                    if not call_state.committed {
++                        raise;
++                    }
++                    ctx.mem.abort();
++                    ctx.pending_effects.clear();
++                    logger.exception(
++                        f"{unit_key or 'request'} failed after its commit: "
++                        f"{type(e).__name__}: {e}"
++                    );
++                    return {
++                        'error': (
++                            'The request committed, but a step after that commit '
++                            'failed and its writes were lost. Repeating the request '
++                            'may repeat the work it already saved.'
++                        ),
++                        'error_code': 'failed_after_commit',
++                        'http_status': 500,
++                        'final': True
++                    };
++                }
++                if _plain_value(outcome) {
++                    ctx.mem.seal_scan();
++                }
+@@ -1968,0 +1999 @@
++                ctx.pending_effects.clear();

@@ -23,6 +23,16 @@ def test_stdio_discovery_http_and_failed_write(allow_write, tmp_path):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             seen.append((self.path, self.headers.get("Authorization"), body))
+            if self.path.endswith("CreateTask"):
+                data = json.dumps(
+                    {"ok": False, "error": {"code": "FAILED_AFTER_COMMIT"}}
+                ).encode()
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             result = (
                 {"ok": False, "error": "conflict"}
                 if self.path.endswith("SaveProcessDefinition")
@@ -85,6 +95,15 @@ def test_stdio_discovery_http_and_failed_write(allow_write, tmp_path):
                 )
                 assert result.isError
                 assert "conflict" in result.content[0].text
+                count = len(seen)
+                result = await session.call_tool(
+                    "create_task", {"title": "One task", "project_id": "project-id"}
+                )
+                assert (
+                    result.isError and "failed_after_commit" in result.content[0].text
+                )
+                assert "before retrying" in result.content[0].text
+                assert len(seen) == count + 1
             else:
                 count = len(seen)
                 result = await session.call_tool(

@@ -1,0 +1,5 @@
+--- a/jaclang/runtime/impl/memory.impl.jac
++++ b/jaclang/runtime/impl/memory.impl.jac
+@@ -161,0 +162,2 @@
++impl Memory.note_effect_failure(e: Exception) -> None {}
++

@@ -1,0 +1,4 @@
+--- a/jaclang/server/endpoints/colocated.jac
++++ b/jaclang/server/endpoints/colocated.jac
+@@ -19,0 +20 @@
++def _answer_is_final(result: any) -> bool;

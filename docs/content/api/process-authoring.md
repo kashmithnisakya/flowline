@@ -11,6 +11,10 @@ report `not_found`.
 retries a losing transaction's writes without replaying its read decisions,
 which permits duplicate definitions. The guarantees below require that fix
 in the hosted build/runtime and a passing deployment integration gate.
+Local checks and CI prepare the verified source backports with
+`python3 tools/jac.py`. The runtime contracts in
+`tests/unit/runtime_boundaries.jac` check committed rows and callback counts.
+This preparation does not change a hosted runtime image.
 
 ## List and inspect
 
@@ -92,6 +96,11 @@ Success reports `ok`, `process_id`, `etag`, `revision`, `request_id` and
 `history_limit`. At 200 snapshots, further changes are
 refused; no history is silently removed. Request receipts have no automatic
 expiry in this version.
+
+A platform `failed_after_commit` error is a final failure after work may have
+become durable. Read the workspace before retrying; retain the original request
+ID and identical arguments for an authoring retry. The CLI and MCP report this
+code as a failed operation and do not automatically repeat the write.
 
 ## Storage and boundaries
 

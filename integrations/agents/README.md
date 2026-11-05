@@ -13,11 +13,13 @@ same `models.ProcessDefinition` schema so a later UI can read the saved data.
 
 **Deployment prerequisite:** definition writes require the Jac transaction fix
 in [jac#10576](https://github.com/jaseci-labs/jac/pull/10576). Stock Jac 0.39.0
-can commit duplicate definitions after a concurrent retry. This PR retains
-`dev`'s version pin and a failing integration gate on that stock runtime;
-do not enable hosted authoring until a supported hosted build/runtime includes
-the fix and passes the gate. Local patched-runtime validation is not hosted
-compatibility evidence. Installing this Python client does not upgrade Jac.
+can commit duplicate definitions after a concurrent retry. The repository's
+local checks and CI use verified compiler/runtime backports through
+`python3 tools/jac.py`, retaining the exact Jac version pin. Runtime contracts
+check durable rows and callback counts before the API integration gates.
+Hosted authoring still requires a supported build/runtime that includes the
+fixes and passes those gates. Local source-handoff results do not establish
+hosted compatibility. Installing this Python client does not upgrade Jac.
 
 ## Install and connect
 
@@ -84,6 +86,12 @@ server returns the original receipt. Reusing an ID for different input fails.
 Updates require the exact saved etag, and concurrent stale edits fail instead
 of overwriting newer work. On conflict, read/diff again and intentionally
 reconcile the document; do not blindly refresh the etag and overwrite.
+
+`failed_after_commit` means the server may already have saved part of an
+operation. Inspect the workspace before retrying. The client preserves this
+final-failure code without automatically resubmitting the write or exposing
+arbitrary server error details. Keep the original request ID for an identical
+process-save retry; task creation has no idempotency receipt.
 
 The document has exactly `title`, `family`, `variant`, `summary`, `steps`,
 `transitions`, `policies` and `configuration`. Steps use stable IDs; `variant`

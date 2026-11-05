@@ -1,0 +1,4 @@
+--- a/jaclang/server/session.jac
++++ b/jaclang/server/session.jac
+@@ -229,0 +230 @@
++    override def note_effect_failure(e: Exception) -> None;

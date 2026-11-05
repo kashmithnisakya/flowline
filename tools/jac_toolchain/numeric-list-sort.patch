@@ -1,0 +1,6 @@
+--- a/jaclang/compiler/backends/es/impl/primitives_es.impl.jac
++++ b/jaclang/compiler/backends/es/impl/primitives_es.impl.jac
+@@ -1128,3 +1127,0 @@
+-    if len(args) == 0 {
+-        return _mcall(target, "sort", []);
+-    }

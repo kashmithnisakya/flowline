@@ -194,6 +194,18 @@ class FlowlineClient:
                 "unauthorized", "Flowline refused authentication or workspace access"
             )
         if response.status_code >= 400:
+            try:
+                failure = response.json()
+            except ValueError:
+                failure = None
+            error = failure.get("error") if isinstance(failure, dict) else None
+            if isinstance(error, dict) and error.get("code") == "FAILED_AFTER_COMMIT":
+                raise FlowlineError(
+                    "failed_after_commit",
+                    "Flowline may have committed part of this operation. "
+                    "Inspect the workspace before retrying.",
+                    {"final": True},
+                )
             raise FlowlineError(
                 "http_error", f"Flowline returned HTTP {response.status_code}"
             )
