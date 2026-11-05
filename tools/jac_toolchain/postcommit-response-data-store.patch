@@ -1,0 +1,5 @@
+--- a/jaclang/data/store.jac
++++ b/jaclang/data/store.jac
+@@ -85,0 +86,2 @@
++    has last_error: (Exception | None) = None;
++

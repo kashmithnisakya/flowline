@@ -48,10 +48,19 @@ jobs:
       - name: jac --version
         run: jac --version
 
+      - name: Prepare verified compiler and runtime backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
+
       # Since 0.37.23 `jac check` fails (E1138) on an import of a dependency
       # jac.toml declares but the environment lacks, so install them first.
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
+
       - name: jac install (python + npm dependencies)
         run: jac install
+
+      - name: Persistence and runtime contracts
+        run: jac test tests/unit/runtime_boundaries.jac
 
       # components/ui/ is jac-shadcn: `jac install --shadcn <name>` rewrites
       # those files verbatim from the registry, so holding them to the
@@ -124,6 +133,12 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/jaseci-labs/jaseci/main/scripts/install.sh \
             | bash -s -- --version "${{ steps.pin.outputs.version }}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare verified compiler and runtime backports
+        run: python3 tools/jac.py --github-env "$GITHUB_ENV"
+
+      - name: Verify cached compiler backport ordering
+        run: python3 tests/smoke/jac_toolchain_gate.py
 
       - name: jac install (python + npm dependencies)
         run: jac install
@@ -199,6 +214,19 @@ jobs:
 
       - name: Agents gate (AI responsibilities queued on a move, the runner, the review service)
         run: python3 tests/smoke/agents_gate.py http://localhost:8000 http://127.0.0.1:8099
+
+      - name: Install the hosted CLI and MCP bridge
+        run: python3 -m pip install ./integrations/agents
+
+      - name: Agent interface gate (authoring, concurrent writes, isolation, CLI and MCP)
+        run: python3 tests/smoke/agent_interface_gate.py http://localhost:8000
+
+      - name: Process authoring preserves review history and managed definitions
+        run: jac test tests/unit/process_authoring.jac
+
+      - name: Process library and authoring share metadata, history and unique variants
+        if: ${{ hashFiles('services/processes/catalog.jac') != '' }}
+        run: python3 tests/smoke/process_authoring_library_gate.py http://localhost:8000
 
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log

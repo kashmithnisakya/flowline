@@ -1,0 +1,6 @@
+--- a/jaclang/server/session.jac
++++ b/jaclang/server/session.jac
+@@ -159,0 +160 @@
++        _committed_units: set[int] postinit,
+@@ -227,0 +229 @@
++    override def unit_committed -> None;
