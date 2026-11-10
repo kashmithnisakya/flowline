@@ -121,6 +121,12 @@ walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 k8s_metrics_enabled = false
 
+# The Postgres volume's size. It must be at least the size of the volume the
+# cluster already holds (20Gi): unset reads as jac-scale's 2Gi default, a
+# shrink, which aborts the deploy. A larger value grows the volume in place.
+[scale.database]
+postgres_storage = "20Gi"
+
 [scale.kubernetes]
 app_name = "flowline"
 # Web app pod sizing. The worker count is fixed in [serve.workers]: "auto"
