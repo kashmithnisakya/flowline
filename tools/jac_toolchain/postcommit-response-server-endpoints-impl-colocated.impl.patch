@@ -1,0 +1,13 @@
+--- a/jaclang/server/endpoints/impl/colocated.impl.jac
++++ b/jaclang/server/endpoints/impl/colocated.impl.jac
+@@ -32,0 +33,4 @@
++}
++
++impl _answer_is_final(result: any) -> bool {
++    return not _unit_failed(result) or bool(result.get('final'));
+@@ -97 +101 @@
+-            committed=not _unit_failed(result)
++            committed=_answer_is_final(result)
+@@ -140 +144 @@
+-            committed=not _unit_failed(result)
++            committed=_answer_is_final(result)

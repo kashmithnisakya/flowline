@@ -1,0 +1,5 @@
+--- a/jaclang/runtime/impl/memory.impl.jac
++++ b/jaclang/runtime/impl/memory.impl.jac
+@@ -199,0 +200,2 @@
++impl Memory.unit_committed {}
++

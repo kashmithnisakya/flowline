@@ -1,0 +1,4 @@
+--- a/jaclang/server/impl/server.impl.jac
++++ b/jaclang/server/impl/server.impl.jac
+@@ -78,0 +79 @@
++    ctx.mem.unit_committed();

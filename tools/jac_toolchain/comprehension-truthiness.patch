@@ -1,0 +1,6 @@
+--- a/jaclang/compiler/backends/es/esast_gen_pass.impl/expr.impl.jac
++++ b/jaclang/compiler/backends/es/esast_gen_pass.impl/expr.impl.jac
+@@ -492,0 +493,3 @@
++                    cond_expr = self._build_jac_call(
++                        ["_jac", "builtin", "bool"], [cond_expr], cond
++                    );

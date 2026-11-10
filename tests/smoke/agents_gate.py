@@ -13,8 +13,11 @@ import json
 import os
 import signal
 import subprocess
+import shlex
 import sys
 import time
+from pathlib import Path
+from urllib.parse import urlparse
 
 import webhook_gate as wg
 from webhook_gate import check, walker, project, req, connect
@@ -364,11 +367,39 @@ def runner_suite():
 
 
 def server_workers():
-    # A `jac run` whose parent is one too; the supervisor respawns it.
-    found = subprocess.run(["pgrep", "-f", "^jac run"], capture_output=True, text=True).stdout.split()
-    parent = {p: subprocess.run(["ps", "-o", "ppid=", "-p", p], capture_output=True, text=True).stdout.strip()
-              for p in found}
-    return [int(p) for p in found if parent[p] in parent]
+    # Only the explicitly identified test supervisor may lose its workers.
+    # Other local Flowline servers and worktrees must remain untouched.
+    address = urlparse(wg.BASE)
+    if address.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        return []
+    supplied = os.environ.get("FLOWLINE_TEST_SUPERVISOR_PID", "")
+    if not supplied and Path("serve.pid").is_file():
+        supplied = Path("serve.pid").read_text().strip()
+    if not supplied.isdecimal():
+        return []
+    supervisor = int(supplied)
+    command = subprocess.run(["ps", "-p", supplied, "-o", "args="], capture_output=True, text=True).stdout.strip()
+    args = shlex.split(command)
+    if len(args) < 2 or Path(args[0]).name != "jac" or args[1] != "run":
+        return []
+    port = "8000"
+    if "--port" in args:
+        index = args.index("--port")
+        if index + 1 == len(args):
+            return []
+        port = args[index + 1]
+    if port != str(address.port or 80):
+        return []
+    rows = subprocess.run(["ps", "-eo", "pid=,ppid=,args="], capture_output=True, text=True).stdout.splitlines()
+    workers = []
+    for row in rows:
+        fields = row.strip().split(None, 2)
+        if len(fields) != 3 or not fields[0].isdecimal() or fields[1] != str(supervisor):
+            continue
+        child = shlex.split(fields[2])
+        if len(child) > 1 and Path(child[0]).name == "jac" and child[1] == "run":
+            workers.append(int(fields[0]))
+    return workers
 
 
 def worker_death_suite(landed):
@@ -386,7 +417,8 @@ def worker_death_suite(landed):
                  (runs(e) or [{}])[0].get("status") == "running" and bool(victims), (runs(e), victims)):
         return
     for pid in victims:
-        os.kill(pid, signal.SIGKILL)
+        if pid in server_workers():
+            os.kill(pid, signal.SIGKILL)
     check("  and the workers come back", wg.wait_ready())
     rows = settle(e, 1, 150)
     posted = [c for c in wg.stub_calls(INST) if c[0] == "POST" and "/pulls/19/reviews" in c[1]]

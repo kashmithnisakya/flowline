@@ -1,0 +1,4 @@
+--- a/jaclang/runtime/context.jac
++++ b/jaclang/runtime/context.jac
+@@ -13,0 +14 @@
++        committed: bool = False,

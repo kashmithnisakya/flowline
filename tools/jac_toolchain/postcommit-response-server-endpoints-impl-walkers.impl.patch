@@ -1,0 +1,16 @@
+--- a/jaclang/server/endpoints/impl/walkers.impl.jac
++++ b/jaclang/server/endpoints/impl/walkers.impl.jac
+@@ -246 +246,5 @@
+-            return _failure(result, 'Walker execution failed');
++            return remember_response(
++                idem,
++                _failure(result, 'Walker execution failed'),
++                committed=bool(result.get('final'))
++            );
+@@ -412 +416,5 @@
+-            return _failure(result, 'Function execution failed');
++            return remember_response(
++                idem,
++                _failure(result, 'Function execution failed'),
++                committed=bool(result.get('final'))
++            );

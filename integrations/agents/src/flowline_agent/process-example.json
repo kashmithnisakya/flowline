@@ -1,0 +1,33 @@
+{
+  "title": "Onboarding",
+  "family": "onboarding",
+  "variant": "proposed",
+  "summary": "Review an onboarding request before completion.",
+  "steps": [
+    {
+      "id": "intake", "title": "Receive request", "owner": "Coordinator",
+      "mode": "Human", "status": "Manual", "detail": "Record the request.",
+      "guard": "Request received", "inputs": "Request", "outputs": "Review brief",
+      "tool": "Flowline", "x": "0", "y": "0", "kind": "start"
+    },
+    {
+      "id": "review", "title": "Review request", "owner": "Reviewer",
+      "mode": "Human", "status": "Manual", "detail": "Check the review brief.",
+      "guard": "Brief complete", "inputs": "Review brief", "outputs": "Decision",
+      "tool": "Flowline", "x": "240", "y": "0", "kind": "handoff"
+    },
+    {
+      "id": "complete", "title": "Complete onboarding", "owner": "Coordinator",
+      "mode": "Human", "status": "Manual", "detail": "Record completion.",
+      "guard": "Approved decision", "inputs": "Decision", "outputs": "Completion record",
+      "tool": "Flowline", "x": "480", "y": "0", "kind": "done"
+    }
+  ],
+  "transitions": [
+    {"source": "intake", "target": "review", "label": "Ready", "kind": "forward"},
+    {"source": "review", "target": "complete", "label": "Approved", "kind": "forward"},
+    {"source": "review", "target": "intake", "label": "Revise", "kind": "return"}
+  ],
+  "policies": [{"title": "Review", "detail": "A reviewer records a decision."}],
+  "configuration": []
+}

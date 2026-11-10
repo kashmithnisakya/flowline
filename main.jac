@@ -114,6 +114,13 @@ import from services.agents.agents {
     CheckReviewService
 }
 
+import from services.processes.authoring {
+    ListProcessDefinitions,
+    GetProcessDefinition,
+    ValidateProcessDefinition,
+    SaveProcessDefinition
+}
+
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;
 }

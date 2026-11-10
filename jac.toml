@@ -1,5 +1,7 @@
 [project]
 name = "flowline"
+# Base binary for the verified compiler backports in tools/jac_toolchain/.
+# Use python3 tools/jac.py for install, check, build and run (including CI).
 jac-version = "==0.39.0"
 default-app = "flowline"
 
@@ -211,6 +213,7 @@ default = "server"
 # Theme choices and the stored preference: browser-only, no evidence of its own.
 "lib.theme" = "client"
 models = "server"
+"services.processes.authoring" = "server"
 "services.agents.agents" = "server"
 "services.agents.runs" = "server"
 "services.agents.runner" = "server"

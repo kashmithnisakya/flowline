@@ -1,0 +1,10 @@
+--- a/jaclang/runtime/impl/context.impl.jac
++++ b/jaclang/runtime/impl/context.impl.jac
+@@ -130,6 +130,7 @@
+     }
+     effects = self.pending_effects;
+     self.pending_effects = [];
++    self.mem._durable_boundary.mark();
+     self.mem.unseal_scan();
+     try {
+         for effect in effects {
