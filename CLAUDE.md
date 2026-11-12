@@ -131,7 +131,8 @@ people it tracks are roster members.
   `WorkspaceView.ai_open` is how many are open, for the sidebar;
   `metrics.jac` counts runs
   with plain `prometheus_client` counters, which `/metrics` serves only when
-  it merges several workers' files, the deployed case),
+  `[scale.monitoring]` is on (CI turns it on; it is off for jachammer) and
+  it merges several workers' files),
   `filters` (the
   saved-filter writers),
   `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
@@ -792,9 +793,11 @@ request), so a request below the idle footprint pins the deployment at
 `[scale.kubernetes]` bounds unless `[scale.gateway.hpa]` sets them (it does:
 1 to 2); four gateway pods on dev (2026-09-14) were that inheritance plus a
 512Mi request sized for one worker while `[serve.workers]` gives the gateway
-two. `[scale.monitoring] k8s_metrics_enabled` and `[scale.gateway.logs]`
-each add a per-node DaemonSet (node-exporter, Alloy) to the namespace on the
-shared cluster, so both stay off; the deploy gate checks the gateway range.
+two. `[scale.monitoring]` and `[scale.gateway.logs]` stay off: jachammer
+refuses a deploy that turns on monitoring, logs or tracing of its own, and
+each would add a per-node DaemonSet (node-exporter, Alloy) to the shared
+cluster. The monitoring switch also gates `/metrics`, so a deployed pod
+serves none; the deploy gate checks the gateway range.
 The dry-run command above renders the manifests locally
 once `bundle_storage_class` is set to any name (a placeholder for the RWX
 check that a real deploy satisfies on the platform); `tests/smoke/

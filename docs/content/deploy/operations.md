@@ -20,11 +20,14 @@ to `curl` without an HTML `Accept` header. That is expected.
 Kubernetes events; `jachammer top [--prod] --json` reports CPU and memory per
 pod.
 
-**Metrics.** `/metrics` (Prometheus format, with per-walker metrics) requires
-admin authentication and merges every worker's series (before Jac 0.37.22 it
-answered `200` with an empty body whenever more than one worker ran,
-jaseci-labs/jac#9190). Process stats (CPU, memory, GC, file descriptors) are
-per process and stay sparse there; `jachammer top` reports them per pod.
+**Metrics.** A jachammer deploy serves no `/metrics`. `[scale.monitoring]` is
+off in `jac.toml` because jachammer refuses a deploy whose app runs its own
+Prometheus and Grafana, and that one switch also gates the endpoint. Where it
+is on (CI, or a cluster of your own), `/metrics` (Prometheus format, with
+per-walker metrics) requires admin authentication and merges every worker's
+series (before Jac 0.37.22 it answered `200` with an empty body whenever more
+than one worker ran, jaseci-labs/jac#9190). `jachammer top` reports CPU and
+memory per pod either way.
 
 **Application logs.** The app logs to named loggers:
 
@@ -89,9 +92,11 @@ review service, its own pod (`pr-review`).
 | `flowline_ai_tokens_total{direction}` | Model tokens, `in` and `out`. |
 | `flowline_ai_cost_usd_total{workspace}` | Model cost per workspace. |
 
-The `flowline_ai_*` series sit on the app's `/metrics` when it serves more
-than one worker, which every deployed pod does: the endpoint merges all
-workers' metric files. A single-worker `jac run` shows Jac's own series only.
+The `flowline_ai_*` series sit on the app's `/metrics` when
+`[scale.monitoring]` is on and the app serves more than one worker: the
+endpoint merges all workers' metric files. A jachammer deploy has the switch
+off, so there the log line above is the record of a run. A single-worker
+`jac run` shows Jac's own series only.
 
 **Kill switch.** Set `FLOWLINE_AGENTS_PAUSED=1` on the project and deploy:
 the runner claims nothing and logs that it is paused, moves keep queuing,
