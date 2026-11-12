@@ -15,7 +15,8 @@ from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
-READY_TIMEOUT = 420
+# A clean boot on a CI runner has taken about 7 minutes since jac 0.38.
+READY_TIMEOUT = 600
 TOKEN = ""
 FAILS: list[str] = []
 
@@ -25,18 +26,23 @@ FAILS: list[str] = []
 # table of THIS build is asserted here.
 CACHED_READERS = [
     "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
-    "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus",
+    "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus", "ListResponsibilities",
 ]
+# Since 0.38 a clean build ignores @effects (jaseci-labs/jac#10410); the
+# stand-in in services/compat restores these declarations, so this is empty.
+# A reader named here warns rather than fails, for the next such regression.
+EFFECTS_REGRESSION: set[str] = set()
 # Task lists stay uncached on purpose: a colleague's move, a webhook drain or
 # a sync from another tab must show on the next call, not 60 s later.
 LIVE_READERS = [
     "BoardSnapshot", "ListTasks", "OverviewSnapshot", "ListLogEntries",
-    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks",
+    "TaskCounts", "TaskHistory", "RoadmapSnapshot", "ListStepTasks", "ListRuns", "ListAgentRuns",
 ]
 MUTATORS = [
     "CreateTask", "UpdateTask", "MoveTask", "DeleteTask", "SaveMember", "SaveProject",
     "SaveRole", "SaveStep", "AddRepo", "SyncGithub", "ApplyTemplate",
     "SetBoardFilters", "SaveFilterSet", "DeleteFilterSet",
+    "SetAiEnabled", "SaveResponsibility", "DeleteResponsibility", "RetryRun", "CancelRun",
 ]
 
 
@@ -273,6 +279,10 @@ def assert_parity(label, project_ids, member_ids, expected_links):
         for s in lines[pid]:
             got_counts[s["id"]] = got_counts.get(s["id"], 0) + s["task_count"]
     check(f"{label}: GetFlowLine step counts, summed over the projects", got_counts == exp["step_counts"] and len(steps) > 0, f"{got_counts} vs {exp['step_counts']}")
+    for pid in project_ids:
+        want = {s["id"]: s["task_count"] for s in lines[pid]}
+        road = report("RoadmapSnapshot", {"project_id": pid}).get("counts")
+        check(f"{label}: RoadmapSnapshot's line counts equal the flow line's", road == want, f"{road} vs {want}")
     default_line = report("GetFlowLine", {"with_counts": True}) or []
     check(f"{label}: GetFlowLine with no project counts the earliest-created one",
           [(s["id"], s["task_count"]) for s in default_line] == [(s["id"], s["task_count"]) for s in steps], (default_line, steps))
@@ -312,6 +322,9 @@ def parity_suite(project_id, member_id, tag):
     for s in steps:
         by_kind.setdefault(s["kind"], s["id"])
     check("parity: the Simple template is applied", len(steps) == 4, str(steps)[:200])
+    review = next((s for s in steps if s["name"] == "Review"), {})
+    check("parity: the Simple template's way back fires on changes requested",
+          "changes_requested" in review.get("next_triggers", []), review)
     p2 = report("SaveProject", {"name": "CI Parity", "description": ""})
     p2_id = str(find_key(p2, "id", "_jac_id") or "")
     m2 = report("SaveMember", {"first_name": "Omar", "last_name": "Diaz"})
@@ -360,6 +373,18 @@ def parity_suite(project_id, member_id, tag):
           moved.get("project_id") == p2_id and moved.get("assignee_ids") == [m2_id], str(moved)[:200])
     links[row["id"]] = (p2_id, [m2_id])
     assert_parity("parity after deletes and a re-parent", [project_id, p2_id], [member_id, m2_id], links)
+    log_wording_check(project_id, steps, tag)
+
+
+def log_wording_check(project_id, steps, tag):
+    # A new task's first line names the step the org calls it, as a move's does,
+    # not the status behind it ("In Progress").
+    doing = next(s for s in steps if s["name"] == "Doing")
+    task = report("CreateTask", {"title": f"Log wording {tag}", "project_id": project_id, "step_id": doing["id"]})
+    today = date.fromisoformat(time.strftime("%Y-%m-%d", time.gmtime()))
+    rows = report("ListLogEntries", {"task_id": task.get("id", ""), "from_date": (today - timedelta(days=1)).isoformat(),
+                                     "to_date": (today + timedelta(days=1)).isoformat()}).get("rows", [])
+    check("log: a new task is added to its step by name", [r.get("activity") for r in rows] == ["Added to Doing"], rows)
 
 
 def log_pages(body):
@@ -610,7 +635,7 @@ def history_store_suite(project_id, member_id):
 
 def sign_up(tag):
     # A second account for the tenant checks: its token, or "" on failure.
-    email, password = f"ci-{tag}@flowline-ci.invalid", f"Ci-{tag}-Xy7!"
+    email, password = f"ci-{tag}@flowline-ci.invalid", f"Pw-{tag}-Xy7!"
     req("POST", "/user/register", {"identities": [{"type": "email", "value": email}],
                                    "credential": {"type": "password", "password": password},
                                    "profile": {"org_name": "CI Other"}})
@@ -696,6 +721,101 @@ def filter_sets_suite(project_id, member_id, tag):
           str(sets()))
 
 
+def ai_suite(task_id, tag):
+    # AI responsibilities: settings validate, a role holds one of each key,
+    # foreign step ids are dropped, the switch flips, deleting a role takes
+    # its responsibilities, and another account reaches none of it.
+    global TOKEN
+
+    def settings():
+        return report("ListResponsibilities")
+
+    fresh = settings()
+    check("ai: a fresh workspace has AI off and no responsibilities",
+          fresh.get("enabled") is False and fresh.get("responsibilities") == [], str(fresh))
+    role = (report("SaveRole", {"name": "Product Engineer"}).get("role") or {})
+    role_id = role.get("id", "")
+    step = report("SaveStep", {"name": "In review", "kind": "handoff", "owner": "Product Engineer"})
+    step_id = str(find_key(step, "id") or "")
+    check("ai: a role and a step it owns to hang responsibilities on", bool(role_id and step_id), f"{role} {step}")
+    for what, body, error in (("an unknown key", {"role_id": role_id, "key": "triage"}, "unknown_key"),
+                              ("an unknown mode", {"role_id": role_id, "mode": "merge"}, "bad_mode"),
+                              ("long instructions", {"role_id": role_id, "instructions": "x" * 2001}, "too_long"),
+                              ("a bad model name", {"role_id": role_id, "model": "gpt 4o!"}, "bad_model"),
+                              ("a malformed role id", {"role_id": "not-a-jid"}, "not_found"),
+                              ("a task id as the role", {"role_id": task_id}, "not_found"),
+                              ("a role id as the responsibility", {"responsibility_id": role_id}, "not_found")):
+        got = report("SaveResponsibility", body)
+        check(f"ai: SaveResponsibility refuses {what} as {error}",
+              got.get("ok") is False and got.get("error") == error, str(got)[:200])
+    made = report("SaveResponsibility", {"role_id": role_id, "on_steps": [step_id, "not-a-jid", task_id, step_id],
+                                         "instructions": "  Check error handling.  ", "model": "claude-sonnet-5"})
+    resp = made.get("responsibility") or {}
+    resp_id = resp.get("id", "")
+    check("ai: SaveResponsibility creates on the role, keeps the workspace's step once, trims instructions",
+          made.get("ok") and resp.get("role_id") == role_id and resp.get("key") == "code_review"
+          and resp.get("on_steps") == [step_id] and resp.get("instructions") == "Check error handling."
+          and resp.get("mode") == "comment" and resp.get("enabled") is True
+          and resp.get("model") == "claude-sonnet-5", str(made))
+    again = report("SaveResponsibility", {"role_id": role_id, "mode": "request_changes"})
+    check("ai: a role holds one responsibility per key", (again.get("responsibility") or {}).get("id") == resp_id
+          and again["responsibility"].get("mode") == "request_changes" and again["responsibility"].get("on_steps") == [],
+          str(again))
+    upd = report("SaveResponsibility", {"responsibility_id": resp_id, "enabled": False, "on_steps": [step_id]})
+    check("ai: SaveResponsibility updates by id", upd.get("ok") and upd["responsibility"].get("enabled") is False
+          and upd["responsibility"].get("on_steps") == [step_id] and upd["responsibility"].get("role_id") == role_id,
+          str(upd))
+    listed = settings().get("responsibilities", [])
+    check("ai: ListResponsibilities lists it with its role", [(r.get("id"), r.get("role_id")) for r in listed]
+          == [(resp_id, role_id)], str(listed))
+    on = report("SetAiEnabled", {"enabled": True})
+    check("ai: SetAiEnabled turns AI on with a stamp", on.get("enabled") is True and bool(on.get("enabled_at")), str(on))
+    check("ai: the switch reads back", settings().get("enabled") is True, str(settings()))
+    off = report("SetAiEnabled", {"enabled": False})
+    check("ai: SetAiEnabled turns it off", off.get("enabled") is False and settings().get("enabled") is False, str(off))
+    check("ai: a task with no runs lists none", report("ListRuns", {"task_id": task_id}) == [], "")
+    activity = report("ListAgentRuns")
+    check("ai: a workspace with no runs has an empty activity page and the daily limit",
+          activity.get("rows") == [] and activity.get("has_more") is False and activity.get("daily_limit", 0) > 0,
+          str(activity))
+    check("ai: a task row starts with no AI outcome",
+          report("GetTask", {"task_id": task_id}).get("ai_outcome") == "", "")
+    check("ai: GetWorkspace counts no open runs", report("GetWorkspace").get("ai_open") == 0, "")
+    for name in ("RetryRun", "CancelRun"):
+        for what, rid in (("a malformed id", "not-a-jid"), ("a task id", task_id), ("a responsibility id", resp_id)):
+            got = report(name, {"run_id": rid})
+            check(f"ai: {name} on {what} is not found", got.get("error") == "not_found", str(got))
+
+    home = TOKEN
+    TOKEN = sign_up(f"{tag}ai")
+    if check("ai: a second account signs in", bool(TOKEN)):
+        theirs = settings()
+        check("ai: another account sees AI off and nothing", theirs.get("enabled") is False
+              and theirs.get("responsibilities") == [], str(theirs))
+        for name, body in (("SaveResponsibility", {"role_id": role_id}),
+                           ("SaveResponsibility", {"responsibility_id": resp_id, "enabled": True}),
+                           ("DeleteResponsibility", {"responsibility_id": resp_id})):
+            got = report(name, body)
+            check(f"ai: another account cannot {name} {sorted(body)}", got.get("error") == "not_found", str(got))
+        report("SetAiEnabled", {"enabled": True})
+        check("ai: another account cannot list a task's runs", report("ListRuns", {"task_id": task_id}) == [], "")
+        check("ai: another account's activity page is its own", report("ListAgentRuns").get("rows") == [], "")
+    TOKEN = home
+    mine = settings()
+    check("ai: the responsibility and the switch are untouched", mine.get("enabled") is False
+          and [(r.get("id"), r.get("enabled")) for r in mine.get("responsibilities", [])] == [(resp_id, False)],
+          str(mine))
+    gone = report("DeleteResponsibility", {"responsibility_id": resp_id})
+    check("ai: DeleteResponsibility deletes it", gone.get("deleted") == resp_id
+          and settings().get("responsibilities") == [], str(gone))
+    check("ai: a deleted responsibility is not found",
+          report("DeleteResponsibility", {"responsibility_id": resp_id}).get("error") == "not_found", "")
+    report("SaveResponsibility", {"role_id": role_id})
+    report("DeleteRole", {"name": "Product Engineer"})
+    check("ai: deleting a role deletes its responsibilities", settings().get("responsibilities") == [],
+          str(settings()))
+
+
 def effects_table(html: str) -> dict:
     # The shell carries the compiler's endpoint effects in its __jac_init__
     # JSON; the client runtime reads its cache verdicts from this table.
@@ -715,9 +835,12 @@ def check_effects(html: str) -> None:
     check("shell carries the endpoint effects table", len(table) > 20, str(len(table)))
     for name in CACHED_READERS:
         row = table.get(name) or {}
+        detail = f"unknown={row.get('unknown')} writes={row.get('writes')} assumptions={row.get('assumptions')}"
+        if name in EFFECTS_REGRESSION and row.get("unknown") is True:
+            print(f"warn {name} is a cacheable reader  [{detail}]  jaseci-labs/jac#10410")
+            continue
         check(f"{name} is a cacheable reader",
-              row.get("unknown") is False and row.get("writes") == [],
-              f"unknown={row.get('unknown')} writes={row.get('writes')} assumptions={row.get('assumptions')}")
+              row.get("unknown") is False and row.get("writes") == [], detail)
     for name in LIVE_READERS:
         row = table.get(name) or {}
         check(f"{name} is never served from the cache",
@@ -768,7 +891,7 @@ def main() -> int:
 
     tag = uuid.uuid4().hex[:10]
     email = f"ci-{tag}@flowline-ci.invalid"
-    password = f"Ci-{tag}-Xy7!"
+    password = f"Pw-{tag}-Xy7!"
     status, _, raw = req("POST", "/user/register", {
         "identities": [{"type": "email", "value": email}],
         "credential": {"type": "password", "password": password},
@@ -881,12 +1004,20 @@ def main() -> int:
           and len(ws.get("roles", [])) == counts["ListRoles"],
           f"{ {k: len(ws.get(k, [])) for k in lists} } vs {counts}")
 
+    # The PR review service is its own app; colocated in CI, its own pod when
+    # deployed. The walker awaits a bridged function on it.
+    status, payload, reports = walker("CheckReviewService")
+    answer = reports[0] if reports else {}
+    check("CheckReviewService reaches the review service", status == 200 and answer.get("ok") is True
+          and isinstance(answer.get("ms"), int), f"{status} {payload}")
+
     parity_suite(project_id, member_id, tag)
     log_paging_suite(project_id, tag)
     log_counts_suite(project_id, tag)
     history_pages_suite(project_id)
     history_store_suite(project_id, member_id)
     filter_sets_suite(project_id, member_id, tag)
+    ai_suite(task_id, tag)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         codes = list(pool.map(lambda _: walker("ListTasks", {"scope": "working"})[0], range(16)))

@@ -52,6 +52,26 @@ write.
 
 ::: obj StepView h3
 
+## AI responsibilities
+
+A role's AI responsibilities and their runs. The catalogue of what a
+responsibility can be is `AI_RESPONSIBILITIES` in `constants.jac`, and
+`AGENT_LIMITS` caps what one workspace's AI may do.
+
+::: obj AiSettings h3
+
+::: obj ResponsibilityView h3
+
+::: obj AgentRunView h3
+
+::: obj AgentRunLine h3
+
+::: obj AgentRunPage h3
+
+::: glob AI_RESPONSIBILITIES
+
+::: glob AGENT_LIMITS
+
 ## Activity log
 
 ::: obj LogPage h3
@@ -85,6 +105,8 @@ write.
 ::: obj StandupNote h3
 
 ::: obj ProposedAction h3
+
+::: obj AssistantReply h3
 
 ## GitHub
 

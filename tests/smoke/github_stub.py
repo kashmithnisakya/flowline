@@ -8,12 +8,32 @@ import json
 import re
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-STATE = {"installations": [], "repos": {}, "next_number": 1000, "calls": [], "labels": {}}
+STATE = {"installations": [], "repos": {}, "next_number": 1000, "calls": [], "labels": {},
+         "pulls": {}, "faults": [], "reviews": []}
 LOCK = threading.Lock()
+
+
+def added_lines(patch):
+    # New-file line numbers the patch adds, as GitHub accepts review comments on.
+    out, line = set(), 0
+    for raw in (patch or "").split("\n"):
+        m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+        if m:
+            line = int(m.group(1))
+            continue
+        if raw.startswith("+") and not raw.startswith("+++"):
+            out.add(line)
+            line += 1
+        elif raw.startswith("-") and not raw.startswith("---"):
+            continue
+        elif line:
+            line += 1
+    return out
 
 
 def issue_item(repo, number, title, state, updated, closed=None, pull=None):
@@ -60,13 +80,47 @@ class Handler(BaseHTTPRequestHandler):
                 return {}
         return {k: v[0] for k, v in parse_qs(raw.decode(errors="replace")).items()}
 
+    def _fault(self, method, path):
+        # A gate-set failure: the next `times` calls matching method and path
+        # answer `status` (a 5xx to retry on, a 403 for a missing permission).
+        for f in STATE["faults"]:
+            if f["times"] > 0 and f["status"] and f["method"] == method and re.fullmatch(f["path"], path):
+                f["times"] -= 1
+                return f
+        return None
+
     def do_GET(self):
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
+        # A delay fault (status 0) holds the call, outside the lock, then
+        # answers normally: a review slower than its claim.
+        with LOCK:
+            slow = next((f for f in STATE["faults"] if f["times"] > 0 and f["status"] == 0
+                         and f["method"] == "GET" and re.fullmatch(f["path"], url.path)), None)
+            if slow:
+                slow["times"] -= 1
+        if slow:
+            time.sleep(slow.get("delay", 0))
         with LOCK:
             STATE["calls"].append(("GET", url.path, self._token()))
             if url.path == "/_stub/state":
                 return self._send(200, STATE)
+            fault = self._fault("GET", url.path)
+            if fault:
+                return self._send(fault["status"], {"message": "stub fault"})
+            # A pull request and its changed files, from the gate's "pulls".
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/pulls/(\d+)", url.path)
+            if m:
+                pr = STATE["pulls"].get(f"{m.group(1)}#{m.group(2)}")
+                return self._send(200, pr["pull"]) if pr else self._send(404, {"message": "Not Found"})
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/pulls/(\d+)/files", url.path)
+            if m:
+                pr = STATE["pulls"].get(f"{m.group(1)}#{m.group(2)}")
+                if not pr:
+                    return self._send(404, {"message": "Not Found"})
+                per = int(q.get("per_page", "30"))
+                page = int(q.get("page", "1"))
+                return self._send(200, pr["files"][(page - 1) * per:page * per])
             if url.path == "/user/installations":
                 rows = [{"id": i, "account": {"login": "stub-org", "avatar_url": ""}}
                         for i in STATE["installations"]]
@@ -119,7 +173,30 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["next_number"] = 1000
                 STATE["calls"] = []
                 STATE["labels"] = {}
+                STATE["pulls"] = {}
+                STATE["faults"] = []
+                STATE["reviews"] = []
                 return self._send(200, {"ok": True})
+            # Add or replace pull requests without dropping the rest:
+            # {"pulls": [{"repo", "number", "head_sha", "state", "files"}]}.
+            if url.path == "/_stub/pulls":
+                for p in body.get("pulls") or []:
+                    key = f"{p['repo']}#{p['number']}"
+                    STATE["pulls"][key] = {"pull": {
+                        "number": p["number"], "state": p.get("state", "open"),
+                        "title": p.get("title", "PR"), "body": p.get("body", ""),
+                        "head": {"sha": p.get("head_sha", "sha-1")},
+                        "html_url": f"https://github.com/{p['repo']}/pull/{p['number']}",
+                    }, "files": p.get("files") or []}
+                return self._send(200, {"ok": True})
+            if url.path == "/_stub/fault":
+                STATE["faults"].append({"method": body["method"], "path": body["path"],
+                                        "status": int(body.get("status", 0)), "times": int(body.get("times", 1)),
+                                        "delay": float(body.get("delay", 0))})
+                return self._send(200, {"ok": True})
+            fault = self._fault("POST", url.path)
+            if fault:
+                return self._send(fault["status"], {"message": "stub fault"})
             if url.path == "/login/oauth/access_token":
                 return self._send(200, {"access_token": "stub-user-token", "token_type": "bearer"})
             m = re.fullmatch(r"/app/installations/(\d+)/access_tokens", url.path)
@@ -143,6 +220,24 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(422, {"message": "Validation Failed"})
                 made.append(body.get("name"))
                 return self._send(201, {"name": body.get("name"), "color": body.get("color")})
+            # A pull request review, refused (422) when a comment names a line the
+            # diff does not add, as GitHub does.
+            m = re.fullmatch(r"/repos/([^/]+/[^/]+)/pulls/(\d+)/reviews", url.path)
+            if m:
+                pr = STATE["pulls"].get(f"{m.group(1)}#{m.group(2)}")
+                if not pr:
+                    return self._send(404, {"message": "Not Found"})
+                allowed = {f["filename"]: added_lines(f.get("patch")) for f in pr["files"]}
+                for c in body.get("comments") or []:
+                    if c.get("line") not in allowed.get(c.get("path"), set()):
+                        return self._send(422, {"message": "Unprocessable Entity",
+                                                "errors": ["Line could not be resolved"]})
+                rid = len(STATE["reviews"]) + 1
+                STATE["reviews"].append({"repo": m.group(1), "number": int(m.group(2)), "id": rid,
+                                         "event": body.get("event"), "commit_id": body.get("commit_id"),
+                                         "body": body.get("body"), "comments": body.get("comments") or []})
+                return self._send(200, {"id": rid, "state": "COMMENTED",
+                                        "html_url": f"https://github.com/{m.group(1)}/pull/{m.group(2)}#pullrequestreview-{rid}"})
             m = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues", url.path)
             if m:
                 repo = m.group(1)

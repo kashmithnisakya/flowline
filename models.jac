@@ -4,8 +4,10 @@ path, so relocating a declaration orphans persisted data.
 
 Layout: root ++> Projects ++> Project ++> Task, root ++> Members ++> Member,
 root ++> Roles ++> Role, root ++> WorkflowSteps ++> WorkflowStep and
-root ++> Logs ++> LogDay ++> LogEntry and root ++> FilterSets ++> FilterSet; repos and the GitHub connection hang off
-the root directly. `owned()` climbs those container edges.
+root ++> Logs ++> LogDay ++> LogEntry and root ++> FilterSets ++> FilterSet;
+a role's AI responsibilities hang under it (Role ++> Responsibility) and
+their runs under root ++> AgentRuns ++> AgentRun; repos and the GitHub
+connection hang off the root directly. `owned()` climbs those container edges.
 """
 
 # jobj raises on a malformed/unknown anchor id — a stale client jid must
@@ -47,8 +49,8 @@ def valid_full_name(full_name: str) -> bool {
     return True;
 }
 
-# The nodes a row may sit under on its way to the root: the three boxes
-# and, for a task, its project. Anything else hangs off the root.
+# The nodes a row may sit under on its way to the root: the boxes, a
+# task's project, a log entry's day and a responsibility's role.
 def is_container(owner: any) -> bool {
     return (
         isinstance(owner, Projects)
@@ -59,12 +61,15 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, Logs)
         or isinstance(owner, LogDay)
         or isinstance(owner, FilterSets)
+        or isinstance(owner, Role)
+        or isinstance(owner, AgentRuns)
     );
 }
 
 
 # Does this node belong to the caller's root? Climbs container edges, at
-# most three hops (task, project, Projects box); typed in-edges never lead
+# most three hops (task, project, Projects box; responsibility, role, Roles
+# box); typed in-edges never lead
 # to a container, so they drop out. jobj/jid resolution is NOT authorization:
 # every jid-addressed mutation calls this first. "My root" is the tenant line.
 def owned(holder: any, target: any) -> bool {
@@ -223,6 +228,16 @@ node Task {
         checklist: list[dict[str, any]] = [],
         # When work on the task starts; the roadmap draws it to the due date.
         start_date: str = "",
+        # "queued" or "running" while an AI run is open on the task, else "".
+        # Kept by the run's write points through settle_ai, so a row shows it.
+        ai_state: str = "",
+        # The stamp of the request that last queued a run here (settle_ai).
+        ai_queued_at: str = "",
+        # The last settled review, for the row's chip: "changes", "reviewed",
+        # "failed" or "" (kept by note_ai_outcome where a run settles).
+        ai_outcome: str = "",
+        ai_comments: int = 0,
+        ai_blocking: int = 0,
         # The container project's jid and the assignees' jids, kept in step
         # with the edges at every write point so a list row needs no hop.
         # The edges stay the truth: `owned` climbs the container edge.
@@ -338,7 +353,11 @@ node Task {
             start_date=self.start_date,
             note_lead=note_lead(self.notes),
             checklist_done=counts[0],
-            checklist_total=counts[1]
+            checklist_total=counts[1],
+            ai_state=self.ai_state,
+            ai_outcome=self.ai_outcome,
+            ai_comments=self.ai_comments,
+            ai_blocking=self.ai_blocking
         );
     }
 
@@ -448,6 +467,60 @@ node Role {
         sort_order: float = 0.0;
 }
 
+# An AI responsibility a role carries (an AI_RESPONSIBILITIES key), run when a
+# task enters one of the role's steps. `on_steps` narrows it to some of those
+# steps by jid ([] means all of them); "" for `model` means the byllm default.
+node Responsibility {
+    has key: str,
+        enabled: bool = True,
+        on_steps: list[str] = [],
+        instructions: str = "",
+        mode: str = "comment",
+        model: str = "",
+        created_at: str = "",
+        updated_at: str = "";
+}
+
+# One run of a responsibility on a task, what the task sheet shows. It names
+# the task and the responsibility by jid, like a log entry; `run_key` (see
+# agent_run_key) is unique per task, responsibility and PR head commit.
+node AgentRun {
+    has task_id: str,
+        responsibility_id: str,
+        key: str,
+        run_key: str,
+        # The step the task landed on when the run was queued: a review that
+        # requests changes sends the task back only if it is still there.
+        step_id: str = "",
+        # An AGENT_RUN_STATUSES value.
+        status: str = "queued",
+        pr_repo: str = "",
+        pr_number: int = 0,
+        head_sha: str = "",
+        # "comment" or "request_changes", once the review is written.
+        verdict: str = "",
+        comments: int = 0,
+        blocking: int = 0,
+        summary: str = "",
+        review_url: str = "",
+        # Why a run failed or was skipped, in words a person can act on.
+        error: str = "",
+        model: str = "",
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        cost_usd: float = 0.0,
+        # The runner's bookkeeping: tries so far, when the claim on a running
+        # run lapses (a pod that died mid-review), and when a queued run is
+        # due (a retry waits out its backoff).
+        attempts: int = 0,
+        lease_until: str = "",
+        next_try_at: str = "",
+        job_id: str = "",
+        queued_at: str = "",
+        started_at: str = "",
+        finished_at: str = "";
+}
+
 # One step of the org's flow line: a named column with a semantic `kind`
 # behind the user's label. The kind, not the name, is what the app keys
 # behaviour on, so renaming never breaks anything. Position is the
@@ -516,6 +589,16 @@ node WorkflowSteps {
 
 node Logs {}
 
+# The runs' box is also the workspace's AI switch: off until someone turns
+# it on, and nothing is queued while it is off.
+node AgentRuns {
+    has enabled: bool = False,
+        enabled_at: str = "",
+        # Runs queued on the current UTC day ("2026-10-14" -> n), for
+        # AGENT_LIMITS' daily_runs; a new day replaces the old count.
+        day_counts: dict[str, int] = {};
+}
+
 # The board's filters as the account left them (`board`, only the keys set
 # away from their default in constants.BOARD_FILTERS), the saved set they
 # came from, and when they were last written ("" means never).
@@ -582,7 +665,13 @@ obj TaskRow {
         note_lead: str = "",
         # How many checklist items are ticked, and how many there are.
         checklist_done: int = 0,
-        checklist_total: int = 0;
+        checklist_total: int = 0,
+        # "queued" or "running" while an AI run is open on the task, else
+        # what its last settled review came to (Task.ai_outcome).
+        ai_state: str = "",
+        ai_outcome: str = "",
+        ai_comments: int = 0,
+        ai_blocking: int = 0;
 }
 
 obj TaskView(TaskRow) {
@@ -730,6 +819,114 @@ def filter_set_view(s: FilterSet) -> FilterSetView {
     return FilterSetView(id=jid(s), name=s.name, page=s.page, filters=dict(s.filters));
 }
 
+obj ResponsibilityView {
+    has id: str,
+        role_id: str,
+        key: str,
+        enabled: bool,
+        on_steps: list[str],
+        instructions: str,
+        mode: str,
+        model: str,
+        updated_at: str;
+}
+
+obj AgentRunView {
+    has id: str,
+        task_id: str,
+        responsibility_id: str,
+        key: str,
+        status: str,
+        pr_repo: str,
+        pr_number: int,
+        head_sha: str,
+        verdict: str,
+        comments: int,
+        blocking: int,
+        summary: str,
+        review_url: str,
+        error: str,
+        model: str,
+        tokens_in: int,
+        tokens_out: int,
+        cost_usd: float,
+        attempts: int,
+        next_try_at: str,
+        queued_at: str,
+        started_at: str,
+        finished_at: str;
+}
+
+# One line of the AI page: a run plus the task it ran on. A deleted task
+# leaves its run as history, with an empty title.
+obj AgentRunLine(AgentRunView) {
+    has task_title: str = "",
+        project_name: str = "";
+}
+
+# One page of the workspace's runs, and how much of today's budget is used.
+obj AgentRunPage {
+    has rows: list[AgentRunLine],
+        has_more: bool = False,
+        runs_today: int = 0,
+        daily_limit: int = 0;
+}
+
+# What the Roles editor reads: the switch and every role's responsibilities.
+obj AiSettings {
+    has enabled: bool,
+        enabled_at: str,
+        responsibilities: list[ResponsibilityView];
+}
+
+# `role_id` saves the hop to the role when the caller already holds it.
+def responsibility_view(r: Responsibility, role_id: str = "") -> ResponsibilityView {
+    owner = role_id;
+    if not owner {
+        owners = [r<--[?:Role]];
+        owner = jid(owners[0]) if owners else "";
+    }
+    return ResponsibilityView(
+        id=jid(r),
+        role_id=owner,
+        key=r.key,
+        enabled=r.enabled,
+        on_steps=list(r.on_steps),
+        instructions=r.instructions,
+        mode=r.mode,
+        model=r.model,
+        updated_at=r.updated_at
+    );
+}
+
+def agent_run_view(r: AgentRun) -> AgentRunView {
+    return AgentRunView(
+        id=jid(r),
+        task_id=r.task_id,
+        responsibility_id=r.responsibility_id,
+        key=r.key,
+        status=r.status,
+        pr_repo=r.pr_repo,
+        pr_number=r.pr_number,
+        head_sha=r.head_sha,
+        verdict=r.verdict,
+        comments=r.comments,
+        blocking=r.blocking,
+        summary=r.summary,
+        review_url=r.review_url,
+        error=r.error,
+        model=r.model,
+        tokens_in=r.tokens_in,
+        tokens_out=r.tokens_out,
+        cost_usd=r.cost_usd,
+        attempts=r.attempts,
+        next_try_at=r.next_try_at,
+        queued_at=r.queued_at,
+        started_at=r.started_at,
+        finished_at=r.finished_at
+    );
+}
+
 def role_view(r: Role) -> RoleView {
     return RoleView(
         id=jid(r), name=r.name, blurb=r.blurb, color=r.color, sort_order=r.sort_order
@@ -762,7 +959,9 @@ obj StepView {
         task_count: int = 0,
         # The first two titles in the step panel's order, filled with the
         # count, so a close zoom on the flow line needs no request.
-        task_titles: list[str] = [];
+        task_titles: list[str] = [],
+        # The AI responsibilities that run when a task lands here, by name.
+        ai: list[str] = [];
 }
 
 # What the client is allowed to know about the GitHub link. The connection
@@ -905,6 +1104,126 @@ def steps_of(holder: Root) -> list[WorkflowStep] {
         out.extend([box-->[?:WorkflowStep]]);
     }
     return out;
+}
+
+
+# The enabled responsibilities that run when a task enters this step: those
+# of the role the step's owner names, kept to the step when `on_steps` lists
+# any. A role holds a handful, so those two tests run in Python.
+def responsibilities_on_step(holder: Root, step: WorkflowStep) -> list[Responsibility] {
+    role = step.owner.strip() if step.owner else "";
+    out: list[Responsibility] = [];
+    if not role or role == "anyone" {
+        return out;
+    }
+    for box in [holder-->[?:Roles]] {
+        for r in [box-->[?:Role, name==role]-->[?:Responsibility]] {
+            if r.enabled and (not r.on_steps or jid(step) in r.on_steps) {
+                out.append(r);
+            }
+        }
+    }
+    return out;
+}
+
+
+# A task's runs, newest first. The task filter runs in the store; a task has
+# a few runs, so the order (queued_at, then jid) is a Python sort.
+def runs_of_task(holder: Root, tid: str) -> list[AgentRun] {
+    out: list[AgentRun] = [];
+    for box in [holder-->[?:AgentRuns]] {
+        out.extend([box-->[?:AgentRun, task_id==tid]]);
+    }
+    out.sort(key=lambda (r: AgentRun) { jid(r); }, reverse=True);
+    out.sort(key=lambda (r: AgentRun) { r.queued_at; }, reverse=True);
+    return out;
+}
+
+
+# The run for one task, responsibility and head commit, if there is one: the
+# check that keeps a second trigger from queuing the same review twice.
+def run_by_key(holder: Root, said: str) -> list[AgentRun] {
+    out: list[AgentRun] = [];
+    for box in [holder-->[?:AgentRuns]] {
+        out.extend([box-->[?:AgentRun, run_key==said]]);
+    }
+    return out;
+}
+
+
+# A task's queued or running run of one responsibility, if any: the check
+# that keeps a second move from queuing the same review again.
+def active_run(holder: Root, tid: str, rid: str) -> list[AgentRun] {
+    out: list[AgentRun] = [];
+    for box in [holder-->[?:AgentRuns]] {
+        for r in [box-->[?:AgentRun, task_id==tid, responsibility_id==rid]] {
+            if r.status == "queued" or r.status == "running" {
+                out.append(r);
+            }
+        }
+    }
+    return out;
+}
+
+
+# Recompute a task's ai_state from its runs. `now` maps a run jid to the
+# status this request (`stamp`) gave it, and a run queued in this request
+# counts through ai_queued_at: a pushed query sees neither write yet.
+def settle_ai(holder: Root, t: Task, now: dict[str, str], stamp: str) {
+    seen: list[str] = [];
+    for r in runs_of_task(holder, jid(t)) {
+        if jid(r) not in now {
+            seen.append(r.status);
+        }
+    }
+    seen.extend(list(now.values()));
+    if t.ai_queued_at == stamp {
+        seen.append("queued");
+    }
+    t.ai_state = "running"
+        if "running" in seen
+        else ("queued" if "queued" in seen else "");
+}
+
+
+# What a settled run leaves on its task's row. A skip or a cancel has nothing
+# to say about the code, so it clears the last result rather than keeping it.
+def note_ai_outcome(t: Task, run: AgentRun) {
+    t.ai_outcome = "";
+    if run.status == "failed" {
+        t.ai_outcome = "failed";
+    } elif run.status == "done" {
+        t.ai_outcome = "changes" if run.verdict == "request_changes" else "reviewed";
+        t.ai_comments = run.comments;
+        t.ai_blocking = run.blocking;
+    }
+}
+
+
+# How many of the workspace's runs are queued or running, for the sidebar.
+def open_run_count(holder: Root) -> int {
+    total = 0;
+    for box in [holder-->[?:AgentRuns]] {
+        total = total + len([box-->[?:AgentRun, status=="running"]]);
+        total = total + len([box-->[?:AgentRun, status=="queued"]]);
+    }
+    return total;
+}
+
+
+# Is the workspace's AI switch on? Off when no box was ever made.
+def ai_enabled(holder: Root) -> bool {
+    for box in [holder-->[?:AgentRuns]] {
+        if box.enabled {
+            return True;
+        }
+    }
+    return False;
+}
+
+
+def agent_run_key(task_id: str, responsibility_id: str, head_sha: str) -> str {
+    return task_id + ":" + responsibility_id + ":" + head_sha;
 }
 
 
@@ -1783,6 +2102,17 @@ def logs_box(holder: Root) -> Logs {
         return found[0];
     }
     box = holder ++> Logs();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def agent_runs_box(holder: Root) -> AgentRuns {
+    found = [holder-->[?:AgentRuns]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> AgentRuns();
     on_attached(holder, box);
     return box;
 }

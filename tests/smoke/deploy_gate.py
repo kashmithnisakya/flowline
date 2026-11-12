@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Assert a `jac scale deploy --dry-run --show-yaml` transcript would ship a
-client bundle, more than one worker per app pod, and a gateway HPA with its own
-ceiling. flowline-dev went API-only on 2026-09-08 because the deploy skipped
+client bundle, more than one worker per app pod, a gateway HPA with its own
+ceiling, the PR review service as its own Deployment, and its bridge token as
+a secret. flowline-dev went API-only on 2026-09-08 because the deploy skipped
 the client build, and ran four gateway pods on 2026-09-14 because the gateway
 inherited the app's replica bounds; `jac run` never shows either, only this
 transcript does. Usage: deploy_gate.py manifests.yaml"""
@@ -13,6 +14,9 @@ WOULD_BUILD = "skipped the host client bundle build"
 APP_DEPLOYMENT = "flowline-deployment"
 GATEWAY_HPA = "gateway-hpa"
 GATEWAY_MAX = 2
+REVIEW_DEPLOYMENT = "pr-review-deployment"
+REVIEW_HPA = "pr-review-hpa"
+REVIEW_MAX = 2
 
 
 def worker_values(text: str) -> dict[str, str]:
@@ -71,7 +75,8 @@ def main() -> int:
     if WOULD_BUILD not in text:
         failures.append(f"transcript never says '{WOULD_BUILD}'")
 
-    fleet = re.search(r'"app": "flowline", "client": (true|false)', text)
+    # The YAML folds the long fleet value, so a line break can sit anywhere.
+    fleet = re.search(r'"app":\s+"flowline",\s+"client":\s+(true|false)', text)
     if fleet is None:
         failures.append("no JAC_SV_FLEET member named flowline in the manifests")
     elif fleet.group(1) != "true":
@@ -96,6 +101,22 @@ def main() -> int:
             f"{GATEWAY_HPA} would scale to {bounds[1]} pods; the gateway only "
             f"proxies, so keep [scale.gateway.hpa] max at {GATEWAY_MAX} or "
             "below (without that table it inherits [scale.kubernetes] bounds)"
+        )
+
+    if REVIEW_DEPLOYMENT not in workers:
+        failures.append(f"no {REVIEW_DEPLOYMENT}: [apps.pr_review] is not its own pod")
+    review = hpas.get(REVIEW_HPA)
+    if review is None:
+        failures.append(f"no {REVIEW_HPA} in the manifests")
+    elif review[1] > REVIEW_MAX:
+        failures.append(
+            f"{REVIEW_HPA} would scale to {review[1]} pods; keep "
+            f"[apps.pr_review.scale] hpa max at {REVIEW_MAX} or below"
+        )
+    if "JAC_BRIDGE_TOKEN" not in text:
+        failures.append(
+            "JAC_BRIDGE_TOKEN is not among the pods' secrets; the web app's "
+            "calls to the review service would be refused (401)"
         )
 
     print(f"client build: {'would build' if WOULD_BUILD in text else 'SKIPPED'}")

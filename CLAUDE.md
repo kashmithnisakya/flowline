@@ -72,7 +72,11 @@ people it tracks are roster members.
   (an entry hangs under its day; `days_between(root, since, until)` reads
   the days in a date range, filtered in the store's query) and
   `root ++> FilterSets ++> FilterSet` (named filter sets;
-  the box also holds the board's own filters); `Repo` and
+  the box also holds the board's own filters) and
+  `root ++> Roles ++> Role ++> Responsibility` (a role's AI responsibilities,
+  an `AI_RESPONSIBILITIES` key each) and `root ++> AgentRuns ++> AgentRun`
+  (one run of a responsibility on a task, naming both by jid; readers
+  `responsibilities_on_step`, `runs_of_task`, `run_by_key`); `Repo` and
   `GithubConnection` hang off the root directly.
   Typed edges: `AssignedTo`, `OnProject`, `HasRole` (a member's roles are
   edges to `Role` nodes; `MemberView.roles` and the `SaveMember` /
@@ -97,7 +101,39 @@ people it tracks are roster members.
   `first_name` and `last_name`; `full_name()` is the display name.
 - **`services/`**: the API, one folder per section (`projects`, `roster`,
   `tasks`, `board`, `log`, `flowlines`, `insights`, `assistant`,
-  `roadmap` (`RoadmapSnapshot`, one project's dated tasks), `filters` (the
+  `roadmap` (`RoadmapSnapshot`, one project's dated tasks; `assistant`'s
+  `AskOrPropose` is Ask's one input: `wants_change` decides question or change,
+  then it answers or proposes, and it writes nothing), `agents` (a
+  role's AI responsibilities, the workspace's AI switch on the `AgentRuns`
+  box, off by default, and a task's runs; `ListResponsibilities` is a
+  declared reader, `ListRuns` never cached; `runs.jac` queues a role's
+  responsibilities from `landing_tail`, so every kind of move queues, and
+  notes the workspace in the `ai_queue` docs-store index; `runner.jac` is a
+  `@schedule` function like the GitHub sync that, per workspace under the
+  `ai:<root>` lease, claims due runs in the workspace's pushed context and
+  commits, awaits `review_pr` on the review service outside any context, then
+  applies each answer in a fresh context only if the run is still on the
+  attempt that asked (a run whose `lease_until` lapsed is reclaimed, which
+  since 0.38 only follows a dead pod, so the agents gate's `worker_death_suite`
+  kills the workers mid-review to see it: the scheduler holds a scheduled
+  function across the service, so one tick runs at a time and a slow review
+  also holds up every other workspace's); the
+  installation token rides in the call because the review service may not
+  read the graph; `FLOWLINE_FAKE_LLM`, `FLOWLINE_AI_INTERVAL_SECONDS`,
+  `_BACKOFF_SECONDS` and `_LEASE_SECONDS` are the gates' knobs;
+  `FLOWLINE_AGENTS_PAUSED=1` stops it claiming; `Task.ai_state`
+  (queued or running, the row's AI chip) is kept by `settle_ai` at every
+  write point that moves a run (queue, claim, apply, `RetryRun`,
+  `CancelRun`), so a new one must call it too; `note_ai_outcome` keeps what the
+  last settled review came to on the task (`ai_outcome`, `ai_comments`,
+  `ai_blocking`, the row's chip after a run) wherever a run settles;
+  `ListAgentRuns` pages the workspace's runs for the AI page, and
+  `WorkspaceView.ai_open` is how many are open, for the sidebar;
+  `metrics.jac` counts runs
+  with plain `prometheus_client` counters, which `/metrics` serves only when
+  `[scale.monitoring]` is on (CI turns it on; it is off for jachammer) and
+  it merges several workers' files),
+  `filters` (the
   saved-filter writers),
   `workspace` (`GetWorkspace`: the roster, projects, flow line, repos,
   roles, saved filter sets, flow line meta and GitHub
@@ -226,14 +262,21 @@ people it tracks are roster members.
   `.append`, `str`, an `obj` constructor) and a writer on `++>`, `del` or an
   attribute assignment, so a cacheable reader keeps its abilities to
   `visit` and `report` and does the work in a same-module `def` under
-  `@effects(reads=[...], writes=[])` (`import from jaclang.lib.effects
-  { effects }`): a decorated body is not scanned, its declaration is
-  merged, a decorator on the walker itself is ignored, and a helper that
-  another module imports is not recognised (`workspace_view`, imported by
-  `board.jac`, lost its decorator; `GetWorkspace` reports through its own
-  `read_workspace`), so a reader's helper is its own. Declared: `GetWorkspace`,
-  `ListMembers`, `ListProjects`, `ListRoles`,
-  `GetFlowLine`, `GetFlowLineMeta`, `ListRepos`, `GithubStatus`. Never
+  `@effects(reads=[...], writes=[])` (`import from
+  services.compat.jaclang.lib.effects { effects }`): a decorated body is not
+  scanned, its declaration is merged, a decorator on the walker itself is
+  ignored, and a helper that another module imports is not recognised
+  (`workspace_view`, imported by `board.jac`, lost its decorator;
+  `GetWorkspace` reports through its own `read_workspace`), so a reader's
+  helper is its own. **Import the stand-in, not `jaclang.lib.effects`.** Since
+  0.38 the native kernel ignores the real decorator (jaseci-labs/jac#10410), so
+  a helper with any unclassified call turns its reader `unknown`; a warm
+  `.jac/cache` can hide that, so judge it on a cold boot. The stand-in is
+  honoured because it compiles from source at a path ending in
+  `jaclang/lib/effects.jac`, so do not move it; delete it and restore the
+  import once a release carries jaseci-labs/jac#10447. Declared: `GetWorkspace`,
+  `ListMembers`, `ListProjects`, `ListRoles`, `GetFlowLine`, `GetFlowLineMeta`,
+  `ListRepos`, `GithubStatus`, `ListResponsibilities`. Never
   declare a task list (`BoardSnapshot`, `ListTasks`, `OverviewSnapshot`,
   `ListLogEntries`, `TaskCounts`, `TaskHistory`, `RoadmapSnapshot`,
   `ListStepTasks`): a colleague's move, a webhook drain applied on the
@@ -257,8 +300,12 @@ people it tracks are roster members.
   (the readers cacheable, the task lists not, the mutators writing) and
   `browser_gate.py` counts the requests (board, flow line, roadmap, board
   make one `/user/me` and no `GetWorkspace`; a People-tab save then the
-  roadmap makes exactly one). The sidebar's projects list never reads the
-  workspace: `rememberWorkspace` fires `flowline:workspace` and the sidebar
+  roadmap makes exactly one). Since 0.38 a clean build ignores `@effects`
+  (jaseci-labs/jac#10410); the stand-in above keeps the readers declared,
+  and `EFFECTS_REGRESSION` in the API gate, empty now, names any reader
+  that may only warn while a regression is open. The sidebar's projects
+  list never reads the workspace: `rememberWorkspace` fires
+  `flowline:workspace` and the sidebar
   redraws from `cachedProjects()`. The trap that hid the cache
   until Sep 2026: a server `def:pub` in a module the client imports
   (`statusChip` in `components/flowlines/kinds.jac`) makes that module
@@ -411,8 +458,8 @@ Isolation is structural: authenticated walkers run on the caller's own root, so
 identity), **but resolution is still not authorization.** Every jid-addressed
 mutation must call `owned(holder, target)` (or go through the `find_task`
 lookup base) before touching anything. `owned` climbs
-container edges (at most three hops: task, project, box; or log entry, day,
-box) and compares each
+container edges (at most three hops: task, project, box; log entry, day,
+box; or responsibility, role, box) and compares each
 parent's jid with the caller's root. `Root` is not a runtime name in
 `models.jac`, so nothing there may `isinstance(x, Root)`. That gate is also why
 the webhook receiver cannot apply a delivery itself: it queues, the tenant
@@ -514,26 +561,41 @@ File-based routing with route groups:
 | `/` | `pages/(public)/index.jac` | public landing page |
 | `/login` | `pages/(public)/login.jac` | public; `?mode=signup` opens the signup tab |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace`, `/setup` | `pages/(auth)/…` | auto-guarded |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/ai`, `/workspace`, `/setup` | `pages/(auth)/…` | auto-guarded |
 | `/github` | `pages/(auth)/github.jac` | the GitHub App's callback and setup URL: renders the Workspace page on its GitHub section |
 
 - **`pages/layout.jac` is path-aware**: app chrome renders only for
   authenticated, non-public paths (`PUBLIC_PATHS`), otherwise the landing page
   would show two navs. Do not add a `layout.jac` inside `(auth)/`: it
   collides with the root layout. The chrome lives in `components/chrome/`:
-  a left sidebar at lg (1024px) and up (the workspace name, search, the pages in
-  `NAV_PAGES` from `CommandPalette.jac` in the order Flow line, Board,
-  Roadmap, Overview, the Projects list, then Ask, Workspace and the account
-  card with the theme and Sign out), and below lg a header over a five-tab
-  bar (those pages plus Workspace). `components/assistant/AssistantDock`
+  a left sidebar at lg (1024px) and up (the workspace name, search, Overview,
+  AI, the Projects list, then Ask, Workspace and the account card with the theme
+  and Sign out), and below lg a header over a four-tab bar (Overview, Board, Ask,
+  More). **A project's views are tabs, not sidebar pages:** Board, Flow line and
+  Roadmap share `components/common/ProjectHead` (the project's name, which is the
+  picker, and the tabs, each a route), with `LineBar`, the steps joined by one
+  line, as its children on the board and the roadmap. `NAV_PAGES` in
+  `CommandPalette.jac` still lists every page, for the palette and the phone's
+  title. `components/assistant/AssistantDock`
   (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
   `/setup` gets only the setup bar (mark and Sign out).
-- **`/workspace` is every setting**: Organization, People, Projects, Roles,
-  GitHub and Preferences (the theme) as `?tab=` sections from
-  `components/workspace/`.
+- **`/workspace` is every setting, one section at a time**: Organization, People,
+  Projects, Roles, GitHub and Preferences (the theme) as panels from
+  `components/workspace/`; a rail picks the section drawn and `?tab=<section>`
+  names it. Only the chosen section is mounted, so GitHub starts only when opened.
+  **`/ai` is everything AI** (`pages/(auth)/ai.jac`, `components/ai/`): the switch
+  (`AiSwitch`, `SetAiEnabled`; turning it on asks first through `ConsentDialog`,
+  and `WhatIsSent` says what leaves the server, including that Ask does not
+  depend on this switch), the workspace's runs (`ListAgentRuns`, polled while
+  one is open), each role's responsibilities (`components/workspace/roles/`: a
+  line each with its own switch, add buttons from `AI_RESPONSIBILITIES`, and the
+  editor dialog) and the review service's status. The Roles section only shows a
+  chip per responsibility, linking there, which is why the workspace page still
+  reads `ListResponsibilities`; a free-text role has no `Role` node, so it gets
+  none until it is added as a role.
   The page loads one `GetWorkspace` and hands the Projects and Roles
   sections their lists as props (open counts are the projects' own
-  tallies), so a tab switch is a render, not a request; a section's write
+  tallies), so a jump between sections is a scroll, not a request; a section's write
   calls `forgetWorkspace()` and awaits the page's `loadAll` (`onChanged`)
   rather than refetching a list of its own. `/github` opens this page on the
   GitHub section (`initialTab` reads the path), where `GithubSection`
@@ -591,7 +653,7 @@ File-based routing with route groups:
   (the project picker above a scoped page's title), `CommandPalette.jac`
   (⌘K), `ErrorNote`, `LoadFailed`, `glyphs`, `Markdown`.
 - **The visual system lives in `styles/global.css`.** One token layer
-  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`,
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent`, `--danger`, `--ai`,
   `--status-*`, `--project-*`, `--avatar-*`, both themes) with the shadcn
   names aliased onto it, so `components/ui/` follows unedited. Geist for UI,
   Geist Mono only for data (`brand/` still draws the og image in Archivo and
@@ -603,6 +665,14 @@ File-based routing with route groups:
   the two that dress registry primitives sit outside `@layer` so they beat
   the primitives' utilities. Nothing renders below 12px, labels are
   sentence case, and only floating layers cast a shadow.
+- **Dashed teal means AI, and nothing else does.** `--ai` shows only on the AI
+  mark (`components/common/AiMark`, a dashed ring that turns while a run works),
+  `.ai-chip` and `.ai-card`. Dashed means AI drew it or is working on it and a
+  person has not settled it: a proposal, a run in flight, a review that wants an
+  answer. Applied or settled work is an ordinary solid surface (`ai-chip-settled`,
+  or `Task added` on a proposal). A pending `create_task` or `move_task` proposal
+  is also drawn dashed on the board (`lib/proposal`, `ProposalRow`) until Apply or
+  Dismiss clears it.
 - **A step's colour is information, not decoration.** It shows only on
   the 14px status icon (whose shape carries the kind): no washes, solid
   pills or tinted bands. `--step-<key>` in `styles/global.css` for both
@@ -610,8 +680,13 @@ File-based routing with route groups:
   (`bg-step-sky`). A new colour key needs a token in both palettes, and its
   key is what persists (`rose` renders orchid, clear of the andon red).
 - **One task sheet everywhere.** `components/board/TaskDialog` is a right-side
-  sheet (route breadcrumb, Move menu, properties, notes, checklist, and "Travel
-  so far" from `ListLogEntries` with `task_id`); only the board passes `beside`
+  sheet for an existing task (route breadcrumb, Move menu, properties, the AI
+  review, notes, checklist, and "Travel so far" from `ListLogEntries` with
+  `task_id`). It shows Step, People, Due and Priority and any field with a value;
+  an empty one is a chip that reveals its row (`OPTIONAL_FIELDS`), and the foot
+  with Save appears only once a field differs from how the sheet opened. A new
+  task is `NewTaskDialog`, a short centred dialog the board alone opens; only the
+  board passes `beside`
   so it stays non-modal next to the step groups. Clicking a step in the flow line
   page's view mode floats `StepTasksPanel` over the diagram (a bottom sheet on
   phones), and a row opens the sheet on the same form dict and the same
@@ -655,8 +730,8 @@ File-based routing with route groups:
   `["board"]`, a set's keys come from `FILTER_TABLES` in `constants.jac`,
   and the server drops any other key.
 - **The board is the flow line's steps, stacked.** `components/board/`:
-  `FlowStrip` (every step as a pill with its count; a pill scrolls its
-  group into view), `StepGroup` (a `StepHeader` bar, then its rows; a drop
+  `FilterBar` (one Filter menu, active filters as chips, then search and
+  Display), `StepGroup` (a `StepHeader` bar, then its rows; a drop
   on the group moves the task there, and Done folds by default and pages
   its older history through `OlderDone`), `TaskLine` (a row: `RowShell`
   for click, Enter, M and drag-beside, `TaskTitle`, then `TaskCells` from
@@ -664,9 +739,12 @@ File-based routing with route groups:
   below lg, and `RowMove`, the step menu, mounted only while open).
   Tailwind only sees class names written out whole in source, so a
   responsive variant is its own literal (`ROW_COLUMNS`), never built by
-  string replacement. The grid's widths are the `--row-cols` variable
+  string replacement. The rows answer the room they have, not the window: under
+  860px of board (Ask docked at 1280 to 1500, or a small window) `.board-rows`
+  drops the GitHub column through `--row-cols-tight`. The grid's widths are the `--row-cols` variable
   (default in `styles/global.css`); `ColumnHeads` lets the user resize the
-  five data columns (a double-click fits one to the cells tagged
+  four data columns (People, Due, GitHub, AI; a High flag and the checklist
+  count sit beside the title) (a double-click fits one to the cells tagged
   `data-col`, the Display menu resets) and keeps them in this browser
   (`columnWidths.jac`).
 - **Board deep links**: `/board?task=<id>` opens a task, `/board?new=1` the
@@ -683,17 +761,30 @@ File-based routing with route groups:
 
 ### Deploy sizing
 
-The app stays declared as `[project] kind/entry-point`, and the app pod is
-sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`, `memory_request`,
-`memory_limit` are all honoured there; the gateway pod is sized in
-`[scale.gateway]`). **Do not move it to `[apps.flowline]`.** On jac 0.37.7 an
-`[apps]` table makes `jac scale deploy` skip the client bundle build (the
-dry run's third line says "The served app has no client target"), so the
-pods come up API-only and `/` is a JSON 404 while `jac run` still serves
-the app locally (this took flowline-dev down on 2026-09-08, PR #176). That
-table is also the only home of `workers = "auto"`, so the worker count is
-fixed instead: `[serve.workers] count = "2"` becomes `JAC_SERVE_WORKERS=2`
-on the app pod (and on the gateway pod, which has no override of its own);
+Two apps: `[apps.flowline]` (`kind = "web-app"`, `entry-point = "main"`) and
+`[apps.pr_review]` (`kind = "service"`, `entry-point = "review.service"`), so
+a deploy runs three Deployments (gateway, `flowline`, `pr-review`); an
+`[apps]` table forbids `kind`/`entry-point` under `[project]`. The web app
+pod is sized in `[scale.kubernetes]` (`cpu_request`, `cpu_limit`,
+`memory_request`, `memory_limit`), the gateway in `[scale.gateway]`, the
+review pod in `[apps.pr_review.scale]` (with `rpc_timeout = 300`: a bridged
+call's default 10 s would cut every review short). On jac 0.37.7 an `[apps]`
+table made the deploy skip the client bundle (flowline-dev went API-only on
+2026-09-08, PR #176); 0.37.11+ builds it, and the deploy gate checks the dry
+run says so. Locally a plain `jac run` loads the review service into the web
+app's process; `jac run flowline --fleet` runs it apart, logging to
+`.jac/logs/<app>.log`. The web app reaches it through `def:protect`
+functions it awaits (a bridged walker's reports join the caller's when
+colocated, so functions, not walkers); a call with no user behind it carries
+`JAC_BRIDGE_TOKEN` and runs as `__bridge__`, which owns no workspace, so the
+service never reads or writes a tenant graph. **The token is a pod's start
+-time env**: `[scale.secrets]` declares it, it must be set before the deploy
+that ships the service, and a change needs a deploy of new source (a redeploy
+of unchanged source keeps the pods; jachammer test project, 2026-10-14). The
+outbox (un-awaited cross-app spawns) is not used: with more than one worker
+process it never delivers (jaseci-labs/jac#9881). The worker count is fixed:
+`[serve.workers] count = "2"` becomes `JAC_SERVE_WORKERS=2`
+on every pod (the gateway and the review pod have no override of their own);
 keep it equal to the cores in `cpu_limit` (#140). Never write `"auto"`
 there: the manifest builder resolves it on the deploying machine, not in
 the pod (this Mac renders 10). The HPA scales on memory too (80% of the
@@ -702,15 +793,17 @@ request), so a request below the idle footprint pins the deployment at
 `[scale.kubernetes]` bounds unless `[scale.gateway.hpa]` sets them (it does:
 1 to 2); four gateway pods on dev (2026-09-14) were that inheritance plus a
 512Mi request sized for one worker while `[serve.workers]` gives the gateway
-two. `[scale.monitoring] k8s_metrics_enabled` and `[scale.gateway.logs]`
-each add a per-node DaemonSet (node-exporter, Alloy) to the namespace on the
-shared cluster, so both stay off; the deploy gate checks the gateway range.
+two. `[scale.monitoring]` and `[scale.gateway.logs]` stay off: jachammer
+refuses a deploy that turns on monitoring, logs or tracing of its own, and
+each would add a per-node DaemonSet (node-exporter, Alloy) to the shared
+cluster. The monitoring switch also gates `/metrics`, so a deployed pod
+serves none; the deploy gate checks the gateway range.
 The dry-run command above renders the manifests locally
 once `bundle_storage_class` is set to any name (a placeholder for the RWX
 check that a real deploy satisfies on the platform); `tests/smoke/
 deploy_gate.py` asserts its transcript in CI.
 
-**`[project] entry-point` is the dotted module name, `main`.** jac 0.37.12+
+**`[apps.flowline] entry-point` is the dotted module name, `main`.** jac 0.37.12+
 refuses `"main.jac"` on load. The jachammer deploy manager used to check the
 key as a file path, so between the pin bump and the platform's 2026-09-14
 release the line had to be omitted entirely (jaseci-labs/jacBuilder#1806,
@@ -766,6 +859,11 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   module state, and awaits that same promise from every mount. Keep those
   patterns: a `has` flag or a `Ref` is per instance, and a remount is still
   one route change away.
+- **A new page opens at its top.** The layout resets the scroll on a path
+  change, in a layout effect so it runs before a page's own effects and a
+  section's deep link still lands; Back and Forward keep what the browser restores
+  (a capture-phase `popstate` listener says which it was: `@jac/runtime` does not
+  export the router's navigation type).
 - **The page is blank until the bundle runs, then paints its frame at
   once.** The HTML shell is an empty `#root` plus the bundle: there is no
   boot script, `jac.toml` carries plain metadata only. (An inline
@@ -865,6 +963,12 @@ fixed by its #1808); the platform now resolves either spelling to the file.
   trigger and no muted styling. Seed `""` for "nothing picked" (project on
   the task sheet and the repo picker); keep a sentinel only where an item
   carries it (the reviewer's "No reviewer").
+- **Put a `by llm()` function's rules in the function's own `sem`.** A
+  field-level `sem` (`sem Finding.severity = ...`) shaped the answer when
+  `review/engine.jac` ran on its own, but not once the same module ran as part
+  of the `pr_review` service app: the model ignored the severity definitions
+  until they moved into `sem review_file`. Keep field `sem`s too; they cost
+  nothing.
 - Client-side: `is None` misses `undefined`; `params["id"]`, never `.get()`;
   rebind state rather than mutating.
 

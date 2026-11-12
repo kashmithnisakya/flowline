@@ -82,9 +82,10 @@ Three consequences worth remembering:
     stays hidden).
 
 `[scale.monitoring]`
-:   `/metrics`, per-walker metrics and a Prometheus plus Grafana pair in the
-    namespace. `k8s_metrics_enabled = false` keeps a node-exporter DaemonSet
-    off the shared cluster.
+:   Off (`enabled = false`): jachammer refuses a deploy whose app runs its own
+    monitoring. On, it gives `/metrics`, per-walker metrics and a Prometheus
+    plus Grafana pair in the namespace; `k8s_metrics_enabled = false` keeps a
+    node-exporter DaemonSet off a shared cluster.
 
 `[scale.kubernetes]`
 :   App pod sizing and autoscaling: CPU `1000m` to `2000m`, memory `4Gi` to

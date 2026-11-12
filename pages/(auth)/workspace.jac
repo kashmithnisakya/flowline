@@ -1,12 +1,17 @@
-"""flowline - Workspace (/workspace): everything you configure, in one frame.
-A rail of sections (organization, people, projects, roles, GitHub,
-preferences) beside one content column. /github renders this page on the
-GitHub section, since the GitHub App sends its install round trip there."""
+"""flowline - Workspace (/workspace): every setting, one section at a time. A rail
+picks the section and `?tab=<section>` names it. /github renders this page too,
+since the GitHub App sends its install round trip there, on the GitHub section."""
 
 import from "@jac/runtime" { useLocation }
 import from "react" { useEffect }
-import from ...models { Project, MemberView, RoleView, RepoView, StepView }
-import from ...lib.session { fetchOrgName, cachedOrgName }
+import from ...models {
+    Project,
+    MemberView,
+    RoleView,
+    RepoView,
+    StepView,
+    ResponsibilityView
+}
 import from ...services.roster.roster {
     ListMembers,
     SaveMember,
@@ -15,21 +20,22 @@ import from ...services.roster.roster {
     ArchiveMember
 }
 import from ...services.projects.projects { AssignToProject, UnassignFromProject }
+import from ...services.agents.agents { ListResponsibilities }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
-import from ...components.roster.MemberTable { MemberTable }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.ConfirmDialog { ConfirmDialog }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
+import from ...components.workspace.PeopleSection { PeopleSection }
 import from ...components.workspace.PreferencesSection { PreferencesSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
 import from ...components.workspace.RolesSection { RolesSection }
 import from ...components.workspace.GithubSection { GithubSection }
-import from ...components.workspace.SectionHeader { SectionHeader }
 import from ...components.workspace.WorkspaceRail { WorkspaceRail }
-import from ...components.workspace.icons { IconPlus, IconSearch }
-import from ...components.ui.button { Button }
-import from ...components.ui.input { Input }
-import from ...components.common.Reveal { Reveal }
+import from ...components.workspace.sections {
+    SECTIONS,
+    askedSection,
+    currentFromAddress,
+}
 import from "sonner" { toast }
 
 glob BLANK_MEMBER: dict[str, str] = {
@@ -40,52 +46,25 @@ glob BLANK_MEMBER: dict[str, str] = {
          "color": "",
          "roleDraft": "",
          "tagDraft": ""
-     },
-     TABS: list[list[str]] = [
-         ["organization", "Organization"],
-         ["people", "People"],
-         ["projects", "Projects"],
-         ["roles", "Roles"],
-         ["github", "GitHub"],
-         ["preferences", "Preferences"]
-     ];
-
-# The section a URL asks for, "" when it names none we know.
-def tabFromSearch(search: str) -> str {
-    w: any = window;
-    params: any = new(w.URLSearchParams, search);
-    wanted = params.get("tab") or "";
-    for item in TABS {
-        if item[0] == wanted {
-            return wanted;
-        }
-    }
-    return "";
-}
-
-def initialTab -> str {
-    w: any = window;
-    if str(w.location.pathname) == "/github" {
-        return "github";
-    }
-    return tabFromSearch(str(w.location.search)) or "organization";
-}
+     };
 
 def:pub WorkspacePage -> JsxPage {
     has members: list[MemberView] = [],
         projects: list[Project] = [],
         roles: list[RoleView] = [],
-        # The Projects and Roles tabs render from these too: one workspace
-        # read on mount, and a tab switch is a render, not a request.
+        # Projects and Roles render from these too: one workspace read on
+        # mount, whichever sections the reader scrolls to.
         repos: list[RepoView] = [],
         steps: list[StepView] = [],
-        # The header's cache, so the rail shows the name from the first paint.
-        orgName: str = cachedOrgName(),
         loading: bool = True,
-        # Read during the first render, so the deep-linked section paints
-        # straight away instead of flipping after an effect.
-        tab: str = initialTab(),
-        query: str = "",
+        # Every role's responsibilities, read beside the workspace for the
+        # Roles section's chips; only this page shows them here.
+        aiItems: list[ResponsibilityView] = [],
+        # Moves when a read lands, so the GitHub section's own lists can follow.
+        readRound: int = 0,
+        # Read during the first render, so the rail and the deep link are right
+        # from the first paint. Only this section is drawn.
+        current: str = currentFromAddress(),
         dialogOpen: bool = False,
         editingId: str = "",
         form: dict[str, str] = BLANK_MEMBER,
@@ -103,20 +82,22 @@ def:pub WorkspacePage -> JsxPage {
         loadAll();
     }
 
-    # A link from the account menu (or anywhere else) can ask for another
-    # section without remounting the page; rail clicks only rewrite the URL,
-    # so they never come back through here.
+    # An address that names a section shows it: on the first load, and when a
+    # link elsewhere (the sidebar, the palette) asks for another. Rail clicks
+    # only rewrite the URL, so they never come through here.
     useEffect(
         lambda {
-            wanted = tabFromSearch(str(location.search));
-            if wanted and wanted != tab {
-                tab = wanted;
+            wanted = askedSection(str(location.pathname), str(location.search));
+            if wanted {
+                current = wanted;
             }
         },
         [location.key]
     );
 
     async def loadAll -> None;
+    async def loadRoster -> None;
+    async def loadAi -> None;
     async def saveMember -> None;
     async def archiveMember -> None;
     async def applyRoles(memberId: str, next: list[str], undoable: bool) -> None;
@@ -131,7 +112,7 @@ def:pub WorkspacePage -> JsxPage {
     def openCreate -> None;
     def openEdit(m: MemberView) -> None;
     def askArchive(m: MemberView) -> None;
-    def selectTab(value: str) -> None;
+    def selectSection(value: str) -> None;
 
     active = [
         m
@@ -162,158 +143,78 @@ def:pub WorkspacePage -> JsxPage {
             }
         }
     }
-    # Name, role or project, matched on the client: the roster is a whole
-    # list already, so a search needs no round trip.
-    needle = query.strip().lower();
-    shown = active;
-    if needle {
-        hits: list[MemberView] = [];
-        for m in active {
-            hay = m.name + " " + " ".join(m.roles) + " " + " ".join(m.project_names);
-            if needle in hay.lower() {
-                hits.append(m);
-            }
-        }
-        shown = hits;
-    }
-    counts: dict[str, str] = {
-        "people": str(len(active)),
-        "projects": str(len(activeProjects)),
-        "roles": str(len(roleOptions))
+    memberHandlers: dict[str, any] = {
+        "onEdit": openEdit,
+        "onArchive": askArchive,
+        "onRoles": lambda (memberId: str, next: list[str]) { applyRoles(
+            memberId, next, True
+        ); },
+        "onProjects": lambda (memberId: str, next: list[str]) { applyProjects(
+            memberId, next, True
+        ); },
+        "onManageRoles": lambda { selectSection("roles"); },
+        "onManageProjects": lambda { selectSection("projects"); }
     };
-    items: list[dict[str, str]] = [];
-    for item in TABS {
-        items.append(
-            {
-                "key": item[0],
-                "label": item[1],
-                "count": (counts[item[0]] if item[0] in counts else "")
-                    if not loading
-                    else ""
-            }
-        );
-    }
-
-    def loadFrame -> JsxElement {
-        return
-            <MemberTable
-                members={[]}
-                projects={[]}
-                roleOptions={[]}
-                onEdit={openEdit}
-                onArchive={askArchive}
-                onRoles={lambda (memberId: str, next: list[str]) { applyRoles(
-                    memberId, next, True
-                ); }}
-                onProjects={lambda (memberId: str, next: list[str]) { applyProjects(
-                    memberId, next, True
-                ); }}
-                onManageRoles={lambda { selectTab("roles"); }}
-                onManageProjects={lambda { selectTab("projects"); }}
-                placeholder={4}
-            />;
-    }
 
     return
         <div className="w-full">
-            <div
-                className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[190px_minmax(0,1fr)] md:gap-0"
-            >
-                <div className="min-w-0 md:border-r md:pr-3">
-                    <WorkspaceRail
-                        orgName={orgName}
-                        items={items}
-                        current={tab}
-                        onSelect={selectTab}
-                    />
-                </div>
-                <div className="min-w-0 md:pl-8">
-                    <div className="flex flex-col gap-4">
-                        {if tab == "organization" {
-                            <OrganizationSection
-                                key="organization"
-                                onRenamed={lambda (name: str) { orgName = name; }}
-                            />
-                        } elif tab == "people" {
-                            <div key="people" className="flex flex-col gap-4">
-                                <SectionHeader
-                                    title="People"
-                                    count={"" if loading else str(len(active))}
-                                >
-                                    {if len(active) > 0 or loading {
-                                        <div
-                                            key="find"
-                                            className="relative min-w-0 flex-1 sm:w-48 sm:flex-none"
-                                        >
-                                            <IconSearch
-                                                className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-subtle"
-                                            />
-                                            <Input
-                                                className="h-8 pl-8"
-                                                placeholder="Find a person"
-                                                aria-label="Find a person"
-                                                value={query}
-                                                onChange={lambda (e: ChangeEvent) { query = e.target.value; }}
-                                            />
-                                        </div>
-                                    }}
-                                    <Button size="sm" onClick={openCreate}>
-                                        <IconPlus/>
-                                        Add person
-                                    </Button>
-                                </SectionHeader>
-                                <Reveal ready={not loading} frame={loadFrame()}>
-                                    <div key="table">
-                                        <MemberTable
-                                            members={shown}
-                                            projects={activeProjects}
-                                            roleOptions={roleOptions}
-                                            query={query.strip()}
-                                            showTags={len(allTags) > 0}
-                                            onEdit={openEdit}
-                                            onArchive={askArchive}
-                                            onCreate={openCreate}
-                                            onRoles={lambda (
-                                                memberId: str, next: list[str]
-                                            ) { applyRoles(memberId, next, True); }}
-                                            onProjects={lambda (
-                                                memberId: str, next: list[str]
-                                            ) { applyProjects(memberId, next, True); }}
-                                            onManageRoles={lambda { selectTab(
-                                                "roles"
-                                            ); }}
-                                            onManageProjects={lambda { selectTab(
-                                                "projects"
-                                            ); }}
-                                        />
-                                    </div>
-                                </Reveal>
-                            </div>
-                        } elif tab == "projects" {
-                            <ProjectsSection
-                                key="projects"
-                                members={active}
-                                projects={projects}
-                                repos={repos}
-                                loading={loading}
-                                onChanged={loadAll}
-                            />
-                        } elif tab == "roles" {
-                            <RolesSection
-                                key="roles"
-                                members={active}
-                                roles={roles}
-                                steps={steps}
-                                loading={loading}
-                                onChanged={loadAll}
-                                onPeople={lambda { selectTab("people"); }}
-                            />
-                        } elif tab == "github" {
-                            <GithubSection key="github"/>
-                        } else {
-                            <PreferencesSection key="preferences"/>
-                        }     }
-                    </div>
+            <div className="flex flex-col gap-4 md:flex-row md:gap-6">
+                <WorkspaceRail
+                    items={SECTIONS}
+                    current={current}
+                    onSelect={selectSection}
+                />
+                <div
+                    key={current}
+                    className="flex max-w-[920px] min-w-0 flex-1 animate-in flex-col gap-6 duration-150 fade-in motion-reduce:animate-none"
+                >
+                    {if current == "organization" {
+                        <OrganizationSection key="organization"/>
+                    }}
+                    {if current == "people" {
+                        <PeopleSection
+                            key="people"
+                            members={active}
+                            projects={activeProjects}
+                            roleOptions={roleOptions}
+                            showTags={len(allTags) > 0}
+                            loading={loading}
+                            handlers={memberHandlers}
+                            onCreate={openCreate}
+                        />
+                    }}
+                    {if current == "projects" {
+                        <ProjectsSection
+                            key="projects"
+                            members={active}
+                            projects={projects}
+                            repos={repos}
+                            loading={loading}
+                            onChanged={loadAll}
+                        />
+                    }}
+                    {if current == "roles" {
+                        <RolesSection
+                            key="roles"
+                            members={active}
+                            roles={roles}
+                            steps={steps}
+                            loading={loading}
+                            onChanged={loadAll}
+                            onPeople={lambda { selectSection("people"); }}
+                            responsibilities={aiItems}
+                        />
+                    }}
+                    {if current == "github" {
+                        <GithubSection
+                            key="github"
+                            syncKey={readRound}
+                            onChanged={loadAll}
+                        />
+                    }}
+                    {if current == "preferences" {
+                        <PreferencesSection key="preferences"/>
+                    }}
                 </div>
             </div>
             <MemberDialog

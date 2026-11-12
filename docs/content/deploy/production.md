@@ -19,6 +19,7 @@ cluster's Secret.
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | For GitHub sign-in | Register `<HOST>/sso/github/callback`. |
 | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | For the GitHub integration | A GitHub App per environment is simplest: its callback, setup and webhook URLs all name one `HOST`. |
 | `GRAFANA_ADMIN_PASSWORD` | With monitoring | Otherwise Grafana keeps a well-known default password. |
+| `JAC_BRIDGE_TOKEN` | Yes | Any long random string (`openssl rand -hex 32`). The web app's calls to the PR review service carry it; without it they are refused with `401`. Set it before the deploy that ships it. |
 
 !!! warning "One GitHub App per environment"
 
@@ -28,16 +29,23 @@ cluster's Secret.
 
 ## Rules that keep deploys healthy
 
-!!! danger "Keep the app under `[project]`"
+Two apps: the web app and the PR review service
+:   `jac.toml` declares `[apps.flowline]` (`kind = "web-app"`) and
+    `[apps.pr_review]` (`kind = "service"`), so a deploy runs three
+    Deployments: the gateway, `flowline` and `pr-review`. The review service
+    has its own sizing under `[apps.pr_review.scale]`. Locally a plain
+    `jac run` loads it into the web app's process; `jac run flowline --fleet`
+    runs it as its own process, the way a deploy does.
 
-    Declaring the app as `[apps.flowline]` makes `jac scale deploy` skip the
-    client bundle: pods come up API-only and `/` is a JSON 404, while `jac run`
-    still serves the app locally. This took the dev deployment down on
-    2026-09-08. The dry run's third line saying "The served app has no client
-    target" is the tell.
+`JAC_BRIDGE_TOKEN` before the first deploy that ships it
+:   The web app signs its calls to the review service with this token when no
+    user is behind them (the scheduled runner). A pod reads it once, at
+    start, so set it before deploying, and on a change deploy new source:
+    a redeploy of unchanged source keeps the running pods and their old value.
 
 `entry-point = "main"`
-:   The dotted module name. Jac 0.37.12+ refuses `"main.jac"`.
+:   The dotted module name, now on `[apps.flowline]`. Jac 0.37.12+ refuses
+    `"main.jac"`.
 
 `[serve.workers] count = "2"`
 :   Becomes `JAC_SERVE_WORKERS=2` on the app pod and the gateway pod. Keep it

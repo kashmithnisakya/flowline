@@ -14,7 +14,6 @@ flowchart LR
     alb --> gw["Gateway pods<br/><small>1 to 2 replicas</small>"]
     gw --> app["App pods<br/><small>2 to 6 replicas, 2 workers each</small>"]
     app --> pg[("Postgres")]
-    app --> mon["Prometheus + Grafana<br/><small>namespace-scoped</small>"]
 ```
 
 | Piece | Comes from |
@@ -22,7 +21,7 @@ flowchart LR
 | App pods | `[project]` in `jac.toml`, sized by `[scale.kubernetes]`, `[serve.workers]` processes each, serving the client bundle and the walker API |
 | Gateway pods | `[scale.gateway]`, proxying requests to the app with a 120 second forward timeout |
 | Postgres | Provisioned by the platform; both the graph and the docs store live there |
-| Monitoring | `[scale.monitoring]`: `/metrics`, walker metrics, a Prometheus and Grafana pair |
+| Monitoring | Off. jachammer refuses a deploy that runs its own Prometheus and Grafana, and the same `[scale.monitoring]` switch gates `/metrics`; see [Operations](operations.md) |
 | Secrets | The project's environment variables, applied as a Kubernetes Secret |
 
 The platform hands every deploy to the Jac release pinned in `jac.toml`
@@ -65,11 +64,12 @@ branch: `dev` for development, `main` for production.
 
 - [ ] CI is green on the commit: format, lint, type check, and the serve job
       (deploy dry run, API, webhook and browser gates)
-- [ ] `jac.toml` still declares the app under `[project]` with
-      `entry-point = "main"`, and has no `[apps.*]` table
+- [ ] `jac.toml` declares the web app as `[apps.flowline]` with
+      `entry-point = "main"` and the review service as `[apps.pr_review]`
 - [ ] The project's environment has every variable in
       [Production configuration](production.md#environment), including
-      `GITHUB_APP_WEBHOOK_SECRET`
+      `GITHUB_APP_WEBHOOK_SECRET` and `JAC_BRIDGE_TOKEN` (set before the
+      deploy that first ships the review service)
 - [ ] The SSO callbacks and the GitHub App's URLs point at this deployment's
       `HOST`
 - [ ] A Jac version bump was exercised on dev with real walker calls first

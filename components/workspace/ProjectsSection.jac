@@ -11,9 +11,8 @@ import from ...services.roster.roster { AddRepo, RemoveRepo }
 import from ...components.projects.ProjectTable { ProjectTable }
 import from ...components.projects.ProjectDialog { ProjectDialog }
 import from ...components.ui.button { Button }
-import from ...components.ui.skeleton { Skeleton }
 import from ..common.Reveal { Reveal }
-import from .SectionHeader { SectionHeader }
+import from .SectionPanel { SectionPanel }
 import from .ConfirmDialog { ConfirmDialog }
 import from .icons { IconPlus }
 import from "sonner" { toast }
@@ -114,13 +113,16 @@ def:pub ProjectsSection(
     }
 
     return
-        <div className="flex flex-col gap-4">
-            <SectionHeader title="Projects" count={"" if loading else str(len(active))}>
-                <Button size="sm" onClick={openCreate}>
-                    <IconPlus/>
-                    New project
-                </Button>
-            </SectionHeader>
+        <SectionPanel
+            section="projects"
+            title="Projects"
+            count={"" if loading else str(len(active))}
+            flush={True}
+            actions={<Button size="sm" variant="outline" onClick={openCreate}>
+                <IconPlus/>
+                New project
+            </Button>}
+        >
             <Reveal ready={not loading} frame={loadFrame()}>
                 <div key="rows">
                     <ProjectTable
@@ -163,5 +165,5 @@ def:pub ProjectsSection(
                 onConfirm={archiveProject}
                 onOpenChange={lambda (o: bool) { if not o { archiveId = ""; }}}
             />
-        </div>;
+        </SectionPanel>;
 }

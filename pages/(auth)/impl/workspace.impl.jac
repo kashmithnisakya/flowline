@@ -1,10 +1,17 @@
 """Implementations for the Workspace page."""
 
 impl WorkspacePage.loadAll -> None {
+    w: any = window;
+    await w.Promise.all([loadRoster(), loadAi()]);
+    loading = False;
+    readRound = readRound + 1;
+}
+
+impl WorkspacePage.loadRoster -> None {
     try {
         # One read for the roster, projects, repos, the org's managed roles
         # (the row menus and the member dialog; none means free text there)
-        # and the steps the Roles tab names.
+        # and the steps the Roles section names.
         ws = await loadWorkspace();
         if ws["ok"] {
             members = ws["members"];
@@ -15,11 +22,21 @@ impl WorkspacePage.loadAll -> None {
         } else {
             toast.error("Could not load the workspace");
         }
-        orgName = await fetchOrgName();
     } except Exception as e {
         toast.error("Could not load the workspace");
     }
-    loading = False;
+}
+
+impl WorkspacePage.loadAi -> None {
+    try {
+        result = root spawn ListResponsibilities();
+        settings: any = result.reports[0] if result.reports else None;
+        if settings {
+            aiItems = settings.responsibilities;
+        }
+    } except Exception as e {
+        toast.error("Could not load the AI settings");
+    }
 }
 
 impl WorkspacePage.setField(key: str, value: str) -> None {
@@ -278,14 +295,17 @@ impl WorkspacePage.applyProjects(
     }
 }
 
-impl WorkspacePage.selectTab(value: str) -> None {
-    tab = value;
-    query = "";
-    # Keep the section in the URL so it is linkable and survives a reload, but
-    # replace rather than push: Back should leave the page, not undo a tab
-    # flip. Any OAuth callback params are dropped here too, which is what
-    # stops a refresh replaying a burned install nonce.
+impl WorkspacePage.selectSection(value: str) -> None {
+    current = value;
     w: any = window;
-    blank: dict[str, any] = {};
-    w.history.replaceState(blank, "", "/workspace?tab=" + value);
+    w.scrollTo({"top": 0, "left": 0, "behavior": "instant"});
+    # Keep the section in the URL so it is linkable and survives a reload, but
+    # replace rather than push: Back should leave the page. Any OAuth callback
+    # params are dropped here too, which stops a refresh replaying a burned
+    # install nonce. An address already on this section keeps its GitHub list.
+    if str(w.location.pathname) != "/workspace"
+        or ("tab=" + value) not in str(w.location.search) {
+        blank: dict[str, any] = {};
+        w.history.replaceState(blank, "", "/workspace?tab=" + value);
+    }
 }

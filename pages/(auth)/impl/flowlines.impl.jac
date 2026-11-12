@@ -3,16 +3,27 @@ GetFlowLine rather than patching local state: the walker is the only place the
 prev/next truth lives. Zoom and pan go through zoomTo/applyPan, which keep a
 piece of the drawing in view whatever the gesture."""
 
+# A step as the inspector's form.
+def formOf(s: StepView) -> dict[str, str] {
+    return {
+        "name": s.name,
+        "kind": s.kind,
+        "color": s.color,
+        "owner": s.owner,
+        "blurb": s.blurb
+    };
+}
+
 impl FlowLinePage.boot -> None {
-    picked = currentProject();
-    projectId = picked;
+    startPid = currentProject();
+    projectId = startPid;
     storedView = localStorage.getItem("flowline_wf_view") or "";
     if storedView == "lanes" {
         lineView = "lanes";
     }
     # The workspace lists and the flow line go out together; neither waits.
     w: any = window;
-    await w.Promise.all([loadShared(), reload(picked)]);
+    await w.Promise.all([loadShared(), reload(startPid)]);
     # No stored pick: the server opened on the default project, so name it
     # (the pick's event then finds it on screen). A pick that is no longer
     # active is replaced, and its event reloads the line.
@@ -175,7 +186,7 @@ impl FlowLinePage.closePeek -> None {
 }
 
 impl FlowLinePage.revealStep(stepId: str) -> None {
-    # The panel floats over the right of the canvas; slide the diagram just
+    # The sheet covers the right of the canvas; slide the diagram just
     # enough that the step it describes stays in view beside it.
     view: any = viewportRef.current;
     if not view or narrow {
@@ -231,33 +242,33 @@ impl FlowLinePage.openTask(tid: str) -> None {
     if len(found) == 0 {
         return;
     }
-    picked = found[0];
+    peekTask = found[0];
     # A task with no step of its own landed here by kind, so the panel's
     # step is the honest answer for the dialog's Step select.
     key = peekId;
     for st in steps {
-        if st.id == picked.step_id {
+        if st.id == peekTask.step_id {
             key = st.id;
         }
     }
-    editTaskId = picked.id;
+    editTaskId = peekTask.id;
     taskForm = {
-        "title": picked.title,
-        "category": picked.category,
-        "tags": ", ".join(picked.tags),
-        "estimate": fmtEstimate(picked.estimate) if picked.estimate > 0.0 else "",
-        "project": picked.project_id,
-        "priority": picked.priority,
+        "title": peekTask.title,
+        "category": peekTask.category,
+        "tags": ", ".join(peekTask.tags),
+        "estimate": fmtEstimate(peekTask.estimate) if peekTask.estimate > 0.0 else "",
+        "project": peekTask.project_id,
+        "priority": peekTask.priority,
         "status": key,
-        "due_date": picked.due_date,
-        "start_date": picked.start_date,
+        "due_date": peekTask.due_date,
+        "start_date": peekTask.start_date,
         "notes": "",
-        "issue": picked.issue_link,
-        "pr": picked.pr_link,
-        "reviewer": picked.reviewer_id or "none",
-        "review_due": picked.review_due
+        "issue": peekTask.issue_link,
+        "pr": peekTask.pr_link,
+        "reviewer": peekTask.reviewer_id or "none",
+        "review_due": peekTask.review_due
     };
-    taskAssignees = picked.assignee_ids;
+    taskAssignees = peekTask.assignee_ids;
     taskOpen = True;
 }
 
@@ -548,13 +559,7 @@ impl FlowLinePage.commitName -> None {
             creatingStep = False;
             if made {
                 selectedId = made.id;
-                form = {
-                    "name": made.name,
-                    "kind": made.kind,
-                    "color": made.color,
-                    "owner": made.owner,
-                    "blurb": made.blurb
-                };
+                form = formOf(made);
             }
         } except Exception as e {
             toast.error("Failed to add the step");
@@ -567,7 +572,7 @@ impl FlowLinePage.commitName -> None {
         busyRef.current = False;
         return;
     }
-    current = [
+    savedStep = [
         s
         for s in steps
         if s.id == selectedId
@@ -575,10 +580,10 @@ impl FlowLinePage.commitName -> None {
     owner = (form["owner"] or "").strip();
     blurb = (form["blurb"] or "").strip();
     if (
-        len(current) > 0
-        and current[0].name == name
-        and current[0].owner == owner
-        and current[0].blurb == blurb
+        len(savedStep) > 0
+        and savedStep[0].name == name
+        and savedStep[0].owner == owner
+        and savedStep[0].blurb == blurb
     ) {
         busyRef.current = False;
         return;
@@ -743,12 +748,12 @@ impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> 
             edgeForm = {};
             await reload(projectId);
             toast.success(
-                "Transition cleared"
+                "Arrow cleared"
                     if not payload["label"]
                         and not payload["carries"]
                         and not payload["trigger"]
                         and not payload["github_label"]
-                    else "Transition saved"
+                    else "Arrow saved"
             );
         } elif payload and payload["message"] {
             toast.error(payload["message"]);
@@ -761,16 +766,16 @@ impl FlowLinePage.commitEdge(fromId: str, toId: str, fields: dict[str, str]) -> 
 }
 
 impl FlowLinePage.commitRule(key: str, on: bool) -> None {
-    current = [
+    savedStep = [
         s
         for s in steps
         if s.id == selectedId
     ];
-    if len(current) == 0 {
+    if len(savedStep) == 0 {
         return;
     }
-    due = on if key == "needs_due_date" else current[0].needs_due_date;
-    pr = on if key == "needs_pr" else current[0].needs_pr;
+    due = on if key == "needs_due_date" else savedStep[0].needs_due_date;
+    pr = on if key == "needs_pr" else savedStep[0].needs_pr;
     try {
         root spawn SetStepRules(step_id=selectedId, needs_due_date=due, needs_pr=pr);
         forgetWorkspace();
@@ -808,20 +813,37 @@ impl FlowLinePage.selectStep(stepId: str) -> None {
     selectedEdge = "";
     confirmDelete = False;
     creatingStep = False;
-    picked = [
+    chosenStep = [
         s
         for s in steps
         if s.id == stepId
     ];
-    if len(picked) > 0 {
-        form = {
-            "name": picked[0].name,
-            "kind": picked[0].kind,
-            "color": picked[0].color,
-            "owner": picked[0].owner,
-            "blurb": picked[0].blurb
-        };
+    if len(chosenStep) > 0 {
+        form = formOf(chosenStep[0]);
     }
+}
+
+# The step sheet's Edit button: the same step, in the inspector.
+impl FlowLinePage.editStep(stepId: str) -> None {
+    switchMode("edit");
+    selectStep(stepId);
+}
+
+# A template only lands on an empty line (ApplyTemplate refuses otherwise), so
+# a line with steps confirms its deletion first; the picker follows from there.
+impl FlowLinePage.openTemplates -> None {
+    if len(steps) == 0 {
+        scratch = False;
+        finishEditing();
+        return;
+    }
+    wipeForTemplate = True;
+    confirmWipe = True;
+}
+
+impl FlowLinePage.askWipe -> None {
+    wipeForTemplate = False;
+    confirmWipe = True;
 }
 
 impl FlowLinePage.armConnect -> None {
@@ -1499,13 +1521,7 @@ impl FlowLinePage.beginDrag(e: any) -> None {
                 selectedEdge = "";
                 confirmDelete = False;
                 creatingStep = False;
-                form = {
-                    "name": step.name,
-                    "kind": step.kind,
-                    "color": step.color,
-                    "owner": step.owner,
-                    "blurb": step.blurb
-                };
+                form = formOf(step);
                 return;
             }
             world = pointerXY(e);

@@ -12,7 +12,6 @@ def:pub StepGroup(
     label: str,
     kind: str,
     color: str,
-    dot: str,
     tasks: list[TaskRow],
     open: bool,
     overdue: int,
@@ -27,7 +26,10 @@ def:pub StepGroup(
     onDropBeside: Callable[[str, str, bool], None],
     onAdd: Callable[[str], None] | None = None,
     empty: str = "No tasks yet",
-    footer: any = None
+    footer: any = None,
+    owner: str = "",
+    ai: list[str] = [],
+    proposal: any = None
 ) -> JsxElement {
     has dragOver: bool = False;
 
@@ -70,15 +72,19 @@ def:pub StepGroup(
                 open={open}
                 onToggle={onToggle}
                 onAdd={(lambda { onAdd(columnKey); }) if onAdd else None}
+                owner={owner}
+                ai={ai}
             />
             {if open {
                 <div key="rows" className="flex flex-col divide-y divide-border/55">
+                    {proposal}
                     {for t in tasks {
                         <TaskLine
                             key={t.id}
                             task={t}
                             today={today}
-                            dot={dot}
+                            color={color}
+                            kind={kind}
                             selected={t.id == selectedId}
                             columnKey={columnKey}
                             doneKey={doneKey}
@@ -88,7 +94,7 @@ def:pub StepGroup(
                             onDropBeside={onDropBeside}
                         />
                     }}
-                    {if len(tasks) == 0 {
+                    {if len(tasks) == 0 and not proposal {
                         <p key="empty" className="py-3 pl-8 text-[13px] text-subtle">
                             {empty}
                         </p>

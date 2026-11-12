@@ -1,13 +1,12 @@
-"""The step's entry rules in the inspector: a task lands here only with a due
-date, or only with a linked PR. Each tick saves at once (SetStepRules)."""
+"""A step's entry rules in the inspector: a task lands here only with a due date,
+or only with a linked pull request. Each switch saves at once (SetStepRules)."""
 
-import from ..ui.checkbox { Checkbox }
+import from ..ui.switch { Switch }
 
 glob RULES: list[dict[str, str]] = [
          {"key": "needs_due_date", "text": "Needs a due date"},
-         {"key": "needs_pr", "text": "Needs a linked PR"}
+         {"key": "needs_pr", "text": "Needs a pull request"}
      ];
-
 
 def:pub StepRules(
     needsDue: bool = False,
@@ -16,15 +15,15 @@ def:pub StepRules(
 ) -> JsxElement {
     held: dict[str, bool] = {"needs_due_date": needsDue, "needs_pr": needsPr};
     return
-        <div className="flex flex-col gap-1.5">
-            <span className="text-[12.5px] font-semibold">Entry rules</span>
+        <section aria-label="Entry rules" className="flex flex-col gap-2">
+            <h3 className="text-[13px] font-semibold">To enter this step, a task</h3>
             {for r in RULES {
                 <label
                     key={r["key"]}
                     className="flex items-center gap-2 text-[13px]"
                     htmlFor={"rule-" + r["key"]}
                 >
-                    <Checkbox
+                    <Switch
                         id={"rule-" + r["key"]}
                         checked={held[r["key"]]}
                         onCheckedChange={lambda (on: bool) { if onRule {
@@ -34,8 +33,8 @@ def:pub StepRules(
                     {r["text"]}
                 </label>
             }}
-            <p className="text-xs text-subtle">
+            <p className="meta">
                 Checked on every move here, by hand or by a GitHub trigger.
             </p>
-        </div>;
+        </section>;
 }

@@ -24,6 +24,9 @@ impl GithubSection.boot -> None {
     if wantTab in ["issues", "pulls"] {
         tab = wantTab;
     }
+    if wantRepo or wantTab {
+        listOpen = True;
+    }
     if wantQuery {
         searchQuery = wantQuery;
         searchDraft = wantQuery;
@@ -85,8 +88,8 @@ impl GithubSection.loadStatus -> None {
 }
 
 impl GithubSection.loadShared -> None {
-    # One read for the connection, repos, projects and flow line; the issue
-    # list follows once the repo is known (the repoId effect). GithubStatus
+    # One read for the connection, repos, projects and flow line; an issue
+    # list follows only once a list is open (the repoId effect). GithubStatus
     # stays the read after a disconnect or a sync.
     ws = await loadWorkspace();
     if not ws["ok"] {
@@ -105,6 +108,10 @@ impl GithubSection.loadShared -> None {
             configGaps = configGaps;
         }
     }
+    adoptLists(ws);
+}
+
+impl GithubSection.adoptLists(ws: dict[str, any]) -> None {
     try {
         fetched: list[RepoView] = ws["repos"];
         repos = fetched;
@@ -136,12 +143,43 @@ impl GithubSection.loadShared -> None {
             importStep = landing;
         }
         # Land on something readable rather than an empty picker. An explicit
-        # choice already made is left alone.
+        # choice already made is left alone, unless its repository has gone.
+        if repoId
+            and len(
+                [
+                    r
+                    for r in fetched
+                    if r.id == repoId
+                ]
+            )
+                == 0 {
+            repoId = "";
+        }
         if not repoId and len(fetched) > 0 {
             repoId = fetched[0].id;
         }
     } except Exception as e {
         toast.error("Could not load this workspace's repositories");
+    }
+}
+
+impl GithubSection.followPage -> None {
+    # A write in another section (a repo removed in Projects, a project renamed)
+    # reloads the page's lists; this mount keeps its own copy, so it follows.
+    # Only the lists: an older read must not undo a connection this section saw.
+    if loading {
+        return;
+    }
+    ws = await loadWorkspace();
+    if ws["ok"] {
+        adoptLists(ws);
+    }
+}
+
+impl GithubSection.tellPage -> None {
+    # After a write here the page's other sections reread what they show.
+    if onChanged {
+        await onChanged();
     }
 }
 
@@ -181,12 +219,14 @@ impl GithubSection.disconnect -> None {
         forgetWorkspace();
         confirmDisconnect = False;
         repoId = "";
+        listOpen = False;
         issues = [];
         pulls = [];
         selected = [];
         pickerRows = [];
         await loadStatus();
         toast.success("Disconnected from GitHub");
+        await tellPage();
     } except Exception as e {
         toast.error("Could not disconnect from GitHub");
     }
@@ -235,9 +275,9 @@ impl GithubSection.runSync(full: bool) -> None {
         rResult = root spawn ListRepos();
         repos = rResult.reports[0] if rResult.reports else repos;
         # The pass just rewrote the stored pages, so the store is current.
-        if tab == "issues" {
+        if listOpen and tab == "issues" {
             await loadIssues(True, False);
-        } else {
+        } elif listOpen {
             await loadPulls(True, False);
         }
         if failure {
@@ -256,6 +296,7 @@ impl GithubSection.runSync(full: bool) -> None {
         # the sync just changed until its next poll.
         w: any = window;
         w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
+        await tellPage();
     } except Exception as e {
         toast.error("Could not sync with GitHub");
     }
@@ -338,6 +379,7 @@ impl GithubSection.toggleAutoSync(rid: str, enabled: bool) -> None {
                     if enabled
                     else "Importing issues turned off"
             );
+            await tellPage();
         } else {
             toast.error("Could not update that repository");
         }
@@ -359,6 +401,7 @@ impl GithubSection.toggleAutoDone(rid: str, enabled: bool) -> None {
                     if enabled
                     else "Moving cards to Done turned off"
             );
+            await tellPage();
         } else {
             toast.error("Could not update that repository");
         }
@@ -380,6 +423,7 @@ impl GithubSection.toggleAutoClose(rid: str, enabled: bool) -> None {
                     if enabled
                     else "Closing issues from Flowline turned off"
             );
+            await tellPage();
         } else {
             toast.error("Could not update that repository");
         }
@@ -405,6 +449,7 @@ impl GithubSection.toggleLabelSync(rid: str, enabled: bool) -> None {
                     if enabled
                     else "Writing labels to GitHub turned off"
             );
+            await tellPage();
         } else {
             toast.error("Could not update that repository");
         }
@@ -435,6 +480,7 @@ impl GithubSection.attachRepo(fullName: str) -> None {
             selectRepo(added.id);
         }
         toast.success("Added " + fullName);
+        await tellPage();
     } except Exception as e {
         toast.error("Could not add " + fullName);
     }
@@ -592,6 +638,20 @@ impl GithubSection.selectRepo(value: str) -> None {
     importProject = "none";
 }
 
+impl GithubSection.openList(value: str) -> None {
+    if value != repoId {
+        selectRepo(value);
+    }
+    listOpen = True;
+}
+
+impl GithubSection.closeList -> None {
+    listOpen = False;
+    # The address stops naming a list the section no longer shows.
+    blank: dict[str, any] = {};
+    window.history.replaceState(blank, "", "/workspace?tab=github");
+}
+
 impl GithubSection.runSearch -> None {
     # Only commit the query; the dependent effect owns the fetch. Calling a
     # loader here would read the pre-commit searchQuery snapshot and search
@@ -640,6 +700,8 @@ impl GithubSection.importSelected -> None {
             # new cards until its next poll.
             w: any = window;
             w.dispatchEvent(new(w.CustomEvent, "flowline:refresh"));
+            forgetWorkspace();
+            await tellPage();
         } else {
             toast.error(payload["message"] or "Could not import those issues");
         }

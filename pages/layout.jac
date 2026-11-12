@@ -5,7 +5,7 @@ Login state and the cached workspace name are read at render, so the first
 render is the real chrome and a page mounts once."""
 
 import from "@jac/runtime" { Outlet, useLocation, jacIsLoggedIn, jacLogout }
-import from "react" { useEffect }
+import from "react" { useEffect, useLayoutEffect }
 import from ..lib.theme { getThemePref, applyTheme, watchTheme, setThemePref }
 import from ..lib.session {
     cachedOrgName,
@@ -39,7 +39,8 @@ def:pub Shell -> JsxLayout {
         askOpen: bool = False,
         wide: bool = False,
         narrow: bool = False,
-        prevPath: Ref[any] = Ref();
+        prevPath: Ref[any] = Ref(),
+        popped: Ref[any] = Ref();
 
     async can with entry {
         applyTheme(getThemePref());
@@ -54,7 +55,35 @@ def:pub Shell -> JsxLayout {
     def logout -> None;
     def pickTheme(pref: str) -> None;
 
-    path = str(useLocation().pathname);
+    loc = useLocation();
+    path = str(loc.pathname);
+    # Capture runs ahead of the router's own listener, which renders the new page.
+    useEffect(
+        lambda {
+            w: any = window;
+            onPop = lambda (e: any) { popped.current = True; };
+            w.addEventListener("popstate", onPop, True);
+            return lambda { w.removeEventListener("popstate", onPop, True); };
+        },
+        []
+    );
+    # A new page opens at its top. Before paint and before the page's own effects,
+    # so a section's deep link still lands; Back and Forward keep what the browser
+    # restores. Instant, because the page's scroll-behavior is smooth.
+    useLayoutEffect(
+        lambda {
+            wasPop = popped.current;
+            popped.current = False;
+            if prevPath.current
+                and prevPath.current != path
+                and not wasPop
+                and not loc.hash {
+                w: any = window;
+                w.scrollTo({"top": 0, "left": 0, "behavior": "instant"});
+            }
+        },
+        [path, str(loc.search)]
+    );
     # Leaving /setup rereads the name the wizard just saved.
     useEffect(
         lambda {
@@ -116,14 +145,18 @@ def:pub Shell -> JsxLayout {
                     account={account}
                     themeChoice={themeChoice}
                     onSearch={openPalette}
-                    onAsk={toggleAsk}
                     onTheme={pickTheme}
                     onSignOut={logout}
                 />
                 <main
-                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-6 lg:pb-10"
+                    className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-3.5 lg:pb-10"
                 >
-                    <Outlet/>
+                    <div
+                        key={path}
+                        className="animate-in fade-in duration-150 motion-reduce:animate-none"
+                    >
+                        <Outlet/>
+                    </div>
                 </main>
             </div>
             <AssistantDock
@@ -132,7 +165,7 @@ def:pub Shell -> JsxLayout {
                 docked={wide}
                 narrow={narrow}
             />
-            <TabBar path={path}/>
+            <TabBar path={path} askOpen={askOpen} onAsk={toggleAsk}/>
             <CommandPalette
                 open={paletteOpen}
                 onOpenChange={lambda (o: bool) { paletteOpen = o; }}

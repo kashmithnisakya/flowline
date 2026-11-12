@@ -6,33 +6,11 @@ impl LoginPage.switchMode(next: str) -> None {
     emailError = "";
     passwordError = "";
     expired = False;
-    # Keep the address in step so a reload or a shared link opens this tab.
+    # Keep the address in step so a reload or a shared link opens this mode.
     w: any = window;
     w.history.replaceState(
         None, "", "/login?mode=signup" if next == "signup" else "/login"
     );
-}
-
-impl LoginPage.tabKey(e: KeyboardEvent) -> None {
-    # Tabs pattern: either arrow flips between the two modes, Home and End pick.
-    next = "";
-    if e.key == "ArrowLeft" or e.key == "ArrowRight" {
-        next = "login" if mode == "signup" else "signup";
-    } elif e.key == "Home" {
-        next = "login";
-    } elif e.key == "End" {
-        next = "signup";
-    }
-    if not next {
-        return;
-    }
-    e.preventDefault();
-    switchMode(next);
-    doc: any = document;
-    target: any = doc.getElementById("tab-" + next);
-    if target {
-        target.focus();
-    }
 }
 
 impl LoginPage.submit(e: FormEvent) -> None {
@@ -74,7 +52,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             res: any = {};
             res = await jacSignup(addr, pw, {});
             if not res["success"] {
-                error = "Could not create a workspace with that email. It may already be registered; try signing in.";
+                error = signupProblem(res);
                 busy = False;
                 return;
             }

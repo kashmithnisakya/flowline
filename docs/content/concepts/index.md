@@ -143,24 +143,26 @@ File-based routing under `pages/`, with route groups:
 | `/` | `pages/(public)/index.jac` | Public landing page |
 | `/login` | `pages/(public)/login.jac` | Public; `?mode=signup` opens sign-up |
 | `/auth/callback` | `pages/(public)/auth/callback.jac` | Receives `?token=` from SSO |
-| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/workspace`, `/setup` | `pages/(auth)/...` | Signed in |
+| `/flowlines`, `/board`, `/roadmap`, `/overview`, `/ai`, `/workspace`, `/setup` | `pages/(auth)/...` | Signed in |
 | `/github` | `pages/(auth)/github.jac` | Signed in; the GitHub App's callback and setup URL, rendered as Workspace on its GitHub section |
 
 - `pages/layout.jac` is path-aware: the app chrome renders only for signed-in,
-  non-public paths. At `md` and up it is a left sidebar: the pages (Flow
-  line, Board, Roadmap, Overview), the projects list, Ask, Workspace and the
-  account. Phones get a header and a five-tab bar (Flow line, Board, Roadmap,
-  Overview, Workspace). The ⌘K palette works everywhere, and Ask docks as a
+  non-public paths. At `lg` and up it is a left sidebar: Overview, AI, the
+  projects list, Ask, Workspace and the account. Phones get a header and a
+  four-tab bar (Overview, Board, Ask, More). A project's Board, Flow line and
+  Roadmap are tabs in the header those pages share. The ⌘K palette works everywhere, and Ask docks as a
   column at 1280px and up and a sheet below. `/setup` gets only the mark and
   Sign out.
 - **The project is a scope, not a filter.** The board, the flow line and the
-  roadmap show one project, the one picked in the sidebar or a page's own
-  picker. `lib/project.jac` keeps it per browser (`currentProject`,
+  roadmap show one project, the one picked in the sidebar or by the project's
+  name at the top of the page. `lib/project.jac` keeps it per browser (`currentProject`,
   `pickProject`) and tells every mounted page through a `flowline:project`
   window event.
 - `/workspace` holds everything configured: Organization, People, Projects,
-  Roles, GitHub and Preferences (the theme), one section at a time from a
-  rail (`?tab=`).
+  Roles, GitHub and Preferences (the theme), one section at a time beside a
+  rail (`?tab=` names the section shown).
+- `/ai` holds everything AI: the switch for AI responsibilities, the workspace's
+  runs, each role's responsibilities and what is sent.
 - Pages are thin stateful shells. They own state and handlers (bodies in
   `pages/(auth)/impl/`) and compose presentational components from
   `components/<area>/`.

@@ -92,6 +92,7 @@ import from services.tasks.history {
 import from jaclang.lib.jaclib { QPred }
 import from services.log.log { record_task_event, sync_task_links }
 import from services.github.util { sync_issue_state, sync_step_labels }
+import from services.agents.runs { queue_responsibilities }
 import from constants { STATUSES, STATUS_KIND, KIND_STATUS, ACTIVE_STATUSES }
 
 
@@ -139,8 +140,8 @@ def handoff_target(holder: Root, task: Task, step: WorkflowStep) -> list[Member]
 
 # What a move onto a step does beyond the step: the step's owner takes the
 # task (`handed`, from handoff_target), a move across Done writes the issue
-# state back, and the arrow crossed writes its GitHub labels (not `moved_by`,
-# the label that moved it). Returns the log line's tail, "" when none applied.
+# state back, the arrow crossed writes its GitHub labels (not `moved_by`, the
+# label that moved it), and the step's AI responsibilities are queued.
 def landing_tail(
     holder: Root, t: Task, handed: list[Member], was: str, from_step: str, moved_by: str
 ) -> str {
@@ -162,6 +163,12 @@ def landing_tail(
     labelled = sync_step_labels(holder, t, from_step, t.step_id, moved_by);
     if labelled {
         tail = tail + " · " + labelled;
+    }
+    if t.step_id and t.step_id != from_step {
+        landed = resolve(t.step_id);
+        if isinstance(landed, WorkflowStep) and owned(holder, landed) {
+            tail = tail + queue_responsibilities(holder, t, landed, t.updated_at);
+        }
     }
     return tail;
 }
@@ -1022,7 +1029,12 @@ walker:protect CreateTask {
         fresh.assignee_ids = link_assignees(holder, fresh, self.assignee_ids);
         count_task(here, fresh, 1);
         note_category(holder, fresh.category);
-        record_task_event(holder, fresh, "Added to " + col, stamp);
+        record_task_event(
+            holder,
+            fresh,
+            "Added to " + (chosen.name if isinstance(chosen, WorkflowStep) else col),
+            stamp
+        );
         report fresh.to_view();
         disengage;
     }

@@ -1,4 +1,4 @@
-"""One worklist group: a tinted pill naming why (with its count), up to
+"""One worklist group: a quiet label naming why (with its count), up to
 SHOW_MAX rows, and a line for the rows it does not list (past the cap, or
 counted on the board but not held by the page; `more` -1 is unknown)."""
 
@@ -6,13 +6,6 @@ import from "@jac/runtime" { Link }
 import from .NeedsRow { NeedsRow }
 
 glob SHOW_MAX: int = 6;
-
-def toneOf(tone: str) -> str {
-    if tone == "alarm" {
-        return "bg-destructive/10 text-destructive";
-    }
-    return "bg-bg-surface text-text-secondary";
-}
 
 def moreText(g: dict[str, any]) -> str {
     capped = len(g["rows"]) - SHOW_MAX if len(g["rows"]) > SHOW_MAX else 0;
@@ -33,15 +26,14 @@ def:pub NeedsGroup(group: dict[str, any]) -> JsxElement {
     return
         <div role="group" aria-label={group["label"]}>
             <h3
-                className={"inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold "
-                    + toneOf(group["tone"])}
+                className="flex items-center gap-1.5 px-4 pt-2.5 pb-0.5 text-xs text-text-tertiary"
             >
                 {group["label"]}
-                <span className="num font-medium opacity-80">
+                <span className="num">
                     {str(count) + ("+" if group["more"] < 0 else "")}
                 </span>
             </h3>
-            <ul className="mt-1.5">
+            <ul>
                 {for (i, r) in enumerate(rows) {
                     if i < SHOW_MAX {
                         <NeedsRow key={r["id"]} row={r}/>
@@ -52,7 +44,7 @@ def:pub NeedsGroup(group: dict[str, any]) -> JsxElement {
                 <Link
                     key="more"
                     to="/board"
-                    className="mt-1 block text-xs text-muted-foreground hover:text-foreground"
+                    className="block border-t border-border-subtle px-4 py-2 text-xs text-text-tertiary hover:text-text-primary"
                 >
                     {moreText(group)}
                 </Link>

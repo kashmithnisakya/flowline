@@ -14,7 +14,8 @@ import from .taskFacts { alertLine }
 def:pub TaskLine(
     task: TaskRow,
     today: str,
-    dot: str,
+    color: str,
+    kind: str,
     selected: bool,
     columnKey: str,
     doneKey: str,
@@ -36,10 +37,15 @@ def:pub TaskLine(
                 + ROW_COLUMNS
                 + (" bg-bg-selected" if selected else "")}
         >
-            <TaskTitle task={task} dot={dot} alert={alertLine(task, today)}/>
+            <TaskTitle
+                task={task}
+                color={color}
+                kind={kind}
+                alert={alertLine(task, today)}
+            />
             <TaskMetaLine task={task} today={today}/>
             <span className="hidden lg:contents">
-                <TaskCells task={task} today={today} color={dot}/>
+                <TaskCells task={task} today={today}/>
             </span>
             <span className="absolute top-1.5 right-1.5 lg:static lg:justify-self-end">
                 <RowMove

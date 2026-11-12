@@ -4,7 +4,7 @@ beside its own rows, in one call. BoardSnapshot fills its workspace fields
 from the same helper, so the board and the other pages never disagree on a
 sort."""
 
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Project,
     Repo,
@@ -21,6 +21,9 @@ import from models {
     repo_view,
     role_view,
     step_view,
+    open_run_count,
+    ai_enabled,
+    responsibilities_on_step,
     projects_of,
     members_of,
     roles_of,
@@ -33,6 +36,7 @@ import from services.github.github {
     LIVE_WINDOW_MINUTES
 }
 import from services.util { minutes_since, ensure_tallies, ensure_arrows }
+import from services.agents.runs { catalogue_name }
 
 obj WorkspaceView {
     """The workspace part of BoardData plus the flow line's own record
@@ -51,7 +55,9 @@ obj WorkspaceView {
         github: GithubConnectionView,
         # A delivery reached the receiver inside the server's live window,
         # so the board polls its queue every 20 s; otherwise once per poll.
-        webhook_live: bool;
+        webhook_live: bool,
+        # AI runs queued or running, which the sidebar's AI link shows.
+        ai_open: int = 0;
 }
 
 
@@ -68,8 +74,15 @@ def workspace_view(holder: Root) -> WorkspaceView {
     projects.sort(key=lambda (pr: Project) { pr.name; });
     steps: list[StepView] = [];
     line_steps = steps_of(holder);
+    ai_on = ai_enabled(holder);
     for st in line_steps {
-        steps.append(step_view(st, line_steps));
+        view = step_view(st, line_steps);
+        if ai_on {
+            view.ai = [
+                catalogue_name(r.key) for r in responsibilities_on_step(holder, st)
+            ];
+        }
+        steps.append(view);
     }
     steps.sort(key=lambda (s: StepView) { s.sort_order; });
     repos: list[RepoView] = [];
@@ -109,7 +122,8 @@ def workspace_view(holder: Root) -> WorkspaceView {
         template_key=template_key,
         github=github,
         webhook_live=github.connected
-            and minutes_since(github.webhook_seen_at) < LIVE_WINDOW_MINUTES
+            and minutes_since(github.webhook_seen_at) < LIVE_WINDOW_MINUTES,
+        ai_open=open_run_count(holder)
     );
 }
 

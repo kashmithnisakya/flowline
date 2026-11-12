@@ -6,7 +6,7 @@ server schedule (services/github/schedule.jac) and by hand; no walker a page
 load calls reaches GitHub."""
 
 import re;
-import from jaclang.lib.effects { effects }
+import from services.compat.jaclang.lib.effects { effects }
 import from models {
     Project,
     Member,
@@ -43,6 +43,7 @@ import from models {
 import from services.util { now_iso, minutes_since, clean_tags, shift_day, today_iso }
 import from services.log.log { record_task_event, log_imports }
 import from services.tasks.tasks { find_task, status_for_step, follow_trigger }
+import from services.agents.runs { queue_responsibilities }
 import from services.github.util {
     missing_config,
     install_url,
@@ -1981,6 +1982,9 @@ def apply_pull(
         return delivery_outcome("stale", key);
     }
     apply_pr_item(ctx, full_name, key, item);
+    if action == "synchronize" {
+        rereview(ctx, hits[0], key, item);
+    }
     # Who is waiting on whom rides the PR event: the request is a fact about
     # the PR, and its answer arrives later as a review of its own.
     if action == "review_requested" {
@@ -1989,6 +1993,22 @@ def apply_pull(
         hits[0].pr_review_state = "";
     }
     return delivery_outcome("applied", key);
+}
+
+
+# New commits on a linked PR while its task sits on a step with AI
+# responsibilities: queue them again. The runner reviews the newest commit and
+# skips one it already reviewed, so a commit is reviewed once.
+def rereview(ctx: SyncContext, t: Task, key: str, item: dict[str, any]) {
+    step = resolve(t.step_id) if t.step_id else None;
+    if not isinstance(step, WorkflowStep) or not owned(ctx.holder, step) {
+        return;
+    }
+    stamp = event_time(item);
+    tail = queue_responsibilities(ctx.holder, t, step, stamp, True);
+    if tail {
+        record_task_event(ctx.holder, t, "New commits on PR " + key + tail, stamp);
+    }
 }
 
 

@@ -1,22 +1,14 @@
-"""The workspace rail: the organization's name over its sections, each with a
-count. A column at md and up, one scrolling row on a phone. Items are real
-links, so a section opens in a new tab too; a plain click stays in place.
+"""The workspace rail: one link per section, and the page shows the chosen one.
+A sticky column at md and up, one scrolling row on a phone. Items are real
+links, so a section opens in a new tab too; a plain click switches in place.
 """
 
 import from "react" { useEffect }
 
 def:pub WorkspaceRail(
-    orgName: str,
-    items: list[dict[str, str]],
-    current: str,
-    onSelect: Callable[[str], None]
+    items: list[list[str]], current: str, onSelect: Callable[[str], None]
 ) -> JsxElement {
     has navRef: Ref[any] = Ref();
-
-    # A count column is reserved (2ch) so the labels never shift when the
-    # numbers land; a wider count still changes the row, so it stays in the
-    # scroll effect's inputs.
-    widths = "|".join([item["count"] for item in items]);
 
     # On a phone the row scrolls sideways; keep the current section in view,
     # so a deep link to Preferences does not open on a clipped label.
@@ -24,7 +16,7 @@ def:pub WorkspaceRail(
         lambda {
             nav: any = navRef.current;
             if nav and nav.scrollWidth > nav.clientWidth {
-                el: any = nav.querySelector("[aria-current=page]");
+                el: any = nav.querySelector("[aria-current=location]");
                 if el {
                     box: any = nav.getBoundingClientRect();
                     at: any = el.getBoundingClientRect();
@@ -34,50 +26,35 @@ def:pub WorkspaceRail(
                 }
             }
         },
-        [current, widths]
+        [current]
     );
 
     return
         <nav
             ref={navRef}
             aria-label="Workspace sections"
-            className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:-mx-6 sm:px-6 md:sticky md:top-6 md:mx-0 md:flex-col md:gap-0.5 md:overflow-visible md:border-b-0 md:px-0 md:pb-0"
+            className="sticky top-14 z-30 -mx-4 flex gap-1 overflow-x-auto border-b bg-background px-4 py-2 sm:-mx-6 sm:px-6 md:top-[72px] md:z-auto md:mx-0 md:w-[160px] md:shrink-0 md:flex-col md:gap-px md:self-start md:overflow-visible md:border-b-0 md:bg-transparent md:px-0 md:py-0 lg:top-6"
         >
-            <div
-                className="hidden min-h-8 truncate px-2 pt-0.5 pb-2.5 text-sm font-bold md:block"
-                title={orgName}
-            >
-                {orgName}
-            </div>
+            <h1 className="page-title hidden px-2 pb-3 md:block">Workspace</h1>
             {for item in items {
                 <a
-                    key={item["key"]}
-                    href={"/workspace?tab=" + item["key"]}
-                    aria-current={"page" if current == item["key"] else None}
-                    className={"group flex shrink-0 items-center justify-between gap-4 rounded-md px-2 py-1.5 text-[13.5px] whitespace-nowrap transition-colors duration-150 "
+                    key={item[0]}
+                    href={"/workspace?tab=" + item[0]}
+                    aria-current={"location" if current == item[0] else None}
+                    className={"flex h-[30px] shrink-0 items-center rounded-md px-2 text-[13px] whitespace-nowrap transition-colors "
                         + (
-                            "bg-accent font-semibold text-foreground"
-                                if current == item["key"]
-                                else "text-muted-foreground hover:bg-accent hover:text-foreground"
+                            "bg-bg-selected font-medium text-text-primary"
+                                if current == item[0]
+                                else "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
                         )}
                     onClick={lambda (e: MouseEvent) { if not (
                         e.metaKey or e.ctrlKey or e.shiftKey
                     ) {
                         e.preventDefault();
-                        onSelect(item["key"]);
+                        onSelect(item[0]);
                     }}}
                 >
-                    <span>{item["label"]}</span>
-                    <span
-                        className={"num min-w-[2ch] text-right text-xs font-normal "
-                            + (
-                                "text-muted-foreground"
-                                    if current == item["key"]
-                                    else "text-subtle group-hover:text-muted-foreground"
-                            )}
-                    >
-                        {item["count"]}
-                    </span>
+                    {item[1]}
                 </a>
             }}
         </nav>;

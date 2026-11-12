@@ -124,8 +124,8 @@ glob:pub CARRY_LABEL: dict[str, str] = {"issue": "Issue", "pr": "PR"},
      # The triggers a transition can carry (constants.TRANSITION_TRIGGERS),
      # as the edge editor offers them.
      TRIGGER_PICKS: list[dict[str, str]] = [
-         {"key": "", "text": "By hand"},
-         {"key": "label", "text": "Label"},
+         {"key": "", "text": "Never"},
+         {"key": "label", "text": "A label is added"},
          {"key": "pr_merged", "text": "PR merged"},
          {"key": "changes_requested", "text": "Changes requested"}
      ];
@@ -143,6 +143,42 @@ def:pub triggerNote(trigger: str, wanted: str) -> str {
         return "moves when a review requests changes";
     }
     return "";
+}
+
+
+# A step's owner as a card or sheet says it.
+def:pub ownerWord(owner: str) -> str {
+    who = owner.strip() if owner else "";
+    if who == "anyone" {
+        return "Anyone";
+    }
+    return who or "No one yet";
+}
+
+
+# What a step asks of a task to enter it, in words; "" for no rules.
+def:pub ruleWords(step: StepView) -> str {
+    if step.needs_due_date and step.needs_pr {
+        return "needs a due date and a PR";
+    }
+    if step.needs_due_date {
+        return "needs a due date";
+    }
+    return "needs a PR" if step.needs_pr else "";
+}
+
+
+# A card's count line. A done step counts recent Done, the seven days the line
+# is read over (GetFlowLine's done_days), not open work.
+def:pub nodeCount(step: StepView) -> str {
+    n = step.task_count;
+    said = (
+        str(n) + " in the last 7 days"
+            if step.kind == "done"
+            else str(n) + (" task" if n == 1 else " tasks")
+    );
+    rules = ruleWords(step);
+    return said + ", " + rules if rules else said;
 }
 
 

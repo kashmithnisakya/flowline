@@ -89,12 +89,30 @@ import from services.github.github {
 import from services.github.events { GithubEvent, DrainGithubEvents }
 # The scheduled sync registers through this import like a walker does.
 import from services.github.schedule { sync_connected_workspaces }
+# The AI runner registers the same way.
+import from services.agents.runner { run_ai_reviews }
 import from services.board.board { BoardSnapshot }
 import from services.workspace.workspace { GetWorkspace }
 import from services.roadmap.roadmap { RoadmapSnapshot }
 import from services.filters.filters { SetBoardFilters, SaveFilterSet, DeleteFilterSet }
 import from services.insights.insights { Digest, OverviewSnapshot }
-import from services.assistant.assistant { AskAssistant, WriteStandup, ProposeAction }
+import from services.assistant.assistant {
+    AskAssistant,
+    AskOrPropose,
+    WriteStandup,
+    ProposeAction
+}
+import from services.agents.agents {
+    ListResponsibilities,
+    SetAiEnabled,
+    SaveResponsibility,
+    DeleteResponsibility,
+    ListRuns,
+    ListAgentRuns,
+    RetryRun,
+    CancelRun,
+    CheckReviewService
+}
 
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;

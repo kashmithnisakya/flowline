@@ -1,9 +1,29 @@
 [project]
 name = "flowline"
-# A dotted module name, the only spelling jac 0.37.12+ loads.
-entry-point = "main"
+jac-version = "==0.39.2"
+default-app = "flowline"
+
+# Two apps, so a deploy runs two Deployments behind one gateway. An [apps]
+# table moves kind and entry-point (a dotted module name) off [project].
+[apps.flowline]
 kind = "web-app"
-jac-version = "==0.37.23"
+entry-point = "main"
+
+# The PR review service: its own pod on deploy, loaded into the web app's
+# process by a plain `jac run` (`jac run flowline --fleet` runs it apart).
+[apps.pr_review]
+kind = "service"
+entry-point = "review.service"
+
+# A review waits on GitHub and a model for up to two minutes; the 10 s default
+# bridged-call timeout would cut every one short.
+[apps.pr_review.scale]
+rpc_timeout = 300.0
+cpu_request = "250m"
+cpu_limit = "1000m"
+memory_request = "1Gi"
+memory_limit = "2Gi"
+hpa = { enabled = true, min = 1, max = 2 }
 
 [jac-shadcn]
 style = "nova"
@@ -14,7 +34,7 @@ radius = "default"
 menuAccent = "subtle"
 menuColor = "default"
 
-[dependencies]
+[dependencies.pypi]
 prometheus_client = "*"
 requests = "*"
 pyjwt = "*"
@@ -46,11 +66,11 @@ lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 [client.app_meta_data]
 title = "Flowline"
-description = "Draw how your team works. The steps you name become the board's columns, and every card that moves writes a line in the daily log. Open source, MIT licensed."
+description = "Draw how your team works. The board follows. Name your steps once, and every move lands in the task's own history. Open source, MIT licensed."
 theme_color = "#ECEEEA"
 icon = "/static/brand/favicon.svg"
 og_title = "Flowline: draw how your team works"
-og_description = "Name your steps once. They become the board's columns, every card that moves writes a line in the log, and linked GitHub issues can move cards when you turn that on."
+og_description = "Name your steps once. The board stacks your work under them, every move lands in the task's own history, and GitHub and AI act only where you switch them on."
 og_type = "website"
 og_image = "${HOST:-http://localhost:8000}/static/brand/og-image.png"
 og_image_width = "1200"
@@ -89,24 +109,28 @@ client_secret = "${GOOGLE_CLIENT_SECRET:-}"
 client_id = "${GITHUB_CLIENT_ID:-}"
 client_secret = "${GITHUB_CLIENT_SECRET:-}"
 
-# /metrics, walker metrics and one Prometheus + Grafana pair in the namespace.
-# k8s_metrics_enabled defaults to true and adds kube-state-metrics plus a
-# node-exporter DaemonSet (one pod on EVERY node of the shared cluster);
-# `jachammer top` already reports pod CPU and memory from metrics-server.
+# Off: jachammer refuses a deploy whose app runs its own monitoring. The one
+# switch also gates the app's /metrics, so a deployed pod serves none; CI turns
+# it on for the smoke gates. k8s_metrics_enabled defaults to true and would add
+# a node-exporter DaemonSet (one pod on EVERY node) if this were ever on.
 [scale.monitoring]
-enabled = true
+enabled = false
 endpoint = "/metrics"
 namespace = "flowline"
 walker_metrics = true
 prometheus_admin_password = "${GRAFANA_ADMIN_PASSWORD}"
 k8s_metrics_enabled = false
 
+# The Postgres volume's size. It must be at least the size of the volume the
+# cluster already holds (20Gi): unset reads as jac-scale's 2Gi default, a
+# shrink, which aborts the deploy. A larger value grows the volume in place.
+[scale.database]
+postgres_storage = "20Gi"
+
 [scale.kubernetes]
 app_name = "flowline"
-# App pod sizing. Only [apps.flowline.scale] can set workers = "auto", but on
-# jac 0.37.7 an [apps] table makes the deploy skip the client bundle (API-only
-# pods, / is a JSON 404), so the app stays under [project] and the worker
-# count is fixed in [serve.workers] instead.
+# Web app pod sizing. The worker count is fixed in [serve.workers]: "auto"
+# would resolve on the deploying machine, not in the pod.
 cpu_request = "1000m"
 cpu_limit = "2000m"
 # Every HPA jac-scale renders also scales on memory (80% of the request), and
@@ -167,22 +191,38 @@ default = "server"
 # localStorage, which would otherwise infer server.
 "components.common.StepBadge" = "client"
 "lib.project" = "client"
+# The Workspace page's section list, address parsing and scroll hold.
+"components.workspace.sections" = "client"
 "components.chrome.SidebarLink.isCurrent" = "client"
 "components.board.taskFacts" = "client"
+"components.dashboard.needsRows" = "client"
 "components.board.columnWidths" = "client"
 "components.board.BoardSkeleton.rememberGroups" = "client"
-# The landing demos' sample data: plain globs, no client evidence of their own.
-"components.landing.demoData" = "client"
-"components.landing.tourData" = "client"
+# The landing picture's sample data: plain data, no client evidence of its own.
+"components.landing.shotData" = "client"
 "lib.utils.fmtEstimate" = "client"
 "lib.utils.normalizeRepoInput" = "client"
 "lib.utils.parseEstimate" = "client"
 # The whole module: rememberWorkspace/forgetWorkspace have no browser
 # evidence, and a server def:pub here would shadow the effects table.
 "lib.workspace" = "client"
+# Ask's open proposal, held in module state for the board to draw.
+"lib.proposal" = "client"
+# Maps a failed signup to a plain line: pure client text, no evidence of its own.
+"lib.signup" = "client"
+# Theme choices and the stored preference: browser-only, no evidence of its own.
+"lib.theme" = "client"
 models = "server"
+"services.agents.agents" = "server"
+"services.agents.runs" = "server"
+"services.agents.runner" = "server"
+"services.agents.metrics" = "server"
+"review.github" = "server"
+"review.engine" = "server"
+"review.post" = "server"
 "services.assistant.assistant" = "server"
 "services.board.board" = "server"
+"services.compat.jaclang.lib.effects" = "server"
 "services.filters.filters" = "server"
 "services.flowlines.flowlines" = "server"
 "services.github.events" = "server"
@@ -198,3 +238,10 @@ models = "server"
 "services.tasks.history" = "server"
 "services.util" = "server"
 "services.workspace.workspace" = "server"
+"review.service" = "server"
+
+# Secrets every pod reads from its environment. JAC_BRIDGE_TOKEN signs the web
+# app's calls to the review service when no user is behind them; it is read
+# at pod start, so it must be set before the deploy that ships it.
+[scale.secrets]
+JAC_BRIDGE_TOKEN = "${JAC_BRIDGE_TOKEN}"

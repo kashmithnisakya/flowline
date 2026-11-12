@@ -19,14 +19,7 @@ import from .columnWidths {
     MAX_TITLE
 }
 
-glob LABELS: list[str] = [
-         "Task",
-         "People",
-         "Priority",
-         "Checklist",
-         "Due",
-         "GitHub"
-     ];
+glob LABELS: list[str] = ["Task", "People", "Due", "GitHub", "AI"];
 
 def:pub ColumnHeads -> JsxElement {
     has widths: list[int] = loadWidths();

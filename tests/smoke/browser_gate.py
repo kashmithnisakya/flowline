@@ -4,7 +4,8 @@ setup wizard on the Simple template, land on the board with the create dialog
 open, create a task from the board's New task button and see its card survive
 a reload, check the runtime reads the served effects table, reads /user/me
 once and mounts the pages after the board on the cached workspace until a
-roster write drops it, then land
+roster write drops it, turn on AI on its page and give a role code review,
+check a proposal from Ask is drawn dashed until it is applied, then land
 on GitHub's install redirect and check the page finishes it with exactly one
 callback. Every step is a real click or keystroke, so a dead button fails here.
 Usage: browser_gate.py [base_url] [stub_url]"""
@@ -48,7 +49,7 @@ def settle(page, url_tail: str, title: str) -> None:
                 break
         except Exception:
             page.wait_for_timeout(500)
-    expect(page.get_by_text(title).first).to_be_visible()
+    expect(page.get_by_text(title).filter(visible=True).first).to_be_visible()
 
 
 TRANSIENT = ("ERR_ABORTED", "detached", "context was destroyed", "navigating")
@@ -67,7 +68,7 @@ def act(page, fn, tries: int = 3):
 
 def run(page, tag: str) -> list[str]:
     email = f"ui-{tag}@flowline-ci.invalid"
-    password = f"Ui-{tag}-Xy7!"
+    password = f"Pw-{tag}-Xy7!"
     title = f"UI task {tag}"
 
     step("sign up")
@@ -99,9 +100,8 @@ def run(page, tag: str) -> list[str]:
 
     step("board: opens with the create dialog on the template's steps")
     settle(page, "/board", "Board")
-    dialog = page.locator("[role=dialog][data-state=open]")
+    dialog = page.locator("[data-new-task]")
     expect(dialog).to_be_visible()
-    expect(dialog.get_by_text("New task", exact=True)).to_be_visible()
     dialog.get_by_role("button", name="Cancel", exact=True).click()
     expect(dialog).to_be_hidden()
     columns = ["To do", "Doing", "Review", "Done"]
@@ -127,20 +127,19 @@ def run(page, tag: str) -> list[str]:
     expected = [[n, k] for n, k in zip(columns, ["start", "active", "handoff", "done"])]
     assert steps == expected, f"setup applied {steps}, expected {expected}"
 
-    step("board: open via the nav")
+    step("board: open via the project's tabs")
     page.get_by_role("link", name="Board", exact=True).click()
     settle(page, "/board", "Board")
 
     step("board: create a task")
     act(page, lambda: page.get_by_role("button", name="New task", exact=True).click())
-    dialog = page.locator("[role=dialog][data-state=open]")
+    dialog = page.locator("[data-new-task]")
     expect(dialog).to_be_visible()
-    expect(dialog.get_by_text("New task", exact=True)).to_be_visible()
-    title_input = dialog.locator("input[data-slot=input]").first
+    title_input = dialog.locator("[data-task-title]")
     title_input.click()
     title_input.press_sequentially(title)
-    expect(dialog.get_by_role("button", name="Save", exact=True)).to_be_enabled()
-    dialog.get_by_role("button", name="Save", exact=True).click()
+    expect(dialog.get_by_role("button", name="Create task", exact=True)).to_be_enabled()
+    dialog.get_by_role("button", name="Create task", exact=True).click()
     expect(dialog).to_be_hidden()
 
     step("board: the task row renders and survives a reload")
@@ -149,24 +148,141 @@ def run(page, tag: str) -> list[str]:
     page.reload()
     expect(page.get_by_role("button", name=title)).to_be_visible()
 
-    step("board: the row opens the dialog")
+    step("board: the row opens the sheet, and Save shows only after an edit")
     page.get_by_role("button", name=title).first.click()
-    dialog = page.locator("[role=dialog][data-state=open]")
-    expect(dialog.get_by_text("Edit task", exact=True)).to_be_visible()
-    dialog.get_by_role("button", name="Cancel", exact=True).click()
+    dialog = page.locator("[data-task-sheet]")
+    expect(dialog.get_by_label("Title", exact=True)).to_have_value(title)
+    expect(dialog.get_by_role("button", name="Save", exact=True)).to_have_count(0)
+    dialog.get_by_label("Title", exact=True).press_sequentially(" edited")
+    expect(dialog.get_by_role("button", name="Save", exact=True)).to_be_visible()
+    dialog.get_by_label("Title", exact=True).fill(title)
+    expect(dialog.get_by_role("button", name="Save", exact=True)).to_have_count(0)
+    dialog.get_by_role("button", name="Close", exact=True).click()
     expect(dialog).to_be_hidden()
 
     step("flow line, roadmap and overview pages render")
     page.get_by_role("link", name="Flow line", exact=True).click()
     settle(page, "/flowlines", "Flow line")
     page.get_by_role("link", name="Roadmap", exact=True).click()
-    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
+    roadmap_open(page)
     page.get_by_role("link", name="Overview", exact=True).click()
     expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
 
     read_cache_once(page)
+    page_scroll_once(page)
+    ai_switch_once(page)
+    ai_responsibility_once(page)
+    ask_proposal_once(page)
     github_install_once(page)
+    ai_run_once(page)
     return []
+
+
+def roadmap_open(page) -> None:
+    # The roadmap has no title of its own: its project tab says where we are.
+    expect(page.get_by_role("link", name="Roadmap", exact=True)).to_have_attribute("aria-current", "page")
+
+
+def ai_switch_once(page) -> None:
+    # The AI page's switch: off in a new workspace, beside what it sends, and
+    # turning it on asks first and survives a reload.
+    step("ai: the switch starts off beside what it sends")
+    page.goto(f"{BASE}/ai")
+    switch = page.get_by_role("switch", name="AI responsibilities")
+    expect(switch).to_have_attribute("aria-checked", "false")
+    expect(page.get_by_text("The task's title and the first line of its notes.", exact=True)).to_be_visible()
+
+    step("ai: turning it on asks first, and an answer of no keeps it off")
+    switch.click()
+    dialog = page.locator("[role=dialog][data-state=open]")
+    expect(dialog.get_by_text("Turn on AI responsibilities?", exact=True)).to_be_visible()
+    dialog.get_by_role("button", name="Keep it off", exact=True).click()
+    expect(dialog).to_be_hidden()
+    expect(switch).to_have_attribute("aria-checked", "false")
+
+    step("ai: turning it on is kept across a reload")
+    switch.click()
+    dialog = page.locator("[role=dialog][data-state=open]")
+    dialog.get_by_role("button", name="Turn on", exact=True).click()
+    expect(page.get_by_text("AI responsibilities turned on", exact=True)).to_be_visible()
+    expect(switch).to_have_attribute("aria-checked", "true")
+    page.reload()
+    switch = page.get_by_role("switch", name="AI responsibilities")
+    expect(switch).to_have_attribute("aria-checked", "true")
+    expect(page.get_by_text(re.compile(r"^On since "))).to_be_visible()
+
+
+def ai_responsibility_once(page) -> None:
+    # A role made in Workspace gets code review on the AI page, with its own
+    # instructions and mode, and both read back after a reload.
+    step("ai: add a role, then give it AI code review")
+    page.goto(f"{BASE}/workspace?tab=roles")
+    page.get_by_role("button", name="Add role", exact=True).first.click()
+    page.get_by_placeholder("Role name").fill("Reviewer")
+    page.get_by_role("button", name="Add role", exact=True).last.click()
+    expect(page.get_by_role("link", name="Add AI to Reviewer", exact=True)).to_be_visible()
+    page.get_by_role("link", name="Add AI to Reviewer", exact=True).click()
+    expect(page.get_by_role("heading", name="AI", exact=True)).to_be_visible()
+    page.get_by_role("button", name="AI code review", exact=True).click()
+    dialog = page.locator("[role=dialog][data-state=open]")
+    expect(dialog.get_by_text("Code review for Reviewer", exact=True)).to_be_visible()
+    dialog.get_by_role("button", name="Request changes", exact=True).click()
+    dialog.get_by_label("Instructions").fill("Check error handling.")
+    dialog.get_by_role("button", name="Save", exact=True).click()
+    expect(dialog).to_be_hidden()
+
+    step("ai: the responsibility reads back after a reload")
+    page.reload()
+    line = page.get_by_role("button", name=re.compile(r"^AI code review · .*may request changes"))
+    expect(line).to_be_visible()
+    line.click()
+    dialog = page.locator("[role=dialog][data-state=open]")
+    expect(dialog.get_by_label("Instructions")).to_have_value("Check error handling.")
+    expect(dialog.get_by_role("button", name="Request changes", exact=True)).to_have_attribute("aria-pressed", "true")
+    dialog.get_by_role("button", name="Cancel", exact=True).click()
+    expect(dialog).to_be_hidden()
+
+
+def ask_proposal_once(page) -> None:
+    # Ask's one input, with the model's answer stood in: CI has no model, and
+    # what is under test is what the client does with a proposal. It is drawn
+    # dashed on the board, nothing is saved, and Apply creates it.
+    title = "Proposed by the gate"
+    reply = {"kind": "change", "text": "", "proposal": {
+        "kind": "create_task", "title": title, "project": "", "assignee": "", "status": "",
+        "priority": "", "category": "", "due_date": "", "note": "", "confidence": "high"}}
+
+    def answer(route) -> None:
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps({"ok": True, "data": {"result": {}, "reports": [reply]}}))
+
+    step("ask: one input, and a change comes back as a dashed row on the board")
+    page.route("**/walker/AskOrPropose", answer)
+    page.goto(f"{BASE}/board")
+    settle(page, "/board", "Board")
+    page.get_by_role("button", name=re.compile(r"^Ask")).first.click()
+    composer = page.get_by_label("Ask, or describe a change", exact=True)
+    composer.fill("Add a task for the gate")
+    composer.press("Enter")
+    card = page.locator("[data-proposal-card=pending]")
+    expect(card.get_by_text(title, exact=True)).to_be_visible()
+    row = page.locator("[data-proposal]")
+    expect(row.get_by_text(title, exact=True)).to_be_visible()
+    # The gate's window is 1280 wide, where docked Ask leaves the board the least
+    # room: the columns give way so the title still reads in full.
+    assert row.get_by_text(title, exact=True).evaluate("e => e.scrollWidth <= e.clientWidth"), "docked Ask squeezed the title"
+    heads = page.locator("[data-board-heads]")
+    expect(heads.get_by_text("Due", exact=True)).to_be_visible()
+    expect(heads.get_by_text("GitHub", exact=True)).to_be_hidden()
+    assert api(page, "ListTasks", {"scope": "all", "q": title}).get("total") == 0, "a proposal saved a task"
+
+    step("ask: Apply makes it a real task and the dashed row goes")
+    card.get_by_role("button", name="Apply", exact=True).click()
+    expect(page.locator("[data-proposal-card=applied]")).to_be_visible()
+    expect(row).to_have_count(0)
+    expect(page.get_by_role("button", name=title)).to_be_visible()
+    page.unroute("**/walker/AskOrPropose")
+    page.get_by_role("button", name="Close Ask", exact=True).click()
 
 
 def read_cache_once(page) -> None:
@@ -200,7 +316,7 @@ def read_cache_once(page) -> None:
     page.get_by_role("link", name="Flow line", exact=True).click()
     settle(page, "/flowlines", "Flow line")
     page.get_by_role("link", name="Roadmap", exact=True).click()
-    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
+    roadmap_open(page)
     page.get_by_role("link", name="Board", exact=True).click()
     settle(page, "/board", "Board")
     page.wait_for_timeout(1500)
@@ -210,8 +326,8 @@ def read_cache_once(page) -> None:
     assert len(me) == 1, f"/user/me was requested {len(me)} times, expected 1"
 
     # The workspace page loads its lists once and the sections render from
-    # props, so a tab switch is a render, not a request (issue #228).
-    step("cache: switching the five workspace tabs makes no request")
+    # props, so a jump between sections is a scroll, not a request (issue #228).
+    step("cache: jumping between the workspace's sections makes no request")
     calls: list[str] = []
     page.on("request", lambda r: calls.append(r.url) if "/walker/" in r.url or "/user/" in r.url else None)
     page.get_by_role("link", name="Workspace", exact=True).click()
@@ -225,9 +341,9 @@ def read_cache_once(page) -> None:
     page.wait_for_timeout(1000)
     assert not calls, f"tab switches made {len(calls)} requests: {calls}"
 
-    # A roster write drops the cache: the People tab's own refetch is the one
-    # request, and the roadmap then mounts on it.
-    step("cache: a People-tab save then the roadmap makes exactly one GetWorkspace")
+    # A roster write drops the cache: the page's own refetch is the one request,
+    # and the overview then mounts on it.
+    step("cache: a People save then the overview makes exactly one GetWorkspace")
     page.locator('a[href="/workspace?tab=people"]').first.click()
     expect(page.get_by_role("button", name="Add person", exact=True).first).to_be_visible()
     page.wait_for_timeout(1000)
@@ -240,12 +356,39 @@ def read_cache_once(page) -> None:
     dialog.get_by_role("button", name="Add person", exact=True).click()
     expect(dialog).to_be_hidden()
     expect(page.get_by_text("Cache Probe", exact=True).first).to_be_visible()
-    page.get_by_role("link", name="Roadmap", exact=True).click()
-    expect(page.get_by_role("heading", name="Roadmap", exact=True)).to_be_visible()
+    page.get_by_role("link", name="Overview", exact=True).click()
+    expect(page.get_by_role("heading", name="Overview", exact=True)).to_be_visible()
     page.wait_for_timeout(1500)
     workspace = [u for u in hits if u.endswith("/walker/GetWorkspace")]
     assert len(workspace) == 1, f"GetWorkspace was requested {len(workspace)} times after the save, expected 1"
     assert not [u for u in hits if u.endswith("/user/me")], "/user/me was requested again after the first load"
+
+
+def page_scroll_once(page) -> None:
+    # A page change opens at the top rather than keeping the last page's scroll;
+    # a link to a section on the new page opens that section, and only it.
+    def scrolled_overview() -> None:
+        page.goto(f"{BASE}/overview")
+        settle(page, "/overview", "Overview")
+        page.evaluate("window.scrollTo({top: 400, behavior: 'instant'})")
+        page.wait_for_function("window.scrollY > 100")
+
+    step("scroll: a new page opens at its top")
+    scrolled_overview()
+    page.get_by_role("link", name="Workspace", exact=True).filter(visible=True).first.click()
+    expect(page.get_by_role("heading", name="Workspace", exact=True).filter(visible=True).first).to_be_visible()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window.scrollY") == 0, "the new page kept the last page's scroll"
+
+    step("workspace: a link to a section opens that section alone")
+    scrolled_overview()
+    page.get_by_role("button", name="New project", exact=True).filter(visible=True).first.click()
+    page.wait_for_function(
+        "window.location.search.includes('tab=projects')"
+        " && document.getElementById('section-projects')"
+        " && !document.getElementById('section-people')"
+    )
+    assert page.evaluate("window.scrollY") == 0, "a section opened scrolled down the page"
 
 
 def github_install_once(page) -> None:
@@ -319,6 +462,106 @@ def github_install_once(page) -> None:
     settle(page, "/board", "Board")
     page.wait_for_timeout(3000)
     assert not syncs, f"the board open called {syncs}"
+
+
+def api(page, name: str, body: dict):
+    """A walker call as the signed-in browser makes it; the first report."""
+    return page.evaluate(
+        """async ([base, name, body]) => {
+            const r = await fetch(base + "/walker/" + name, {
+                method: "POST",
+                headers: {"Content-Type": "application/json",
+                          "Authorization": "Bearer " + localStorage.getItem("jac_token")},
+                body: JSON.stringify(body),
+            });
+            const d = await r.json();
+            const reports = (d.data && d.data.reports) || d.reports || [];
+            return reports[0];
+        }""",
+        [BASE, name, body],
+    )
+
+
+def ai_chip_catches_up(page, task_id: str) -> None:
+    # A review can settle between the board's read and the sheet's first read,
+    # and the board's poll shows it only up to 60 s later. This board answers
+    # from before it settled, so only the sheet can correct the row.
+    step("ai: a row still showing Queued catches up when its sheet finds the review done")
+
+    def rewind(node) -> None:
+        if isinstance(node, dict):
+            if node.get("id") == task_id:
+                node.update({"ai_state": "queued", "ai_outcome": ""})
+            for value in node.values():
+                rewind(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewind(value)
+
+    def behind(route) -> None:
+        answer = route.fetch()
+        data = answer.json()
+        rewind(data)
+        route.fulfill(response=answer, json=data)
+
+    page.route("**/walker/BoardSnapshot", behind)
+    page.goto(f"{BASE}/board")
+    settle(page, "/board", "Board")
+    row = page.locator(f"[data-task-row='{task_id}']")
+    chip = row.locator(".ai-chip").filter(visible=True)
+    expect(chip).to_have_text("Queued")
+    page.unroute("**/walker/BoardSnapshot")
+    row.get_by_text("Reviewed by AI", exact=True).click()
+    runs = page.get_by_role("region", name="AI reviews")
+    expect(runs.get_by_text("Commented", exact=True)).to_be_visible()
+    expect(chip).to_have_text("Reviewed", timeout=15_000)
+
+
+def ai_run_once(page) -> None:
+    # The task sheet's AI reviews: Reviewer (given code review above) owns
+    # Review, a task with a linked PR lands there, and the sheet follows the
+    # run from the queue to the review on its own (the runner's fake model).
+    step("ai: Review is the Reviewer's, and a task with a PR lands there")
+    repo = "stub-org/ai-repo"
+    body = json.dumps({"pulls": [{"repo": repo, "number": 5, "head_sha": "sha-5"}]}).encode()
+    req = urllib.request.Request(f"{STUB}/_stub/pulls", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        assert resp.status == 200, f"stub pulls {resp.status}"
+    steps = {st["name"]: st for st in api(page, "GetFlowLine", {"with_counts": False})}
+    api(page, "SaveStep", {"step_id": steps["Review"]["id"], "owner": "Reviewer"})
+    first = (api(page, "ListProjects", {}) or [{}])[0]
+    project_id = first.get("id") or first.get("_jac_id", "")
+    made = api(page, "CreateTask", {"title": "Reviewed by AI", "project_id": project_id,
+                                    "step_id": steps["Doing"]["id"]})
+    fields = {k: made.get(k, "") for k in ("title", "category", "priority", "status", "step_id", "due_date",
+                                           "start_date", "notes", "issue_link", "reviewer_id", "review_due",
+                                           "project_id")}
+    fields.update({"task_id": made["id"], "tags": [], "estimate": 0.0, "assignee_ids": [],
+                   "pr_link": f"https://github.com/{repo}/pull/5"})
+    api(page, "UpdateTask", fields)
+    landed = api(page, "MoveTask", {"task_id": made["id"], "step_id": steps["Review"]["id"]})
+    assert landed.get("ai_state") == "queued", f"the move reported {landed.get('ai_state')!r}, expected 'queued'"
+
+    step("ai: the flow line marks Review, the sheet shows the run reviewed")
+    page.goto(f"{BASE}/flowlines")
+    settle(page, "/flowlines", "Flow line")
+    expect(page.locator(f"[data-step='{steps['Review']['id']}'] [data-step-ai]")).to_be_visible()
+    page.goto(f"{BASE}/board?task={made['id']}")
+    settle(page, "/board", "Board")
+    runs = page.get_by_role("region", name="AI reviews")
+    expect(runs).to_be_visible()
+    expect(runs.get_by_text("Commented", exact=True)).to_be_visible(timeout=90_000)
+    expect(runs.get_by_role("link", name="View on GitHub")).to_be_visible()
+    # The settled run refetches the task, so the row's chip settles with it.
+    row = page.locator(f"[data-task-row='{made['id']}']")
+    expect(row.locator(".ai-chip").filter(visible=True)).to_have_text("Reviewed", timeout=15_000)
+    ai_chip_catches_up(page, made["id"])
+
+    step("ai: the AI page lists the run with its task")
+    page.goto(f"{BASE}/ai")
+    expect(page.get_by_role("link", name="Reviewed by AI", exact=True)).to_be_visible()
+    expect(page.get_by_text("Commented", exact=True)).to_be_visible()
 
 
 def main() -> int:

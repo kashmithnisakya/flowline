@@ -23,7 +23,8 @@ ownership explicitly** before touching anything:
 
 ```jac title="models.jac"
 # Does this node belong to the caller's root? Climbs container edges, at
-# most three hops (task, project, Projects box); typed in-edges never lead
+# most three hops (task, project, Projects box; responsibility, role, Roles
+# box); typed in-edges never lead
 # to a container, so they drop out. jobj/jid resolution is NOT authorization:
 # every jid-addressed mutation calls this first. "My root" is the tenant line.
 def owned(holder: any, target: any) -> bool {

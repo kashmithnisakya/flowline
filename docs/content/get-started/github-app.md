@@ -36,11 +36,12 @@ GitHub section, which finishes the install round trip; an App registered with
 !!! note "Pull requests: read and write"
 
     Write access to pull requests is for AI code review, which posts its
-    review on the pull request. Nothing uses it yet. On an App registered
-    with read only, raising it sends every account that installed the App a
-    request to approve the new permission (an organization owner approves it
-    under **Settings, GitHub Apps**). Until they approve, the installation
-    keeps read access and everything else works as before.
+    review on the pull request. On an App registered with read only, raising
+    it sends every account that installed the App a request to approve the
+    new permission (an organization owner approves it under **Settings,
+    GitHub Apps**). Until they approve, the installation keeps read access,
+    everything else works as before, and an AI review fails with a message
+    asking for that approval.
 
 !!! danger "Two settings that are not optional"
 

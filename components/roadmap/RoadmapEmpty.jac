@@ -19,7 +19,7 @@ def:pub RoadmapEmpty(
             className="flex flex-col items-center gap-4 px-6 py-16 text-center"
             aria-busy={busy}
         >
-            <p className="max-w-md text-sm text-muted-foreground">{text}</p>
+            <p className="max-w-md text-[13px] text-text-secondary">{text}</p>
             {if action == "today" {
                 <Button
                     key="today"

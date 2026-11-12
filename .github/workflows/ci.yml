@@ -130,20 +130,21 @@ jobs:
 
       # `bundle_storage_class` is the placeholder for the RWX check a real
       # deploy satisfies on the platform; it is added to a scratch copy only.
-      # So is `[scale.secrets]`: jachammer stages one `KEY = "${KEY}"` per
-      # .env key, and jac 0.37.18 fails the dry run on a bare ${VAR} in
-      # jac.toml that no secret supplies to the pods.
-      - name: Deploy gate (dry-run manifests build a client bundle and run 2 workers)
+      # So are the extra `[scale.secrets]` keys: jachammer stages one
+      # `KEY = "${KEY}"` per project env key into that table, and jac 0.37.18
+      # fails the dry run on a bare ${VAR} that no secret supplies to the pods.
+      - name: Deploy gate (dry-run manifests build a client bundle, run 2 workers and the review service pod)
         env:
           GITHUB_APP_WEBHOOK_SECRET: ci-placeholder
           GRAFANA_ADMIN_PASSWORD: ci-placeholder
+          JAC_BRIDGE_TOKEN: ci-placeholder
         run: |
           cp jac.toml /tmp/jac.toml.orig
           trap 'mv /tmp/jac.toml.orig jac.toml' EXIT
           python3 - <<'PY'
           s = open("jac.toml", encoding="utf-8").read()
           s = s.replace("[scale.kubernetes]\n", '[scale.kubernetes]\nbundle_storage_class = "ci-placeholder"\n', 1)
-          s += '\n[scale.secrets]\nGITHUB_APP_WEBHOOK_SECRET = "${GITHUB_APP_WEBHOOK_SECRET}"\nGRAFANA_ADMIN_PASSWORD = "${GRAFANA_ADMIN_PASSWORD}"\n'
+          s = s.replace("[scale.secrets]\n", '[scale.secrets]\nGITHUB_APP_WEBHOOK_SECRET = "${GITHUB_APP_WEBHOOK_SECRET}"\nGRAFANA_ADMIN_PASSWORD = "${GRAFANA_ADMIN_PASSWORD}"\n', 1)
           open("jac.toml", "w", encoding="utf-8").write(s)
           PY
           jac scale deploy --dry-run --show-yaml main.jac > manifests.yaml
@@ -170,7 +171,29 @@ jobs:
             # Below the workspaces the gate binds, so a tick really caps and
             # the gate sees the next tick carry the rest.
             echo "FLOWLINE_SYNC_MAX_WORKSPACES=2"
+            # The AI runner: the fixed fake review instead of a model, a tick
+            # every 5 s, retries 2 s apart and a claim that lapses in 8 s, so
+            # the agents gate sees its retries in a minute.
+            echo "FLOWLINE_FAKE_LLM=1"
+            echo "FLOWLINE_AI_INTERVAL_SECONDS=5"
+            echo "FLOWLINE_AI_BACKOFF_SECONDS=2"
+            echo "FLOWLINE_AI_LEASE_SECONDS=8"
+            # /metrics answers basic auth with this password; the agents gate
+            # reads the AI counters there.
+            echo "GRAFANA_ADMIN_PASSWORD=ci-grafana"
           } >> "$GITHUB_ENV"
+
+      # jac.toml ships [scale.monitoring] off (jachammer refuses it on), and the
+      # same switch gates /metrics, which the agents gate reads. The runner's
+      # checkout is the only copy changed.
+      - name: Turn /metrics on for the gates
+        run: |
+          python3 - <<'PY'
+          s = open("jac.toml", encoding="utf-8").read()
+          off = "[scale.monitoring]\nenabled = false\n"
+          assert s.count(off) == 1, "jac.toml [scale.monitoring] is not the shape this step rewrites"
+          open("jac.toml", "w", encoding="utf-8").write(s.replace(off, "[scale.monitoring]\nenabled = true\n"))
+          PY
 
       - name: Serve the app (jac run --no-dev, background)
         run: |
@@ -185,6 +208,9 @@ jobs:
 
       - name: Automation gate (entry rules, label, merge and review triggers, PR linking)
         run: python3 tests/smoke/automation_gate.py http://localhost:8000 http://127.0.0.1:8099
+
+      - name: Agents gate (AI responsibilities queued on a move, the runner, the review service)
+        run: python3 tests/smoke/agents_gate.py http://localhost:8000 http://127.0.0.1:8099
 
       - name: Two worker processes are serving
         run: grep -E "supervising [2-9][0-9]* worker" serve.log

@@ -28,7 +28,8 @@ def emptyWorkspace -> dict[str, any] {
         "flow_name": "Flow line",
         "template_key": "",
         "github": None,
-        "webhook_live": False
+        "webhook_live": False,
+        "ai_open": 0
     };
 }
 
@@ -47,7 +48,8 @@ def shapeOf(view: any) -> dict[str, any] {
         "flow_name": view.flow_name,
         "template_key": view.template_key,
         "github": view.github,
-        "webhook_live": view.webhook_live
+        "webhook_live": view.webhook_live,
+        "ai_open": view.ai_open
     };
 }
 
@@ -67,6 +69,12 @@ def:pub rememberWorkspace(view: any) {
 def:pub cachedProjects -> list[any] {
     view: any = CACHE["view"];
     return view["projects"] if view else [];
+}
+
+# How many AI runs were open when the workspace was last read, for the sidebar.
+def:pub cachedAiOpen -> int {
+    view: any = CACHE["view"];
+    return view["ai_open"] if view else 0;
 }
 
 # Drop the cached view: every roster writer calls this right after its

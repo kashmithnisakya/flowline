@@ -97,6 +97,7 @@ production.
 ```bash
 jachammer env add HOST=https://flowline.example.com
 jachammer env add GITHUB_APP_WEBHOOK_SECRET=$(openssl rand -hex 32)
+jachammer env add JAC_BRIDGE_TOKEN=$(openssl rand -hex 32)
 jachammer env add OPENAI_API_KEY=sk-...
 jachammer env ls              # values masked; --reveal to print them
 jachammer env rm OPENAI_API_KEY
@@ -226,9 +227,10 @@ jobs:
 
 | Symptom | Cause |
 | --- | --- |
-| `/` returns a JSON 404 while the API works | The deploy skipped the client bundle. Make sure there is no `[apps.*]` table in `jac.toml`; see [Production configuration](production.md#rules-that-keep-deploys-healthy). |
+| `/` returns a JSON 404 while the API works | The deploy skipped the client bundle. On jac 0.37.7 an `[apps.*]` table caused this; 0.37.11+ builds the web app's client with `[apps]` declared. `tests/smoke/deploy_gate.py` checks the dry run for it. |
+| Calls to the review service fail with `401` | The pods have no `JAC_BRIDGE_TOKEN`, or the pods started before it was set. Set it on the project, then deploy new source: a redeploy of unchanged source keeps the running pods. |
 | Load fails on `entry-point` | Jac 0.37.12+ needs the dotted module name: `entry-point = "main"`. |
-| Deploy stops with "jac.toml reads environment variables the deployed pods will not have" | Jac 0.37.18+ checks every `${VAR}` in `jac.toml` against what the pods receive. Add the listed variable to the project's environment (`GITHUB_APP_WEBHOOK_SECRET` and `GRAFANA_ADMIN_PASSWORD` are required). |
+| Deploy stops with "jac.toml reads environment variables the deployed pods will not have" | Jac 0.37.18+ checks every `${VAR}` in `jac.toml` against what the pods receive. Add the listed variable to the project's environment (`GITHUB_APP_WEBHOOK_SECRET`, `GRAFANA_ADMIN_PASSWORD` and `JAC_BRIDGE_TOKEN` are required). |
 | The board crashes with "X is not iterable" only on the deployed build | `[placement] default` was changed from `"server"`, and the client build compiled `constants.jac` to wasm. |
 | `503` with `transport_error` on long calls | The gateway's forward timeout. `[scale.gateway] http_forward_timeout = 120.0` raises the platform's 30 second default. |
 | The old build still answers after `deployed:` | A rolling update: old pods serve for a few minutes, and a browser that saw the old bundle caches it. Verify with a cache-busting query string. |

@@ -15,7 +15,8 @@ glob PERMISSIONS: list[list[str]] = [
          [
              "write",
              "Write to an issue only when you create, close or reopen one from a task"
-         ]
+         ],
+         ["write", "Post a review on a pull request when a role's AI code review runs"]
      ];
 
 def:pub ConnectCard(

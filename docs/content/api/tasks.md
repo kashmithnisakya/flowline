@@ -148,7 +148,7 @@ archived. Every task needs a project.
 - `start_date` is stored as an ISO day (or `""`).
 - The task is appended to the end of its step.
 - Assignees that are not owned members are skipped.
-- Logs `Added to <status>`.
+- Logs `Added to <step>`: the step's name, or the status with no flow line.
 
 ```bash
 curl -X POST $BASE/walker/CreateTask -H "Authorization: Bearer $TOKEN" \
