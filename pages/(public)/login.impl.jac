@@ -52,7 +52,7 @@ impl LoginPage.submit(e: FormEvent) -> None {
             res: any = {};
             res = await jacSignup(addr, pw, {});
             if not res["success"] {
-                error = "Could not create a workspace with that email. It may already be registered; try signing in.";
+                error = signupProblem(res);
                 busy = False;
                 return;
             }
