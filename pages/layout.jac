@@ -151,7 +151,12 @@ def:pub Shell -> JsxLayout {
                 <main
                     className="px-4 pt-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-6 lg:pt-3.5 lg:pb-10"
                 >
-                    <Outlet/>
+                    <div
+                        key={path}
+                        className="animate-in fade-in duration-150 motion-reduce:animate-none"
+                    >
+                        <Outlet/>
+                    </div>
                 </main>
             </div>
             <AssistantDock
