@@ -366,7 +366,7 @@ def read_cache_once(page) -> None:
 
 def page_scroll_once(page) -> None:
     # A page change opens at the top rather than keeping the last page's scroll;
-    # a link to a section on the new page still lands on that section.
+    # a link to a section on the new page opens that section, and only it.
     def scrolled_overview() -> None:
         page.goto(f"{BASE}/overview")
         settle(page, "/overview", "Overview")
@@ -380,10 +380,15 @@ def page_scroll_once(page) -> None:
     page.wait_for_timeout(400)
     assert page.evaluate("window.scrollY") == 0, "the new page kept the last page's scroll"
 
-    step("scroll: a link to a section still lands on it")
+    step("workspace: a link to a section opens that section alone")
     scrolled_overview()
     page.get_by_role("button", name="New project", exact=True).filter(visible=True).first.click()
-    page.wait_for_function("window.location.search.includes('tab=projects') && window.scrollY > 100")
+    page.wait_for_function(
+        "window.location.search.includes('tab=projects')"
+        " && document.getElementById('section-projects')"
+        " && !document.getElementById('section-people')"
+    )
+    assert page.evaluate("window.scrollY") == 0, "a section opened scrolled down the page"
 
 
 def github_install_once(page) -> None:
