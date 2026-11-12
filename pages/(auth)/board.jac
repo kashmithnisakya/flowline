@@ -51,7 +51,7 @@ import from ...components.board.ProposalRow { ProposalRow }
 import from ...components.board.MoveDialog { MoveDialog }
 import from ...components.common.Reveal { Reveal }
 import from ...lib.project { currentProject, pickProject }
-import from ...lib.workspace { rememberWorkspace, forgetWorkspace }
+import from ...lib.workspace { rememberWorkspace, forgetWorkspace, cachedProjects }
 import from ...lib.proposal { currentProposal }
 import from "sonner" { toast }
 import from "react" { useEffect }
@@ -157,7 +157,9 @@ def:pub BoardPage -> JsxPage {
         # The org's roles, for the lane order and colours in the task
         # dialog's flow line picture.
         roleRows: list[RoleView] = [],
-        projects: list[Project] = [],
+        # Seeded from the cache like the other project pages, so the title
+        # does not read "No project yet" until the snapshot lands.
+        projects: list[Project] = cachedProjects(),
         steps: list[StepView] = [],
         # The flow line's name, over the strip.
         flowName: str = "Flow line",
