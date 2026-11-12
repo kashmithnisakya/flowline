@@ -6,6 +6,7 @@ in. The submit button stays enabled and validation shows under its field.
 
 import from "@jac/runtime" { jacIsLoggedIn, jacLogin, jacSignup }
 import from ...lib.session { forgetSession, checkSession }
+import from ...lib.signup { signupProblem }
 import from ...components.auth.AuthBand { AuthBand }
 import from ...components.auth.AuthGlyphs { ClockGlyph }
 import from ...components.auth.PasswordField { PasswordField }
