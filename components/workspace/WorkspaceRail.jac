@@ -1,6 +1,6 @@
-"""The workspace rail: anchors to the page's sections. A sticky column at md and
-up, one scrolling row on a phone. Items are real links, so a section opens in a
-new tab too; a plain click scrolls this page.
+"""The workspace rail: one link per section, and the page shows the chosen one.
+A sticky column at md and up, one scrolling row on a phone. Items are real
+links, so a section opens in a new tab too; a plain click switches in place.
 """
 
 import from "react" { useEffect }

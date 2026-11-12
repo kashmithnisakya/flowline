@@ -1,7 +1,6 @@
-"""flowline - Workspace (/workspace): every setting on one scrolling page. A rail
-of anchors beside the sections as panels, and `?tab=<section>` scrolls to one.
-/github renders this page too, since the GitHub App sends its install round trip
-there; the GitHub section mounts lazily unless the address asks for it."""
+"""flowline - Workspace (/workspace): every setting, one section at a time. A rail
+picks the section and `?tab=<section>` names it. /github renders this page too,
+since the GitHub App sends its install round trip there, on the GitHub section."""
 
 import from "@jac/runtime" { useLocation }
 import from "react" { useEffect }
@@ -25,25 +24,21 @@ import from ...services.agents.agents { ListResponsibilities }
 import from ...lib.workspace { loadWorkspace, forgetWorkspace }
 import from ...components.roster.MemberDialog { MemberDialog }
 import from ...components.workspace.ConfirmDialog { ConfirmDialog }
-import from ...components.workspace.GithubSlot { GithubSlot }
 import from ...components.workspace.OrganizationSection { OrganizationSection }
 import from ...components.workspace.PeopleSection { PeopleSection }
 import from ...components.workspace.PreferencesSection { PreferencesSection }
 import from ...components.workspace.ProjectsSection { ProjectsSection }
 import from ...components.workspace.RolesSection { RolesSection }
-import from ...components.workspace.SectionSpy { SectionSpy }
+import from ...components.workspace.GithubSection { GithubSection }
 import from ...components.workspace.WorkspaceRail { WorkspaceRail }
 import from ...components.workspace.sections {
     SECTIONS,
     askedSection,
-    asksForGithub,
     currentFromAddress,
-    holdSection
 }
 import from "sonner" { toast }
 
-glob COLUMN_ID: str = "workspace-sections",
-     BLANK_MEMBER: dict[str, str] = {
+glob BLANK_MEMBER: dict[str, str] = {
          "first_name": "",
          "last_name": "",
          "email": "",
@@ -68,9 +63,8 @@ def:pub WorkspacePage -> JsxPage {
         # Moves when a read lands, so the GitHub section's own lists can follow.
         readRound: int = 0,
         # Read during the first render, so the rail and the deep link are right
-        # from the first paint.
+        # from the first paint. Only this section is drawn.
         current: str = currentFromAddress(),
-        githubAsked: bool = asksForGithub(),
         dialogOpen: bool = False,
         editingId: str = "",
         form: dict[str, str] = BLANK_MEMBER,
@@ -88,18 +82,14 @@ def:pub WorkspacePage -> JsxPage {
         loadAll();
     }
 
-    # An address that names a section scrolls to it: on the first load, and
-    # when a link elsewhere on this page (the sidebar, the palette) asks for
-    # another. Rail clicks only rewrite the URL, so they never come through here.
+    # An address that names a section shows it: on the first load, and when a
+    # link elsewhere (the sidebar, the palette) asks for another. Rail clicks
+    # only rewrite the URL, so they never come through here.
     useEffect(
         lambda {
             wanted = askedSection(str(location.pathname), str(location.search));
             if wanted {
                 current = wanted;
-                if wanted == "github" {
-                    githubAsked = True;
-                }
-                holdSection(wanted);
             }
         },
         [location.key]
@@ -175,47 +165,58 @@ def:pub WorkspacePage -> JsxPage {
                     onSelect={selectSection}
                 />
                 <div
-                    id={COLUMN_ID}
-                    className="flex max-w-[920px] min-w-0 flex-1 flex-col gap-6"
+                    key={current}
+                    className="flex max-w-[920px] min-w-0 flex-1 animate-in flex-col gap-6 duration-150 fade-in motion-reduce:animate-none"
                 >
-                    <OrganizationSection/>
-                    <PeopleSection
-                        members={active}
-                        projects={activeProjects}
-                        roleOptions={roleOptions}
-                        showTags={len(allTags) > 0}
-                        loading={loading}
-                        handlers={memberHandlers}
-                        onCreate={openCreate}
-                    />
-                    <ProjectsSection
-                        members={active}
-                        projects={projects}
-                        repos={repos}
-                        loading={loading}
-                        onChanged={loadAll}
-                    />
-                    <RolesSection
-                        members={active}
-                        roles={roles}
-                        steps={steps}
-                        loading={loading}
-                        onChanged={loadAll}
-                        onPeople={lambda { selectSection("people"); }}
-                        responsibilities={aiItems}
-                    />
-                    <GithubSlot
-                        wake={githubAsked}
-                        syncKey={readRound}
-                        onChanged={loadAll}
-                    />
-                    <PreferencesSection/>
+                    {if current == "organization" {
+                        <OrganizationSection key="organization"/>
+                    }}
+                    {if current == "people" {
+                        <PeopleSection
+                            key="people"
+                            members={active}
+                            projects={activeProjects}
+                            roleOptions={roleOptions}
+                            showTags={len(allTags) > 0}
+                            loading={loading}
+                            handlers={memberHandlers}
+                            onCreate={openCreate}
+                        />
+                    }}
+                    {if current == "projects" {
+                        <ProjectsSection
+                            key="projects"
+                            members={active}
+                            projects={projects}
+                            repos={repos}
+                            loading={loading}
+                            onChanged={loadAll}
+                        />
+                    }}
+                    {if current == "roles" {
+                        <RolesSection
+                            key="roles"
+                            members={active}
+                            roles={roles}
+                            steps={steps}
+                            loading={loading}
+                            onChanged={loadAll}
+                            onPeople={lambda { selectSection("people"); }}
+                            responsibilities={aiItems}
+                        />
+                    }}
+                    {if current == "github" {
+                        <GithubSection
+                            key="github"
+                            syncKey={readRound}
+                            onChanged={loadAll}
+                        />
+                    }}
+                    {if current == "preferences" {
+                        <PreferencesSection key="preferences"/>
+                    }}
                 </div>
             </div>
-            <SectionSpy
-                column={COLUMN_ID}
-                onCurrent={lambda (key: str) { if key != current { current = key; }}}
-            />
             <MemberDialog
                 open={dialogOpen}
                 editing={bool(editingId)}
