@@ -183,6 +183,18 @@ jobs:
             echo "GRAFANA_ADMIN_PASSWORD=ci-grafana"
           } >> "$GITHUB_ENV"
 
+      # jac.toml ships [scale.monitoring] off (jachammer refuses it on), and the
+      # same switch gates /metrics, which the agents gate reads. The runner's
+      # checkout is the only copy changed.
+      - name: Turn /metrics on for the gates
+        run: |
+          python3 - <<'PY'
+          s = open("jac.toml", encoding="utf-8").read()
+          off = "[scale.monitoring]\nenabled = false\n"
+          assert s.count(off) == 1, "jac.toml [scale.monitoring] is not the shape this step rewrites"
+          open("jac.toml", "w", encoding="utf-8").write(s.replace(off, "[scale.monitoring]\nenabled = true\n"))
+          PY
+
       - name: Serve the app (jac run --no-dev, background)
         run: |
           nohup jac run --no-dev --port 8000 main.jac > serve.log 2>&1 &
