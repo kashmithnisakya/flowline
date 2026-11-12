@@ -578,11 +578,10 @@ File-based routing with route groups:
   title. `components/assistant/AssistantDock`
   (Ask) is mounted once: a docked column at 1280px and up, a sheet below.
   `/setup` gets only the setup bar (mark and Sign out).
-- **`/workspace` is every setting, on one scrolling page**: Organization, People,
+- **`/workspace` is every setting, one section at a time**: Organization, People,
   Projects, Roles, GitHub and Preferences (the theme) as panels from
-  `components/workspace/` beside a rail of anchors; `?tab=<section>` scrolls to
-  one. `GithubSlot` mounts the GitHub section as it nears the viewport, or at once
-  when the address asks for it.
+  `components/workspace/`; a rail picks the section drawn and `?tab=<section>`
+  names it. Only the chosen section is mounted, so GitHub starts only when opened.
   **`/ai` is everything AI** (`pages/(auth)/ai.jac`, `components/ai/`): the switch
   (`AiSwitch`, `SetAiEnabled`; turning it on asks first through `ConsentDialog`,
   and `WhatIsSent` says what leaves the server, including that Ask does not

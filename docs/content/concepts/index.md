@@ -159,8 +159,8 @@ File-based routing under `pages/`, with route groups:
   `pickProject`) and tells every mounted page through a `flowline:project`
   window event.
 - `/workspace` holds everything configured: Organization, People, Projects,
-  Roles, GitHub and Preferences (the theme), all on one scrolling page beside a
-  rail of anchors (`?tab=` scrolls to a section).
+  Roles, GitHub and Preferences (the theme), one section at a time beside a
+  rail (`?tab=` names the section shown).
 - `/ai` holds everything AI: the switch for AI responsibilities, the workspace's
   runs, each role's responsibilities and what is sent.
 - Pages are thin stateful shells. They own state and handlers (bodies in

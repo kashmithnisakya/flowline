@@ -297,15 +297,12 @@ impl WorkspacePage.applyProjects(
 
 impl WorkspacePage.selectSection(value: str) -> None {
     current = value;
-    if value == "github" {
-        githubAsked = True;
-    }
-    holdSection(value, True);
+    w: any = window;
+    w.scrollTo({"top": 0, "left": 0, "behavior": "instant"});
     # Keep the section in the URL so it is linkable and survives a reload, but
     # replace rather than push: Back should leave the page. Any OAuth callback
     # params are dropped here too, which stops a refresh replaying a burned
     # install nonce. An address already on this section keeps its GitHub list.
-    w: any = window;
     if str(w.location.pathname) != "/workspace"
         or ("tab=" + value) not in str(w.location.search) {
         blank: dict[str, any] = {};
