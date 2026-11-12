@@ -28,10 +28,6 @@ CACHED_READERS = [
     "GetWorkspace", "ListMembers", "ListProjects", "ListRoles",
     "GetFlowLine", "GetFlowLineMeta", "ListRepos", "GithubStatus", "ListResponsibilities",
 ]
-# Since 0.38 a clean build ignores @effects (jaseci-labs/jac#10410); the
-# stand-in in services/compat restores these declarations, so this is empty.
-# A reader named here warns rather than fails, for the next such regression.
-EFFECTS_REGRESSION: set[str] = set()
 # Task lists stay uncached on purpose: a colleague's move, a webhook drain or
 # a sync from another tab must show on the next call, not 60 s later.
 LIVE_READERS = [
@@ -836,9 +832,6 @@ def check_effects(html: str) -> None:
     for name in CACHED_READERS:
         row = table.get(name) or {}
         detail = f"unknown={row.get('unknown')} writes={row.get('writes')} assumptions={row.get('assumptions')}"
-        if name in EFFECTS_REGRESSION and row.get("unknown") is True:
-            print(f"warn {name} is a cacheable reader  [{detail}]  jaseci-labs/jac#10410")
-            continue
         check(f"{name} is a cacheable reader",
               row.get("unknown") is False and row.get("writes") == [], detail)
     for name in LIVE_READERS:

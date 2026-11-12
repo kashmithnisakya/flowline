@@ -5,7 +5,9 @@ much work sits there and what it takes to enter."""
 import from ...models { StepView }
 import from .kinds { ownerWord, nodeCount }
 
-def:pub NodeMeta(step: StepView, showOwner: bool = True) -> JsxElement {
+def:pub NodeMeta(
+    step: StepView, showOwner: bool = True, showCounts: bool = True
+) -> JsxElement {
     return
         <span
             className="mt-0.5 flex min-w-0 flex-col text-xs leading-[18px] text-text-tertiary"
@@ -13,6 +15,8 @@ def:pub NodeMeta(step: StepView, showOwner: bool = True) -> JsxElement {
             {if showOwner {
                 <span key="owner" className="truncate">{ownerWord(step.owner)}</span>
             }}
-            <span className="num truncate">{nodeCount(step)}</span>
+            {if showCounts {
+                <span key="count" className="num truncate">{nodeCount(step)}</span>
+            }}
         </span>;
 }

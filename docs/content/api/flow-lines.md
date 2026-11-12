@@ -81,12 +81,21 @@ foreign.
 | `kind` | Invalid or empty becomes `active` | Invalid or empty keeps. A real change re-maps the status of every task on the step. |
 | `color` | Empty uses the kind's default colour | Empty keeps |
 | `owner`, `blurb` | Stored trimmed | Empty keeps |
-| `x`, `y` | Canvas position; outside 0..20000 becomes 0 | Ignored: use `MoveStep` |
+| `x`, `y` | Signed canvas position, each from -20,000 to 20,000; finite overflow is clamped to the nearest boundary, non-finite values become 0 | Ignored: use `MoveStep` |
 
 ::: walker MoveStep h3
 
-**Reports** the moved [`StepView`](types.md#stepview). Coordinates outside
-0..20000 (or not finite) become 0.
+**Reports** the moved [`StepView`](types.md#stepview). Both coordinates accept
+negative values: a step can cross the canvas origin on either axis. Each
+finite coordinate is clamped to -20,000..20,000; a non-finite value that reaches
+the walker becomes 0 so later responses remain valid JSON. Send ordinary JSON
+numbers; `NaN` and `Infinity` are not valid JSON.
+
+For example, `{"step_id": "<id>", "x": -25000, "y": 120}` stores
+`x = -20000` and `y = 120`. Creating a step through `SaveStep` uses the same
+coordinate rules. The shared bound is:
+
+::: glob FLOW_COORD_LIMIT
 
 ::: walker SetStepRules h3
 

@@ -261,19 +261,11 @@ people it tracks are roster members.
   `.append`, `str`, an `obj` constructor) and a writer on `++>`, `del` or an
   attribute assignment, so a cacheable reader keeps its abilities to
   `visit` and `report` and does the work in a same-module `def` under
-  `@effects(reads=[...], writes=[])` (`import from
-  services.compat.jaclang.lib.effects { effects }`): a decorated body is not
-  scanned, its declaration is merged, a decorator on the walker itself is
-  ignored, and a helper that another module imports is not recognised
-  (`workspace_view`, imported by `board.jac`, lost its decorator;
-  `GetWorkspace` reports through its own `read_workspace`), so a reader's
-  helper is its own. **Import the stand-in, not `jaclang.lib.effects`.** Since
-  0.38 the native kernel ignores the real decorator (jaseci-labs/jac#10410), so
-  a helper with any unclassified call turns its reader `unknown`; a warm
-  `.jac/cache` can hide that, so judge it on a cold boot. The stand-in is
-  honoured because it compiles from source at a path ending in
-  `jaclang/lib/effects.jac`, so do not move it; delete it and restore the
-  import once a release carries jaseci-labs/jac#10447. Declared: `GetWorkspace`,
+  `@effects(reads=[...], writes=[])` (`import from jaclang.lib.effects
+  { effects }`). The verified compiler wrapper preserves declarations on
+  package-relative paths and cached interface symbols, including aliased
+  imports. Use the wrapper for local and CI checks; a hosted compiler must
+  independently contain the pinned fixes. Declared: `GetWorkspace`,
   `ListMembers`, `ListProjects`, `ListRoles`, `GetFlowLine`, `GetFlowLineMeta`,
   `ListRepos`, `GithubStatus`, `ListResponsibilities`. Never
   declare a task list (`BoardSnapshot`, `ListTasks`, `OverviewSnapshot`,
@@ -299,12 +291,10 @@ people it tracks are roster members.
   (the readers cacheable, the task lists not, the mutators writing) and
   `browser_gate.py` counts the requests (board, flow line, roadmap, board
   make one `/user/me` and no `GetWorkspace`; a People-tab save then the
-  roadmap makes exactly one). Since 0.38 a clean build ignores `@effects`
-  (jaseci-labs/jac#10410); the stand-in above keeps the readers declared,
-  and `EFFECTS_REGRESSION` in the API gate, empty now, names any reader
-  that may only warn while a regression is open. The sidebar's projects
-  list never reads the workspace: `rememberWorkspace` fires
-  `flowline:workspace` and the sidebar
+  roadmap makes exactly one). The API gate requires every declared reader
+  to remain cacheable; it does not downgrade failures to warnings. The
+  sidebar's projects list never reads the workspace: `rememberWorkspace`
+  fires `flowline:workspace` and the sidebar
   redraws from `cachedProjects()`. The trap that hid the cache
   until Sep 2026: a server `def:pub` in a module the client imports
   (`statusChip` in `components/flowlines/kinds.jac`) makes that module

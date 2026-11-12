@@ -1,0 +1,8 @@
+--- a/jaclang/runtime/exceptions.jac
++++ b/jaclang/runtime/exceptions.jac
+@@ -29,3 +29,5 @@
+ obj TransactionLost(WriteConflict) {
+     def message -> str;
+ }
++
++obj PartialCommitError(RuntimeError) {}

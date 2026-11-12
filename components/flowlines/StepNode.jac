@@ -18,6 +18,7 @@ def:pub StepNode(
     titles: list[str],
     showTitles: bool = False,
     showOwner: bool = True,
+    showCounts: bool = True,
     selected: bool = False,
     portsOn: bool = False,
     target: bool = False,
@@ -47,6 +48,7 @@ def:pub StepNode(
         >
             <button
                 type="button"
+                aria-pressed={selected}
                 title={step.name + (", " + step.blurb if step.blurb else "")}
                 className={"group relative flex h-full w-full items-start gap-2 rounded-xl border bg-card px-3 py-[7px] text-left transition-[border-color,box-shadow] duration-150 "
                     + (
@@ -67,11 +69,19 @@ def:pub StepNode(
                     <StepIcon color={colorKey(step.color)} kind={step.kind}/>
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                    <span className="truncate text-[13px] leading-5 font-semibold">
+                    <span
+                        data-step-title=""
+                        className="truncate text-[13px] leading-5 font-semibold"
+                    >
                         {step.name}
                     </span>
                     {if detail != "low" {
-                        <NodeMeta key="meta" step={step} showOwner={showOwner}/>
+                        <NodeMeta
+                            key="meta"
+                            step={step}
+                            showOwner={showOwner}
+                            showCounts={showCounts}
+                        />
                     }}
                     {if showTitles {
                         <NodeTitles

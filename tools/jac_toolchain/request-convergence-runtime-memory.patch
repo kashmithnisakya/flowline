@@ -1,0 +1,4 @@
+--- a/jaclang/runtime/memory.jac
++++ b/jaclang/runtime/memory.jac
+@@ -68,0 +69 @@
++    def unit_committed;
