@@ -189,6 +189,7 @@ nav:
       - Insights: api/insights.md
       - Assistant: api/assistant.md
       - AI responsibilities: api/agents.md
+      - AI agents: api/ai-agents.md
       - GitHub: api/github.md
       - Webhooks: api/webhooks.md
       - Types: api/types.md

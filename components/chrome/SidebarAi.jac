@@ -20,7 +20,7 @@ def:pub SidebarAi(path: str) -> JsxElement {
         []
     );
 
-    on = isCurrent(path, "/ai");
+    on = isCurrent(path, "/ai") or isCurrent(path, "/agent");
     return
         <Link
             to="/ai"

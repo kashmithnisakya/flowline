@@ -208,6 +208,9 @@ default = "server"
 "lib.workspace" = "client"
 # Ask's open proposal, held in module state for the board to draw.
 "lib.proposal" = "client"
+# Agent drafts, statuses and the starting canvas: pure data for the AI page.
+"lib.agents" = "client"
+"lib.canvas" = "client"
 # Maps a failed signup to a plain line: pure client text, no evidence of its own.
 "lib.signup" = "client"
 # Theme choices and the stored preference: browser-only, no evidence of its own.
