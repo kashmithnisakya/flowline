@@ -7,10 +7,12 @@ import json;
 import logging;
 import from jaclang.server.shared_store { shared_store }
 import from models {
+    Agent,
     Task,
     WorkflowStep,
     AgentRun,
     responsibilities_on_step,
+    agents_on_step,
     active_run,
     agent_runs_box,
     agent_run_key,
@@ -30,6 +32,13 @@ def catalogue_name(key: str) -> str {
         }
     }
     return key;
+}
+
+
+# What a run is recorded under: a responsibility's key, or "code_review" for
+# an agent (only review agents run yet).
+def unit_key(r: any) -> str {
+    return "code_review" if isinstance(r, Agent) else r.key;
 }
 
 
@@ -93,11 +102,13 @@ def note_queued(root_jid: str, stamp: str) {
 def queue_responsibilities(
     holder: Root, t: Task, step: WorkflowStep, stamp: str, fresh_commit: bool = False
 ) -> str {
-    wanted = responsibilities_on_step(holder, step);
+    wanted: list[any] = [];
+    wanted.extend(responsibilities_on_step(holder, step));
+    wanted.extend(agents_on_step(holder, step, t.project_id));
     if not wanted {
         return "";
     }
-    names = ", ".join([catalogue_name(r.key).lower() for r in wanted]);
+    names = ", ".join([catalogue_name(unit_key(r)).lower() for r in wanted]);
     if not ai_enabled(holder) {
         return " · AI " + names + " skipped: AI is off";
     }
@@ -123,7 +134,7 @@ def queue_responsibilities(
         run = box ++> AgentRun(
             task_id=jid(t),
             responsibility_id=jid(r),
-            key=r.key,
+            key=unit_key(r),
             step_id=jid(step),
             run_key=agent_run_key(jid(t), jid(r), "queued:" + stamp),
             status="queued",
@@ -136,7 +147,7 @@ def queue_responsibilities(
         on_attached(holder, run);
         fresh[jid(run)] = "queued";
         box.day_counts = {day: used + 1};
-        queued.append(catalogue_name(r.key).lower());
+        queued.append(catalogue_name(unit_key(r)).lower());
     }
     if queued {
         t.ai_queued_at = stamp;

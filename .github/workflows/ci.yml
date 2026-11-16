@@ -178,6 +178,8 @@ jobs:
             echo "FLOWLINE_AI_INTERVAL_SECONDS=5"
             echo "FLOWLINE_AI_BACKOFF_SECONDS=2"
             echo "FLOWLINE_AI_LEASE_SECONDS=8"
+            # Seals the model keys the agents gate saves.
+            echo "FLOWLINE_SECRETS_KEY=ci-secrets-key"
             # /metrics answers basic auth with this password; the agents gate
             # reads the AI counters there.
             echo "GRAFANA_ADMIN_PASSWORD=ci-grafana"

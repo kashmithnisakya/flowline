@@ -1254,7 +1254,7 @@ def agents_on_step(holder: Root, step: WorkflowStep, project_id: str) -> list[Ag
             if a.enabled
                 and agent_reviews(a)
                 and jid(step) in a.steps
-                and (not a.projects or project_id in a.projects) {
+                and (not a.projects or not project_id or project_id in a.projects) {
                 out.append(a);
             }
         }

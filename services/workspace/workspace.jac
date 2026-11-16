@@ -24,6 +24,7 @@ import from models {
     open_run_count,
     ai_enabled,
     responsibilities_on_step,
+    agents_on_step,
     projects_of,
     members_of,
     roles_of,
@@ -80,7 +81,8 @@ def workspace_view(holder: Root) -> WorkspaceView {
         if ai_on {
             view.ai = [
                 catalogue_name(r.key) for r in responsibilities_on_step(holder, st)
-            ];
+            ]
+                + [a.name for a in agents_on_step(holder, st, "")];
         }
         steps.append(view);
     }

@@ -17,7 +17,9 @@ import from jaclang.server.bridge { BridgeError }
 import from models {
     Task,
     WorkflowStep,
+    Agent,
     Responsibility,
+    agent_reviews,
     AgentRun,
     AgentRuns,
     GithubConnection,
@@ -34,6 +36,7 @@ import from services.github.util { installation_token, lease_owner }
 import from services.log.log { record_task_event }
 import from services.tasks.tasks { follow_trigger }
 import from services.agents.runs { AI_QUEUE, catalogue_name }
+import from services.agents.keys { provider_credentials, tokens_left, note_tokens }
 import from review.service { review_pr }
 import from services.agents.metrics { note_run }
 
@@ -197,6 +200,24 @@ def has_open(holder: Root) -> bool {
 }
 
 
+# The instructions an agent's review gets: its prompt, then its rules.
+def agent_brief(a: Agent) -> str {
+    return (a.prompt + "\n\n" + a.rules).strip();
+}
+
+
+# How a run may end a review: a responsibility's own mode, or for an agent
+# "request_changes" only when it holds the move_task tool with write access.
+def run_mode(r: any) -> str {
+    if isinstance(r, Agent) {
+        return "request_changes"
+            if "move_task" in r.tools and r.access.get("write", False)
+            else "comment";
+    }
+    return r.mode;
+}
+
+
 # Claim up to RUNS_PER_TICK due runs and return what the review service needs
 # for each. A run that cannot start (its task or responsibility is gone,
 # GitHub is not connected) is settled here.
@@ -224,7 +245,33 @@ def claim(holder: Root) -> dict[str, any] {
             finish(holder, run, "skipped", "The task is gone.", now);
             continue;
         }
-        if not isinstance(r, Responsibility) or not owned(holder, r) or not r.enabled {
+        instructions = "";
+        mode = "";
+        model = "";
+        creds: dict[str, any] = {};
+        if isinstance(r, Responsibility) and owned(holder, r) and r.enabled {
+            instructions = r.instructions;
+            mode = r.mode;
+            model = r.model;
+        } elif isinstance(r, Agent)
+            and owned(holder, r)
+            and r.enabled
+            and agent_reviews(r) {
+            creds = provider_credentials(holder, r.model);
+            if not creds["ok"] {
+                finish(holder, run, "failed", str(creds["error"]), now);
+                continue;
+            }
+            if not tokens_left(holder) {
+                finish(
+                    holder, run, "skipped", "The daily token budget is used up.", now
+                );
+                continue;
+            }
+            instructions = agent_brief(r);
+            mode = run_mode(r);
+            model = str(creds["model"]);
+        } else {
             finish(holder, run, "skipped", "The responsibility is off or gone.", now);
             continue;
         }
@@ -251,9 +298,11 @@ def claim(holder: Root) -> dict[str, any] {
                 "repo": run.pr_repo,
                 "pr_number": run.pr_number,
                 "intent": t.title + "\n\n" + note_lead(t.notes),
-                "instructions": r.instructions,
-                "mode": r.mode,
-                "model": r.model,
+                "instructions": instructions,
+                "mode": mode,
+                "model": model,
+                "api_key": str(creds.get("api_key") or ""),
+                "api_base": str(creds.get("api_base") or ""),
                 "reviewed": reviewed
             }
         );
@@ -274,7 +323,9 @@ async def ask(job: dict[str, any]) -> dict[str, any] {
             instructions=job["instructions"],
             mode=job["mode"],
             model=job["model"],
-            reviewed=job["reviewed"]
+            reviewed=job["reviewed"],
+            api_key=job["api_key"],
+            api_base=job["api_base"]
         );
         return {"job": job, "out": out, "ms": int((time.monotonic() - started) * 1000)};
     } except BridgeError as e {
@@ -309,8 +360,8 @@ async def ask_all(jobs: list[dict[str, any]]) -> list[dict[str, any]] {
 def send_back(holder: Root, run: AgentRun, t: Task, stamp: str) {
     r = resolve(run.responsibility_id);
     if run.verdict != "request_changes"
-        or not isinstance(r, Responsibility)
-        or r.mode != "request_changes"
+        or not (isinstance(r, Responsibility) or isinstance(r, Agent))
+        or run_mode(r) != "request_changes"
         or not run.step_id
         or t.step_id != run.step_id {
         return;
@@ -378,6 +429,9 @@ def apply(holder: Root, results: list[dict[str, any]]) {
             run.tokens_in = out.tokens_in;
             run.tokens_out = out.tokens_out;
             run.cost_usd = out.cost_usd;
+            if isinstance(resolve(run.responsibility_id), Agent) {
+                note_tokens(holder, int(out.tokens_in) + int(out.tokens_out));
+            }
             run.error = "";
             run.lease_until = "";
             run.finished_at = now;

@@ -28,6 +28,7 @@ import from models {
     roles_box,
     steps_box,
     responsibilities_on_step,
+    agents_on_step,
     ai_enabled
 }
 import from services.agents.runs { catalogue_name }
@@ -191,7 +192,8 @@ def read_flow_line(
         if ai_on {
             view.ai = [
                 catalogue_name(r.key) for r in responsibilities_on_step(holder, st)
-            ];
+            ]
+                + [a.name for a in agents_on_step(holder, st, "")];
         }
         views.append(view);
     }
