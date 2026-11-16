@@ -63,6 +63,8 @@ def is_container(owner: any) -> bool {
         or isinstance(owner, FilterSets)
         or isinstance(owner, Role)
         or isinstance(owner, AgentRuns)
+        or isinstance(owner, Agents)
+        or isinstance(owner, AiProviders)
     );
 }
 
@@ -481,6 +483,52 @@ node Responsibility {
         updated_at: str = "";
 }
 
+# The agents' box. An agent is an AI teammate that plays one role.
+node Agents {}
+
+# An agent plays the role `role_id` names, wakes when a task lands on one of
+# `steps` (jids) or on `event`, may use `tools` within `access`, and runs on the
+# workspace's own model (`model` is "provider:name"). `projects` empty means every
+# project. `canvas` is the flow the user drew: {"nodes": [...], "edges": [...]}.
+node Agent {
+    has name: str,
+        role_id: str = "",
+        projects: list[str] = [],
+        steps: list[str] = [],
+        event: str = "",
+        tools: list[str] = [],
+        access: dict[str, bool] = {},
+        mode: str = "suggest",
+        duties: list[str] = [],
+        prompt: str = "",
+        rules: str = "",
+        model: str = "",
+        enabled: bool = False,
+        canvas: dict[str, any] = {},
+        created_at: str = "",
+        updated_at: str = "";
+}
+
+# The model accounts' box, also the workspace's token budget: `day_tokens` is
+# the tokens agents used on the current UTC day ("2026-11-12" -> n).
+node AiProviders {
+    has default_model: str = "",
+        daily_tokens: int = 500000,
+        day_tokens: dict[str, int] = {};
+}
+
+# One provider account. `secret` is the key sealed with the server's secrets
+# key; it is never reported, only its last four characters are.
+node AiProvider {
+    has key: str,
+        secret: str = "",
+        key_last: str = "",
+        base_url: str = "",
+        custom_model: str = "",
+        tested_at: str = "",
+        updated_at: str = "";
+}
+
 # One run of a responsibility on a task, what the task sheet shows. It names
 # the task and the responsibility by jid, like a log entry; `run_key` (see
 # agent_run_key) is unique per task, responsibility and PR head commit.
@@ -879,6 +927,76 @@ obj AiSettings {
         responsibilities: list[ResponsibilityView];
 }
 
+obj AgentView {
+    has id: str,
+        name: str,
+        role_id: str,
+        projects: list[str],
+        steps: list[str],
+        event: str,
+        tools: list[str],
+        access: dict[str, bool],
+        mode: str,
+        duties: list[str],
+        prompt: str,
+        rules: str,
+        model: str,
+        enabled: bool,
+        # Whether this agent's kind can run yet (a review: read_pr and comment_on_pr).
+        runs: bool,
+        canvas: dict[str, any],
+        updated_at: str;
+}
+
+# What the page learns of a provider account: never the key.
+obj ProviderView {
+    has key: str,
+        name: str,
+        connected: bool,
+        key_last: str,
+        base_url: str,
+        custom_model: str,
+        tested_at: str;
+}
+
+obj AiKeys {
+    has providers: list[ProviderView],
+        # [value, label] of every model a connected provider offers.
+        models: list[list[str]],
+        default_model: str,
+        daily_tokens: int,
+        tokens_today: int,
+        # False when the server has no secrets key, so no key can be saved.
+        secrets_ready: bool;
+}
+
+# An agent that reviews pull requests: it reads one and comments on it.
+def agent_reviews(a: Agent) -> bool {
+    return "read_pr" in a.tools and "comment_on_pr" in a.tools;
+}
+
+def agent_view(a: Agent) -> AgentView {
+    return AgentView(
+        id=jid(a),
+        name=a.name,
+        role_id=a.role_id,
+        projects=list(a.projects),
+        steps=list(a.steps),
+        event=a.event,
+        tools=list(a.tools),
+        access=dict(a.access),
+        mode=a.mode,
+        duties=list(a.duties),
+        prompt=a.prompt,
+        rules=a.rules,
+        model=a.model,
+        enabled=a.enabled,
+        runs=agent_reviews(a),
+        canvas=dict(a.canvas),
+        updated_at=a.updated_at
+    );
+}
+
 # `role_id` saves the hop to the role when the caller already holds it.
 def responsibility_view(r: Responsibility, role_id: str = "") -> ResponsibilityView {
     owner = role_id;
@@ -1120,6 +1238,24 @@ def responsibilities_on_step(holder: Root, step: WorkflowStep) -> list[Responsib
         for r in [box-->[?:Role, name==role]-->[?:Responsibility]] {
             if r.enabled and (not r.on_steps or jid(step) in r.on_steps) {
                 out.append(r);
+            }
+        }
+    }
+    return out;
+}
+
+
+# The enabled review agents that wake when a task of `project_id` enters this
+# step. An agent's own step list decides, not the step's owner role.
+def agents_on_step(holder: Root, step: WorkflowStep, project_id: str) -> list[Agent] {
+    out: list[Agent] = [];
+    for box in [holder-->[?:Agents]] {
+        for a in [box-->[?:Agent]] {
+            if a.enabled
+                and agent_reviews(a)
+                and jid(step) in a.steps
+                and (not a.projects or not project_id or project_id in a.projects) {
+                out.append(a);
             }
         }
     }
@@ -2113,6 +2249,28 @@ def agent_runs_box(holder: Root) -> AgentRuns {
         return found[0];
     }
     box = holder ++> AgentRuns();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def agents_box(holder: Root) -> Agents {
+    found = [holder-->[?:Agents]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> Agents();
+    on_attached(holder, box);
+    return box;
+}
+
+
+def ai_providers_box(holder: Root) -> AiProviders {
+    found = [holder-->[?:AiProviders]];
+    if found {
+        return found[0];
+    }
+    box = holder ++> AiProviders();
     on_attached(holder, box);
     return box;
 }

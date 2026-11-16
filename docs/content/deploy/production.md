@@ -20,6 +20,7 @@ cluster's Secret.
 | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` | For the GitHub integration | A GitHub App per environment is simplest: its callback, setup and webhook URLs all name one `HOST`. |
 | `GRAFANA_ADMIN_PASSWORD` | With monitoring | Otherwise Grafana keeps a well-known default password. |
 | `JAC_BRIDGE_TOKEN` | Yes | Any long random string (`openssl rand -hex 32`). The web app's calls to the PR review service carry it; without it they are refused with `401`. Set it before the deploy that ships it. |
+| `FLOWLINE_SECRETS_KEY` | For AI agents | Any long random string (`openssl rand -hex 32`), the same on every pod and never changed afterwards. It seals each workspace's own model key before it is stored. Empty, the Models and keys page cannot save a key; changed, saved keys cannot be opened and must be saved again. |
 
 !!! warning "One GitHub App per environment"
 

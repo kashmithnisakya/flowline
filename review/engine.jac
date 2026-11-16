@@ -112,6 +112,14 @@ def slot -> dict[str, any] {
 def reviewer -> any {
     mine = slot();
     name = str(mine["model"] or os.environ.get("LLM_MODEL") or "gpt-4o-mini");
+    held = str(mine.get("api_key") or "");
+    if held {
+        # A workspace's own key is never cached: the Model lives for this call
+        # and nothing else in this thread can reach it.
+        return Model(
+            model_name=name, api_key=held, api_base=str(mine.get("api_base") or "")
+        );
+    }
     if name not in mine["models"] {
         mine["models"][name] = Model(model_name=name);
     }
@@ -274,7 +282,12 @@ def fake_file(path: str, patch: str) -> FileReview {
 }
 
 def review_one(
-    f: dict[str, any], intent: str, guidance: str, model: str, bucket: dict[str, any]
+    f: dict[str, any],
+    intent: str,
+    guidance: str,
+    model: str,
+    bucket: dict[str, any],
+    creds: dict[str, str]
 ) -> FileReview {
     path = str(f.get("filename") or "");
     patch = str(f.get("patch") or "");
@@ -283,10 +296,14 @@ def review_one(
     }
     slot()["model"] = model;
     slot()["usage"] = bucket;
+    slot()["api_key"] = creds["api_key"];
+    slot()["api_base"] = creds["api_base"];
     try {
         return review_file(intent, guidance, path, patch);
     } finally {
         slot()["usage"] = None;
+        slot()["api_key"] = "";
+        slot()["api_base"] = "";
     }
 }
 
@@ -317,7 +334,13 @@ def model_failure(e: Exception) -> dict[str, any] {
 # Review the pull request: {"ok", "summary", "findings", "skipped", "model",
 # "tokens_in", "tokens_out", "cost_usd"} or {"ok": False, "error", "retryable"}.
 def run_review(
-    token: str, repo: str, pr_number: int, intent: str, guidance: str, model: str
+    token: str,
+    repo: str,
+    pr_number: int,
+    intent: str,
+    guidance: str,
+    model: str,
+    creds: dict[str, str]
 ) -> dict[str, any] {
     got = collect_files(token, repo, pr_number);
     if not got["ok"] {
@@ -332,7 +355,7 @@ def run_review(
     try {
         with concurrent.futures.ThreadPoolExecutor(max_workers=FILE_WORKERS) as pool {
             jobs = [
-                pool.submit(review_one, f, intent, guidance, model, bucket)
+                pool.submit(review_one, f, intent, guidance, model, bucket, creds)
                 for f in parts["kept"]
             ];
             for (f, job) in zip(parts["kept"], jobs) {
@@ -352,10 +375,14 @@ def run_review(
         } elif findings or parts["skipped"] {
             slot()["model"] = model;
             slot()["usage"] = bucket;
+            slot()["api_key"] = creds["api_key"];
+            slot()["api_base"] = creds["api_base"];
             try {
                 merged = summarise_review(intent, findings, parts["skipped"]);
             } finally {
                 slot()["usage"] = None;
+                slot()["api_key"] = "";
+                slot()["api_base"] = "";
             }
             summary = merged.summary;
             findings = [

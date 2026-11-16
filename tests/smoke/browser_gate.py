@@ -170,6 +170,7 @@ def run(page, tag: str) -> list[str]:
 
     read_cache_once(page)
     page_scroll_once(page)
+    ai_agents_once(page)
     ai_switch_once(page)
     ai_responsibility_once(page)
     ask_proposal_once(page)
@@ -184,10 +185,11 @@ def roadmap_open(page) -> None:
 
 
 def ai_switch_once(page) -> None:
-    # The AI page's switch: off in a new workspace, beside what it sends, and
-    # turning it on asks first and survives a reload.
+    # The AI page's switch: off in a new workspace, beside what it sends (the
+    # Runs tab, where the page's older content lives), and turning it on asks
+    # first and survives a reload.
     step("ai: the switch starts off beside what it sends")
-    page.goto(f"{BASE}/ai")
+    page.goto(f"{BASE}/ai?tab=runs")
     switch = page.get_by_role("switch", name="AI responsibilities")
     expect(switch).to_have_attribute("aria-checked", "false")
     expect(page.get_by_text("The task's title and the first line of its notes.", exact=True)).to_be_visible()
@@ -210,6 +212,16 @@ def ai_switch_once(page) -> None:
     switch = page.get_by_role("switch", name="AI responsibilities")
     expect(switch).to_have_attribute("aria-checked", "true")
     expect(page.get_by_text(re.compile(r"^On since "))).to_be_visible()
+
+
+def ai_agents_once(page) -> None:
+    # The page opens on its Agents tab; Models and keys is a tab of its own.
+    step("ai: the page opens on Agents, with a tab for Models and keys")
+    page.goto(f"{BASE}/ai")
+    expect(page.get_by_role("tab", name="Agents", exact=True)).to_have_attribute("aria-selected", "true")
+    expect(page.get_by_text("No agents yet", exact=True)).to_be_visible()
+    page.get_by_role("tab", name="Models and keys", exact=True).click()
+    expect(page.get_by_text("Agents use your own provider account", exact=False)).to_be_visible()
 
 
 def ai_responsibility_once(page) -> None:
@@ -559,7 +571,7 @@ def ai_run_once(page) -> None:
     ai_chip_catches_up(page, made["id"])
 
     step("ai: the AI page lists the run with its task")
-    page.goto(f"{BASE}/ai")
+    page.goto(f"{BASE}/ai?tab=runs")
     expect(page.get_by_role("link", name="Reviewed by AI", exact=True)).to_be_visible()
     expect(page.get_by_text("Commented", exact=True)).to_be_visible()
 

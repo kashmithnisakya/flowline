@@ -20,7 +20,7 @@ def:pub RoleAiChips(role: str, items: list[ResponsibilityView]) -> JsxElement {
     if len(items) == 0 {
         return
             <Link
-                to="/ai"
+                to="/ai?tab=runs"
                 aria-label={"Add AI to " + role}
                 className="ai-chip ai-chip-settled border-dashed border-input hover:bg-bg-hover"
             >
@@ -32,7 +32,7 @@ def:pub RoleAiChips(role: str, items: list[ResponsibilityView]) -> JsxElement {
             {for item in items {
                 <Link
                     key={item.id}
-                    to="/ai"
+                    to="/ai?tab=runs"
                     className={"ai-chip" if item.enabled else "ai-chip ai-chip-settled"}
                 >
                     <AiMark/>

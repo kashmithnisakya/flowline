@@ -21,6 +21,8 @@ from webhook_gate import check, walker, project, req, connect
 
 REPO = "ci-org/agents-repo"
 INST = 4747
+AGENT_INST = 4848
+SECRET = "sk-gate-ABCDEF0123456789"
 SETTLED = ("done", "failed", "skipped", "cancelled")
 
 
@@ -371,6 +373,87 @@ def server_workers():
     return [int(p) for p in found if parent[p] in parent]
 
 
+def agent_suite():
+    """An agent runs a review on the workspace's own key: nothing queues while it
+    is off or has no key, the key is never reported, a run records the agent,
+    a project it is not set to and a removed key stop it, and another workspace
+    sees none of it. Needs FLOWLINE_SECRETS_KEY on the server."""
+    stub("/_stub/reset", {"installations": [AGENT_INST], "repos": {REPO: []}})
+    stub("/_stub/pulls", {"pulls": [pull(21, "sha-21a"), pull(22, "sha-22"), pull(23, "sha-23")]})
+    wg.login("agents-byok")
+    check("agent: connect GitHub", connect(AGENT_INST).get("ok"))
+    pid = project()
+    other = walker("SaveProject", {"name": "Elsewhere"})
+    other_pid = other.get("id") or other.get("_jac_id") or ""
+    role = walker("SaveRole", {"name": "Engineer"}).get("role", {})
+    bid = walker("SaveStep", {"name": "Building", "kind": "active", "owner": "Developer"}).get("id", "")
+    rid = walker("SaveStep", {"name": "In review", "kind": "handoff", "owner": "Engineer"}).get("id", "")
+    walker("SetAiEnabled", {"enabled": True})
+    keys = walker("ListAiKeys")
+    check("agent: the server can seal a key", keys.get("secrets_ready") is True and keys.get("models") == [], keys)
+
+    setup = {"name": "Reviewer", "role_id": role.get("id", ""), "steps": [rid], "tools": ["read_pr", "comment_on_pr"],
+             "access": {"suggest": True, "write": True}, "mode": "suggest", "prompt": "Review.", "rules": "Be brief.",
+             "model": "openai:gpt-4o-mini"}
+    made = walker("SaveAgent", setup).get("agent") or {}
+    aid = made.get("id", "")
+    check("agent: saved off, and it is a review agent", bool(aid) and made.get("enabled") is False
+          and made.get("runs") is True, made)
+    refused = walker("SetAgentEnabled", {"agent_id": aid, "enabled": True})
+    check("agent: cannot be switched on without a key", refused.get("error") == "no_model", refused)
+
+    def landed(title, number, project_id=pid):
+        t = walker("CreateTask", {"title": title, "project_id": project_id, "step_id": bid})
+        t = update(t, pr_link=f"https://github.com/{REPO}/pull/{number}")
+        move(t["id"], rid)
+        return t["id"]
+
+    first = landed("Agent off", 21)
+    check("agent: an agent that is off queues nothing", runs(first) == [], runs(first))
+
+    walker("SaveProviderKey", {"provider": "openai", "api_key": SECRET})
+    seen = json.dumps([walker("ListAiKeys"), reports("ListAgents")])
+    check("agent: the key is never reported, only its last four", SECRET not in seen and SECRET[-4:] in seen, seen[:200])
+    check("agent: a bad custom address is refused",
+          walker("SaveProviderKey", {"provider": "custom", "api_key": SECRET, "base_url": "http://10.0.0.1/v1",
+                                     "custom_model": "m"}).get("error") == "bad_base")
+    on = walker("SetAgentEnabled", {"agent_id": aid, "enabled": True})
+    check("agent: switched on once its provider has a key", (on.get("agent") or {}).get("enabled") is True, on)
+    check("agent: the step carries the agent's name", flow_steps().get("In review", {}).get("ai") == ["Reviewer"],
+          flow_steps().get("In review"))
+
+    second = landed("Agent on", 22)
+    queued = runs(second)
+    check("agent: a landing queues a run under the agent", len(queued) == 1 and queued[0].get("key") == "code_review"
+          and queued[0].get("responsibility_id") == aid, queued)
+    done = settle(second)
+    check("agent: the run is reviewed with the workspace's key", bool(done) and done[0].get("status") == "done"
+          and done[0].get("head_sha") == "sha-22", done)
+    check("agent: a run never carries the key", SECRET not in json.dumps(done), done)
+
+    walker("SaveAgent", {**setup, "agent_id": aid, "projects": [other_pid]})
+    third = landed("Wrong project", 23)
+    check("agent: a project it is not set to queues nothing", runs(third) == [], runs(third))
+    walker("SaveAgent", {**setup, "agent_id": aid, "projects": [pid]})
+    fourth = landed("Right project", 23)
+    check("agent: a project it is set to queues a run", len(runs(fourth)) == 1, runs(fourth))
+    settle(fourth)
+
+    walker("RemoveProviderKey", {"provider": "openai"})
+    listed = (reports("ListAgents") or [[]])[0]
+    check("agent: removing the key switches the agent off", listed and listed[0].get("enabled") is False, listed)
+    fifth = landed("Key gone", 21)
+    check("agent: nothing queues once the key is gone", runs(fifth) == [], runs(fifth))
+
+    home = wg.TOKEN
+    wg.login("agents-byok-b")
+    check("agent: another workspace sees no agents or keys", (reports("ListAgents") or [[]])[0] == []
+          and not any(p.get("connected") for p in walker("ListAiKeys").get("providers", [])))
+    foreign = walker("SetAgentEnabled", {"agent_id": aid, "enabled": True})
+    check("agent: another workspace cannot switch it on", foreign.get("error") == "not_found", foreign)
+    wg.TOKEN = home
+
+
 def worker_death_suite(landed):
     # The runtime never starts this task beside itself, so a live worker's claim
     # cannot be taken back. Only a dead worker's can, so this kills them. It runs
@@ -402,6 +485,7 @@ def main() -> int:
         return 2
     unconnected = queue_suite()
     queued_home = wg.TOKEN
+    agent_suite()
     landed = runner_suite()
     runner_home = wg.TOKEN
     wg.TOKEN = queued_home

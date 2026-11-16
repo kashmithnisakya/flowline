@@ -21,10 +21,26 @@ import from ...components.ai.RunList { RunList }
 import from ...components.ai.RolePanel { RolePanel }
 import from ...components.ai.WhatIsSent { WhatIsSent }
 import from ...components.ai.AiStatus { AiStatus }
+import from ...components.agents.AiTabs { AiTabs, AI_TABS }
+import from ...components.agents.AgentsPanel { AgentsPanel }
+import from ...components.agents.KeysPanel { KeysPanel }
 import from ...components.common.LoadFailed { LoadFailed }
 import from "sonner" { toast }
 
 glob POLL_MS: int = 5000;
+
+# The tab the address names (?tab=models), else the agents.
+def tabFromAddress -> str {
+    w: any = window;
+    params: any = new(w.URLSearchParams, w.location.search);
+    wanted = str(params.get("tab") or "");
+    for t in AI_TABS {
+        if t[0] == wanted {
+            return wanted;
+        }
+    }
+    return "agents";
+}
 
 def anyLive(rows: list[AgentRunLine]) -> bool {
     for r in rows {
@@ -50,6 +66,7 @@ def:pub AiPage -> JsxPage {
         loading: bool = True,
         failed: bool = False,
         acting: bool = False,
+        tab: str = tabFromAddress(),
         tick: int = 0;
 
     can with entry {
@@ -74,6 +91,7 @@ def:pub AiPage -> JsxPage {
     async def pickFilter(wanted: bool) -> None;
     async def loadShared -> None;
     async def loadSettings -> None;
+    def pickTab(wanted: str) -> None;
 
     if failed and len(rows) == 0 and len(items) == 0 {
         return
@@ -101,43 +119,50 @@ def:pub AiPage -> JsxPage {
                     />
                 </div>
             </div>
-            <div className="flex flex-wrap items-start gap-4">
-                <div className="min-w-0 flex-[3_1_560px]">
-                    <RunList
-                        rows={rows}
-                        attention={attention}
-                        hasMore={hasMore}
-                        loading={loading}
-                        busy={acting}
-                        aiEnabled={enabled}
-                        onFilter={pickFilter}
-                        onMore={showMore}
-                        onRetry={lambda (id: str) { act(id, True); }}
-                        onCancel={lambda (id: str) { act(id, False); }}
-                    />
+            <AiTabs tab={tab} onTab={pickTab}/>
+            {if tab == "agents" {
+                <AgentsPanel key="agents" onGoKeys={lambda { pickTab("models"); }}/>
+            } elif tab == "models" {
+                <KeysPanel key="models"/>
+            } else {
+                <div key="runs" className="flex flex-wrap items-start gap-4">
+                    <div className="min-w-0 flex-[3_1_560px]">
+                        <RunList
+                            rows={rows}
+                            attention={attention}
+                            hasMore={hasMore}
+                            loading={loading}
+                            busy={acting}
+                            aiEnabled={enabled}
+                            onFilter={pickFilter}
+                            onMore={showMore}
+                            onRetry={lambda (id: str) { act(id, True); }}
+                            onCancel={lambda (id: str) { act(id, False); }}
+                        />
+                    </div>
+                    <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
+                        <RolePanel
+                            roles={roles}
+                            steps={steps}
+                            items={items}
+                            aiEnabled={enabled}
+                            onChanged={reloadSettings}
+                        />
+                        <section
+                            className="surface bg-bg-elevated"
+                            aria-label="What is sent"
+                        >
+                            <div className="flex min-h-11 items-center border-b px-4">
+                                <h2 className="text-sm font-semibold">What is sent</h2>
+                            </div>
+                            <div className="px-4 py-3">
+                                <WhatIsSent/>
+                            </div>
+                        </section>
+                        <AiStatus/>
+                    </div>
                 </div>
-                <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
-                    <RolePanel
-                        roles={roles}
-                        steps={steps}
-                        items={items}
-                        aiEnabled={enabled}
-                        onChanged={reloadSettings}
-                    />
-                    <section
-                        className="surface bg-bg-elevated"
-                        aria-label="What is sent"
-                    >
-                        <div className="flex min-h-11 items-center border-b px-4">
-                            <h2 className="text-sm font-semibold">What is sent</h2>
-                        </div>
-                        <div className="px-4 py-3">
-                            <WhatIsSent/>
-                        </div>
-                    </section>
-                    <AiStatus/>
-                </div>
-            </div>
+            }  }
         </div>;
 }
 
@@ -235,4 +260,11 @@ impl AiPage.act(runId: str, retry: bool) -> None {
         toast.error("Could not change that run");
     }
     acting = False;
+}
+
+impl AiPage.pickTab(wanted: str) -> None {
+    tab = wanted;
+    w: any = window;
+    blank: dict[str, any] = {};
+    w.history.replaceState(blank, "", "/ai?tab=" + wanted);
 }

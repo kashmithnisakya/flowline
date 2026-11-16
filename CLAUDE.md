@@ -362,6 +362,28 @@ people it tracks are roster members.
   reads. Every ordering ends in the jid, so a row cannot swap
   pages between two requests (sorts are stable, so a `jid` pass first and
   the real key second gives a deterministic tiebreak).
+- **AI agents** (`services/agents/crew.jac`, `keys.jac`; `root ++> Agents ++> Agent`
+  and `root ++> AiProviders ++> AiProvider`): an agent plays one `Role` (`role_id`),
+  wakes on `steps` (jids) in its `projects` (empty means all) and runs on the
+  workspace's own model (`model` is `provider:name`). `AGENT_TOOLS`, `AGENT_DUTIES`
+  and `AI_PROVIDERS` in `constants.jac` are the registries. **Only a review agent
+  runs** (`agent_reviews`: `read_pr` plus `comment_on_pr`): `queue_responsibilities`
+  adds `agents_on_step` to the role's responsibilities, the runner's `claim` resolves
+  an `AgentRun.responsibility_id` to a `Responsibility` or an `Agent`, and the run is
+  recorded under `code_review`. Other agents are saved, drawn and switched on but
+  never queue. **The canvas is a design:** `Agent.canvas` is cleaned by
+  `clean_canvas` and the runner follows the agent's setup, never the graph.
+  **Agents never use the platform's key.** A key is sealed with
+  `FLOWLINE_SECRETS_KEY` (`seal` / `unseal`, Fernet), never reported (only
+  `key_last`), opened in the runner's tenant context by `provider_credentials`, passed
+  in `review_pr(api_key, api_base)` and held by the review thread for that call: the
+  engine's `reviewer()` builds an uncached `Model` for it, because the per-thread
+  model cache is keyed by name and would hand one workspace's key to the next. A
+  custom OpenAI-compatible address must be public https (`base_problem`), since
+  the web app calls it. Tokens count against `AiProviders.day_tokens`
+  (`tokens_left`, `note_tokens`). Setup is checked server-side (`setup_problem`):
+  a tool needing suggest or write access the agent lacks is refused, so a prompt can
+  never widen access.
 - **`constants.jac`**: `STATUSES`, `PRIORITIES`, `STEP_KINDS`, `KIND_COLORS`,
   `KIND_STATUS`, `STATUS_KIND` and `FLOW_LINE_TEMPLATES` as `glob`s shared by
   client dropdowns and server validation.
@@ -601,6 +623,17 @@ File-based routing with route groups:
   GitHub section (`initialTab` reads the path), where `GithubSection`
   finishes an install round trip and moves the address to
   `/workspace?tab=github`; the section's own list view rides in `?view=`.
+- **`/ai` has three tabs** (`?tab=agents|models|runs`; `AiTabs`): Agents
+  (`components/agents/AgentsPanel`: the list, a five-step create dialog and its
+  steps, `lib/agents` for drafts and statuses), Models and keys (`KeysPanel`,
+  `ProviderCard`, `LimitsCard`) and the runs and responsibilities the page was before.
+  **`/agent?id=`** (`pages/(auth)/agent.jac`, `components/agents/canvas/`) is one
+  agent's canvas: nodes dragged by their header with pointer capture, connected by
+  clicking a right port then a left port, edited in `NodeInspector`, saved with
+  `SaveAgentCanvas`. The When node is the agent's own setup, so it saves through
+  `SaveAgent`. Its "Check flow" is client-side (`lib/canvas.flowProblems`); there is no
+  run on the canvas. `node` and `test` are Jac keywords: neither can name a parameter or an
+  ability.
 - Pages are **thin stateful shells**: they own `has` state and handlers (bodies
   in `.impl.jac` annexes under `pages/(auth)/impl/`) and compose presentational
   components from `components/<area>/` (`chrome`, `board`, `roadmap`,

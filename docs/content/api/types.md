@@ -68,6 +68,19 @@ responsibility can be is `AI_RESPONSIBILITIES` in `constants.jac`, and
 
 ::: obj AgentRunPage h3
 
+## AI agents
+
+An agent plays one role and runs on the workspace's own model key. The tools an
+agent may be given, the responsibility templates it starts from and the
+providers it can use are `AGENT_TOOLS`, `AGENT_DUTIES` and `AI_PROVIDERS` in
+`constants.jac`.
+
+::: obj AgentView h3
+
+::: obj ProviderView h3
+
+::: obj AiKeys h3
+
 ::: glob AI_RESPONSIBILITIES
 
 ::: glob AGENT_LIMITS

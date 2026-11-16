@@ -208,6 +208,9 @@ default = "server"
 "lib.workspace" = "client"
 # Ask's open proposal, held in module state for the board to draw.
 "lib.proposal" = "client"
+# Agent drafts, statuses and the starting canvas: pure data for the AI page.
+"lib.agents" = "client"
+"lib.canvas" = "client"
 # Maps a failed signup to a plain line: pure client text, no evidence of its own.
 "lib.signup" = "client"
 # Theme choices and the stored preference: browser-only, no evidence of its own.
@@ -217,6 +220,8 @@ models = "server"
 "services.agents.runs" = "server"
 "services.agents.runner" = "server"
 "services.agents.metrics" = "server"
+"services.agents.keys" = "server"
+"services.agents.crew" = "server"
 "review.github" = "server"
 "review.engine" = "server"
 "review.post" = "server"
@@ -245,3 +250,5 @@ models = "server"
 # at pod start, so it must be set before the deploy that ships it.
 [scale.secrets]
 JAC_BRIDGE_TOKEN = "${JAC_BRIDGE_TOKEN}"
+# Seals the workspaces' own model keys at rest. Empty: no key can be saved.
+FLOWLINE_SECRETS_KEY = "${FLOWLINE_SECRETS_KEY:-}"

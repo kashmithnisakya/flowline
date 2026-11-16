@@ -47,7 +47,8 @@ def failed(answer: dict[str, any], head_sha: str = "") -> ReviewOutcome {
 
 # Review one pull request at its current head with an installation token the
 # web app minted. `reviewed` lists the head commits this responsibility has
-# already reviewed on this task, so a commit is reviewed once.
+# already reviewed on this task, so a commit is reviewed once. `api_key` and
+# `api_base` are the workspace's own model account, held for this call only.
 def:protect review_pr(
     token: str,
     repo: str,
@@ -56,7 +57,9 @@ def:protect review_pr(
     instructions: str = "",
     mode: str = "comment",
     model: str = "",
-    reviewed: list[str] = []
+    reviewed: list[str] = [],
+    api_key: str = "",
+    api_base: str = ""
 ) -> ReviewOutcome {
     pr = gh(token, "GET", "/repos/" + repo + "/pulls/" + str(pr_number));
     if not pr["ok"] {
@@ -80,7 +83,15 @@ def:protect review_pr(
             head_sha=head
         );
     }
-    done = run_review(token, repo, pr_number, intent, instructions, model);
+    done = run_review(
+        token,
+        repo,
+        pr_number,
+        intent,
+        instructions,
+        model,
+        {"api_key": api_key, "api_base": api_base}
+    );
     if not done["ok"] {
         return ReviewOutcome(
             ok=False,
