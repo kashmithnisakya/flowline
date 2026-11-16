@@ -66,7 +66,8 @@ def:pub DatePicker(
     clearable: bool = False,
     className: str = "",
     iconOnly: bool = False,
-    label: str = ""
+    label: str = "",
+    placeholder: str = "Pick a date"
 ) -> JsxElement {
     has pickerOpen: bool = False,
         viewYear: int = 0,
@@ -135,7 +136,7 @@ def:pub DatePicker(
                 </svg>
                 {if not iconOnly {
                     <span key="label">
-                        {prettyLabel(value) if value else "Pick a date"}
+                        {prettyLabel(value) if value else placeholder}
                     </span>
                 }}
             </DropdownMenuTrigger>

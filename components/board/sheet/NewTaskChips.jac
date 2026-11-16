@@ -77,6 +77,7 @@ def:pub NewTaskChips(
             </PeoplePicker>
             <DatePicker
                 value={form["due_date"]}
+                placeholder="Due date"
                 clearable={True}
                 className={ADD + " w-auto! font-normal!"}
                 onChange={lambda (d: str) { onField("due_date", d); }}

@@ -8,6 +8,7 @@ import from ..ui.switch { Switch }
 import from ..ui.button { Button }
 import from ..common.AiMark { AiMark }
 import from ..common.glyphs { Spinner }
+import from "sonner" { toast }
 import from .sheet.NewTaskChips { NewTaskChips }
 import from .sheet.NewTaskMore { NewTaskMore }
 
@@ -30,12 +31,23 @@ def:pub NewTaskDialog(
     has another: bool = False,
         more: bool = False;
 
-    canSave = not saving and bool(form["title"].strip()) and bool(form["project"]);
-
     def create {
-        if canSave {
-            onCreate(another);
+        if saving {
+            return;
         }
+        if not form["title"].strip() {
+            toast.error("Give the task a title first");
+            field: any = document.querySelector("[data-task-title]");
+            if field {
+                field.focus();
+            }
+            return;
+        }
+        if not form["project"] {
+            toast.error("Pick a project for this task");
+            return;
+        }
+        onCreate(another);
     }
 
     def askInstead {
@@ -143,7 +155,7 @@ def:pub NewTaskDialog(
                         >
                             Cancel
                         </Button>
-                        <Button disabled={not canSave} onClick={lambda { create(); }}>
+                        <Button disabled={saving} onClick={lambda { create(); }}>
                             {if saving {
                                 <Spinner key="sp"/>
                             }}
