@@ -758,7 +758,7 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 toast.error(saved.reports[0].refused);
             }
         } else {
-            root spawn CreateTask(
+            made = root spawn CreateTask(
                 title=title,
                 category=form["category"],
                 tags=tagList,
@@ -773,6 +773,13 @@ impl BoardPage.saveTask(keepOpen: bool = False) -> None {
                 assignee_ids=fAssignees,
                 project_id=project
             );
+            if len(made.reports or []) == 0 {
+                toast.error(
+                    "Could not create the task. Check the project and the step's rules."
+                );
+                saving = False;
+                return;
+            }
         }
         if keepOpen and switchTo["kind"] {
             openSwitchTarget();
