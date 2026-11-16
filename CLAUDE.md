@@ -373,8 +373,11 @@ people it tracks are roster members.
   recorded under `code_review`. Other agents are saved, drawn and switched on but
   never queue. **The canvas is a design:** `Agent.canvas` is cleaned by
   `clean_canvas` and the runner follows the agent's setup, never the graph.
-  **Agents never use the platform's key.** A key is sealed with
-  `FLOWLINE_SECRETS_KEY` (`seal` / `unseal`, Fernet), never reported (only
+  **Agents never use the platform's key.** `FLOWLINE_SECRETS_KEY` is declared bare
+  (`"${FLOWLINE_SECRETS_KEY}"`) in `[scale.secrets]`: a `${VAR:-}` default is resolved on
+  the deploying machine to `""` and baked in (dev showed `secrets_ready` false for hours),
+  and a literal `${...}` it ships reads as unset (`secret_text`). A key is sealed with
+  it (`seal` / `unseal`, Fernet), never reported (only
   `key_last`), opened in the runner's tenant context by `provider_credentials`, passed
   in `review_pr(api_key, api_base)` and held by the review thread for that call: the
   engine's `reviewer()` builds an uncached `Model` for it, because the per-thread

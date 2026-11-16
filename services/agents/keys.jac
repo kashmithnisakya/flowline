@@ -46,13 +46,21 @@ def provider_info(key: str) -> dict[str, any] {
 }
 
 
+# The sealing secret, or "" when unset. A deploy that never received it can leave
+# the literal ${...} text, which is a guessable value, so that reads as unset.
+def secret_text -> str {
+    raw = os.environ.get("FLOWLINE_SECRETS_KEY", "").strip();
+    return "" if raw.startswith("${") else raw;
+}
+
+
 def secrets_ready -> bool {
-    return bool(os.environ.get("FLOWLINE_SECRETS_KEY", "").strip());
+    return bool(secret_text());
 }
 
 
 def sealer -> any {
-    raw = os.environ.get("FLOWLINE_SECRETS_KEY", "").strip();
+    raw = secret_text();
     if not raw {
         return None;
     }
