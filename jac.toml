@@ -217,6 +217,8 @@ models = "server"
 "services.agents.runs" = "server"
 "services.agents.runner" = "server"
 "services.agents.metrics" = "server"
+"services.agents.keys" = "server"
+"services.agents.crew" = "server"
 "review.github" = "server"
 "review.engine" = "server"
 "review.post" = "server"
@@ -245,3 +247,5 @@ models = "server"
 # at pod start, so it must be set before the deploy that ships it.
 [scale.secrets]
 JAC_BRIDGE_TOKEN = "${JAC_BRIDGE_TOKEN}"
+# Seals the workspaces' own model keys at rest. Empty: no key can be saved.
+FLOWLINE_SECRETS_KEY = "${FLOWLINE_SECRETS_KEY:-}"

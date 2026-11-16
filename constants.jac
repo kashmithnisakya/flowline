@@ -273,6 +273,141 @@ glob STATUSES: list[str] = [
          "max_instructions": 2000,
          "max_attempts": 3
      },
+     # What an agent may be given. A tool's kind is the access it needs: read
+     # always, suggest and write only when the agent's access allows them.
+     AGENT_TOOLS: list[dict[str, str]] = [
+         {
+             "key": "read_task",
+             "kind": "read",
+             "does": "Title, notes, checklist and step"
+         },
+         {
+             "key": "read_pr",
+             "kind": "read",
+             "does": "Linked pull request files and diff"
+         },
+         {
+             "key": "search_tasks",
+             "kind": "read",
+             "does": "Similar tasks in the project"
+         },
+         {
+             "key": "suggest_fields",
+             "kind": "suggest",
+             "does": "Category, priority, assignee, due date"
+         },
+         {"key": "add_checklist", "kind": "suggest", "does": "Draft checklist items"},
+         {
+             "key": "comment_on_pr",
+             "kind": "write",
+             "does": "Post inline review comments"
+         },
+         {"key": "write_note", "kind": "write", "does": "Append to the task's notes"},
+         {"key": "move_task", "kind": "write", "does": "Send the task back"}
+     ],
+     # Responsibility templates an agent starts from. `kind` names the flow line
+     # step kind it usually wakes on; the page resolves it to this workspace's
+     # steps. Only a read_pr plus comment_on_pr agent runs today (a review).
+     AGENT_DUTIES: list[dict[str, any]] = [
+         {
+             "key": "review",
+             "name": "Review pull requests",
+             "tools": ["read_pr", "comment_on_pr"],
+             "kind": "handoff",
+             "event": "",
+             "prompt": "Review only the lines the pull request changed. Report bugs and security problems, not style."
+         },
+         {
+             "key": "notes",
+             "name": "Write hand-off notes",
+             "tools": ["read_pr", "write_note"],
+             "kind": "",
+             "event": "pr_merged",
+             "prompt": "Write a two sentence completion note from the merged pull request, then one changelog line."
+         },
+         {
+             "key": "writer",
+             "name": "Draft checklist and notes",
+             "tools": ["read_task", "add_checklist"],
+             "kind": "start",
+             "event": "",
+             "prompt": "Draft notes and a short, testable checklist for {task.title}."
+         },
+         {
+             "key": "triage",
+             "name": "Triage new tasks",
+             "tools": ["read_task", "search_tasks", "suggest_fields"],
+             "kind": "",
+             "event": "created",
+             "prompt": "Suggest category, priority, assignee and due date. Only fill fields that are empty."
+         },
+         {
+             "key": "watch",
+             "name": "Find stuck tasks",
+             "tools": ["read_task", "search_tasks"],
+             "kind": "",
+             "event": "schedule",
+             "prompt": "List tasks that sat in {step.name} too long, or are Blocked without a reason, with one line on why."
+         },
+         {
+             "key": "testplan",
+             "name": "Draft a test plan",
+             "tools": ["read_task", "read_pr", "add_checklist"],
+             "kind": "handoff",
+             "event": "",
+             "prompt": "Draft a test plan from the task and the pull request. Cover the happy path and two edge cases."
+         }
+     ],
+     AGENT_EVENTS: list[list[str]] = [
+         ["", "Task lands on the steps picked"],
+         ["created", "A task is created or imported"],
+         ["pr_merged", "A pull request merges"],
+         ["schedule", "Every morning at 9"]
+     ],
+     AGENT_MODES: list[str] = ["suggest", "apply"],
+     AGENT_NODE_TYPES: list[str] = [
+         "trigger",
+         "prompt",
+         "tool",
+         "condition",
+         "approval"
+     ],
+     # Bounds on what an agent's setup and canvas may hold.
+     AGENT_SETUP: dict[str, int] = {
+         "max_agents": 30,
+         "name": 80,
+         "prompt": 8000,
+         "rules": 2000,
+         "nodes": 40,
+         "edges": 80,
+         "node_text": 8000
+     },
+     # Where an agent's model comes from: the workspace's own account with a
+     # provider. `prefix` is what the model library needs before the model name;
+     # the custom provider is any OpenAI-compatible endpoint the workspace names.
+     AI_PROVIDERS: list[dict[str, any]] = [
+         {
+             "key": "openai",
+             "name": "OpenAI",
+             "models": ["gpt-4o-mini", "gpt-4o"],
+             "prefix": "",
+             "base": "https://api.openai.com/v1"
+         },
+         {
+             "key": "anthropic",
+             "name": "Anthropic",
+             "models": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+             "prefix": "anthropic/",
+             "base": "https://api.anthropic.com/v1"
+         },
+         {
+             "key": "custom",
+             "name": "Custom, OpenAI compatible",
+             "models": [],
+             "prefix": "openai/",
+             "base": ""
+         }
+     ],
      # Kind -> legacy status. A move writes both, so insights, GitHub sync
      # and the assistant never have to learn what a step is.
      KIND_STATUS: dict[str, str] = {

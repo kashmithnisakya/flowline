@@ -113,6 +113,20 @@ import from services.agents.agents {
     CancelRun,
     CheckReviewService
 }
+import from services.agents.crew {
+    ListAgents,
+    SaveAgent,
+    SetAgentEnabled,
+    SaveAgentCanvas,
+    DeleteAgent
+}
+import from services.agents.keys {
+    ListAiKeys,
+    SaveProviderKey,
+    RemoveProviderKey,
+    TestProvider,
+    SaveAiLimits
+}
 
 def:pub app(children: any) -> JsxElement {
     return <>{children}</>;
