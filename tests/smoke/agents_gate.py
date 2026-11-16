@@ -484,8 +484,8 @@ def main() -> int:
     if not check("server ready within timeout", wg.wait_ready()):
         return 2
     unconnected = queue_suite()
-    agent_suite()
     queued_home = wg.TOKEN
+    agent_suite()
     landed = runner_suite()
     runner_home = wg.TOKEN
     wg.TOKEN = queued_home
