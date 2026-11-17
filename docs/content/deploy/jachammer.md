@@ -98,6 +98,7 @@ production.
 jachammer env add HOST=https://flowline.example.com
 jachammer env add GITHUB_APP_WEBHOOK_SECRET=$(openssl rand -hex 32)
 jachammer env add JAC_BRIDGE_TOKEN=$(openssl rand -hex 32)
+jachammer env add JAC_SCALE_ADMIN_PASSWORD=...   # the /admin portal's first password
 jachammer env add OPENAI_API_KEY=sk-...
 jachammer env ls              # values masked; --reveal to print them
 jachammer env rm OPENAI_API_KEY
