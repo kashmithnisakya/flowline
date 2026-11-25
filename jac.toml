@@ -167,10 +167,6 @@ max = 2
 [scale.gateway.logs]
 enabled = false
 
-[jacpack]
-name = 'flowline'
-description = 'Jac IDE snapshot for flowline'
-
 # GitHub App deliveries land on /webhook/GithubEvent. The runtime verifies
 # X-Hub-Signature-256 against this secret before the walker runs, so an
 # empty or wrong value means every delivery is refused, never applied.
