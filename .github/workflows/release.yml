@@ -1,6 +1,7 @@
 # Builds the app's .jab with the jac release pinned in jac.toml and attaches
-# it, with its checksum, to the GitHub release. The .jab holds tracked source
-# only: environment values never ride in it (they are set per environment).
+# it, with its checksum, to the GitHub release. The .jab is the sealed app:
+# precompiled modules, the built client bundle and the source they came from.
+# Environment values never ride in it (they are set per environment).
 # Run it by hand to get the same files as a workflow artifact, no release.
 name: Release
 
@@ -40,7 +41,8 @@ jobs:
       - name: jac install
         run: jac install
 
-      # `jac build` type-checks first, then packs the tracked files.
+      # `jac build` type-checks, compiles the server, bakes the client bundle and
+      # precompiles, then seals it all into one .jab.
       - name: Build the .jab
         id: build
         run: |
